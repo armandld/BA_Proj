@@ -33,7 +33,6 @@ dependencies:
     # --- The Qiskit Core Stack ---
     - 'qiskit'                 # The main Qiskit package (includes Terra)
     - 'qiskit-aer'             # High-performance simulator (handles its own C++)
-    - 'qiskit_algorithms'      # QAOA, VQE, and other algorithms
     - 'qiskit-ibm-runtime'     # To run on real IBM hardware
 
     # --- Qiskit Application Modules ---

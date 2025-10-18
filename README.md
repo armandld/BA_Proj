@@ -11,13 +11,21 @@ Ce dépôt contient le code pour notre projet, utilisant **Python**, **C++** et 
 BA_Proj/
 ├── LICENSE
 ├── README.md
-├── conda-packages.txt
-├── cpp
-│   └── hello.cpp
+├── environment.yaml
 ├── notebooks
-├── pip-packages.txt
-└── python
+├── setup_env.sh
+├── src
+├── tutos
+│   ├── Max_cut
+│   └── helloworld.py
+└── update.sh
 ```
+
+The ```bash src/``` folder will contain the codes executed for this project.
+The ```bash log/``` folder will contain the console logs of each test, with date & time of the log.
+The ```bash results/``` folder will contain the outputs (&inputs if reused) of the files from the ```bash src/``` folder.
+
+In fact, a similar structure is already presented in the ```bash tutos/Max_cut/``` folder.
 
 ---
 
@@ -27,7 +35,7 @@ BA_Proj/
 - Git
 - macOS, Linux ou Windows (avec WSL pour Windows)
 - CMake et un compilateur C++ (gcc / clang)
-- Python 3.12 recommandé
+- Python 3.11 recommandé
 
 ---
 
@@ -47,86 +55,43 @@ source update_env.sh
 # Launch a tutorial
 By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
 
-once in the project in ```bash BA_proj/ ```, type
+once in the project in ```bash BA_proj/```, type
 
 ```bash
 bash tutos/Max_cut/run_pipeline.sh --backend aer --nodes 10 --edges 12 --mode simulator --verbose
 ```
-## TO ADAPT ---------------------------------------------------- Details if installation using .sh files do not work:
+## Details if installation using .sh files do not work:
 
-### 1️⃣ Créer un nouvel environnement vide avec la version de Python souhaitée
+### Try the following
 
 ```bash
-# Remplacez mon_env par le nom souhaité pour votre environnement
-ENV_NAME="mon_env"
-PYTHON_VERSION="3.12"
-
-# Créer l'environnement
-conda create -y -n $ENV_NAME python=$PYTHON_VERSION
-
-# Important pour que le shell reconnaisse conda activate
-source $(conda info --base)/etc/profile.d/conda.sh
-conda activate $ENV_NAME
+conda env create -f environment.yml
 ```
 
-### 2️⃣ Installer tous les packages Conda listés
+### To activate the venv 
+
+Take a look at the file ```bash environment.yml```, a venv name should be visible.
+
+Usually:
 
 ```bash
-conda install -y --file conda-packages.txt
-```
-
-### 3️⃣ Installer tous les packages pip listés (en ignorant les fichiers locaux)
-
-```bash
-# Filtrer les packages locaux pour éviter les erreurs
-grep -v "file://" pip-packages.txt | xargs -n 1 pip install
-
-# Vérifier et installer Qiskit si nécessaire
-pip install --upgrade qiskit
-```
-### To activate the environment
-
-```bash
-conda activate $ENV_NAME
+conda activate qiskit-project # TO ADAPT IF CHANGED
 ```
 
 ## Details if update using .sh files do not work:
 
 Avant de mettre à jour l’environnement, il est recommandé de faire un backup des packages pour pouvoir revenir à une version stable si nécessaire :
 
-### 1️⃣ Sauvegarder la liste des packages Conda
-
-```bash
-conda list --export | grep -v "@" > conda-packages-backup.txt
-```
-
-### 2️⃣ Sauvegarder la liste des packages pip (en ignorant les fichiers locaux)
-
-```bash
-pip freeze | grep -v "file://" > pip-packages-backup.txt
-```
-
-### 3️⃣ Mettre à jour Conda
+### Update conda gestion
 
 ```bash
 conda update -n base -c defaults conda -y
 ```
 
-### 4️⃣ Mettre à jour tous les packages Conda
+### Update the list :
+
+Usually :
 
 ```bash
-conda update --all -y
-```
-
-### 5️⃣ Mettre à jour les packages pip obsolètes individuellement
-
-```bash
-# Lire ligne par ligne pour éviter les erreurs avec les retours chariot
-pip list --outdated --format=columns | tail -n +3 | awk '{print $1}' | tr -d '\r' | while read pkg; do
-    echo "Mise à jour de $pkg..."
-    pip install --upgrade "$pkg"
-done
-
-# Vérification et mise à jour de Qiskit
-pip install --upgrade qiskit
+conda env update --name qiskit-project --file environment.yaml --prune # TO ADAPT IF CHANGED
 ```
