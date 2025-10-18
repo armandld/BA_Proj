@@ -44,6 +44,8 @@ source setup_env.sh
 source update_env.sh
 ```
 
+## Details if installation using .sh files do not work:
+
 ### 1️⃣ Créer un nouvel environnement vide avec la version de Python souhaitée
 
 ```bash
