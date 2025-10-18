@@ -1,0 +1,65 @@
+[2025-10-19 00:34:26] ==============================================================
+[2025-10-19 00:34:26] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 00:34:26] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 00:34:26] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts
+[2025-10-19 00:34:26] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-10-19 00:34:26] ==============================================================
+[2025-10-19 00:34:26] 🧹 Cleaning previous results...
+[2025-10-19 00:34:26] ➡️ Stage: Mapping
+[2025-10-19 00:34:26] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/mapping.py --backend aer --nodes 5 --edges 6 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/networkx/readwrite/json_graph/node_link.py:145: FutureWarning: 
+The default value will be `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_data(G, edges="links") to preserve current behavior, or
+  nx.node_link_data(G, edges="edges") for forward compatibility.
+  warnings.warn(
+🔹 Using AER backend
+🔹 Graph edges: [(np.int64(0), 1), (np.int64(0), 2), (np.int64(0), 3), (np.int64(1), 4), (np.int64(2), 4), (np.int64(2), 3)]
+cost_hamiltonian :  SparsePauliOp(['ZZIII', 'IIIII', 'ZIZII', 'IIIII', 'ZIIZI', 'IIIII', 'IZIIZ', 'IIIII', 'IIZIZ', 'IIIII', 'IIZZI', 'IIIII'],
+              coeffs=[ 0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j,
+ -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j])
+✅ Mapping complete. Saved to /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results/mapping.json
+Hamiltonian terms:
+  ZZIII : 0.5
+  IIIII : -0.5
+  ZIZII : 0.5
+  IIIII : -0.5
+  ZIIZI : 0.5
+  IIIII : -0.5
+  IZIIZ : 0.5
+  IIIII : -0.5
+  IIZIZ : 0.5
+  IIIII : -0.5
+  IIZZI : 0.5
+  IIIII : -0.5
+[2025-10-19 00:34:33] ✅ Stage 'Mapping' completed successfully.
+[2025-10-19 00:34:33] ➡️ Stage: Optimization
+[2025-10-19 00:34:33] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+[2025-10-19 00:34:40] ✅ Stage 'Optimization' completed successfully.
+[2025-10-19 00:34:40] ➡️ Stage: Execution
+[2025-10-19 00:34:40] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/execute.py --mode simulator --backend aer --shots 100000 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/fake_provider/local_service.py:273: UserWarning: Options {'dynamical_decoupling': {'enable': True, 'sequence_type': 'XY4'}, 'twirling': {'enable_gates': True, 'num_randomizations': 'auto'}} have no effect in local testing mode.
+  warnings.warn(f"Options {options_copy} have no effect in local testing mode.")
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -4.153468465315347
+       x: [ 3.000e+00  2.795e+00  3.856e+00  3.121e+00]
+    nfev: 34
+   maxcv: 0.0
+{24: 0.03106, 14: 0.10285, 12: 0.10355, 11: 0.08564, 15: 0.01085, 13: 0.00916, 18: 0.00985, 5: 0.03041, 7: 0.03104, 20: 0.08439, 28: 0.04741, 17: 0.10514, 4: 0.01083, 19: 0.10394, 3: 0.04656, 10: 0.04675, 21: 0.04714, 6: 0.00949, 25: 0.0094, 26: 0.03019, 22: 0.00354, 9: 0.00347, 1: 0.00082, 31: 0.0015, 2: 0.00437, 29: 0.00381, 27: 0.01145, 16: 0.0118, 23: 0.00077, 0: 0.00128, 30: 0.00085, 8: 0.00069}
+Execution result saved to /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results/execution_result.json
+Objective value: -4.153468465315347
+[2025-10-19 00:34:51] ✅ Stage 'Execution' completed successfully.
+[2025-10-19 00:34:51] ➡️ Stage: Post-processing
+[2025-10-19 00:34:51] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/postprocess.py --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Result bitstring: [1, 0, 0, 0, 1]
+The value of the cut is: 5
+[2025-10-19 00:35:06] ✅ Stage 'Post-processing' completed successfully.
+[2025-10-19 00:35:06] ==============================================================
+[2025-10-19 00:35:06] 🎉 Quantum MaxCut pipeline completed successfully!
+[2025-10-19 00:35:06] Results saved in: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-10-19 00:35:06] Full log: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results/../logs/pipeline[2025-10-19_00-34-23].log
+[2025-10-19 00:35:06] ==============================================================

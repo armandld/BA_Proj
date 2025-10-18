@@ -1,0 +1,46 @@
+# This file defines the Conda environment for your project.
+# Create it with: conda env create -f environment.yml
+# Activate it with: conda activate qiskit-project
+
+name: qiskit-project
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # ----------------------------------------------------
+  # 1. Core Conda Packages (Python, C++ deps, Data Science)
+  # ----------------------------------------------------
+  - python=3.11   # A modern, stable Python version
+
+  # Famous Data Science / Utility Libraries
+  - numpy         # Core numerical computing
+  - scipy         # Scientific computing
+  - pandas        # Data analysis and manipulation
+  - matplotlib    # Plotting
+  - seaborn       # Prettier plotting
+  - scikit-learn  # Famous machine learning library
+  - jupyterlab    # For running notebooks
+  - tqdm          # Progress bars
+  - networkx      # For graph problems (like your MaxCut)
+  - h5py          # For saving/loading large data
+
+  # ----------------------------------------------------
+  # 2. Pip Packages (for all Qiskit libraries)
+  # ----------------------------------------------------
+  - pip
+  - pip:
+    # --- The Qiskit Core Stack ---
+    - 'qiskit'                 # The main Qiskit package (includes Terra)
+    - 'qiskit-aer'             # High-performance simulator (handles its own C++)
+    - 'qiskit_algorithms'      # QAOA, VQE, and other algorithms
+    - 'qiskit-ibm-runtime'     # To run on real IBM hardware
+
+    # --- Qiskit Application Modules ---
+    - 'qiskit-optimization'    # For problems like MaxCut, Knapsack
+    - 'qiskit-machine-learning'
+    - 'qiskit-nature'
+    - 'qiskit-finance'
+
+    # --- Common Qiskit Utilities ---
+    - 'pylatexenc'             # Often needed for circuit drawing

@@ -44,7 +44,15 @@ source setup_env.sh
 source update_env.sh
 ```
 
-## Details if installation using .sh files do not work:
+# Launch a tutorial
+By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
+
+once in the project in ```bash BA_proj/ ```, type
+
+```bash
+bash tutos/Max_cut/run_pipeline.sh --backend aer --nodes 10 --edges 12 --mode simulator --verbose
+```
+## TO ADAPT ---------------------------------------------------- Details if installation using .sh files do not work:
 
 ### 1️⃣ Créer un nouvel environnement vide avec la version de Python souhaitée
 
