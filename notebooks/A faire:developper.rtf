@@ -1,0 +1,268 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2709
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fswiss\fcharset0 Helvetica-Bold;\f2\froman\fcharset0 Times-Bold;
+\f3\fmodern\fcharset0 Courier;\f4\froman\fcharset0 Times-Roman;\f5\fnil\fcharset0 STIXTwoMath-Regular;
+\f6\froman\fcharset0 Times-Italic;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 A faire:\
+\
+D\'e9composer la cost function en somme de : \outl0\strokewidth0 < phi | D_X  * A *\'85| psi >\
+D\'e9finir un circuit pour chaque produit scalaire et le minimiser par variational approach:\
+Exemple typique \'e0 1 dimension:\outl0\strokewidth0 \strokec2 \
+< phi | D_X | psi >\
+< 0 | U(theta)_adj D_X U(lambda) | 0 >\
+D\'e9finir correctement 3 gates:\
+Gate 1 : \'e9tat psi : U(lambda) \
+Gate 2 (en bas du circuit) : U(eps) tel que U(eps) |\'a00> = |X > et permet ainsi d\'92avoir D_X\
+Gate 3 : \outl0\strokewidth0 \'e9tat phi : U(theta) \
+\
+R\'e9utiliser les param\'e8tres pour avancer d\'92une time step la fonction\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b\fs48 \cf0 \ul \ulc0 Comment faire un HADMARD TEST DE DIMENSION 2 (e.g. \ulc0 < phi | \ulc0 D_phi*D_ksi \ulc0 | psi >\ulc0 )???
+\f0\b0\fs24 \ulnone \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b\fs48 \cf0 \ul \ulc0 Comment faire un observable virtuel avec des qubits virtuels???\
+\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\fs36 \cf0 \ulnone \outl0\strokewidth0 \strokec2 \uc0\u10024  Exemple propre adapt\'e9 \'e0 ton code\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\fs28 \cf0 ### 1. D\'e9finir les param\'e8tres\
+\pard\pardeftab720\partightenfactor0
+
+\f3\b0\fs26 \cf0 \
+from qiskit import QuantumCircuit\
+from qiskit.circuit import ParameterVector\
+import numpy as np\
+from scipy.stats import unitary_group\
+\
+# number of qubits\
+num_qubits = args.numqbits\
+\
+theta_params = ParameterVector("\uc0\u952 ", 4**num_qubits)\
+phi_params   = ParameterVector("\uc0\u966 ", 4**num_qubits)\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\fs24 \cf0 \uc0\u9888 \u65039  Pour un unitaire 2^n \'d7 2^n, il faut 
+\f2\b (2\uc0\u8319 )\'b2 param\'e8tres
+\f4\b0  : tu faisais d\'e9j\'e0 
+\f3\fs26 theta.flat()
+\f4\fs24  \uc0\u8594  correct.\
+\pard\pardeftab720\partightenfactor0
+\cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 2. Construire la matrice Unitaire param\'e9trique\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\b0\fs24 \cf0 Tu dois transformer tes matrices fixes en une expression lin\'e9aire en param\'e8tres :\
+\pard\pardeftab720\partightenfactor0
+
+\f5 \cf0 U\
+(\
+\uc0\u952 \
+)\
+=\
+\uc0\u8721 \
+\pard\pardeftab720\partightenfactor0
+
+\fs18 \cf0 k\
+\pard\pardeftab720\partightenfactor0
+
+\fs24 \cf0 \uc0\u952 \
+\pard\pardeftab720\partightenfactor0
+
+\fs18 \cf0 k\
+\pard\pardeftab720\partightenfactor0
+
+\fs24 \cf0 A\
+\pard\pardeftab720\partightenfactor0
+
+\fs18 \cf0 k\
+\pard\pardeftab720\partightenfactor0
+
+\fs24 \cf0 ,\
+\pard\pardeftab720\partightenfactor0
+
+\f4 \cf0 U(\\theta) = \\sum_k \\theta_k A_k,
+\f5 \
+\pard\pardeftab720\partightenfactor0
+
+\f4 \cf0 U(\uc0\u952 )=k\u8721  \u952 k Ak ,\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 o\'f9 les
+\f5 \
+\pard\pardeftab720\partightenfactor0
+\cf0 A\
+\pard\pardeftab720\partightenfactor0
+
+\fs18 \cf0 k\
+\pard\pardeftab720\partightenfactor0
+
+\f4\fs24 \cf0 A_k
+\f5 \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4 \cf0 Ak sont les matrices de base (Pauli products ou une base unitaire quelconque).\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f2\b\fs28 \cf0 \uc0\u55357 \u56393  Option facile (recommand\'e9e)\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\b0\fs24 \cf0 Utilise la 
+\f6\i d\'e9composition de Lie
+\f4\i0  fournie dans Qiskit :\
+\pard\pardeftab720\partightenfactor0
+
+\f3\fs26 \cf0 \
+from qiskit.circuit.library import PauliEvolutionGate\
+from qiskit.quantum_info import SparsePauliOp\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\fs24 \cf0 D\'e9finis le Hamiltonien :\
+\pard\pardeftab720\partightenfactor0
+
+\f3\fs26 \cf0 \
+paulis = []\
+coeffs = []\
+\
+for k in range(4**num_qubits):\
+    paulis.append(...)  # cha\'eenes de Pauli\
+    coeffs.append(theta_params[k])\
+\
+H_theta = SparsePauliOp(paulis, coeffs)\
+U_theta = PauliEvolutionGate(H_theta, time=1)\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\fs24 \cf0 \uc0\u10004 \u65039  Avantage :\u8232 \u8594  U d\'e9pend des \u952  de mani\'e8re explicite et param\'e9trable\u8232 \u8594  
+\f3\fs26 Estimator
+\f4\fs24  comprend \'e7a\uc0\u8232 \u8594  Le circuit devient r\'e9utilisable comme un ansatz QAOA\
+\pard\pardeftab720\partightenfactor0
+\cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 3. Construire ton circuit param\'e9tr\'e9\
+\pard\pardeftab720\partightenfactor0
+
+\f3\b0\fs26 \cf0 \
+def H_TEST_DIM_1(theta_vec, phi_vec, eps):\
+\
+    qc = QuantumCircuit(2*num_qubits+1, 1)\
+\
+    # gates param\'e9triques\
+    U_state = U_theta      # d\'e9pend de theta_params\
+    U_phi   = U_phi_gate   # d\'e9pend de phi_params\
+\
+    qc.h(0)\
+\
+    qc.append(U_state.control(1), [0] + list(range(1, num_qubits+1)))\
+    qc.append(U_phi.control(1),   [0] + list(range(num_qubits+1, 2*num_qubits+1)))\
+\
+    # CNOT ladder\
+    for k in range(num_qubits):\
+        qc.ccx(0, k+1, num_qubits+1+k)\
+\
+    qc.append(U_state.inverse().control(1), [0] + list(range(1, num_qubits+1)))\
+\
+    qc.h(0)\
+    qc.measure(0, 0)\
+\
+    return qc\
+\pard\pardeftab720\partightenfactor0
+
+\f4\fs24 \cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 4. Sauvegarde QPY\
+\pard\pardeftab720\partightenfactor0
+
+\f3\b0\fs26 \cf0 \
+circuit = H_TEST_DIM_1(theta_params, phi_params, eps)\
+with open("var.qpy","wb") as f:\
+    qpy.dump(circuit, f)\
+\pard\pardeftab720\partightenfactor0
+
+\f4\fs24 \cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 \uc0\u10004 \u65039  5. Script d\'92ex\'e9cution / optimisation (comme QAOA)\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\b0\fs24 \cf0 Dans ton 
+\f2\b second script
+\f4\b0 , tu fais :\
+\pard\pardeftab720\partightenfactor0
+
+\f3\fs26 \cf0 \
+with open("var.qpy","rb") as f:\
+    circuit = qpy.load(f)[0]\
+\
+from qiskit_ibm_runtime import Session, Estimator\
+import numpy as np\
+\
+def cost_fn(params, circuit, estimator):\
+    # mapping params \uc0\u8594  (\u952 , \u966 )\
+    theta_values = params[:N_theta]\
+    phi_values   = params[N_theta:]\
+\
+    param_dict = \{**dict(zip(theta_params, theta_values)),\
+                  **dict(zip(phi_params, phi_values))\}\
+\
+    pub = (circuit, None, param_dict)\
+\
+    job = estimator.run([pub])\
+    result = job.result()[0]\
+\
+    return result.data.evs\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\fs24 \cf0 \uc0\u10004 \u65039  Identique \'e0 ton code QAOA\u8232 \u10004 \u65039  Fonctionnelle avec un 
+\f3\fs26 Estimator
+\f4\fs24 \uc0\u8232 \u10004 \u65039  Param\'e9trable pour diff\'e9rentes valeurs de \u952 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 \uc0\u55356 \u57225  R\'e9sultat\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\b0\fs24 \cf0 Tu obtiens 
+\f2\b exactement la m\'eame architecture que ton pipeline QAOA
+\f4\b0 , mais pour un circuit g\'e9n\'e9rique avec unitaries param\'e9tr\'e9es :\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\sa240\partightenfactor0
+\ls1\ilvl0\cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 un 
+\f6\i ansatz param\'e9tr\'e9
+\f4\i0 \
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 un hamiltonien encod\'e9 implicitement dans le circuit\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 un 
+\f6\i run
+\f4\i0  s\'e9par\'e9 avec injection de param\'e8tres\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 optimisation via COBYLA ou autre\
+\pard\pardeftab720\partightenfactor0
+\cf0 \
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f2\b\fs36 \cf0 \uc0\u55357 \u56524  Si tu veux, je peux :\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f4\b0\fs24 \cf0 \uc0\u9989  t\'92\'e9crire la version compl\'e8te, pr\'eate \'e0 l\'92emploi (un seul fichier)\u8232 \u9989  t\'92impl\'e9menter une base Pauli automatique pour g\'e9n\'e9rer U(\u952 )\u8232 \u9989  t\'92aider \'e0 faire l\'92\'e9quivalent exact de ton QAOA code (structure identique, fichiers JSON, QPY, etc.)\
+Dis-moi ce que tu pr\'e9f\'e8res.\
+\pard\pardeftab720\partightenfactor0
+\cf0 \
+\
+\
+}

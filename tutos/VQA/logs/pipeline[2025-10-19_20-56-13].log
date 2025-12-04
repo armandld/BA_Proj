@@ -1,0 +1,32 @@
+[2025-10-19 20:56:17] ==============================================================
+[2025-10-19 20:56:17] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 20:56:17] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 20:56:17] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 20:56:17] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:56:17] ==============================================================
+[2025-10-19 20:56:17] 🧹 Cleaning previous results...
+[2025-10-19 20:56:17] ➡️ Stage: Mapping
+[2025-10-19 20:56:17] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+
+   Normal return from subroutine COBYLA
+
+   NFVALS =  133   F =-6.000000E+00    MAXCV = 0.000000E+00
+   X = 2.076637E+00   1.091586E+00   1.570804E+00   1.805296E-05   1.686820E+00
+       1.454857E+00  -3.962870E-01  -3.963299E-01
+🔹 Démarrage de l'optimisation VQE (cela peut prendre du temps)...
+
+✅ Optimisation terminée !
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -5.9999999758346405
+       x: [ 2.077e+00  1.092e+00  1.571e+00  1.805e-05  1.687e+00
+            1.455e+00 -3.963e-01 -3.963e-01]
+    nfev: 133
+   maxcv: 0.0
+[2025-10-19 20:56:25] ✅ Stage 'Mapping' completed successfully.
+[2025-10-19 20:56:25] ==============================================================
+[2025-10-19 20:56:25] 🎉 Quantum VQA pipeline completed successfully!
+[2025-10-19 20:56:25] Results saved in: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:56:25] Full log: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results/../logs/pipeline[2025-10-19_20-56-13].log
+[2025-10-19 20:56:25] ==============================================================

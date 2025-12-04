@@ -1,0 +1,13 @@
+[2025-10-19 18:33:49] ==============================================================
+[2025-10-19 18:33:49] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 18:33:49] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 18:33:49] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 18:33:49] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 18:33:49] ==============================================================
+[2025-10-19 18:33:49] 🧹 Cleaning previous results...
+[2025-10-19 18:33:49] ➡️ Stage: Mapping
+[2025-10-19 18:33:49] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 22, in <module>
+    from qiskit.circuit.library import Parameter, TwoLocal, zz_feature_map, QAOAAnsatz
+ImportError: cannot import name 'Parameter' from 'qiskit.circuit.library' (/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/library/__init__.py)

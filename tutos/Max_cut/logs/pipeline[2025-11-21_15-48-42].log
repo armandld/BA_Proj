@@ -1,0 +1,11 @@
+[2025-11-21 15:48:47] ==============================================================
+[2025-11-21 15:48:47] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:48:47] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:48:47] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:48:47] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:48:47] ==============================================================
+[2025-11-21 15:48:47] 🧹 Cleaning previous results...
+[2025-11-21 15:48:47] ➡️ Stage: Mapping
+[2025-11-21 15:48:47] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py:88: UserWarning: Glyph 9 (	) missing from font(s) DejaVu Sans.
+  plt.show()

@@ -1,0 +1,17 @@
+[2025-10-19 20:50:52] ==============================================================
+[2025-10-19 20:50:52] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 20:50:52] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 20:50:52] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 20:50:52] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:50:52] ==============================================================
+[2025-10-19 20:50:53] 🧹 Cleaning previous results...
+[2025-10-19 20:50:53] ➡️ Stage: Mapping
+[2025-10-19 20:50:53] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+🔹 Démarrage de l'optimisation VQE (cela peut prendre du temps)...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 119, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 100, in main
+    estimator = Estimator(backend=backend)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: EstimatorV2.__init__() got an unexpected keyword argument 'backend'

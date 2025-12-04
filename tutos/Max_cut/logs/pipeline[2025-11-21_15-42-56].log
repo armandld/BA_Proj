@@ -1,0 +1,36 @@
+[2025-11-21 15:43:01] ==============================================================
+[2025-11-21 15:43:01] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:43:01] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:43:01] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:43:01] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:43:01] ==============================================================
+[2025-11-21 15:43:01] 🧹 Cleaning previous results...
+[2025-11-21 15:43:01] ➡️ Stage: Mapping
+[2025-11-21 15:43:01] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Liste A:  [1, 2, 3]
+Liste B:  [0, 1, 2, 3]
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 6822, in _bit_argument_conversion
+    return [bit_sequence[specifier]]
+            ~~~~~~~~~~~~^^^^^^^^^^^
+IndexError: list index out of range
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 155, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 85, in main
+    qc.append(CU_oprator,[0]+list(range(num_qbits+1, 2*num_qbits+2)))
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2547, in append
+    expanded_qargs = [self._qbit_argument_conversion(qarg) for qarg in qargs or []]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2547, in <listcomp>
+    expanded_qargs = [self._qbit_argument_conversion(qarg) for qarg in qargs or []]
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2397, in _qbit_argument_conversion
+    return _bit_argument_conversion(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 6824, in _bit_argument_conversion
+    raise CircuitError(
+qiskit.circuit.exceptions.CircuitError: 'Index 7 out of range for size 7.'

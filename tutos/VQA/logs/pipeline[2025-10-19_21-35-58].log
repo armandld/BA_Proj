@@ -1,0 +1,47 @@
+[2025-10-19 21:36:01] ==============================================================
+[2025-10-19 21:36:01] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 21:36:01] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 21:36:01] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 21:36:01] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 21:36:01] ==============================================================
+[2025-10-19 21:36:01] 🧹 Cleaning previous results...
+[2025-10-19 21:36:01] ➡️ Stage: Mapping
+[2025-10-19 21:36:01] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+
+   Normal return from subroutine COBYLA
+
+   NFVALS =  663   F =-3.999999E+00    MAXCV = 0.000000E+00
+   X =-3.159510E-01  -1.095441E-01  -1.570832E+00   3.141562E+00   4.850381E-01
+       2.656599E+00   1.572590E+00   1.572460E+00
+🔹 Démarrage de l'optimisation SSVQE (cela peut prendre du temps)...
+
+✅ Optimisation terminée !
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -3.999999312030131
+       x: [-3.160e-01 -1.095e-01 -1.571e+00  3.142e+00  4.850e-01
+            2.657e+00  1.573e+00  1.572e+00]
+    nfev: 663
+   maxcv: 0.0
+--------------------------------------------------
+🔹 Calcul des valeurs propres (eigenvalues) finales...
+
+🎉 RÉSULTATS DU SSVQE (VALEURS PROPRES) 🎉
+  - Approximation de l'énergie de l'état fondamental (E₀): -6.000000
+  - Approximation de l'énergie du 1er état excité (E₁): 4.000001
+--------------------------------------------------
+🔹 Construction des états propres (eigenstates) finaux...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 180, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 164, in main
+    eigenstate_vectors = [
+                         ^
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 165, in <listcomp>
+    Statevector.from_instruction(circuit) for circuit in eigenstate_circuits
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/quantum_info/states/statevector.py", line 773, in from_instruction
+    init = np.zeros(2**instruction.num_qubits, dtype=complex)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: Maximum allowed dimension exceeded

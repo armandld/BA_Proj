@@ -1,0 +1,19 @@
+[2025-11-21 15:56:06] ==============================================================
+[2025-11-21 15:56:06] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:56:06] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:56:06] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:56:06] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:56:06] ==============================================================
+[2025-11-21 15:56:06] 🧹 Cleaning previous results...
+[2025-11-21 15:56:06] ➡️ Stage: Mapping
+[2025-11-21 15:56:06] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 157, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 86, in main
+    qc.append(AndGate([0,qc[k]],qc[num_qbits+ k]))
+                                ~~^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2342, in __getitem__
+    return self._data[item]
+           ~~~~~~~~~~^^^^^^
+IndexError: index out of range

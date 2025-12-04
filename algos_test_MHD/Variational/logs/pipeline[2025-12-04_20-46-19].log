@@ -1,0 +1,24 @@
+[2025-12-04 20:46:23] ==============================================================
+[2025-12-04 20:46:23] 🚀 Starting Quantum Variational Pipeline
+[2025-12-04 20:46:23] Mode: simulator | Backend: aer | Shots: 100000
+[2025-12-04 20:46:23] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-04 20:46:23] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-04 20:46:23] ==============================================================
+[2025-12-04 20:46:23] 🧹 Cleaning previous results...
+[2025-12-04 20:46:23] ➡️ Stage: Mapping
+[2025-12-04 20:46:23] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --mqbits 2 --depth 2
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+QC1 PARAMETERS :  ParameterView([ParameterVectorElement(θ[0]), ParameterVectorElement(θ[1]), ParameterVectorElement(θ[2]), ParameterVectorElement(θ[3]), ParameterVectorElement(θ[4]), ParameterVectorElement(θ[5]), ParameterVectorElement(θ[6]), ParameterVectorElement(θ[7]), ParameterVectorElement(θ[8]), ParameterVectorElement(θ[9]), ParameterVectorElement(θ[10]), ParameterVectorElement(θ[11]), ParameterVectorElement(θ[12]), ParameterVectorElement(θ[13]), ParameterVectorElement(θ[14]), ParameterVectorElement(θ[15]), ParameterVectorElement(θ[16]), ParameterVectorElement(θ[17]), ParameterVectorElement(θ[18]), ParameterVectorElement(θ[19]), ParameterVectorElement(θ[20]), ParameterVectorElement(θ[21]), ParameterVectorElement(θ[22]), ParameterVectorElement(θ[23]), ParameterVectorElement(θ[24]), ParameterVectorElement(θ[25]), ParameterVectorElement(θ[26]), ParameterVectorElement(θ[27]), ParameterVectorElement(θ[28]), ParameterVectorElement(θ[29]), ParameterVectorElement(θ[30]), ParameterVectorElement(θ[31]), ParameterVectorElement(θ[32]), ParameterVectorElement(θ[33]), ParameterVectorElement(θ[34]), ParameterVectorElement(θ[35]), ParameterVectorElement(θ_Schmidt[0])])
+QC2 PARAMETERS :  ParameterView([ParameterVectorElement(θ[0]), ParameterVectorElement(θ[1]), ParameterVectorElement(θ[2]), ParameterVectorElement(θ[3]), ParameterVectorElement(θ[4]), ParameterVectorElement(θ[5]), ParameterVectorElement(θ[6]), ParameterVectorElement(θ[7]), ParameterVectorElement(θ[8]), ParameterVectorElement(θ[9]), ParameterVectorElement(θ[10]), ParameterVectorElement(θ[11]), ParameterVectorElement(θ[12]), ParameterVectorElement(θ[13]), ParameterVectorElement(θ[14]), ParameterVectorElement(θ[15]), ParameterVectorElement(θ[16]), ParameterVectorElement(θ[17]), ParameterVectorElement(θ[18]), ParameterVectorElement(θ[19]), ParameterVectorElement(θ[20]), ParameterVectorElement(θ[21]), ParameterVectorElement(θ[22]), ParameterVectorElement(θ[23]), ParameterVectorElement(θ[24]), ParameterVectorElement(θ[25]), ParameterVectorElement(θ[26]), ParameterVectorElement(θ[27]), ParameterVectorElement(θ[28]), ParameterVectorElement(θ[29]), ParameterVectorElement(θ[30]), ParameterVectorElement(θ[31]), ParameterVectorElement(θ[32]), ParameterVectorElement(θ[33]), ParameterVectorElement(θ[34]), ParameterVectorElement(θ[35]), ParameterVectorElement(θ_Schmidt[0])])
+Theta non utilisés pour qc1: []
+Phi non utilisés pour qc1: []
+Theta non utilisés pour qc2: []
+Phi non utilisés pour qc2: []
+[2025-12-04 20:46:28] ✅ Stage 'Mapping' completed successfully.
+[2025-12-04 20:46:28] ➡️ Stage: Optimization
+[2025-12-04 20:46:28] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --opt_level 2
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/qpy/binary_io/circuits.py:1479: UserWarning: The ParameterVector: 'cu' is not fully identical to its pre-serialization state. Elements 1, 2, 3 in the ParameterVector will be not equal to the pre-serialized ParameterVector as they weren't used in the circuit: c_circuit-169
+  warnings.warn(
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/qpy/binary_io/circuits.py:1479: UserWarning: The ParameterVector: 'cu' is not fully identical to its pre-serialization state. Elements 1, 2, 3 in the ParameterVector will be not equal to the pre-serialized ParameterVector as they weren't used in the circuit: c_circuit-169
+  warnings.warn(

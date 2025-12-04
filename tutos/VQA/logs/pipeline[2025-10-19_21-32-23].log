@@ -1,0 +1,73 @@
+[2025-10-19 21:32:27] ==============================================================
+[2025-10-19 21:32:27] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 21:32:27] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 21:32:27] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 21:32:27] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 21:32:27] ==============================================================
+[2025-10-19 21:32:27] 🧹 Cleaning previous results...
+[2025-10-19 21:32:27] ➡️ Stage: Mapping
+[2025-10-19 21:32:27] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+
+   Normal return from subroutine COBYLA
+
+   NFVALS =  217   F =-4.000000E+00    MAXCV = 0.000000E+00
+   X = 1.023855E+00   1.522326E+00   1.570779E+00   3.141580E+00   1.364885E-04
+      -2.234332E-04   4.023434E-01   4.023313E-01
+
+   Normal return from subroutine COBYLA
+
+   NFVALS =  237   F =-4.000000E+00    MAXCV = 0.000000E+00
+   X = 1.342386E+00   7.127646E-01   1.570789E+00   3.141504E+00   2.545062E-04
+      -2.566150E-04   6.035513E-01   6.035073E-01
+🔹 Démarrage de l'optimisation SSVQE (cela peut prendre du temps)...
+
+✅ Optimisation terminée !
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -3.9999999517293734
+       x: [ 1.024e+00  1.522e+00  1.571e+00  3.142e+00  1.365e-04
+           -2.234e-04  4.023e-01  4.023e-01]
+    nfev: 217
+   maxcv: 0.0
+
+
+
+🔹 Calcul des valeurs propres (eigenvalues) finales...
+
+🎉 RÉSULTATS DU SSVQE 🎉
+  - Approximation de l'énergie de l'état fondamental (E₀): -6.000000
+  - Approximation de l'énergie du 1er état excité (E₁): 4.000000
+
+Les états propres (eigenstates) correspondants sont les états quantiques préparés par :
+  - Pour E₀: Le premier ansatz avec les paramètres optimaux.
+  - Pour E₁: Le second ansatz avec les paramètres optimaux.
+🔹 Démarrage de l'optimisation SSVQE (cela peut prendre du temps)...
+
+✅ Optimisation terminée !
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -3.999999930620554
+       x: [ 1.342e+00  7.128e-01  1.571e+00  3.142e+00  2.545e-04
+           -2.566e-04  6.036e-01  6.035e-01]
+    nfev: 237
+   maxcv: 0.0
+
+
+
+🔹 Calcul des valeurs propres (eigenvalues) finales...
+
+🎉 RÉSULTATS DU SSVQE 🎉
+  - Approximation de l'énergie de l'état fondamental (E₀): -6.000000
+  - Approximation de l'énergie du 1er état excité (E₁): 4.000000
+
+Les états propres (eigenstates) correspondants sont les états quantiques préparés par :
+  - Pour E₀: Le premier ansatz avec les paramètres optimaux.
+  - Pour E₁: Le second ansatz avec les paramètres optimaux.
+[2025-10-19 21:32:38] ✅ Stage 'Mapping' completed successfully.
+[2025-10-19 21:32:38] ==============================================================
+[2025-10-19 21:32:38] 🎉 Quantum VQA pipeline completed successfully!
+[2025-10-19 21:32:38] Results saved in: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 21:32:38] Full log: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results/../logs/pipeline[2025-10-19_21-32-23].log
+[2025-10-19 21:32:38] ==============================================================

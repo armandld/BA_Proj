@@ -1,0 +1,9 @@
+[2025-11-21 15:46:36] ==============================================================
+[2025-11-21 15:46:36] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:46:36] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:46:36] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:46:36] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:46:36] ==============================================================
+[2025-11-21 15:46:36] 🧹 Cleaning previous results...
+[2025-11-21 15:46:36] ➡️ Stage: Mapping
+[2025-11-21 15:46:36] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose

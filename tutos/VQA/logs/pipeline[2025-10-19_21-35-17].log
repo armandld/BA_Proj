@@ -1,0 +1,44 @@
+[2025-10-19 21:35:21] ==============================================================
+[2025-10-19 21:35:21] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 21:35:21] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 21:35:21] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 21:35:21] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 21:35:21] ==============================================================
+[2025-10-19 21:35:21] 🧹 Cleaning previous results...
+[2025-10-19 21:35:21] ➡️ Stage: Mapping
+[2025-10-19 21:35:21] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+
+   Normal return from subroutine COBYLA
+
+   NFVALS =  208   F =-4.000000E+00    MAXCV = 0.000000E+00
+   X = 2.139247E+00   2.566290E-01  -1.570899E+00  -3.282186E-05  -3.150699E-04
+      -2.594183E-04  -6.804254E-01   2.461077E+00
+🔹 Démarrage de l'optimisation SSVQE (cela peut prendre du temps)...
+
+✅ Optimisation terminée !
+ message: Optimization terminated successfully.
+ success: True
+  status: 1
+     fun: -3.9999999009795744
+       x: [ 2.139e+00  2.566e-01 -1.571e+00 -3.282e-05 -3.151e-04
+           -2.594e-04 -6.804e-01  2.461e+00]
+    nfev: 208
+   maxcv: 0.0
+--------------------------------------------------
+🔹 Calcul des valeurs propres (eigenvalues) finales...
+
+🎉 RÉSULTATS DU SSVQE (VALEURS PROPRES) 🎉
+  - Approximation de l'énergie de l'état fondamental (E₀): -6.000000
+  - Approximation de l'énergie du 1er état excité (E₁): 4.000000
+--------------------------------------------------
+🔹 Construction des états propres (eigenstates) finaux...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 180, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 164, in main
+    eigenstate_vectors = [
+                         ^
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 165, in <listcomp>
+    Statevector.from_instruction(circuit) for circuit in eigenstate_circuits
+    ^^^^^^^^^^^
+NameError: name 'Statevector' is not defined

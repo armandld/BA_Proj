@@ -1,0 +1,16 @@
+[2025-11-21 16:07:56] ==============================================================
+[2025-11-21 16:07:56] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 16:07:56] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 16:07:56] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 16:07:56] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 16:07:56] ==============================================================
+[2025-11-21 16:07:56] 🧹 Cleaning previous results...
+[2025-11-21 16:07:56] ➡️ Stage: Mapping
+[2025-11-21 16:07:56] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 162, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 74, in main
+    U_state_adj = U_state.adjoint().label(" $\\hat{U}^{dag}(\\theta)$ ")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not callable

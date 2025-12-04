@@ -1,0 +1,66 @@
+[2025-10-19 20:52:44] ==============================================================
+[2025-10-19 20:52:44] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 20:52:44] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 20:52:44] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 20:52:44] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:52:44] ==============================================================
+[2025-10-19 20:52:44] 🧹 Cleaning previous results...
+[2025-10-19 20:52:44] ➡️ Stage: Mapping
+[2025-10-19 20:52:44] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+🔹 Démarrage de l'optimisation VQE (cela peut prendre du temps)...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 119, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 106, in main
+    result = minimize(
+             ^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_minimize.py", line 744, in minimize
+    res = _minimize_cobyla(fun, x0, args, constraints, callback=callback,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 35, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 278, in _minimize_cobyla
+    sf = _prepare_scalar_function(fun, x0, args=args, jac=_jac)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_optimize.py", line 291, in _prepare_scalar_function
+    sf = ScalarFunction(fun, x0, args, grad, hess,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 223, in __init__
+    self._update_fun()
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 295, in _update_fun
+    fx = self._wrapped_fun(self.x)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 21, in wrapped
+    fx = fun(np.copy(x), *args)
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 55, in cost_func_vqe
+    estimator_result = estimator_job.result()[0]
+                       ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/primitive_job.py", line 51, in result
+    return self._future.result()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/statevector_estimator.py", line 147, in _run
+    return PrimitiveResult([self._run_pub(pub) for pub in pubs], metadata={"version": 2})
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/statevector_estimator.py", line 147, in <listcomp>
+    return PrimitiveResult([self._run_pub(pub) for pub in pubs], metadata={"version": 2})
+                            ^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/statevector_estimator.py", line 162, in _run_pub
+    final_state = _statevector_from_circuit(bound_circuit, rng)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/utils.py", line 245, in _statevector_from_circuit
+    sv = Statevector.from_int(0, 2**circuit.num_qubits)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/quantum_info/states/statevector.py", line 747, in from_int
+    state = np.zeros(size, dtype=complex)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: Maximum allowed dimension exceeded

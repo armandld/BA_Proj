@@ -1,0 +1,19 @@
+[2025-10-19 19:31:05] ==============================================================
+[2025-10-19 19:31:05] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 19:31:05] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 19:31:05] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 19:31:05] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 19:31:05] ==============================================================
+[2025-10-19 19:31:05] 🧹 Cleaning previous results...
+[2025-10-19 19:31:05] ➡️ Stage: Mapping
+[2025-10-19 19:31:05] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/fake_provider/local_service.py:189: UserWarning: The resilience_level option has no effect in local testing mode.
+  warnings.warn("The resilience_level option has no effect in local testing mode.")
+[-0.00702881]
+[-0.0216]
+[2025-10-19 19:31:44] ✅ Stage 'Mapping' completed successfully.
+[2025-10-19 19:31:44] ==============================================================
+[2025-10-19 19:31:44] 🎉 Quantum VQA pipeline completed successfully!
+[2025-10-19 19:31:44] Results saved in: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 19:31:44] Full log: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results/../logs/pipeline[2025-10-19_19-31-03].log
+[2025-10-19 19:31:44] ==============================================================
