@@ -11,6 +11,7 @@ set -o pipefail
 # -----------------------------
 BACKEND="aer"
 MODE="simulator"
+METHOD="COBYLA"
 NUM_SHOTS=100000
 VERBOSE=false
 SKIP_CLEANUP=false
@@ -19,7 +20,6 @@ ONLY_OPTIMIZE=false
 ONLY_EXECUTE=false
 ONLY_POSTPROCESS=false
 NUM_QBITS=4
-M_QBITS=2
 DEPTH=2
 OPT_LEVEL=3
 
@@ -33,6 +33,7 @@ SCRIPTS_LOC="$SCRIPT_DIR/src"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../" && pwd)"
 # Output and log paths
 OUT_DIR="$SCRIPT_DIR/data"
+IN_DIR="$SCRIPT_DIR/input/mapping_input.json"
 LOG_DIR="$OUT_DIR/../logs"
 LOG_FILE="$LOG_DIR/pipeline[$(date +'%Y-%m-%d_%H-%M-%S')].log"
 
@@ -82,12 +83,12 @@ display_help() {
     echo "  --mode <simulator|hardware>     Simulator or IBM Quantum (default: simulator)"
     echo "  --shots <int>                   Number of shots (default: 1024)"
     echo "  --numqbits <int>                Number of qubits (default: 4)"
-    echo "  --mqbits <int>                 Number of qubits for ZGR_QFT (default: 2)"
     echo "  --depth <int>                  Depth of the ULA ansatz (default: 2)"
     echo "  --opt_level <0|1|2|3>          Optimization level for transpiler (default: 3)"
     echo "  --out-dir <dir>                 Output directory (default: data)"
     echo "  --verbose                       Enable verbose logging"
     echo "  --skip-cleanup                  Skip deleting previous data"
+    echo "  --method <COBYLA|Nelder-Mead|Powell|L-BFGS-B>               Optimization method for minimize (default: COBYLA)"
     echo ""
     echo "Stage control (choose one):"
     echo "  --only-mapping                  Run mapping stage only"
@@ -136,13 +137,14 @@ while [[ $# -gt 0 ]]; do
         --backend) BACKEND="$2"; shift 2 ;;
         --mode) MODE="$2"; shift 2 ;;
         --shots) NUM_SHOTS="$2"; shift 2 ;;
+        --in-dir) IN_DIR="$2"; shift 2 ;;
         --out-dir) OUT_DIR="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
         --skip-cleanup) SKIP_CLEANUP=true; shift ;;
         --numqbits) NUM_QBITS="$2"; shift 2 ;;
-        --mqbits) M_QBITS="$2"; shift 2 ;;
         --depth) DEPTH="$2"; shift 2 ;;
         --opt_level) OPT_LEVEL="$2"; shift 2 ;;
+        --method) METHOD="$2"; shift 2 ;;
         --only-mapping) ONLY_MAPPING=true; shift ;;
         --only-optimize) ONLY_OPTIMIZE=true; shift ;;
         --only-execute) ONLY_EXECUTE=true; shift ;;
@@ -174,9 +176,10 @@ mkdir -p "$OUT_DIR"
 
 log "=============================================================="
 log "🚀 Starting Quantum Variational Pipeline"
-log "Mode: $MODE | Backend: $BACKEND | Shots: $NUM_SHOTS"
+log "Mode: $MODE | Backend: $BACKEND | Shots: $NUM_SHOTS | Method: $METHOD"
 log "Script Path: $SCRIPTS_LOC"
 log "Output Dir: $OUT_DIR"
+log "Input Dir: $IN_DIR"
 log "=============================================================="
 
 if [ "$SKIP_CLEANUP" = false ]; then
@@ -194,7 +197,7 @@ stop_if_reached() {
 # -----------------------------
 # 1️⃣ Problem Mapping Stage
 # -----------------------------
-run_stage "Mapping" python "$SCRIPTS_LOC/mapping.py" --out-dir "$OUT_DIR" --numqbits "$NUM_QBITS" --mqbits "$M_QBITS" --depth "$DEPTH" $([ "$VERBOSE" = true ] && echo "--verbose")
+run_stage "Mapping" python "$SCRIPTS_LOC/mapping.py" --in-dir "$IN_DIR" --out-dir "$OUT_DIR" --numqbits "$NUM_QBITS" --depth "$DEPTH" $([ "$VERBOSE" = true ] && echo "--verbose")
 stop_if_reached "mapping"
 
 # -----------------------------
@@ -206,7 +209,7 @@ stop_if_reached "optimization"
 # -----------------------------
 # 3️⃣ Quantum Execution Stage
 # -----------------------------
-run_stage "Execution" python "$SCRIPTS_LOC/execute.py" --mode "$MODE" --backend "$BACKEND" --shots "$NUM_SHOTS" --out-dir "$OUT_DIR" $([ "$VERBOSE" = true ] && echo "--verbose")
+run_stage "Execution" python "$SCRIPTS_LOC/execute.py" --mode "$MODE" --backend "$BACKEND" --shots "$NUM_SHOTS" --out-dir "$OUT_DIR" --method "$METHOD" $([ "$VERBOSE" = true ] && echo "--verbose")
 stop_if_reached "execution"
 
 # -----------------------------

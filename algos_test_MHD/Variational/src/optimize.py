@@ -1,4 +1,5 @@
 import argparse
+import warnings
 import json
 import numpy as np
 import networkx as nx
@@ -19,12 +20,14 @@ def load_mapping(file_path):
         return json.load(f)
 
 def main():
-    parser = argparse.ArgumentParser(description="Optimize QAOA parameters for Max-Cut")
+    parser = argparse.ArgumentParser(description="Optimize VQA circuits")
     parser.add_argument("--backend", default="aer", choices=["aer", "estimator"], help="Quantum backend")
     parser.add_argument("--out-dir", default="../data", help="Output directory for mapping")
-    parser.add_argument("--opt_level", type=int, required=False, choices = [0, 1, 2, 3], help="Optimization level for transpiler, default: 3.")
+    parser.add_argument("--opt_level", type=int, required=True, choices = [0, 1, 2, 3], help="Optimization level for transpiler, default: 3.")
     parser.add_argument("--verbose", action="store_true")
+
     args = parser.parse_args()
+    warnings.filterwarnings("ignore", message="The ParameterVector: .* is not fully identical")
 
     if args.backend == "aer":
         # Primitive V2 du simulateur Aer
@@ -37,23 +40,33 @@ def main():
         raise ValueError("Unsupported backend")
     
     # Create pass manager for transpilation
-    pm = generate_preset_pass_manager(optimization_level=args.opt_level if args.opt_level is not None else 3, backend=backend)
+    pm = generate_preset_pass_manager(optimization_level=args.opt_level, backend=backend)
+
+    print("Optimization Level: ", args.opt_level)
 
     mapping = load_mapping(f"{args.out_dir}/mapping.json")
     circuits = []
-    for k in [1,2]:
-        circuit_file = os.path.join(args.out_dir, f"C{k}.qpy")
+    for k in range(len(mapping["circuits"])):
+        print(f"Optimizing circuit number {k+1}...")
+        circuit_file = os.path.join(args.out_dir, f"{mapping['circuits'][k]['file']}")
         with open(circuit_file, "rb") as f:
             circuits.append(qpy.load(f)[0])  # load returns a list of circuits
+        
+        candidate_circuit = pm.run(circuits[k])
+        
+        if args.verbose:
+            candidate_circuit.draw("mpl", fold=False, idle_wires=False)
 
-        candidate_circuit = pm.run(circuits[k-1])
-
-        candidate_circuit.draw("mpl", fold=False, idle_wires=False)
-
-        candidate_circuit_file = os.path.join(args.out_dir, f"var_circuit_{k}.qpy")
+        candidate_circuit_file = os.path.join(args.out_dir, f"transpiled_circuit_{k+1}.qpy")
 
         with open(candidate_circuit_file, "wb") as f:
             qpy.dump(candidate_circuit, f)  # saves the circuit to a binary file
+
+        mapping["transpiled_circuits"].append({
+            "name": f"transpiled_{mapping['circuits'][k]['name']}",
+            "file": f"transpiled_circuit_{k+1}.qpy",
+            "measurement": mapping["circuits"][k]["measurement"]
+        })
 
     if args.verbose:
         plt.show()

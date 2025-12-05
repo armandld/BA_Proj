@@ -67,13 +67,12 @@ def build_gate_A_parameterized(num_qubits_A, theta_vector):
             ucry_decomp(qc, list(layer_params), controls, target)
     return qc
 
-def append_Matrix_SVD(U_matrix, qc, n_A, qubits_A,label=None):
-    if U_matrix is not None:
+def append_Matrix_SVD(matrix, qc, n, qubits,label=None):
+    if matrix is not None:
             # UnitaryGate gère la décomposition optimale lors de la transpilation
-            if(U_matrix.shape != (2**n_A, 2**n_A)):
-                print("n_A : ",n_A)
-                raise ValueError(f"U_matrix must be of shape {(2**n_A, 2**n_A)}")
-            qc.append(UnitaryGate(U_matrix, label=label), qubits_A)
+            if(matrix.shape != (2**n, 2**n)):
+                raise ValueError(f"Matrix must be of shape {(2**n, 2**n)}")
+            qc.append(UnitaryGate(matrix, label=label), qubits)
 
 def append_Matrix_A(gate_A, qc, n_A, n_B, qubits_A, qubits_B):
     qc.append(gate_A, qubits_A)
@@ -119,9 +118,9 @@ def prep_state_for_vqa(n_total, U_matrix, V_matrix):
     # On insère les matrices calculées par la SVD.
     # Elles sont statiques (non paramétrées par theta) car elles définissent 
     # la base propre de l'état cible. L'optimisation se fait sur les poids (Gate A).
-    
+    print("NA:", n_A, " NB:", n_B)
     append_Matrix_SVD(U_matrix, qc_c, n_A, qubits_A, label="U")
-        
+
     append_Matrix_SVD(V_matrix, qc_c, n_B, qubits_B, label="V")
 
     append_Matrix_A(gate_A, qc_c_conj, n_A, n_B, qubits_A, qubits_B)
