@@ -52,6 +52,14 @@ source setup_env.sh
 source update_env.sh
 ```
 
+# Launch the current pipeline
+By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
+
+once in the project in ```bash BA_proj/```, type
+
+```bash
+bash algos_test_MHD/Variational/run_pipeline.sh --backend aer --numqbits 4 --opt_level 3 --depth 1
+```
 # Launch a tutorial
 By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
 
