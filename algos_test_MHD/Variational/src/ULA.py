@@ -71,7 +71,7 @@ def ULA_gate(num_qubits, depth):
     # Explanation: In one depth unit, we cover all adjacent pairs (0,1), (1,2), (2,3)...
     # There are n-1 such pairs in total.
     total_params = 6 * (num_qubits - 1) * depth
-    theta = ParameterVector('θ', total_params)
+    theta = ParameterVector('ε', total_params)
     
     param_idx = 0
     

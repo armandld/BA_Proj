@@ -70,9 +70,7 @@ def prep_state_for_vqa(m_qubits):
     Prépare le circuit paramétré (squelette) et les vecteurs de paramètres.
     """
     n_params = 2**m_qubits - 1
-    theta_y_vec = ParameterVector('θy', n_params)
-    theta_z_vec = ParameterVector('θz', n_params)
-    alpha_vec   = ParameterVector('α', 1)
+    theta = ParameterVector('θ', 2*n_params+1)
 
     # Restructuration en couches pour le constructeur
     y_layers_params = []
@@ -84,18 +82,18 @@ def prep_state_for_vqa(m_qubits):
         n_controls = m_qubits - 1 - i
         n_angles = 2**n_controls
         
-        layer_y = theta_y_vec[current_idx : current_idx + n_angles]
-        layer_z = theta_z_vec[current_idx : current_idx + n_angles]
+        layer_y = theta[0:n_params][current_idx : current_idx + n_angles]
+        layer_z = theta[n_params:2*n_params][current_idx : current_idx + n_angles]
         
         y_layers_params.append(layer_y)
         z_layers_params.append(layer_z)
         current_idx += n_angles
 
     # Construction du circuit
-    gate_c = prep_state(m_qubits, y_layers_params, z_layers_params, alpha_vec[0], conjugate=False)
-    gate_c_conj = prep_state(m_qubits, y_layers_params, z_layers_params, alpha_vec[0], conjugate=True)
+    gate_c = prep_state(m_qubits, y_layers_params, z_layers_params, theta[-1], conjugate=False)
+    gate_c_conj = prep_state(m_qubits, y_layers_params, z_layers_params, theta[-1], conjugate=True)
     
-    return gate_c, gate_c_conj, theta_y_vec, theta_z_vec, alpha_vec
+    return gate_c, gate_c_conj, theta
 
 # -----------------------------
 # Main entry point

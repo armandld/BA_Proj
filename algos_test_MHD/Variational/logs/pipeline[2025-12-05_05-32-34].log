@@ -1,0 +1,42 @@
+[2025-12-05 05:32:38] ==============================================================
+[2025-12-05 05:32:38] 🚀 Starting Quantum Variational Pipeline
+[2025-12-05 05:32:38] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-05 05:32:38] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-05 05:32:38] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-05 05:32:38] Input Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json
+[2025-12-05 05:32:38] ==============================================================
+[2025-12-05 05:32:38] 🧹 Cleaning previous results...
+[2025-12-05 05:32:38] ➡️ Stage: Mapping
+[2025-12-05 05:32:38] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --in-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --depth 1
+Processing role: theta with method: ZGR_rot
+Condition n (4) > 2m (2).
+-> Utilisation de la méthode Booléenne (Rapide, avec Ancillas)
+Processing role: phi with method: ZGR_Schmidt
+NA: 1  NB: 1
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+Processing role: eps with method: ULA
+[2025-12-05 05:32:43] ✅ Stage 'Mapping' completed successfully.
+[2025-12-05 05:32:43] ➡️ Stage: Optimization
+[2025-12-05 05:32:43] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --opt_level 3
+Optimization Level:  3
+Optimizing circuit number 1...
+Optimizing circuit number 2...
+[2025-12-05 05:33:00] ✅ Stage 'Optimization' completed successfully.
+[2025-12-05 05:33:00] ➡️ Stage: Execution
+[2025-12-05 05:33:00] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py --mode simulator --backend aer --shots 100000 --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --method COBYLA
+Loading 2 circuits...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 245, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 149, in main
+    obs = logical_obs.apply_layout(qc.layout)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/quantum_info/operators/symplectic/sparse_pauli_op.py", line 1193, in apply_layout
+    return new_op.compose(self, qargs=layout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/quantum_info/operators/symplectic/sparse_pauli_op.py", line 337, in compose
+    self._op_shape.compose(other._op_shape, qargs, front)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/quantum_info/operators/op_shape.py", line 475, in compose
+    raise QiskitError(
+qiskit.exceptions.QiskitError: 'Number of qargs does not match (9 != 4)'

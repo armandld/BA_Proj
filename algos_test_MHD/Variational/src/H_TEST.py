@@ -1,9 +1,5 @@
-# scripts/mapping.py
+# scripts/H_TEST.py
 
-"""
-Stage 1: Problem Mapping for MaxCut (QAOA pipeline)
-Compatible with Qiskit 2.x (uses SparsePauliOp instead of qiskit.opflow)
-"""
 
 import argparse
 import json

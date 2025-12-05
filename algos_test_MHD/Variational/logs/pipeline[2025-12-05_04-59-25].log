@@ -1,0 +1,34 @@
+[2025-12-05 04:59:29] ==============================================================
+[2025-12-05 04:59:29] 🚀 Starting Quantum Variational Pipeline
+[2025-12-05 04:59:29] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-05 04:59:29] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-05 04:59:29] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-05 04:59:29] Input Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json
+[2025-12-05 04:59:29] ==============================================================
+[2025-12-05 04:59:29] 🧹 Cleaning previous results...
+[2025-12-05 04:59:29] ➡️ Stage: Mapping
+[2025-12-05 04:59:29] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --in-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --depth 1
+Processing role: theta with method: ZGR_rot
+Condition n (4) > 2m (2).
+-> Utilisation de la méthode Booléenne (Rapide, avec Ancillas)
+Processing role: phi with method: ZGR_Schmidt
+NA: 1  NB: 1
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+Processing role: eps with method: ULA
+[2025-12-05 04:59:34] ✅ Stage 'Mapping' completed successfully.
+[2025-12-05 04:59:34] ➡️ Stage: Optimization
+[2025-12-05 04:59:34] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --opt_level 3
+Optimization Level:  3
+Optimizing circuit number 1...
+Optimizing circuit number 2...
+[2025-12-05 04:59:51] ✅ Stage 'Optimization' completed successfully.
+[2025-12-05 04:59:51] ➡️ Stage: Execution
+[2025-12-05 04:59:51] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py --mode simulator --backend aer --shots 100000 --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --method COBYLA
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 159, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 47, in main
+    hamiltonian_terms = mapping_data["hamiltonian"]
+                        ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'hamiltonian'

@@ -1,0 +1,63 @@
+[2025-12-05 05:17:53] ==============================================================
+[2025-12-05 05:17:53] 🚀 Starting Quantum Variational Pipeline
+[2025-12-05 05:17:53] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-05 05:17:53] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-05 05:17:53] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-05 05:17:53] Input Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json
+[2025-12-05 05:17:53] ==============================================================
+[2025-12-05 05:17:53] 🧹 Cleaning previous results...
+[2025-12-05 05:17:53] ➡️ Stage: Mapping
+[2025-12-05 05:17:53] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --in-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --depth 1
+Processing role: theta with method: ZGR_rot
+Condition n (4) > 2m (2).
+-> Utilisation de la méthode Booléenne (Rapide, avec Ancillas)
+Processing role: phi with method: ZGR_Schmidt
+NA: 1  NB: 1
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+Processing role: eps with method: ULA
+[2025-12-05 05:17:56] ✅ Stage 'Mapping' completed successfully.
+[2025-12-05 05:17:56] ➡️ Stage: Optimization
+[2025-12-05 05:17:56] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --opt_level 3
+Optimization Level:  3
+Optimizing circuit number 1...
+Optimizing circuit number 2...
+[2025-12-05 05:18:13] ✅ Stage 'Optimization' completed successfully.
+[2025-12-05 05:18:13] ➡️ Stage: Execution
+[2025-12-05 05:18:13] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py --mode simulator --backend aer --shots 100000 --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --method COBYLA
+Loading 0 circuits...
+Starting optimization with COBYLA on 22 parameters...
+Initial Cost evaluation...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 240, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 205, in main
+    res = minimize(
+          ^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_minimize.py", line 744, in minimize
+    res = _minimize_cobyla(fun, x0, args, constraints, callback=callback,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 35, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 278, in _minimize_cobyla
+    sf = _prepare_scalar_function(fun, x0, args=args, jac=_jac)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_optimize.py", line 291, in _prepare_scalar_function
+    sf = ScalarFunction(fun, x0, args, grad, hess,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 223, in __init__
+    self._update_fun()
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 295, in _update_fun
+    fx = self._wrapped_fun(self.x)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 21, in wrapped
+    fx = fun(np.copy(x), *args)
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/execute.py", line 188, in cost_function
+    val1 = results[0].data.evs # Expectation value circuit 1
+           ~~~~~~~^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/primitives/containers/primitive_result.py", line 44, in __getitem__
+    return self._pub_results[index]
+           ~~~~~~~~~~~~~~~~~^^^^^^^
+IndexError: list index out of range

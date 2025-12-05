@@ -109,7 +109,7 @@ def prep_state_for_vqa(n_total, U_matrix, V_matrix):
     # --- 1. Gate A (Paramétrée : Coefficients de Schmidt) ---
     # Nombre de params = 2^n_A - 1
     num_params_A = 2**n_A - 1
-    params_A = ParameterVector('θ_Schmidt', num_params_A)
+    params_A = ParameterVector('Φ', num_params_A)
     
     gate_A = build_gate_A_parameterized(n_A, params_A).to_gate()
     append_Matrix_A(gate_A, qc_c, n_A, n_B, qubits_A, qubits_B)

@@ -1,0 +1,34 @@
+[2025-12-05 04:14:20] ==============================================================
+[2025-12-05 04:14:20] 🚀 Starting Quantum Variational Pipeline
+[2025-12-05 04:14:20] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-05 04:14:20] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-05 04:14:21] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-05 04:14:21] Input Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json
+[2025-12-05 04:14:21] ==============================================================
+[2025-12-05 04:14:21] 🧹 Cleaning previous results...
+[2025-12-05 04:14:21] ➡️ Stage: Mapping
+[2025-12-05 04:14:21] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --in-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --depth 2
+Processing role: theta with method: ZGR_Schmidt
+NA: 1  NB: 1
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+Processing role: phi with method: ZGR_rot
+Condition n (4) <= 2m (4).
+-> Utilisation de la méthode QFT (Compacte, sans Ancilla)
+Processing role: eps with method: ULA
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py", line 203, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py", line 164, in main
+    qc1 = H_TEST_DIM_1(num_qbits, U_theta, U_phi, U_eps)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/H_TEST.py", line 85, in H_TEST_DIM_1
+    qc.append(U_eps_inv.control(1), [0] + list(range(1, num_qubits+1)))
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2561, in append
+    circuit_scope.append(instruction)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 6736, in append
+    return self.circuit._append(instruction, _standard_gate=_standard_gate)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2636, in _append
+    self._data.append(instruction)
+qiskit.circuit.exceptions.CircuitError: "name conflict adding parameter 'θ[0]'"

@@ -1,0 +1,73 @@
+[2025-12-05 04:31:41] ==============================================================
+[2025-12-05 04:31:41] 🚀 Starting Quantum Variational Pipeline
+[2025-12-05 04:31:41] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-05 04:31:41] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src
+[2025-12-05 04:31:41] Output Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data
+[2025-12-05 04:31:41] Input Dir: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json
+[2025-12-05 04:31:41] ==============================================================
+[2025-12-05 04:31:42] 🧹 Cleaning previous results...
+[2025-12-05 04:31:42] ➡️ Stage: Mapping
+[2025-12-05 04:31:42] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py --in-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/input/mapping_input.json --out-dir /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/data --numqbits 4 --depth 1
+Processing role: theta with method: ZGR_rot
+Condition n (4) > 2m (2).
+-> Utilisation de la méthode Booléenne (Rapide, avec Ancillas)
+Processing role: phi with method: ZGR_Schmidt
+NA: 0  NB: 1
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py", line 203, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/mapping.py", line 100, in main
+    current_gate, current_params = ZGR_QFT_gate(
+                                   ^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/src/ZGR_QFT.py", line 55, in ZGR_QFT_gate
+    full_qc.append(gate_c.control(1), [0] + list(range(num_qubits - m_qubits, num_qubits)))
+                   ^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/gate.py", line 142, in control
+    return add_control(self, num_ctrl_qubits, label, ctrl_state)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/add_control.py", line 62, in add_control
+    cgate = control(operation, num_ctrl_qubits=num_ctrl_qubits, label=label, ctrl_state=ctrl_state)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/add_control.py", line 121, in control
+    unrolled_gate = _unroll_gate(operation, basis_gates=basis)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/add_control.py", line 291, in _unroll_gate
+    opqc = pm.run(circ)
+           ^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/transpiler/passmanager.py", line 464, in wrapper
+    return meth(*meth_args, **meth_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/transpiler/passmanager.py", line 226, in run
+    return super().run(
+           ^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/passmanager/passmanager.py", line 249, in run
+    out = [
+          ^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/passmanager/passmanager.py", line 250, in <listcomp>
+    _run_workflow(program=program, pass_manager=self, callback=callback, **kwargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/passmanager/passmanager.py", line 310, in _run_workflow
+    passmanager_ir, final_state = flow_controller.execute(
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/passmanager/base_tasks.py", line 218, in execute
+    passmanager_ir, state = next_task.execute(
+                            ^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/transpiler/basepasses.py", line 195, in execute
+    new_dag, state = super().execute(
+                     ^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/passmanager/base_tasks.py", line 98, in execute
+    ret = self.run(passmanager_ir)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/transpiler/passes/basis/unroll_custom_definitions.py", line 93, in run
+    unrolled = getattr(node.op, "definition", None)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/instruction.py", line 335, in definition
+    self._define()
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/library/generalized_gates/unitary.py", line 161, in _define
+    self.definition = qs_decomposition(self.to_matrix())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/synthesis/unitary/qsd.py", line 128, in qs_decomposition
+    (u1, u2), vtheta, (v1h, v2h) = scipy.linalg.cossin(mat, separate=True, p=dim_o2, q=dim_o2)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/linalg/_decomp_cossin.py", line 129, in cossin
+    raise ValueError("When p and q are None, exactly four arrays"
+ValueError: When p and q are None, exactly four arrays should be in X, got 1

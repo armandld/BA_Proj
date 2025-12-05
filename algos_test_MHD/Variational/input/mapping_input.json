@@ -1,17 +1,15 @@
 [
-  { "role": "theta", "prep": "ZGR_Schmidt",
+  { "role": "theta", "prep": "ZGR_rot",
     "vector": [
                 [0.5, 0], 
-                [0, 0.5], 
-                [0, 0], 
-                [0, 0]
+                [0, 0.5]
               ] 
   },
-  { "role": "phi",   "prep": "ZGR_rot",
+  { "role": "phi",   "prep": "ZGR_Schmidt",
     "vector":[
-                [0.707, 0], 
-                [0, 0], 
-                [0.707, 0], 
+                [0.707, 0],
+                [0.707, 0],
+                [0, 0],
                 [0, 0]
               ]
   },

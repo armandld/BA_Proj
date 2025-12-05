@@ -37,8 +37,8 @@ def ZGR_QFT_gate(m_qubits, num_qubits, U_matrix=None, V_matrix=None, rot=False):
     
     # Gate |c>
     if(rot == True):
-        gate_c, gate_c_conj, theta_y_vec, theta_z_vec, alpha_vec = uniform_rot_prep(m_qubits)
-        params = [theta_y_vec, theta_z_vec, alpha_vec]
+        gate_c, gate_c_conj, theta = uniform_rot_prep(m_qubits)
+        params = theta
     else:
         if(U_matrix is None or V_matrix is None):
             raise ValueError("U_matrix and V_matrix must be provided for Schmidt preparation.")

@@ -57,16 +57,31 @@ def main():
         if args.verbose:
             candidate_circuit.draw("mpl", fold=False, idle_wires=False)
 
+        # Essential to enable the serialization of the candidate circuit
+        candidate_circuit.global_phase = 0
+
         candidate_circuit_file = os.path.join(args.out_dir, f"transpiled_circuit_{k+1}.qpy")
+        threshold = 10  # ne print que si le nombre de paramètres dépasse ce seuil
+
+        """for instruction in candidate_circuit.data:
+            instr = instruction.operation
+            num_params = len(getattr(instr, 'params', []))
+            if num_params > threshold:
+                print(f"Gate: {instr.name}, Num params: {num_params}")
+        """
 
         with open(candidate_circuit_file, "wb") as f:
             qpy.dump(candidate_circuit, f)  # saves the circuit to a binary file
 
-        mapping["transpiled_circuits"].append({
+        mapping['transpiled_circuits'].append({
             "name": f"transpiled_{mapping['circuits'][k]['name']}",
             "file": f"transpiled_circuit_{k+1}.qpy",
             "measurement": mapping["circuits"][k]["measurement"]
         })
+
+    json_file = os.path.join(args.out_dir, "mapping.json")
+    with open(json_file, "w") as f:
+        json.dump(mapping, f, indent=2)
 
     if args.verbose:
         plt.show()
