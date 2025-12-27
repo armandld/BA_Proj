@@ -1,0 +1,23 @@
+[2025-12-27 15:59:16] ==============================================================
+[2025-12-27 15:59:16] 🚀 Starting Quantum Pipeline
+[2025-12-27 15:59:16] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 15:59:16] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 15:59:16] Output Dir: vqa_output.json
+[2025-12-27 15:59:16] Input Dir: vqa_input.json
+[2025-12-27 15:59:16] ==============================================================
+[2025-12-27 15:59:16] 🧹 Cleaning previous results...
+[2025-12-27 15:59:16] ➡️ Stage: TEST
+[2025-12-27 15:59:16] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-dir vqa_input.json --out-dir vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('10000001', 476), ('00101000', 188), ('10011011', 107)] ...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py", line 142, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py", line 130, in main
+    with open(args.out_dir, 'w') as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^
+IsADirectoryError: [Errno 21] Is a directory: 'vqa_output.json'

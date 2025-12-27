@@ -1,0 +1,70 @@
+[2025-12-27 16:42:54] ==============================================================
+[2025-12-27 16:42:54] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 16:42:54] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 16:42:54] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 16:42:54] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 16:42:54] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 16:42:54] ==============================================================
+[2025-12-27 16:42:54] 🧹 Cleaning previous results...
+[2025-12-27 16:42:54] ➡️ Stage: Main Pipeline
+[2025-12-27 16:42:54] ➡️ Stage: Main Pipeline
+[2025-12-27 16:42:54] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 16:42:54] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 16:42:56] ==============================================================
+[2025-12-27 16:42:56] ==============================================================
+[2025-12-27 16:42:56] 🚀 Starting Quantum Pipeline
+[2025-12-27 16:42:56] 🚀 Starting Quantum Pipeline
+[2025-12-27 16:42:56] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 16:42:56] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 16:42:56] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 16:42:56] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 16:42:57] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 16:42:57] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 16:42:57] Input File: /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json
+[2025-12-27 16:42:57] Input File: /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json
+[2025-12-27 16:42:57] ==============================================================
+[2025-12-27 16:42:57] ==============================================================
+[2025-12-27 16:42:57] 🧹 Cleaning previous results...
+[2025-12-27 16:42:57] 🧹 Cleaning previous results...
+[2025-12-27 16:42:57] ➡️ Stage: TEST
+[2025-12-27 16:42:57] ➡️ Stage: TEST
+[2025-12-27 16:42:57] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_output.json --out-dir /Users/Sayu/Desktop/BA_Proj/data --numqbits 8
+[2025-12-27 16:42:57] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/src/../data/vqa_output.json --out-dir /Users/Sayu/Desktop/BA_Proj/data --numqbits 8
+usage: TEST1.py [-h] --in-file IN_FILE --out-file OUT_FILE
+                [--numqbits NUMQBITS] [--shots SHOTS] [--backend BACKEND]
+                [--depth DEPTH] [--mode MODE] [--method METHOD]
+                [--opt_level OPT_LEVEL]
+usage: TEST1.py [-h] --in-file IN_FILE --out-file OUT_FILE
+                [--numqbits NUMQBITS] [--shots SHOTS] [--backend BACKEND]
+                [--depth DEPTH] [--mode MODE] [--method METHOD]
+                [--opt_level OPT_LEVEL]
+TEST1.py: error: unrecognized arguments: --out-dir /Users/Sayu/Desktop/BA_Proj/data
+TEST1.py: error: unrecognized arguments: --out-dir /Users/Sayu/Desktop/BA_Proj/data
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+❌ Erreur critique dans le VQA Shell: Command '['bash', '/Users/Sayu/Desktop/BA_Proj/src/run_VQA_pipeline.sh', '--in-file', '/Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json', '--out-dir', '/Users/Sayu/Desktop/BA_Proj/data', '--out-file', '/Users/Sayu/Desktop/BA_Proj/src/../data/vqa_output.json', '--backend', 'aer', '--method', 'COBYLA', '--mode', 'simulator', '--opt_level', '1', '--shots', '100000', '--depth', '1', '--numqbits', '8']' returned non-zero exit status 2.
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 178, in <module>
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+❌ Erreur critique dans le VQA Shell: Command '['bash', '/Users/Sayu/Desktop/BA_Proj/src/run_VQA_pipeline.sh', '--in-file', '/Users/Sayu/Desktop/BA_Proj/src/../data/vqa_input.json', '--out-dir', '/Users/Sayu/Desktop/BA_Proj/data', '--out-file', '/Users/Sayu/Desktop/BA_Proj/src/../data/vqa_output.json', '--backend', 'aer', '--method', 'COBYLA', '--mode', 'simulator', '--opt_level', '1', '--shots', '100000', '--depth', '1', '--numqbits', '8']' returned non-zero exit status 2.
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 178, in <module>
+    main()
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 123, in main
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 123, in main
+    patches_to_create = grid.decode_refinement_patches(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    patches_to_create = grid.decode_refinement_patches(
+  File "/Users/Sayu/Desktop/BA_Proj/src/Simulation/grid.py", line 70, in decode_refinement_patches
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/src/Simulation/grid.py", line 70, in decode_refinement_patches
+    probs_h = np.array(vqa_probs[:num_edges]).reshape((self.N, self.N))
+                       ~~~~~~~~~^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+    probs_h = np.array(vqa_probs[:num_edges]).reshape((self.N, self.N))
+                       ~~~~~~~~~^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable

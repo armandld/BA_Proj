@@ -1,0 +1,23 @@
+[2025-12-27 18:36:51] ==============================================================
+[2025-12-27 18:36:51] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:36:51] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:36:51] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:36:51] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:36:51] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:36:51] ==============================================================
+[2025-12-27 18:36:51] ➡️ Stage: TEST
+[2025-12-27 18:36:51] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 32
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 4 angles
+   -> Theta_v: 4 angles
+⚙️  Génération de 1000 shots pour 32 qubits...
+📊 Résultat Counts (Extrait): [('00000000100010001001101000000011', 496), ('11111100100110111110101001111101', 109), ('01011100101111011011101010100011', 152)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 18:36:52] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:36:52] ==============================================================
+[2025-12-27 18:36:52] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:36:52] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:36:52] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-36-49].log
+[2025-12-27 18:36:52] ==============================================================

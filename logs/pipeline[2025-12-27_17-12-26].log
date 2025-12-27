@@ -1,0 +1,76 @@
+[2025-12-27 17:12:30] ==============================================================
+[2025-12-27 17:12:30] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 17:12:30] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:12:30] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 17:12:30] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:12:30] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 17:12:30] ==============================================================
+[2025-12-27 17:12:30] 🧹 Cleaning previous results...
+[2025-12-27 17:12:30] ➡️ Stage: Main Pipeline
+[2025-12-27 17:12:30] ➡️ Stage: Main Pipeline
+[2025-12-27 17:12:30] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 17:12:30] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 17:12:34] ==============================================================
+[2025-12-27 17:12:34] ==============================================================
+[2025-12-27 17:12:34] 🚀 Starting Quantum Pipeline
+[2025-12-27 17:12:34] 🚀 Starting Quantum Pipeline
+[2025-12-27 17:12:34] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:12:34] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:12:34] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 17:12:34] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 17:12:34] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:12:34] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:12:34] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 17:12:34] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 17:12:34] ==============================================================
+[2025-12-27 17:12:34] ==============================================================
+[2025-12-27 17:12:34] ➡️ Stage: TEST
+[2025-12-27 17:12:34] ➡️ Stage: TEST
+[2025-12-27 17:12:34] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+[2025-12-27 17:12:34] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11111101', 70), ('00100011', 385), ('11100111', 121)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11111101', 70), ('00100011', 385), ('11100111', 121)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 17:12:34] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 17:12:34] ✅ Stage 'TEST' completed successfully.
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+❌ Erreur critique dans le VQA Shell: Command '['bash', '/Users/Sayu/Desktop/BA_Proj/src/run_VQA_pipeline.sh', '--in-file', '/Users/Sayu/Desktop/BA_Proj/data/vqa_input.json', '--out-dir', '/Users/Sayu/Desktop/BA_Proj/data', '--out-file', '/Users/Sayu/Desktop/BA_Proj/data/vqa_output.json', '--backend', 'aer', '--method', 'COBYLA', '--mode', 'simulator', '--opt_level', '1', '--shots', '100000', '--depth', '1', '--numqbits', '8']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 183, in <module>
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+❌ Erreur critique dans le VQA Shell: Command '['bash', '/Users/Sayu/Desktop/BA_Proj/src/run_VQA_pipeline.sh', '--in-file', '/Users/Sayu/Desktop/BA_Proj/data/vqa_input.json', '--out-dir', '/Users/Sayu/Desktop/BA_Proj/data', '--out-file', '/Users/Sayu/Desktop/BA_Proj/data/vqa_output.json', '--backend', 'aer', '--method', 'COBYLA', '--mode', 'simulator', '--opt_level', '1', '--shots', '100000', '--depth', '1', '--numqbits', '8']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 183, in <module>
+    main()
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 128, in main
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 128, in main
+    patches_to_create = grid.decode_refinement_patches(
+    patches_to_create = grid.decode_refinement_patches(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/src/Simulation/grid.py", line 70, in decode_refinement_patches
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/src/Simulation/grid.py", line 70, in decode_refinement_patches
+    probs_h = np.array(vqa_probs[:num_edges]).reshape((self.N, self.N))
+    probs_h = np.array(vqa_probs[:num_edges]).reshape((self.N, self.N))
+                       ~~~~~~~~~^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+                       ~~~~~~~~~^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable

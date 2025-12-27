@@ -1,0 +1,100 @@
+[2025-12-27 18:27:04] ==============================================================
+[2025-12-27 18:27:04] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 18:27:04] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:27:04] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 18:27:04] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:27:04] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 18:27:04] ==============================================================
+[2025-12-27 18:27:04] 🧹 Cleaning previous results...
+[2025-12-27 18:27:04] ➡️ Stage: Main Pipeline
+[2025-12-27 18:27:04] ➡️ Stage: Main Pipeline
+[2025-12-27 18:27:04] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 18:27:04] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+Initialisation Orszag-Tang (Grille 2x2)...
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+Lancement pour 100 pas de temps...
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 18:27:07] ==============================================================
+[2025-12-27 18:27:07] ==============================================================
+[2025-12-27 18:27:07] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:27:07] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:27:07] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:27:07] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:27:07] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:27:07] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:27:07] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:27:07] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:27:07] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:27:07] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:27:07] ==============================================================
+[2025-12-27 18:27:07] ==============================================================
+[2025-12-27 18:27:07] ➡️ Stage: TEST
+[2025-12-27 18:27:07] ➡️ Stage: TEST
+[2025-12-27 18:27:07] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+[2025-12-27 18:27:07] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11001011', 260), ('01110111', 189), ('01011100', 41)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11001011', 260), ('01110111', 189), ('01011100', 41)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 18:27:08] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:27:08] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:27:08] ==============================================================
+[2025-12-27 18:27:08] ==============================================================
+[2025-12-27 18:27:08] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:27:08] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:27:08] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:27:08] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:27:08] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-27-05].log
+[2025-12-27 18:27:08] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-27-05].log
+[2025-12-27 18:27:08] ==============================================================
+[2025-12-27 18:27:08] ==============================================================
+VQA Probabilities: [0.95  0.85  0.513 0.634 0.429 0.332 0.746 0.673]
+VQA Probabilities: [0.95  0.85  0.513 0.634 0.429 0.332 0.746 0.673]
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 164, in <module>
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 164, in <module>
+    main()
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 140, in main
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 140, in main
+    plot_amr_state(sim, active_patches, t, DT, t)
+    plot_amr_state(sim, active_patches, t, DT, t)
+  File "/Users/Sayu/Desktop/BA_Proj/src/visual.py", line 24, in plot_amr_state
+  File "/Users/Sayu/Desktop/BA_Proj/src/visual.py", line 24, in plot_amr_state
+    im = ax.pcolormesh(X, Y, Jz_coarse, cmap=cmap, vmin=vmin, vmax=vmax, 
+    im = ax.pcolormesh(X, Y, Jz_coarse, cmap=cmap, vmin=vmin, vmax=vmax, 
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/__init__.py", line 1524, in inner
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/__init__.py", line 1524, in inner
+    return func(
+           ^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/axes/_axes.py", line 6528, in pcolormesh
+    return func(
+           ^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/axes/_axes.py", line 6528, in pcolormesh
+    X, Y, C, shading = self._pcolorargs('pcolormesh', *args,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/axes/_axes.py", line 6066, in _pcolorargs
+    X, Y, C, shading = self._pcolorargs('pcolormesh', *args,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/axes/_axes.py", line 6066, in _pcolorargs
+    raise TypeError('Dimensions of C %s are incompatible with'
+TypeError: Dimensions of C (2, 2) are incompatible with X (3) and/or Y (3); see help(pcolormesh)
+    raise TypeError('Dimensions of C %s are incompatible with'
+TypeError: Dimensions of C (2, 2) are incompatible with X (3) and/or Y (3); see help(pcolormesh)

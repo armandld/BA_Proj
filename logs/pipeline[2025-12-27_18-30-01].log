@@ -1,0 +1,158 @@
+[2025-12-27 18:30:03] ==============================================================
+[2025-12-27 18:30:03] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 18:30:03] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:03] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 18:30:03] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:03] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 18:30:03] ==============================================================
+[2025-12-27 18:30:03] 🧹 Cleaning previous results...
+[2025-12-27 18:30:03] ➡️ Stage: Main Pipeline
+[2025-12-27 18:30:03] ➡️ Stage: Main Pipeline
+[2025-12-27 18:30:03] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 18:30:03] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+Initialisation Orszag-Tang (Grille 2x2)...
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+Lancement pour 100 pas de temps...
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:30:07] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:30:07] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:07] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:07] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:30:07] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:30:07] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:07] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:07] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:30:07] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] ➡️ Stage: TEST
+[2025-12-27 18:30:07] ➡️ Stage: TEST
+[2025-12-27 18:30:07] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+[2025-12-27 18:30:07] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11110011', 88), ('00011000', 356), ('10100010', 63)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11110011', 88), ('00011000', 356), ('10100010', 63)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 18:30:07] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:30:07] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:30:07] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:30:07] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:07] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:07] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-30-05].log
+[2025-12-27 18:30:07] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-30-05].log
+[2025-12-27 18:30:07] ==============================================================
+[2025-12-27 18:30:07] ==============================================================
+VQA Probabilities: [0.95  0.85  0.353 0.656 0.717 0.148 0.438 0.551]
+VQA Probabilities: [0.95  0.85  0.353 0.656 0.717 0.148 0.438 0.551]
+Step 0/100 (t=0.00) - Max Jz: 0.0000
+Step 0/100 (t=0.00) - Max Jz: 0.0000
+Step 1/100 (t=0.01) - Max Jz: 0.0000
+Step 1/100 (t=0.01) - Max Jz: 0.0000
+Step 2/100 (t=0.02) - Max Jz: 0.0000
+Step 2/100 (t=0.02) - Max Jz: 0.0000
+Step 3/100 (t=0.03) - Max Jz: 0.0000
+Step 3/100 (t=0.03) - Max Jz: 0.0000
+Step 4/100 (t=0.04) - Max Jz: 0.0000
+Step 4/100 (t=0.04) - Max Jz: 0.0000
+Step 5/100 (t=0.05) - Max Jz: 0.0000
+Step 5/100 (t=0.05) - Max Jz: 0.0000
+Step 6/100 (t=0.06) - Max Jz: 0.0000
+Step 6/100 (t=0.06) - Max Jz: 0.0000
+Step 7/100 (t=0.07) - Max Jz: 0.0000
+Step 7/100 (t=0.07) - Max Jz: 0.0000
+Step 8/100 (t=0.08) - Max Jz: 0.0000
+Step 8/100 (t=0.08) - Max Jz: 0.0000
+Step 9/100 (t=0.09) - Max Jz: 0.0000
+Step 9/100 (t=0.09) - Max Jz: 0.0000
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:30:18] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:30:18] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:18] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:18] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:30:18] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:30:18] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:18] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:18] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:30:18] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] ➡️ Stage: TEST
+[2025-12-27 18:30:18] ➡️ Stage: TEST
+[2025-12-27 18:30:18] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+[2025-12-27 18:30:18] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11010000', 415), ('01010001', 154), ('01101000', 171)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('11010000', 415), ('01010001', 154), ('01101000', 171)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 18:30:18] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:30:18] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:30:18] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:30:18] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:18] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:18] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-30-16].log
+[2025-12-27 18:30:18] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-30-16].log
+[2025-12-27 18:30:18] ==============================================================
+[2025-12-27 18:30:18] ==============================================================
+VQA Probabilities: [0.95  0.85  0.332 0.637 0.317 0.112 0.11  0.277]
+VQA Probabilities: [0.95  0.85  0.332 0.637 0.317 0.112 0.11  0.277]
+Step 10/100 (t=0.10) - Max Jz: 0.0000
+Step 10/100 (t=0.10) - Max Jz: 0.0000
+Step 11/100 (t=0.11) - Max Jz: 0.0000
+Step 11/100 (t=0.11) - Max Jz: 0.0000
+Step 12/100 (t=0.12) - Max Jz: 0.0000
+Step 12/100 (t=0.12) - Max Jz: 0.0000
+Step 13/100 (t=0.13) - Max Jz: 0.0000
+Step 13/100 (t=0.13) - Max Jz: 0.0000
+Step 14/100 (t=0.14) - Max Jz: 0.0000
+Step 14/100 (t=0.14) - Max Jz: 0.0000
+Step 15/100 (t=0.15) - Max Jz: 0.0000
+Step 15/100 (t=0.15) - Max Jz: 0.0000
+Step 16/100 (t=0.16) - Max Jz: 0.0000
+Step 16/100 (t=0.16) - Max Jz: 0.0000
+Step 17/100 (t=0.17) - Max Jz: 0.0000
+Step 17/100 (t=0.17) - Max Jz: 0.0000
+Step 18/100 (t=0.18) - Max Jz: 0.0000
+Step 18/100 (t=0.18) - Max Jz: 0.0000
+Step 19/100 (t=0.19) - Max Jz: 0.0000
+Step 19/100 (t=0.19) - Max Jz: 0.0000
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project

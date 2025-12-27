@@ -1,0 +1,38 @@
+[2025-12-27 17:03:57] ==============================================================
+[2025-12-27 17:03:57] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 17:03:57] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:03:57] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 17:03:57] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:03:57] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 17:03:57] ==============================================================
+[2025-12-27 17:03:57] 🧹 Cleaning previous results...
+[2025-12-27 17:03:57] ➡️ Stage: Main Pipeline
+[2025-12-27 17:03:57] ➡️ Stage: Main Pipeline
+[2025-12-27 17:03:58] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 17:03:58] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+DATA DIR /Users/Sayu/Desktop/BA_Proj/data
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 185, in <module>
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+DATA DIR /Users/Sayu/Desktop/BA_Proj/data
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 185, in <module>
+    main()
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 129, in main
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 129, in main
+    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh")
+    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 23, in call_vqa_shell
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 23, in call_vqa_shell
+    print("input_file",{input_file})
+    print("input_file",{input_file})
+                        ^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'input_file' where it is not associated with a value
+                        ^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'input_file' where it is not associated with a value

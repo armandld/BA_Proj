@@ -1,0 +1,23 @@
+[2025-12-27 18:30:35] ==============================================================
+[2025-12-27 18:30:35] 🚀 Starting Quantum Pipeline
+[2025-12-27 18:30:35] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 18:30:35] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 18:30:35] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:35] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 18:30:35] ==============================================================
+[2025-12-27 18:30:35] ➡️ Stage: TEST
+[2025-12-27 18:30:35] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 128
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 8 angles
+   -> Theta_v: 8 angles
+⚙️  Génération de 1000 shots pour 128 qubits...
+📊 Résultat Counts (Extrait): [('01000011011010101111101111101101110001111100110100011011101001011101101110100110000100111010111100101100100000100100111110000010', 84), ('00010000010001100001111010111011010101101100100101010101010001100010110011111110111101100101001001110101110100111110011100001000', 275), ('10010001001011010010101010100010101001111010110110101110000110010011100101000000110101100100100111100010011100000001010000011001', 105)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 18:30:36] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 18:30:36] ==============================================================
+[2025-12-27 18:30:36] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 18:30:36] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 18:30:36] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_18-30-33].log
+[2025-12-27 18:30:36] ==============================================================

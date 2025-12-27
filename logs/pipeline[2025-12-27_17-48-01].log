@@ -1,0 +1,122 @@
+[2025-12-27 17:48:05] ==============================================================
+[2025-12-27 17:48:05] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2025-12-27 17:48:05] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:48:05] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2025-12-27 17:48:05] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:48:05] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2025-12-27 17:48:05] ==============================================================
+[2025-12-27 17:48:05] 🧹 Cleaning previous results...
+[2025-12-27 17:48:05] ➡️ Stage: Main Pipeline
+[2025-12-27 17:48:05] ➡️ Stage: Main Pipeline
+[2025-12-27 17:48:05] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+[2025-12-27 17:48:05] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 1.0 --dt 0.01 --hybrid-dt 0.1 --depth 1 --backend aer --shots 100000 --method COBYLA
+Initialisation Orszag-Tang (Grille 2x2)...
+Initialisation Orszag-Tang (Grille 2x2)...
+Lancement pour 100 pas de temps...
+Lancement pour 100 pas de temps...
+🔹 Detected Conda environment: qiskit-project
+🔹 Detected Conda environment: qiskit-project
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] 🚀 Starting Quantum Pipeline
+[2025-12-27 17:48:10] 🚀 Starting Quantum Pipeline
+[2025-12-27 17:48:10] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:48:10] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2025-12-27 17:48:10] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 17:48:10] Script Path: /Users/Sayu/Desktop/BA_Proj/src/VQA
+[2025-12-27 17:48:10] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:48:10] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:48:10] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 17:48:10] Input File: /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] ➡️ Stage: TEST
+[2025-12-27 17:48:10] ➡️ Stage: TEST
+[2025-12-27 17:48:10] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+[2025-12-27 17:48:10] Running: python /Users/Sayu/Desktop/BA_Proj/src/VQA/TEST1.py --in-file /Users/Sayu/Desktop/BA_Proj/data/vqa_input.json --out-file /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json --numqbits 8
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('00100011', 114), ('01011111', 69), ('11101001', 342)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+--- [VQA WORKER] Démarrage ---
+✅ Input Lu avec succès.
+   -> Theta_h: 2 angles
+   -> Theta_v: 2 angles
+⚙️  Génération de 1000 shots pour 8 qubits...
+📊 Résultat Counts (Extrait): [('00100011', 114), ('01011111', 69), ('11101001', 342)] ...
+💾 Probabilités sauvegardées dans: /Users/Sayu/Desktop/BA_Proj/data/vqa_output.json
+💾 Counts bruts sauvegardés dans : /Users/Sayu/Desktop/BA_Proj/data/debug_counts.json
+[2025-12-27 17:48:10] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 17:48:10] ✅ Stage 'TEST' completed successfully.
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 17:48:10] 🎉 Q-HAS Variational pipeline completed successfully!
+[2025-12-27 17:48:10] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:48:10] Results saved in: /Users/Sayu/Desktop/BA_Proj/data
+[2025-12-27 17:48:10] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_17-48-07].log
+[2025-12-27 17:48:10] Full log: /Users/Sayu/Desktop/BA_Proj/data/../logs/pipeline[2025-12-27_17-48-07].log
+[2025-12-27 17:48:10] ==============================================================
+[2025-12-27 17:48:10] ==============================================================
+VQA Probabilities: [0.95  0.85  0.742 0.211 0.651 0.312 0.512 0.553]
+VQA Probabilities: [0.95  0.85  0.742 0.211 0.651 0.312 0.512 0.553]
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 191, in <module>
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 191, in <module>
+    main()
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 167, in main
+  File "/Users/Sayu/Desktop/BA_Proj/src/pipeline.py", line 167, in main
+    plot_amr_state(sim, active_patches, t, DT, t)
+    plot_amr_state(sim, active_patches, t, DT, t)
+  File "/Users/Sayu/Desktop/BA_Proj/src/visual.py", line 73, in plot_amr_state
+  File "/Users/Sayu/Desktop/BA_Proj/src/visual.py", line 73, in plot_amr_state
+    plt.savefig(output_filename)
+    plt.savefig(output_filename)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/pyplot.py", line 1250, in savefig
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/pyplot.py", line 1250, in savefig
+    res = fig.savefig(*args, **kwargs)  # type: ignore[func-returns-value]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/figure.py", line 3490, in savefig
+    res = fig.savefig(*args, **kwargs)  # type: ignore[func-returns-value]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/figure.py", line 3490, in savefig
+    self.canvas.print_figure(fname, **kwargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 2186, in print_figure
+    self.canvas.print_figure(fname, **kwargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 2186, in print_figure
+    result = print_method(
+             ^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 2042, in <lambda>
+    result = print_method(
+             ^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 2042, in <lambda>
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backends/backend_agg.py", line 481, in print_png
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backends/backend_agg.py", line 481, in print_png
+    self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+    self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backends/backend_agg.py", line 430, in _print_pil
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/backends/backend_agg.py", line 430, in _print_pil
+    mpl.image.imsave(
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/image.py", line 1657, in imsave
+    mpl.image.imsave(
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/matplotlib/image.py", line 1657, in imsave
+    image.save(fname, **pil_kwargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/PIL/Image.py", line 2583, in save
+    fp = builtins.open(filename, "w+b")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '../data/frame_0000.png'
+    image.save(fname, **pil_kwargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/PIL/Image.py", line 2583, in save
+    fp = builtins.open(filename, "w+b")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '../data/frame_0000.png'
