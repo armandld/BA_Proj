@@ -1,162 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from scipy.ndimage import zoom, label, find_objects, binary_dilation
 
-from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
-from Simulation.PhysToAngle import AngleMapper
 
 from call_vqa_shell import call_vqa_shell
-
-def refinement(patches_to_create, coarse_sim, grid, DT):
-    """
-    Gère la création et la mise à jour des patchs raffinés.
-    Args:
-        patches_to_create: Liste des patchs à créer (dictionnaires avec métadonnées)
-        coarse_sim: Instance du solveur grossier (MHDSolver)
-        grid: Grille grossière (PeriodicGrid)
-        DT: Pas de temps global
-    Returns:
-        active_patches: Liste des instances de solveurs fins actifs
-    """
-    active_patches = []
-    
-    for p in patches_to_create:
-        factor = p['factor'] # 2 ou 4
-        
-        # 1. Création Grille (x2 ou x4)
-        data_list = [coarse_sim.vx, coarse_sim.vy, coarse_sim.Bx, coarse_sim.By]
-        fine_grid, fine_data = grid.create_refined_grid(
-            data_list, 
-            p['i_start'], p['j_start'], p['width'], 
-            factor=factor # Dynamique !
-        )
-        
-        # 2. Création Solveur
-        # Le DT doit suivre le DX pour la condition CFL (Courant-Friedrichs-Lewy)
-        # Si dx est divisé par factor, dt doit l'être aussi (environ)
-        fine_sim = MHDSolver(fine_grid, dt=DT/factor, Re=500, Rm=500)
-        
-        # 3. Injection Données
-        fine_sim.vx = fine_data[0]
-        fine_sim.vy = fine_data[1]
-        fine_sim.Bx = fine_data[2]
-        fine_sim.By = fine_data[3]
-        
-        # Métadonnées pour l'affichage et la boucle
-        fine_sim.meta = p 
-        active_patches.append(fine_sim)
-        
-    return active_patches
-
-
-# ==============================================================================
-# 2. COEUR DE L'ALGORITHME : RAFFINEMENT RÉCURSIF (STEP 2, 3, 4)
-# ==============================================================================
-
-def global_vqa_scan_nv(sim, mapper, args, Phi_prev, resolution_N=3, resolution_DNS=16, low_thresh=0.6, high_thresh=0.85, padding=1, DT = 0.1):
-    """
-    Stratégie Top-Down :
-    1. Résume la simulation (ex: 256x256) en une vue satellite 3x3.
-    2. Lance le VQA sur ces 18 qubits.
-    3. Identifie les secteurs instables.
-    4. Retourne les coordonnées physiques pour le raffinement.
-    """
-    # Taille Quantique Fixe (3x3 = 18 Qubits, très rapide)
-    VQA_N = resolution_N
-    
-    physics_state = sim.get_fluxes()
-    Phi = mapper.compute_stress_flux(physics_state)    
-    # On calcule le facteur pour passer de Taille_Reelle à 3
-    # ex: 256 -> 3
-    zoom_factor = VQA_N / resolution_DNS
-    
-    # Average Pooling (ordre 1 est suffisant pour une tendance)
-
-    mini_h = zoom(Phi['phi_horizontal'], zoom_factor, order=1)
-    mini_v = zoom(Phi['phi_vertical'],   zoom_factor, order=1)
-    
-    # 2. On recrée le dictionnaire attendu par mapper.map_to_angles
-    mini_Phi_dict = {
-        'phi_horizontal': mini_h,
-        'phi_vertical':   mini_v
-    }
-
-    mini_h_prev = zoom(Phi_prev['phi_horizontal'], zoom_factor, order=1) if Phi_prev else np.zeros_like(mini_h)
-    mini_v_prev = zoom(Phi_prev['phi_vertical'],   zoom_factor, order=1) if Phi_prev else np.zeros_like(mini_v)
-    mini_Phi_prev_dict = {
-        'phi_horizontal': mini_h_prev,
-        'phi_vertical':   mini_v_prev
-    }
-
-
-    # 2. Appel VQA Global
-    # Le mapper voit un état 3x3, il produit 18 angles
-    angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT) # Pas de mémoire Phi_prev pour le scan global
-    
-    # On force l'utilisation de 18 qubits
-    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", override_grid_size=VQA_N)
-    
-    if probs is None: return []
-
-    # 3. Décodage des Probabilités (Bitstring -> Zones)
-    num_edges = VQA_N * VQA_N
-    probs_h = probs[:num_edges].reshape(VQA_N, VQA_N)
-    probs_v = probs[num_edges:].reshape(VQA_N, VQA_N)
-    prob_map = np.maximum(probs_h, probs_v)
-    
-    # 2. Masque binaire large (Tout ce qui mérite attention)
-    mask_attention = prob_map > low_thresh
-        
-    effective_padding = padding
-    if resolution_N <= 8:
-        effective_padding = 0
-        
-    if effective_padding > 0:
-        mask_attention = binary_dilation(mask_attention, iterations=effective_padding)
-            
-    # 3. Clustering
-    labeled_array, num_features = label(mask_attention)
-    slices = find_objects(labeled_array)
-    
-    patches = []
-    for sl in slices:
-        # Extraction des coordonnées
-        start_i, end_i = sl[0].start, sl[0].stop
-        start_j, end_j = sl[1].start, sl[1].stop
-        height = end_i - start_i
-        width = end_j - start_j
-        size = max(height, width)
-        
-        # --- INTELLIGENCE VQA ICI ---
-        # On regarde la probabilité MAX à l'intérieur de ce cluster spécifique
-        # Pour décider de la gravité
-        cluster_probs = prob_map[sl]
-        # On applique le masque du label pour ne pas prendre les zéros autour
-        # (Simplification: on prend juste le max du rectangle bounding box)
-        max_p_in_cluster = np.max(cluster_probs)
-        
-        # Décision du Facteur
-        if max_p_in_cluster >= high_thresh:
-            factor = 4  # URGENCE ABSOLUE
-        else:
-            factor = 2  # Turbulence standard
-        
-        patches.append({
-            'i_start': start_i,
-            'j_start': start_j,
-            'width': size,
-            'factor': factor  # Nouvelle info
-        })
-    print(f"PATCHES DETECTED: {len(patches)}")
-    print(patches)
-    return patches
-
-
-
-
-
 
 def recursive_vqa_scan(
     # Données physiques complètes (ne changent pas, on passe des références)
@@ -297,7 +144,7 @@ def recursive_vqa_scan(
     # Ici, pour économiser, on ne fait rien. Les zones non listées seront interpolées.
 
 
-def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, max_patches=256, DT=0.1):
+def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, max_patches=256, min_size=6, DT=0.1):
     """
     Point d'entrée principal à appeler dans ton main().
     """
@@ -330,7 +177,7 @@ def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, m
         mapper=mapper, args=args, DT=DT,
         active_patches=final_patches,
         max_depth=max_depth,         # Profondeur max (256 -> ~3px)
-        min_size=4,          # Taille min patch
+        min_size=min_size,          # Taille min patch
         threshold=threshold,      # Sensibilité
         max_patches=max_patches
     )

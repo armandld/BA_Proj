@@ -99,10 +99,15 @@ def main():
     # Le format attendu par pipeline.py est {'theta_h': [...], 'theta_v': [...]}
     theta_h = data_in.get("theta_h", [])
     theta_v = data_in.get("theta_v", [])
+    psi_h = data_in.get("psi_h", [])
+    psi_v = data_in.get("psi_v", [])
     
     print(f"✅ Input Lu avec succès.")
     print(f"   -> Theta_h: {len(theta_h)} angles")
     print(f"   -> Theta_v: {len(theta_v)} angles")
+    print(f"   -> Psi_h: {len(psi_h)} angles")
+    print(f"   -> Psi_v: {len(psi_v)} angles")
+    
     # (Ici on n'utilise pas les angles pour le calcul random, mais on prouve qu'on les a lus)
 
     # 2. Simulation (Génération aléatoire de Counts)

@@ -1,9 +1,5 @@
-import json
-import subprocess
-import os
 import argparse
 import sys
-import math
 from math import log
 
 
@@ -13,7 +9,7 @@ import matplotlib.pyplot as plt
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
-from Simulation.refinement import refinement, global_vqa_scan_nv, run_adaptive_vqa
+from Simulation.refinement import run_adaptive_vqa
 
 from visual import plot_amr_state
 from call_vqa_shell import call_vqa_shell
@@ -62,7 +58,8 @@ def main():
     mask_calcul = None
 
     for t in range(STEPS):
-        
+
+        sim.step_masked(mask_calcul)
         # MaJ Quantum périodique
         if t % HYBRID == 0:
             physics_state = sim.get_fluxes()
@@ -70,17 +67,17 @@ def main():
             angles = mapper.map_to_angles(Phi, Phi_prev, alpha=np.pi, beta=1.0, dt=DT)
             probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh")
             print("VQA Probabilities:", probs)
-            active_patches = run_adaptive_vqa(sim, mapper, args, Phi_prev,threshold=0.7,max_depth= int(log(N)/log(VQA_N))+1, max_patches=N)
+            active_patches = run_adaptive_vqa(
+                sim, mapper, args, Phi_prev,
+                threshold=0.7,
+                max_depth= int(log(N)/log(VQA_N))+1,
+                max_patches=N,
+                min_size = 6,
+                DT=DT
+            )
             mask_calcul = patches_to_mask((N,N), active_patches)
-            print(f"Active patches for computation: {len(active_patches)}")
-            #patches_to_create = global_vqa_scan(
-            #    sim, mapper, args, Phi_prev, resolution_N=VQA_N, resolution_DNS=N, low_thresh=0.75, high_thresh=0.85, padding=1, DT=DT
-            #)
-            # active_patches = refinement(patches_to_create, sim, grid, DT)
             plot_amr_state(sim, active_patches, t, DT, t)
             Phi_prev = Phi
-
-        sim.step_masked(mask_calcul)
 
         max_current = np.max(np.abs(physics_state['Jz']))
         print(f"Step {t}/{STEPS} (t={t*DT:.2f}) - Max Jz: {max_current:.4f}")
