@@ -78,9 +78,13 @@ class PeriodicGrid:
         # 2. Masque binaire large (Tout ce qui mérite attention)
         mask_attention = prob_map > low_thresh
         
-        if padding > 0:
-            mask_attention = binary_dilation(mask_attention, iterations=padding)
-
+        effective_padding = padding
+        if self.N <= 8:
+            effective_padding = 0
+        
+        if effective_padding > 0:
+            mask_attention = binary_dilation(mask_attention, iterations=effective_padding)
+            
         # 3. Clustering
         labeled_array, num_features = label(mask_attention)
         slices = find_objects(labeled_array)
@@ -112,7 +116,8 @@ class PeriodicGrid:
                 'i_start': start_i,
                 'j_start': start_j,
                 'width': size,
-                'factor': factor  # <--- Nouvelle info
+                'factor': factor  # Nouvelle info
             })
-            
+        print(f"PATCHES DETECTED: {len(patches)}")
+        print(patches)
         return patches

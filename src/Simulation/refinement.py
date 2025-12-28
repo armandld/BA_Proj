@@ -1,5 +1,13 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from scipy.ndimage import zoom, label, find_objects, binary_dilation
+
+from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
+from Simulation.PhysToAngle import AngleMapper
+
+from call_vqa_shell import call_vqa_shell
 
 def refinement(patches_to_create, coarse_sim, grid, DT):
     """
@@ -42,169 +50,296 @@ def refinement(patches_to_create, coarse_sim, grid, DT):
         
     return active_patches
 
-import json
-import subprocess
-import os
-import argparse
-import sys
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-
-from Simulation.grid import PeriodicGrid
-from Simulation.solver import MHDSolver
-from Simulation.PhysToAngle import AngleMapper
-
-# ==============================================================================
-# 1. FONCTIONS UTILITAIRES (SHELL & VQA)
-# ==============================================================================
-
-def call_vqa_shell(angles_tuple, args, script_path="run_VQA_pipeline.sh"):
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(current_dir, script_path)
-    data_dir = os.path.abspath(os.path.join(current_dir, "../data"))
-    os.makedirs(data_dir, exist_ok=True)
-
-    input_file = os.path.join(data_dir, "vqa_input.json")
-    output_file = os.path.join(data_dir, "vqa_output.json")
-    
-    data = {
-        "theta_h": angles_tuple[0].tolist(), "theta_v": angles_tuple[1].tolist(),
-        "psi_h": angles_tuple[2].tolist(),   "psi_v": angles_tuple[3].tolist()
-    }
-    
-    with open(input_file, "w") as f:
-        json.dump(data, f)
-    
-    cmd = [
-        "bash", script_path, "--in-file", input_file, "--out-dir", data_dir,
-        "--out-file", output_file, "--backend", args.backend,
-        "--method", args.method, "--mode", args.mode,
-        "--opt_level", str(args.opt_level), "--shots", str(args.shots),
-        "--depth", str(args.depth), "--numqbits", str(args.grid_size * args.grid_size * 2),
-    ]
-    
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) # Silence total
-    except subprocess.CalledProcessError:
-        return None
-
-    if os.path.exists(output_file):
-        with open(output_file, "r") as f:
-            return np.array(json.load(f))
-    return None
 
 # ==============================================================================
 # 2. COEUR DE L'ALGORITHME : RAFFINEMENT RÉCURSIF (STEP 2, 3, 4)
 # ==============================================================================
 
-def recursive_vqa_check(sim_data, grid_info, current_depth, max_depth, mapper, args, Phi_prev=None):
+def global_vqa_scan_nv(sim, mapper, args, Phi_prev, resolution_N=3, resolution_DNS=16, low_thresh=0.6, high_thresh=0.85, padding=1, DT = 0.1):
     """
-    Implémente la logique récursive : 
-    VQA -> Identification Risque -> Si Risque et Depth < Max -> Recurse
+    Stratégie Top-Down :
+    1. Résume la simulation (ex: 256x256) en une vue satellite 3x3.
+    2. Lance le VQA sur ces 18 qubits.
+    3. Identifie les secteurs instables.
+    4. Retourne les coordonnées physiques pour le raffinement.
     """
-    active_solvers = []
+    # Taille Quantique Fixe (3x3 = 18 Qubits, très rapide)
+    VQA_N = resolution_N
     
-    # --- Step 2: Quantum Risk Assessment ---
-    # On simule une extraction de flux sur la grille locale courante
-    # sim_data est une liste [vx, vy, Bx, By]
-    # On reconstruit un état physique temporaire pour le mapper
-    # Note: Simplification ici, on passe directement les tableaux au mapper adapté
-    # Pour ce code, on suppose que sim_data est déjà formaté ou on l'utilise tel quel.
+    physics_state = sim.get_fluxes()
+    Phi = mapper.compute_stress_flux(physics_state)    
+    # On calcule le facteur pour passer de Taille_Reelle à 3
+    # ex: 256 -> 3
+    zoom_factor = VQA_N / resolution_DNS
     
-    # 1. Calculer Phi (Flux) pour cette échelle
-    # (Ici on fait une approximation : on mappe les données locales vers des angles)
-    # Dans une vraie implém, il faudrait un objet 'PhysicsState' local. 
-    # Hack pour la démo: On utilise la moyenne ou un slice du sim global si depth=0
-    
-    # Appel VQA (On suppose que le mapping est fait en amont ou ici)
-    # Pour la récursion, on a besoin de mapper les données locales (sim_data) vers des angles.
-    # Ici, pour simplifier l'exemple, on va dire que si c'est profond, on utilise les données interpolées.
-    
-    # Calcul simplifié des flux locaux (Jz)
-    vx, vy, Bx, By = sim_data
-    Phi = mapper.compute_stress_flux(sim_data)
-    angles = mapper.map_to_angles(Phi, Phi_prev, alpha=np.pi, beta=1.0, dt=args.dt)
-    
-    probs = call_vqa_shell(angles, args)
-    
-    if probs is None: return [] # Echec VQA
+    # Average Pooling (ordre 1 est suffisant pour une tendance)
 
-    # --- Step 3: Identify High-Risk Zones ---
-    # On utilise la grille courante pour décoder où ça chauffe
-    # i_start, j_start sont relatifs à la grille PARENTE, ici on gère des coordonnées absolues
-    patches_candidates = PeriodicGrid(resolution_N=len(vx)).decode_refinement_patches(
-        probs, low_thresh=0.6, high_thresh=0.90, padding=0
+    mini_h = zoom(Phi['phi_horizontal'], zoom_factor, order=1)
+    mini_v = zoom(Phi['phi_vertical'],   zoom_factor, order=1)
+    
+    # 2. On recrée le dictionnaire attendu par mapper.map_to_angles
+    mini_Phi_dict = {
+        'phi_horizontal': mini_h,
+        'phi_vertical':   mini_v
+    }
+
+    mini_h_prev = zoom(Phi_prev['phi_horizontal'], zoom_factor, order=1) if Phi_prev else np.zeros_like(mini_h)
+    mini_v_prev = zoom(Phi_prev['phi_vertical'],   zoom_factor, order=1) if Phi_prev else np.zeros_like(mini_v)
+    mini_Phi_prev_dict = {
+        'phi_horizontal': mini_h_prev,
+        'phi_vertical':   mini_v_prev
+    }
+
+
+    # 2. Appel VQA Global
+    # Le mapper voit un état 3x3, il produit 18 angles
+    angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT) # Pas de mémoire Phi_prev pour le scan global
+    
+    # On force l'utilisation de 18 qubits
+    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", override_grid_size=VQA_N)
+    
+    if probs is None: return []
+
+    # 3. Décodage des Probabilités (Bitstring -> Zones)
+    num_edges = VQA_N * VQA_N
+    probs_h = probs[:num_edges].reshape(VQA_N, VQA_N)
+    probs_v = probs[num_edges:].reshape(VQA_N, VQA_N)
+    prob_map = np.maximum(probs_h, probs_v)
+    
+    # 2. Masque binaire large (Tout ce qui mérite attention)
+    mask_attention = prob_map > low_thresh
+        
+    effective_padding = padding
+    if resolution_N <= 8:
+        effective_padding = 0
+        
+    if effective_padding > 0:
+        mask_attention = binary_dilation(mask_attention, iterations=effective_padding)
+            
+    # 3. Clustering
+    labeled_array, num_features = label(mask_attention)
+    slices = find_objects(labeled_array)
+    
+    patches = []
+    for sl in slices:
+        # Extraction des coordonnées
+        start_i, end_i = sl[0].start, sl[0].stop
+        start_j, end_j = sl[1].start, sl[1].stop
+        height = end_i - start_i
+        width = end_j - start_j
+        size = max(height, width)
+        
+        # --- INTELLIGENCE VQA ICI ---
+        # On regarde la probabilité MAX à l'intérieur de ce cluster spécifique
+        # Pour décider de la gravité
+        cluster_probs = prob_map[sl]
+        # On applique le masque du label pour ne pas prendre les zéros autour
+        # (Simplification: on prend juste le max du rectangle bounding box)
+        max_p_in_cluster = np.max(cluster_probs)
+        
+        # Décision du Facteur
+        if max_p_in_cluster >= high_thresh:
+            factor = 4  # URGENCE ABSOLUE
+        else:
+            factor = 2  # Turbulence standard
+        
+        patches.append({
+            'i_start': start_i,
+            'j_start': start_j,
+            'width': size,
+            'factor': factor  # Nouvelle info
+        })
+    print(f"PATCHES DETECTED: {len(patches)}")
+    print(patches)
+    return patches
+
+
+
+
+
+
+def recursive_vqa_scan(
+    # Données physiques complètes (ne changent pas, on passe des références)
+    full_phi_h, full_phi_v, 
+    full_prev_h, full_prev_v, 
+    
+    # Paramètres de récursion
+    bounds,        # Tuple (y_start, y_end, x_start, x_end) de la zone actuelle
+    depth,         # Profondeur actuelle de récursion
+    
+    # Objets et Configs
+    mapper, args, DT,
+    
+    # Accumulateur de résultats
+    active_patches, # Liste où on stocke les zones finales identifiées
+    
+    # Hyper-paramètres
+    max_depth=3,      # Combien de fois on peut zoomer (ex: 256 -> 85 -> 28 -> 9)
+    min_size=4,       # Taille minimale d'un patch en pixels physiques
+    threshold=0.6,    # Seuil pour dire "C'est turbulent, faut creuser"
+    max_patches=256   # Budget computationnel
+):
+    """
+    Fonction récursive qui explore le domaine physique guidée par le VQA.
+    """
+    # Si on a déjà explosé le budget, on arrête tout
+    if len(active_patches) >= max_patches:
+        return
+
+    y_s, y_e, x_s, x_e = bounds
+    height, width = y_e - y_s, x_e - x_s
+    
+    # --- 1. Extraction et Préparation Locale ---
+    # On découpe les données physiques correspondant à la zone actuelle
+    local_h = full_phi_h[y_s:y_e, x_s:x_e]
+    local_v = full_phi_v[y_s:y_e, x_s:x_e]
+    
+    # Sécurité : Si la zone est trop petite ou vide, on arrête
+    if height < min_size or width < min_size:
+        # On considère cette toute petite zone comme un "patch final"
+        active_patches.append({'bounds': bounds, 'depth': depth, 'type': 'leaf_limit'})
+        return
+
+    # Calcul du facteur de zoom pour ramener cette zone locale à 3x3 pour le VQA
+    target_dim = 3
+    zoom_y = target_dim / height
+    zoom_x = target_dim / width
+    
+    # Zoom (Average pooling implicite via l'interpolation linéaire order=1)
+    mini_h = zoom(local_h, (zoom_y, zoom_x), order=1)
+    mini_v = zoom(local_v, (zoom_y, zoom_x), order=1)
+    
+    # Reconstruction du dictionnaire pour le mapper
+    mini_Phi_dict = {'phi_horizontal': mini_h, 'phi_vertical': mini_v}
+
+    # Gestion du phi_prev (si disponible)
+    if full_prev_h is not None:
+        local_prev_h = full_prev_h[y_s:y_e, x_s:x_e]
+        local_prev_v = full_prev_v[y_s:y_e, x_s:x_e]
+        mini_prev_h = zoom(local_prev_h, (zoom_y, zoom_x), order=1)
+        mini_prev_v = zoom(local_prev_v, (zoom_y, zoom_x), order=1)
+        mini_Phi_prev_dict = {'phi_horizontal': mini_prev_h, 'phi_vertical': mini_prev_v}
+    else:
+        # Cold start: on passe l'état actuel comme "prev" (dérivée nulle) ou des zéros
+        mini_Phi_prev_dict = mini_Phi_dict 
+
+    # --- 2. L'Oracle VQA (Appel Quantique) ---
+    # Le VQA analyse la zone et retourne 18 angles -> Probabilités sur la grille 3x3
+    angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT)
+    
+    # Appel Shell (Simulé ou Réel) - Force la grille 3x3
+    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", override_grid_size=target_dim)
+    
+    if probs is None: return # Erreur technique
+
+    # Décodage : 3x3 ProbMap
+    num_edges = target_dim * target_dim
+    probs_h = probs[:num_edges].reshape(target_dim, target_dim)
+    probs_v = probs[num_edges:].reshape(target_dim, target_dim)
+    prob_map = np.maximum(probs_h, probs_v) # Carte de chaleur 3x3 de la zone actuelle
+
+    # --- 3. Décision Récursive (AMR Logic) ---
+    
+    # Cas de base : On a atteint la profondeur max
+    if depth >= max_depth:
+        # On ajoute ce patch entier à la liste finale
+        active_patches.append({
+            'bounds': bounds, 
+            'depth': depth, 
+            'score': np.max(prob_map),
+            'type': 'leaf_depth'
+        })
+        return
+
+    # Cas Récursif : On analyse les 9 sous-blocs suggérés par le VQA
+    # Taille des sous-blocs
+    step_y = height // 3
+    step_x = width // 3
+    
+    sub_regions_found = False
+    
+    for i in range(3):
+        for j in range(3):
+            # Probabilité locale vue par le VQA pour ce sous-secteur
+            local_prob = prob_map[i, j]
+            
+            # Coordonnées physiques du sous-secteur
+            sub_y_s = y_s + i * step_y
+            sub_y_e = y_s + (i + 1) * step_y if i < 2 else y_e # Le dernier prend le reste
+            sub_x_s = x_s + j * step_x
+            sub_x_e = x_s + (j + 1) * step_x if j < 2 else x_e
+            
+            sub_bounds = (sub_y_s, sub_y_e, sub_x_s, sub_x_e)
+            
+            if local_prob > threshold:
+                # TURBULENCE DÉTECTÉE : On plonge plus profond !
+                sub_regions_found = True
+                new_threshold = threshold #+ (1 - threshold)/3
+                recursive_vqa_scan(
+                    full_phi_h, full_phi_v, full_prev_h, full_prev_v,
+                    sub_bounds, depth + 1,
+                    mapper, args, DT, active_patches,
+                    max_depth, min_size, new_threshold, max_patches
+                )
+            else:
+                active_patches.append({
+                    'bounds': sub_bounds,
+                    'depth': depth,
+                    'score': local_prob,
+                    'type': 'coarse_leaf' # C'est un gros patch calme
+                })
+
+            # Sinon : La zone est calme (prob < threshold), on l'ignore.
+            # Elle ne sera pas ajoutée aux "active_patches", donc pas de calcul coûteux dessus.
+
+    # Cas spécial : Si le VQA dit que TOUT est calme à ce niveau,
+    # mais qu'on est au niveau 0 ou 1, on peut vouloir garder une zone "coarse" (grossière).
+    # Ici, pour économiser, on ne fait rien. Les zones non listées seront interpolées.
+
+
+def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, max_patches=256, DT=0.1):
+    """
+    Point d'entrée principal à appeler dans ton main().
+    """
+    # 1. Préparation des données complètes (Read-Only pour la récursion)
+    physics_state = sim.get_fluxes()
+    Phi = mapper.compute_stress_flux(physics_state)
+    
+    full_h = Phi['phi_horizontal']
+    full_v = Phi['phi_vertical']
+    
+    if Phi_prev:
+        full_prev_h = Phi_prev['phi_horizontal']
+        full_prev_v = Phi_prev['phi_vertical']
+    else:
+        full_prev_h = None
+        full_prev_v = None
+        
+    H, W = full_h.shape
+    initial_bounds = (0, H, 0, W)
+    
+    # Liste qui recevra les résultats
+    final_patches = []
+    
+    print(f"--- START RECURSIVE VQA SCAN (Budget: {max_patches} patches) ---")
+    
+    # 2. Lancement de la récursion
+    recursive_vqa_scan(
+        full_h, full_v, full_prev_h, full_prev_v,
+        initial_bounds, depth=0,
+        mapper=mapper, args=args, DT=DT,
+        active_patches=final_patches,
+        max_depth=max_depth,         # Profondeur max (256 -> ~3px)
+        min_size=4,          # Taille min patch
+        threshold=threshold,      # Sensibilité
+        max_patches=max_patches
     )
+    if len(final_patches) == 0:
+        print(">>> VQA found nothing active. Defaulting to FULL COMPUTATION.")
+        H, W = full_h.shape
+        # On ajoute un gros patch qui couvre tout
+        final_patches.append({'bounds': (0, H, 0, W), 'depth': 0, 'type': 'fallback'})
     
-    # --- Step 4: Recursive Refinement (Zoom) ---
-    is_leaf = True
-    
-    if len(patches_candidates) > 0 and current_depth < max_depth:
-        is_leaf = False
-        # On a détecté un risque ET on peut encore zoomer
-        print(f"   [Depth {current_depth}] ⚠️ Risque détecté dans {len(patches_candidates)} zones. Zooming...")
-        
-        for p in patches_candidates:
-            # 1. Generate Sub-grid (Interpolation)
-            # On découpe les données locales pour créer la donnée de l'enfant
-            # create_refined_grid attend des indices globaux, ici on bricole pour la recursion locale
-            # Pour simplifier: On extrait la slice et on interpole x2 (factor 2 par défaut pour quadtree)
-            
-            # Extraction basique (slice)
-            s_i, s_j, w = p['i_start'], p['j_start'], p['width']
-            sub_data = [d[s_i:s_i+w, s_j:s_j+w] for d in sim_data]
-            
-            # Interpolation (Raffinement x2 pour l'étape suivante)
-            # On utilise la méthode de la classe Grid mais "manuellement" car on est en local
-            refined_data = []
-            for d in sub_data:
-                # Interpolation x2 simple (Kron product)
-                refined_d = d.repeat(2, axis=0).repeat(2, axis=1)
-                refined_data.append(refined_d)
-            
-            # Calcul des nouvelles coordonnées absolues pour le traçage
-            abs_i = grid_info['abs_i'] + s_i * grid_info['scale_factor']
-            abs_j = grid_info['abs_j'] + s_j * grid_info['scale_factor']
-            new_scale = grid_info['scale_factor'] # On garde l'échelle relative au grossier
-            
-            new_info = {
-                'abs_i': abs_i, 'abs_j': abs_j, 
-                'width': w, 'factor': 2, # Relatif au parent
-                'global_scale': grid_info['global_scale'] / 2 # L'échelle diminue
-            }
-
-            # --- RECURSE ---
-            # On appelle la fonction sur l'enfant
-            child_solvers = recursive_vqa_check(
-                refined_data, new_info, current_depth + 1, max_depth, mapper, args, Phi
-            )
-            active_solvers.extend(child_solvers)
-            
-    # Si c'est une feuille (soit pas de risque, soit profondeur max atteinte)
-    # OU si on a décidé de s'arrêter là.
-    if is_leaf:
-        # On crée le solveur pour cette région
-        # C'est ici qu'on définit la "Fine Mesh AMR" finale
-        # On calcule le facteur de zoom total par rapport à la grille 0
-        total_zoom = 2**current_depth
-        
-        # On crée une grille périodique locale
-        local_N = len(vx)
-        local_grid = PeriodicGrid(resolution_N=local_N)
-        
-        # Le DT doit être réduit : DT_base / total_zoom
-        fine_sim = MHDSolver(local_grid, dt=args.dt/total_zoom, Re=500, Rm=500)
-        fine_sim.vx, fine_sim.vy, fine_sim.Bx, fine_sim.By = sim_data
-        
-        # Metadata pour le plot
-        fine_sim.meta = {
-            'depth': current_depth,
-            'abs_i': grid_info['abs_i'],
-            'abs_j': grid_info['abs_j'],
-            'width_in_coarse_units': len(vx) / (2**current_depth), # Approx
-            'zoom': total_zoom
-        }
-        active_solvers.append(fine_sim)
-
-    return active_solvers
+    print(f"--- SCAN COMPLETE: {len(final_patches)} Active Zones Identified ---")
+    print(final_patches)
+    return final_patches

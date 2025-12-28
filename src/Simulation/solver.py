@@ -71,6 +71,81 @@ class MHDSolver:
         self.Bx += self.dt * (-adv_B_x + str_v_x + self.eta * lap_Bx)
         self.By += self.dt * (-adv_B_y + str_v_y + self.eta * lap_By)
 
+    def step_masked(self, mask=None):
+        """
+        Version Optimisée et Corrigée.
+        Gère correctement le cas 'Pas de Masque' et évite la duplication de code.
+        """
+        # 1. Gradients et Laplaciens GLOBAUX (Toujours calculés)
+        grad_vx_x, grad_vx_y = self.grid.grad(self.vx)
+        grad_vy_x, grad_vy_y = self.grid.grad(self.vy)
+        grad_Bx_x, grad_Bx_y = self.grid.grad(self.Bx)
+        grad_By_x, grad_By_y = self.grid.grad(self.By)
+        
+        # 2. Diffusion de base (Calculée partout)
+        dvx = self.nu * self.grid.laplacian(self.vx)
+        dvy = self.nu * self.grid.laplacian(self.vy)
+        dBx = self.eta * self.grid.laplacian(self.Bx)
+        dBy = self.eta * self.grid.laplacian(self.By)
+
+        # --- DEFINITION DU KERNEL PHYSIQUE (Moteur de calcul) ---
+        # Cette petite fonction locale contient TOUTE ta physique non-linéaire.
+        # On peut l'appeler sur la grille entière OU sur une sous-partie.
+        def nonlinear_kernel(vx, vy, Bx, By, 
+                             g_vx_x, g_vx_y, g_vy_x, g_vy_y, 
+                             g_Bx_x, g_Bx_y, g_By_x, g_By_y):
+            
+            # Advection (v . grad)
+            adv_v_x = vx * g_vx_x + vy * g_vx_y
+            adv_v_y = vx * g_vy_x + vy * g_vy_y
+            adv_B_x = vx * g_Bx_x + vy * g_Bx_y
+            adv_B_y = vx * g_By_x + vy * g_By_y
+            
+            # Lorentz / Stretching (B . grad)
+            str_v_x = Bx * g_vx_x + By * g_vx_y
+            str_v_y = Bx * g_vy_x + By * g_vy_y
+            str_B_x = Bx * g_Bx_x + By * g_Bx_y
+            str_B_y = Bx * g_By_x + By * g_By_y
+            
+            # Retourne les DELTAS (Forces)
+            return (-adv_v_x + str_v_x), (-adv_v_y + str_v_y), \
+                   (-adv_B_x + str_B_x), (-adv_B_y + str_B_y)
+
+        # 3. Application Conditionnelle
+        if mask is not None:
+            # --- CAS VQA : Calcul Haute Performance sur sous-ensemble ---
+            # On extrait les données (C'est très rapide en numpy)
+            res_vx, res_vy, res_Bx, res_By = nonlinear_kernel(
+                self.vx[mask], self.vy[mask], self.Bx[mask], self.By[mask],
+                grad_vx_x[mask], grad_vx_y[mask], grad_vy_x[mask], grad_vy_y[mask],
+                grad_Bx_x[mask], grad_Bx_y[mask], grad_By_x[mask], grad_By_y[mask]
+            )
+            # On injecte les résultats UNIQUEMENT sur le masque
+            dvx[mask] += res_vx
+            dvy[mask] += res_vy
+            dBx[mask] += res_Bx
+            dBy[mask] += res_By
+
+        else:
+            # --- CAS CLASSIQUE / WARM START : Calcul Global ---
+            # C'est ce qui te manquait !
+            res_vx, res_vy, res_Bx, res_By = nonlinear_kernel(
+                self.vx, self.vy, self.Bx, self.By,
+                grad_vx_x, grad_vx_y, grad_vy_x, grad_vy_y,
+                grad_Bx_x, grad_Bx_y, grad_By_x, grad_By_y
+            )
+            # On ajoute partout
+            dvx += res_vx
+            dvy += res_vy
+            dBx += res_Bx
+            dBy += res_By
+
+        # 4. Intégration
+        self.vx += self.dt * dvx
+        self.vy += self.dt * dvy
+        self.Bx += self.dt * dBx
+        self.By += self.dt * dBy
+
     def get_fluxes(self):
         """
         Prépare les données pour le Mapping Quantique (VQA).

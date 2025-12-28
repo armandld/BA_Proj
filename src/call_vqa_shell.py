@@ -11,11 +11,10 @@ import matplotlib.pyplot as plt
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
-from Simulation.refinement import refinement
 
 from visual import plot_amr_state
 
-def call_vqa_shell(angles_tuple, args, script_path="run_VQA_pipeline.sh"):
+def call_vqa_shell(angles_tuple, args, script_path="run_VQA_pipeline.sh", override_grid_size=None):
     """
     Appelle le script shell externe pour le calcul VQA.
     """
@@ -42,6 +41,8 @@ def call_vqa_shell(angles_tuple, args, script_path="run_VQA_pipeline.sh"):
     with open(input_file, "w") as f:
         json.dump(data, f)
     
+    target_N = override_grid_size if override_grid_size else args.grid_size
+    num_qubits = target_N * target_N * 2  # ex: 3*3*2 = 18 qubits
     
     # 2. Construction de la commande Shell
     # On transmet les paramètres quantiques reçus par le main
@@ -56,7 +57,7 @@ def call_vqa_shell(angles_tuple, args, script_path="run_VQA_pipeline.sh"):
         "--opt_level", str(args.opt_level),
         "--shots", str(args.shots),
         "--depth", str(args.depth),
-        "--numqbits", str(args.grid_size * args.grid_size * 2),
+        "--numqbits", str(num_qubits),
     ]
     
     if args.verbose:

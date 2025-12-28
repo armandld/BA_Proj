@@ -121,10 +121,10 @@ def main():
     # pipeline.py attend une LISTE de floats, pas un dictionnaire.
     probs = counts_to_marginals(counts, args.numqbits)
     
-    # DEBUG: Force une instabilité pour tester l'AMR visuellement
+    """# DEBUG: Force une instabilité pour tester l'AMR visuellement
     if len(probs) >= 2:
-        probs[0] = 0.95 # Qubit 0 instable
-        probs[1] = 0.85 # Qubit 1 instable
+        probs[-1] = 0.95 # Qubit 0 instable
+        probs[-2] = 0.85 # Qubit 1 instable"""
 
     # B. Sauvegarde pour la Pipeline (vqa_output.json)
     with open(args.out_file, 'w') as f:

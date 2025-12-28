@@ -3,6 +3,8 @@ import subprocess
 import os
 import argparse
 import sys
+import math
+from math import log
 
 
 import numpy as np
@@ -11,12 +13,11 @@ import matplotlib.pyplot as plt
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
-from Simulation.refinement import refinement
+from Simulation.refinement import refinement, global_vqa_scan_nv, run_adaptive_vqa
 
-from visual import plot_amr_state,plot_recursive_state, simple_hierarchical_plot
-from Simulation.refinement import recursive_vqa_check
+from visual import plot_amr_state
 from call_vqa_shell import call_vqa_shell
-    
+from patches import patches_to_mask
 
 def main():
     sys.stdout.reconfigure(line_buffering=True) # Pour un affichage immédiat des print() à enlever pour une meilleure perf
@@ -40,14 +41,12 @@ def main():
 
     args = parser.parse_args()
     # 1. Configuration
-    N = args.grid_size              # Résolution Grossière
-    D_MAX = args.dns_resolution/N   # Profondeur Max de Raffinement
+    N = args.dns_resolution          # Résolution moyenne (DNS)
+    VQA_N = args.grid_size      # Résolution Grossière
     T_MAX = args.t_max         # Temps final
     DT = args.dt           # Pas de temps
     HYBRID = int(args.hybrid_dt / DT)         # Fréquence de mise à jour hybride
     STEPS = int(T_MAX / DT)
-
-    Phi_prev = None
     
     # 2. Initialisation
     print(f"Initialisation Orszag-Tang (Grille {N}x{N})...")
@@ -55,58 +54,48 @@ def main():
     sim = MHDSolver(grid, dt=DT, Re=500, Rm=500) # A CHANGER: PARAMETRER R_max et R_e max
     sim.init_orszag_tang()
     mapper = AngleMapper(v0=1.0, B0=1.0)
+    active_patches = []
     
-    plt.ion()
+    # 3. Boucle Temporelle
+    print(f"Lancement pour {STEPS} pas de temps...")
+    Phi_prev = None
+    mask_calcul = None
 
     for t in range(STEPS):
         
-        # --- Step 1: Classical Coarse Update ---
-        # U_pred <- ClassicalSolver(U_t)
-        sim.time_step()
-        U_pred = [sim.vx, sim.vy, sim.Bx, sim.By] # Snapshot
-        
-        # --- Step 2, 3, 4: Recursive VQA Refinement ---
-        # On lance la récursion depuis la racine (Grille 0)
-        
-        # Info de base pour la racine
-        root_info = {
-            'abs_i': 0, 'abs_j': 0, 
-            'scale_factor': 1, 'global_scale': 1.0
-        }
-        
-        print(f"--- Step {t}: Quantum Risk Assessment (Recursion) ---")
-        
-        # Cette fonction va faire Step 2 -> Step 3 -> Recurse Step 4
-        # Elle retourne la liste finale des solveurs (R_final)
-        fine_solvers = recursive_vqa_check(
-            U_pred, root_info, current_depth=0, max_depth=D_MAX, 
-            mapper=mapper, args=args, Phi_prev=Phi_prev
-        )
-        
-        # --- Step 5: Correction & Advance ---
-        # Apply Fine Mesh AMR on final regions R_final
-        if len(fine_solvers) > 0:
-            print(f" -> Execution: {len(fine_solvers)} solvers actifs (dont coarse).")
-            
-            # On fait avancer chaque solveur fin
-            # Note: Le solveur de profondeur 0 est déjà avancé en Step 1, 
-            # ici on avance les raffinements pour préparer le feedback (Step 6 hypothétique)
-            for f_sim in fine_solvers:
-                if f_sim.meta['depth'] > 0:
-                    # Les patchs profonds doivent faire plus de pas pour rattraper le temps
-                    steps_needed = 2**f_sim.meta['depth'] 
-                    for _ in range(steps_needed):
-                        f_sim.time_step()
-        
-        # Coarsen Mesh back ? (Feedback)
-        # Dans cette implémentation, on met simplement à jour Phi pour le prochain tour
-        physics_state = sim.get_fluxes()
-        Phi_prev = mapper.compute_stress_flux(physics_state)
+        # MaJ Quantum périodique
+        if t % HYBRID == 0:
+            physics_state = sim.get_fluxes()
+            Phi = mapper.compute_stress_flux(physics_state)
+            angles = mapper.map_to_angles(Phi, Phi_prev, alpha=np.pi, beta=1.0, dt=DT)
+            probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh")
+            print("VQA Probabilities:", probs)
+            active_patches = run_adaptive_vqa(sim, mapper, args, Phi_prev,threshold=0.7,max_depth= int(log(N)/log(VQA_N))+1, max_patches=N)
+            mask_calcul = patches_to_mask((N,N), active_patches)
+            print(f"Active patches for computation: {len(active_patches)}")
+            #patches_to_create = global_vqa_scan(
+            #    sim, mapper, args, Phi_prev, resolution_N=VQA_N, resolution_DNS=N, low_thresh=0.75, high_thresh=0.85, padding=1, DT=DT
+            #)
+            # active_patches = refinement(patches_to_create, sim, grid, DT)
+            plot_amr_state(sim, active_patches, t, DT, t)
+            Phi_prev = Phi
 
-        # Visualisation rapide
-        simple_hierarchical_plot(sim, fine_solvers, t, args.dt)
+        sim.step_masked(mask_calcul)
 
-    plt.ioff()
+        max_current = np.max(np.abs(physics_state['Jz']))
+        print(f"Step {t}/{STEPS} (t={t*DT:.2f}) - Max Jz: {max_current:.4f}")
+        
+
+    # 4. Visualisation Finale
+    print("Simulation terminée. Génération du plot...")
+    final_state = sim.get_fluxes()
+    
+    plt.figure(figsize=(10, 8))
+    plt.imshow(final_state['Jz'].T, origin='lower', cmap='RdBu', extent=[0, 2*np.pi, 0, 2*np.pi])
+    plt.colorbar(label='Densité de Courant Jz')
+    plt.title(f"Orszag-Tang Vortex (t={T_MAX}) - Détection de Reconnexion")
+    plt.xlabel('x')
+    plt.ylabel('y')
     plt.show()
 
 if __name__ == "__main__":
