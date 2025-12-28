@@ -18,8 +18,8 @@ def get_adaptive_flux(local_h, local_v, target_dim=3, mixing_ratio=0.3):
     # Règle empirique : il faut au moins 2 pixels pour en lisser 1 proprement.
     if min_side > target_dim:
         # Grand patch : on peut lisser pour réduire le bruit
-        proc_h = uniform_filter(proc_h, size=3, mode='reflect')
-        proc_v = uniform_filter(proc_v, size=3, mode='reflect')
+        proc_h = uniform_filter(proc_h, size=3, mode='wrap')
+        proc_v = uniform_filter(proc_v, size=3, mode='wrap')
     else:
         # Tout petit patch (ex: 4x4 vers 3x3) : INTERDIT DE LISSER
         # On veut garder chaque pixel d'information brute.
