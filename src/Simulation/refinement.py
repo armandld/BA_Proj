@@ -5,6 +5,10 @@ from Simulation.solver import MHDSolver
 
 from call_vqa_shell import call_vqa_shell
 
+from help_visual import visualize_vqa_step
+
+from Simulation.MixingVHarrays import get_adaptive_flux
+
 def recursive_vqa_scan(
     # Données physiques complètes (ne changent pas, on passe des références)
     full_phi_h, full_phi_v, 
@@ -21,6 +25,7 @@ def recursive_vqa_scan(
     active_patches, # Liste où on stocke les zones finales identifiées
     
     # Hyper-paramètres
+    target_dim=4,    # Dimension de la grille d'entrée du VQA (ex: 3x3)
     max_depth=3,      # Combien de fois on peut zoomer (ex: 256 -> 85 -> 28 -> 9)
     min_size=4,       # Taille minimale d'un patch en pixels physiques
     threshold=0.6,    # Seuil pour dire "C'est turbulent, faut creuser"
@@ -47,15 +52,7 @@ def recursive_vqa_scan(
         active_patches.append({'bounds': bounds, 'depth': depth, 'type': 'leaf_limit'})
         return
 
-    # Calcul du facteur de zoom pour ramener cette zone locale à 3x3 pour le VQA
-    target_dim = 3
-    zoom_y = target_dim / height
-    zoom_x = target_dim / width
-    
-    # Zoom (Average pooling implicite via l'interpolation linéaire order=1)
-    mini_h = zoom(local_h, (zoom_y, zoom_x), order=1)
-    mini_v = zoom(local_v, (zoom_y, zoom_x), order=1)
-    
+    mini_h, mini_v = get_adaptive_flux(local_h, local_v, target_dim=target_dim, mixing_ratio=0.5)
     # Reconstruction du dictionnaire pour le mapper
     mini_Phi_dict = {'phi_horizontal': mini_h, 'phi_vertical': mini_v}
 
@@ -63,21 +60,27 @@ def recursive_vqa_scan(
     if full_prev_h is not None:
         local_prev_h = full_prev_h[y_s:y_e, x_s:x_e]
         local_prev_v = full_prev_v[y_s:y_e, x_s:x_e]
-        mini_prev_h = zoom(local_prev_h, (zoom_y, zoom_x), order=1)
-        mini_prev_v = zoom(local_prev_v, (zoom_y, zoom_x), order=1)
+        mini_prev_h, mini_prev_v = get_adaptive_flux(
+            local_prev_h,
+            local_prev_v,
+            target_dim=target_dim,
+            mixing_ratio=0.5
+        )
         mini_Phi_prev_dict = {'phi_horizontal': mini_prev_h, 'phi_vertical': mini_prev_v}
     else:
         # Cold start: on passe l'état actuel comme "prev" (dérivée nulle) ou des zéros
         mini_Phi_prev_dict = mini_Phi_dict 
-
     # --- 2. L'Oracle VQA (Appel Quantique) ---
     # Le VQA analyse la zone et retourne 18 angles -> Probabilités sur la grille 3x3
     angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT)
-    
     # Appel Shell (Simulé ou Réel) - Force la grille 3x3
-    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", override_grid_size=target_dim)
-    
+    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", period_bound = depth==0)
+
+    # Visualiser les steps
+    #visualize_vqa_step(local_h, local_v, bounds, depth)
+
     if probs is None: return # Erreur technique
+
 
     # Décodage : 3x3 ProbMap
     num_edges = target_dim * target_dim
@@ -126,7 +129,8 @@ def recursive_vqa_scan(
                     full_phi_h, full_phi_v, full_prev_h, full_prev_v,
                     sub_bounds, depth + 1,
                     mapper, args, DT, active_patches,
-                    max_depth, min_size, new_threshold, max_patches
+                    target_dim = target_dim, max_depth = max_depth, min_size = min_size,
+                    threshold = new_threshold, max_patches = max_patches
                 )
             else:
                 active_patches.append({
@@ -136,15 +140,8 @@ def recursive_vqa_scan(
                     'type': 'coarse_leaf' # C'est un gros patch calme
                 })
 
-            # Sinon : La zone est calme (prob < threshold), on l'ignore.
-            # Elle ne sera pas ajoutée aux "active_patches", donc pas de calcul coûteux dessus.
 
-    # Cas spécial : Si le VQA dit que TOUT est calme à ce niveau,
-    # mais qu'on est au niveau 0 ou 1, on peut vouloir garder une zone "coarse" (grossière).
-    # Ici, pour économiser, on ne fait rien. Les zones non listées seront interpolées.
-
-
-def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, max_patches=256, min_size=6, DT=0.1):
+def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, target_dim=3, max_depth=4, max_patches=256, min_size=6, DT=0.1):
     """
     Point d'entrée principal à appeler dans ton main().
     """
@@ -176,6 +173,7 @@ def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, max_depth=4, m
         initial_bounds, depth=0,
         mapper=mapper, args=args, DT=DT,
         active_patches=final_patches,
+        target_dim=target_dim,          # Grille d'entrée du VQA
         max_depth=max_depth,         # Profondeur max (256 -> ~3px)
         min_size=min_size,          # Taille min patch
         threshold=threshold,      # Sensibilité

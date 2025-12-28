@@ -15,6 +15,8 @@ from visual import plot_amr_state
 from call_vqa_shell import call_vqa_shell
 from patches import patches_to_mask
 
+from help_visual import plot_grid_topology, plot_flux_on_edges
+
 def main():
     sys.stdout.reconfigure(line_buffering=True) # Pour un affichage immédiat des print() à enlever pour une meilleure perf
 
@@ -56,20 +58,19 @@ def main():
     print(f"Lancement pour {STEPS} pas de temps...")
     Phi_prev = None
     mask_calcul = None
-
+    physics_state = sim.get_fluxes()
+    Phi = mapper.compute_stress_flux(physics_state)
+    plot_grid_topology(grid)
+    plot_flux_on_edges(grid, Phi)
     for t in range(STEPS):
 
         sim.step_masked(mask_calcul)
         # MaJ Quantum périodique
         if t % HYBRID == 0:
-            physics_state = sim.get_fluxes()
-            Phi = mapper.compute_stress_flux(physics_state)
-            angles = mapper.map_to_angles(Phi, Phi_prev, alpha=np.pi, beta=1.0, dt=DT)
-            probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh")
-            print("VQA Probabilities:", probs)
             active_patches = run_adaptive_vqa(
                 sim, mapper, args, Phi_prev,
                 threshold=0.7,
+                target_dim = VQA_N,
                 max_depth= int(log(N)/log(VQA_N))+1,
                 max_patches=N,
                 min_size = 6,

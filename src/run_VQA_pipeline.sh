@@ -14,12 +14,12 @@ MODE="simulator"
 METHOD="COBYLA"
 NUM_SHOTS=100000
 VERBOSE=false
+PERIOD_BOUND=false
 SKIP_CLEANUP=false
 ONLY_MAPPING=false
 ONLY_OPTIMIZE=false
 ONLY_EXECUTE=false
 ONLY_POSTPROCESS=false
-NUM_QBITS=4
 DEPTH=2
 OPT_LEVEL=3
 GRID_SIZE=16
@@ -87,7 +87,6 @@ display_help() {
     echo "  --backend <aer|estimator>       Quantum backend (default: aer)"
     echo "  --mode <simulator|hardware>     Simulator or IBM Quantum (default: simulator)"
     echo "  --shots <int>                   Number of shots (default: 1024)"
-    echo "  --numqbits <int>                Number of qubits (default: 4)"
     echo "  --depth <int>                  Depth of the ULA ansatz (default: 2)"
     echo "  --opt_level <0|1|2|3>          Optimization level for transpiler (default: 3)"
     echo "  --out-dir <dir>                 Output directory (default: data)"
@@ -96,12 +95,7 @@ display_help() {
     echo "  --verbose                       Enable verbose logging"
     echo "  --skip-cleanup                  Skip deleting previous data"
     echo "  --method <COBYLA|Nelder-Mead|Powell|L-BFGS-B>               Optimization method for minimize (default: COBYLA)"
-    echo "Custom Domain Parameters:"
-    echo "  --grid-size <int>               Coarse grid dimension N (NxN) (default: 16)"
-    echo "  --dns-resolution <int>          High-Res Grid for Ground Truth (default: 256)"
-    echo "  --t-max <float>                 Simulation end time (default: 1.0)"
-    echo "  --dt <float>                    Time step size (default: 0.01)"
-    echo "  --hybrid-dt <float>               Hybrid simulation time step size (default: 0.1)"
+    echo "  --period_bound                  Check for periodic boundaries"
     echo ""
     echo "Stage control (choose one):"
     echo "  --only-mapping                  Run mapping stage only"
@@ -155,10 +149,10 @@ while [[ $# -gt 0 ]]; do
         --out-file) OUT_FILE="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
         --skip-cleanup) SKIP_CLEANUP=true; shift ;;
-        --numqbits) NUM_QBITS="$2"; shift 2 ;;
         --depth) DEPTH="$2"; shift 2 ;;
         --opt_level) OPT_LEVEL="$2"; shift 2 ;;
         --method) METHOD="$2"; shift 2 ;;
+        --period_bound) PERIOD_BOUND=true; shift ;;
         --only-mapping) ONLY_MAPPING=true; shift ;;
         --only-optimize) ONLY_OPTIMIZE=true; shift ;;
         --only-execute) ONLY_EXECUTE=true; shift ;;
@@ -207,9 +201,9 @@ stop_if_reached() {
 # -----------------------------
 # 1️⃣ Problem Mapping Stage
 # -----------------------------
-run_stage "TEST" python "$SCRIPTS_LOC/TEST1.py" --in-file "$IN_FILE" --out-file "$OUT_FILE" --numqbits "$NUM_QBITS"
+run_stage "TEST" python "$SCRIPTS_LOC/TEST1.py" --in-file "$IN_FILE" --out-file "$OUT_FILE" $([ "$PERIOD_BOUND" = true ] && echo "--period_bound")
 :<<'TEST'
-run_stage "Mapping" python "$SCRIPTS_LOC/mapping.py" --in-file "$IN_FILE" --out-dir "$OUT_DIR" --numqbits "$NUM_QBITS" --depth "$DEPTH" --grid-size "$GRID_SIZE" --dns-resolution "$DNS_RESOLUTION" --t-max "$T_MAX" --dt "$DT" --hybrid-dt "$HYBRID_DT" $([ "$VERBOSE" = true ] && echo "--verbose")
+run_stage "Mapping" python "$SCRIPTS_LOC/mapping.py" --in-file "$IN_FILE" --out-dir "$OUT_DIR" --depth "$DEPTH" $([ "$VERBOSE" = true ] && echo "--verbose") $([ "$PERIOD_BOUND" = true ] && echo "--period_bound")
 stop_if_reached "mapping"
 
 # -----------------------------

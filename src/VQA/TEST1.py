@@ -72,7 +72,6 @@ def main():
     parser.add_argument("--out-file", required=True, help="Chemin fichier JSON sortie (Probabilités)")
     
     # Paramètres quantiques
-    parser.add_argument("--numqbits", type=int, default=4)
     parser.add_argument("--shots", type=int, default=1000)
     
     # Arguments 'Dummy' pour compatibilité (ne pas enlever sinon argparse plante)
@@ -81,7 +80,8 @@ def main():
     parser.add_argument("--mode", default="simulator")
     parser.add_argument("--method", default="COBYLA")
     parser.add_argument("--opt_level", default="1")
-    
+    parser.add_argument("--period_bound", action="store_true")
+
     args = parser.parse_args()
 
     print(f"--- [VQA WORKER] Démarrage ---")
@@ -97,24 +97,25 @@ def main():
 
     # Vérification simple du contenu
     # Le format attendu par pipeline.py est {'theta_h': [...], 'theta_v': [...]}
-    theta_h = data_in.get("theta_h", [])
-    theta_v = data_in.get("theta_v", [])
-    psi_h = data_in.get("psi_h", [])
-    psi_v = data_in.get("psi_v", [])
-    
+    theta_h = np.array(data_in.get("theta_h", [])).flatten()
+    theta_v = np.array(data_in.get("theta_v", [])).flatten()
+    psi_h   = np.array(data_in.get("psi_h",   [])).flatten()
+    psi_v   = np.array(data_in.get("psi_v",   [])).flatten()
+
     print(f"✅ Input Lu avec succès.")
     print(f"   -> Theta_h: {len(theta_h)} angles")
     print(f"   -> Theta_v: {len(theta_v)} angles")
     print(f"   -> Psi_h: {len(psi_h)} angles")
     print(f"   -> Psi_v: {len(psi_v)} angles")
     
+    num_qubits = 2*len(theta_h)
     # (Ici on n'utilise pas les angles pour le calcul random, mais on prouve qu'on les a lus)
 
     # 2. Simulation (Génération aléatoire de Counts)
     # -----------------------------------------------------
-    print(f"⚙️  Génération de {args.shots} shots pour {args.numqbits} qubits...")
+    print(f"⚙️  Génération de {args.shots} shots pour {num_qubits} qubits...")
     
-    counts = generate_random_counts(args.numqbits, args.shots)
+    counts = generate_random_counts(num_qubits, args.shots)
     
     # Affichage console pour vérification immédiate
     print(f"📊 Résultat Counts (Extrait): {list(counts.items())[:3]} ...")
@@ -124,7 +125,7 @@ def main():
     
     # A. Conversion en Probabilités (CRITIQUE pour pipeline.py)
     # pipeline.py attend une LISTE de floats, pas un dictionnaire.
-    probs = counts_to_marginals(counts, args.numqbits)
+    probs = counts_to_marginals(counts, num_qubits)
     
     """# DEBUG: Force une instabilité pour tester l'AMR visuellement
     if len(probs) >= 2:
