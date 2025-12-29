@@ -8,6 +8,7 @@ from call_vqa_shell import call_vqa_shell
 from help_visual import visualize_vqa_step
 
 from Simulation.MixingVHarrays import get_adaptive_flux
+from Simulation.reorder_array import extract_periodic_patch
 
 def recursive_vqa_scan(
     # Données physiques complètes (ne changent pas, on passe des références)
@@ -29,7 +30,9 @@ def recursive_vqa_scan(
     max_depth=3,      # Combien de fois on peut zoomer (ex: 256 -> 85 -> 28 -> 9)
     min_size=4,       # Taille minimale d'un patch en pixels physiques
     threshold=0.6,    # Seuil pour dire "C'est turbulent, faut creuser"
-    max_patches=256   # Budget computationnel
+    max_patches=256,   # Budget computationnel
+    cross_h = False,
+    cross_v = False,
 ):
     """
     Fonction récursive qui explore le domaine physique guidée par le VQA.
@@ -39,18 +42,30 @@ def recursive_vqa_scan(
         return
 
     y_s, y_e, x_s, x_e = bounds
-    height, width = y_e - y_s, x_e - x_s
+
+    if cross_h :
+        height = len(full_phi_v) - y_e - y_s
+    else :
+        height = y_e - y_s
     
-    # --- 1. Extraction et Préparation Locale ---
-    # On découpe les données physiques correspondant à la zone actuelle
-    local_h = full_phi_h[y_s:y_e, x_s:x_e]
-    local_v = full_phi_v[y_s:y_e, x_s:x_e]
-    
+    if cross_v :
+        width = len(full_phi_h) - x_e - x_s
+    else :
+        width = x_e - x_s
+
     # Sécurité : Si la zone est trop petite ou vide, on arrête
     if height < min_size or width < min_size:
         # On considère cette toute petite zone comme un "patch final"
-        active_patches.append({'bounds': bounds, 'depth': depth, 'type': 'leaf_limit'})
+        active_patches.append({
+            'bounds': bounds,'cross_h': cross_h,'cross_v': cross_v, 'depth': depth, 'type': 'leaf_limit'
+        })
         return
+
+    # --- 1. Extraction et Préparation Locale --- 
+    # On découpe les données physiques correspondant à la zone actuelle
+    local_h = extract_periodic_patch(full_phi_h, y_s, y_e, x_s, x_e, cross_h, cross_v)
+    local_v = extract_periodic_patch(full_phi_v, y_s, y_e, x_s, x_e, cross_h, cross_v)
+    
 
     mini_h, mini_v = get_adaptive_flux(local_h, local_v, target_dim=target_dim, mixing_ratio=0.5)
     # Reconstruction du dictionnaire pour le mapper
@@ -58,8 +73,9 @@ def recursive_vqa_scan(
 
     # Gestion du phi_prev (si disponible)
     if full_prev_h is not None:
-        local_prev_h = full_prev_h[y_s:y_e, x_s:x_e]
-        local_prev_v = full_prev_v[y_s:y_e, x_s:x_e]
+        local_prev_h = extract_periodic_patch(full_prev_h, y_s, y_e, x_s, x_e, cross_h, cross_v)
+        local_prev_v = extract_periodic_patch(full_prev_v, y_s, y_e, x_s, x_e, cross_h, cross_v)
+
         mini_prev_h, mini_prev_v = get_adaptive_flux(
             local_prev_h,
             local_prev_v,
@@ -77,7 +93,7 @@ def recursive_vqa_scan(
     probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", period_bound = depth==0)
 
     # Visualiser les steps
-    #visualize_vqa_step(local_h, local_v, bounds, depth)
+    visualize_vqa_step(local_h, local_v, bounds, depth)
 
     if probs is None: return # Erreur technique
 
@@ -94,7 +110,9 @@ def recursive_vqa_scan(
     if depth >= max_depth:
         # On ajoute ce patch entier à la liste finale
         active_patches.append({
-            'bounds': bounds, 
+            'bounds': bounds,
+            'cross_h': cross_h,
+            'cross_v': cross_v,
             'depth': depth, 
             'score': np.max(prob_map),
             'type': 'leaf_depth'
@@ -105,38 +123,94 @@ def recursive_vqa_scan(
     # Taille des sous-blocs
     step_y = height // 3
     step_x = width // 3
-    
-    sub_regions_found = False
-    
+        
     for i in range(3):
         for j in range(3):
             # Probabilité locale vue par le VQA pour ce sous-secteur
-            local_prob = prob_map[i, j]
+            local_prob_h = probs_h[i, j]
+            local_prob_v = probs_v[i, j]
+
+            #Possibly improve the expression of the threshold depending on depth
+            new_threshold = threshold #+ (1 - threshold)/3
+
+            new_cross_h = False
+            new_cross_v = False
+
+            lim_h = False
+            lim_v = False
+
+            y_s_h = y_s - height//2
+            if y_s_h < 0:
+                y_s_h += len(full_phi_v)
+            y_e_h = y_e - height//2
+
+            # Coordonnées physiques du sous-secteur horizontal
+            sub_y_s_h = y_s_h + i * step_y
+            sub_y_e_h = y_s_h + (i + 1) * step_y if i < 2 else y_e_h # Le dernier prend le reste
+            sub_y_s_h = sub_y_s_h % len(full_phi_v)
+            sub_y_e_h = sub_y_e_h % len(full_phi_v)
+            if(sub_y_e_h<sub_y_s_h): cross_v = True
+
+            sub_x_s_h = x_s + j * step_x
+            sub_x_e_h = x_s + (j + 1) * step_x if j < 2 else x_e
             
-            # Coordonnées physiques du sous-secteur
-            sub_y_s = y_s + i * step_y
-            sub_y_e = y_s + (i + 1) * step_y if i < 2 else y_e # Le dernier prend le reste
-            sub_x_s = x_s + j * step_x
-            sub_x_e = x_s + (j + 1) * step_x if j < 2 else x_e
-            
-            sub_bounds = (sub_y_s, sub_y_e, sub_x_s, sub_x_e)
-            
-            if local_prob > threshold:
-                # TURBULENCE DÉTECTÉE : On plonge plus profond !
-                sub_regions_found = True
-                new_threshold = threshold #+ (1 - threshold)/3
+            sub_bounds_h = (sub_y_s_h, sub_y_e_h, sub_x_s_h, sub_x_e_h)
+        
+
+            x_s_v = y_s - height//2
+            if x_s_v < 0:
+                x_s_v += len(full_phi_h)
+            x_e_v = y_e - height//2
+
+            # Coordonnées physiques du sous-secteur vertical
+            sub_x_s_v = x_s_v + j * step_x
+            sub_x_e_v = x_s_v + (j + 1) * step_x if j < 2 else x_e_v
+            sub_x_s_v = sub_x_s_v % len(full_phi_h)
+            sub_x_e_v = sub_x_e_v % len(full_phi_h)
+            if(sub_x_e_v<sub_x_s_v): cross_h = True
+            sub_y_s_v = y_s + i * step_y
+            sub_y_e_v = y_s + (i + 1) * step_y if i < 2 else y_e # Le dernier prend le reste
+
+            sub_bounds_v = (sub_y_s_v, sub_y_e_v, sub_x_s_v, sub_x_e_v)
+
+            if local_prob_h > threshold:
+                # TURBULENCE DÉTECTÉE : On plonge plus profond 
+                
                 recursive_vqa_scan(
                     full_phi_h, full_phi_v, full_prev_h, full_prev_v,
-                    sub_bounds, depth + 1,
+                    sub_bounds_h, depth + 1,
                     mapper, args, DT, active_patches,
                     target_dim = target_dim, max_depth = max_depth, min_size = min_size,
                     threshold = new_threshold, max_patches = max_patches
                 )
             else:
                 active_patches.append({
-                    'bounds': sub_bounds,
+                    'bounds': sub_bounds_h,
+                    'cross_h': cross_h,
+                    'cross_v': cross_v,
                     'depth': depth,
-                    'score': local_prob,
+                    'score': local_prob_h,
+                    'type': 'coarse_leaf' # C'est un gros patch calme
+                })
+
+            if local_prob_v > threshold:
+                # TURBULENCE DÉTECTÉE : On plonge plus profond 
+                
+                recursive_vqa_scan(
+                    full_phi_h, full_phi_v, full_prev_h, full_prev_v,
+                    sub_bounds_v, depth + 1,
+                    mapper, args, DT, active_patches,
+                    target_dim = target_dim, max_depth = max_depth, min_size = min_size,
+                    threshold = new_threshold, max_patches = max_patches,
+                    cross_v = new_cross_v, cross_h = new_cross_h
+                )
+            else:
+                active_patches.append({
+                    'bounds': sub_bounds_v,
+                    'cross_h': cross_h,
+                    'cross_v': cross_v,
+                    'depth': depth,
+                    'score': local_prob_v,
                     'type': 'coarse_leaf' # C'est un gros patch calme
                 })
 
@@ -177,13 +251,16 @@ def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, target_dim=3, 
         max_depth=max_depth,         # Profondeur max (256 -> ~3px)
         min_size=min_size,          # Taille min patch
         threshold=threshold,      # Sensibilité
-        max_patches=max_patches
+        max_patches=max_patches,
+        cross_h = False,
+        cross_v = False
     )
     if len(final_patches) == 0:
         print(">>> VQA found nothing active. Defaulting to FULL COMPUTATION.")
         H, W = full_h.shape
         # On ajoute un gros patch qui couvre tout
-        final_patches.append({'bounds': (0, H, 0, W), 'depth': 0, 'type': 'fallback'})
+        final_patches.append({
+            'bounds': (0, H, 0, W), 'cross_h': False, 'cross_v': False, 'depth': 0, 'type': 'fallback'})
     
     print(f"--- SCAN COMPLETE: {len(final_patches)} Active Zones Identified ---")
     print(final_patches)

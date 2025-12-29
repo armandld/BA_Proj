@@ -77,7 +77,7 @@ def main():
                 DT=DT
             )
             mask_calcul = patches_to_mask((N,N), active_patches)
-            plot_amr_state(sim, active_patches, t, DT, t)
+            plot_amr_state(sim, active_patches, t, DT, t, N)
             Phi_prev = Phi
 
         max_current = np.max(np.abs(physics_state['Jz']))

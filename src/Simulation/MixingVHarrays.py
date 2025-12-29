@@ -36,7 +36,6 @@ def get_adaptive_flux(local_h, local_v, target_dim=3, mixing_ratio=0.3):
     
     # --- 3. Réduction (Zoom) ---
     # Si la taille est déjà 3x3, zoom renvoie l'original (identity), donc c'est safe.
-    print(f"[Adaptive Flux] Reducing from ({h},{w}) to ({target_dim},{target_dim})")
     zoom_y = target_dim / h
     zoom_x = target_dim / w
     
