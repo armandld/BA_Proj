@@ -33,25 +33,39 @@ class AngleMapper:
         By = physics_state['By'] / self.B0
         
         # 2. Compute Differences for Horizontal Edges (Right Neighbors)
-        # We compare pixel (i,j) with (i, j+1) using roll(-1, axis=1)
+        # We compare pixel (i,j) with (i, j+1) and with (i, j-1) using roll(-1, axis=1)
         # Note: roll handles periodicity automatically (Torus topology)
-        diff_h_vx = np.roll(vx, -1, axis=1) - vx
-        diff_h_vy = np.roll(vy, -1, axis=1) - vy
-        diff_h_Bx = np.roll(Bx, -1, axis=1) - Bx
-        diff_h_By = np.roll(By, -1, axis=1) - By
+        diff_h_vx_right = np.roll(vx, -1, axis=1) - vx
+        diff_h_vy_right = np.roll(vy, -1, axis=1) - vy
+        diff_h_Bx_right = np.roll(Bx, -1, axis=1) - Bx
+        diff_h_By_right = np.roll(By, -1, axis=1) - By
+
+        diff_h_vx_left = np.roll(vx, 1, axis=1) - vx
+        diff_h_vy_left = np.roll(vy, 1, axis=1) - vy
+        diff_h_Bx_left = np.roll(Bx, 1, axis=1) - Bx
+        diff_h_By_left = np.roll(By, 1, axis=1) - By
         
         # Calculate Norm: sqrt(dvx^2 + dvy^2 + dBx^2 + dBy^2)
-        phi_h = np.sqrt(diff_h_vx**2 + diff_h_vy**2 + diff_h_Bx**2 + diff_h_By**2)
-
+        phi_h_left = np.sqrt(diff_h_vx_left**2 + diff_h_vy_left**2 + diff_h_Bx_left**2 + diff_h_By_left**2)
+        phi_h_right = np.sqrt(diff_h_vx_right**2 + diff_h_vy_right**2 + diff_h_Bx_right**2 + diff_h_By_right**2)
+        phi_h = np.maximum(phi_h_left,phi_h_right)
+        
         # 3. Compute Differences for Vertical Edges (Bottom Neighbors)
-        # We compare pixel (i,j) with (i+1, j) using roll(-1, axis=0)
-        diff_v_vx = np.roll(vx, -1, axis=0) - vx
-        diff_v_vy = np.roll(vy, -1, axis=0) - vy
-        diff_v_Bx = np.roll(Bx, -1, axis=0) - Bx
-        diff_v_By = np.roll(By, -1, axis=0) - By
+        # We compare pixel (i,j) with (i+1, j) and with (i-1,j) using roll(-1, axis=0)
+        diff_v_vx_bottom = np.roll(vx, -1, axis=0) - vx
+        diff_v_vy_bottom = np.roll(vy, -1, axis=0) - vy
+        diff_v_Bx_bottom = np.roll(Bx, -1, axis=0) - Bx
+        diff_v_By_bottom = np.roll(By, -1, axis=0) - By
+
+        diff_v_vx_high = np.roll(vx, 1, axis=0) - vx
+        diff_v_vy_high = np.roll(vy, 1, axis=0) - vy
+        diff_v_Bx_high = np.roll(Bx, 1, axis=0) - Bx
+        diff_v_By_high = np.roll(By, 1, axis=0) - By
         
         # Calculate Norm
-        phi_v = np.sqrt(diff_v_vx**2 + diff_v_vy**2 + diff_v_Bx**2 + diff_v_By**2)
+        phi_v_bottom = np.sqrt(diff_v_vx_bottom**2 + diff_v_vy_bottom**2 + diff_v_Bx_bottom**2 + diff_v_By_bottom**2)
+        phi_v_high = np.sqrt(diff_v_vx_high**2 + diff_v_vy_high**2 + diff_v_Bx_high**2 + diff_v_By_high**2)
+        phi_v = np.maximum(phi_v_high, phi_v_bottom)
 
         return {
             'phi_horizontal': phi_h,

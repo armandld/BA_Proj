@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-def plot_amr_state(sim, active_patches, step, dt, t_val, N):
+def plot_amr_state(sim, active_patches, step, dt, t_val):
     """
     Affiche l'état MHD global (Courant Jz) et superpose les boîtes d'attention VQA.
     Style: RdBu (Rouge/Bleu) + Cadres Rouges pointillés + Indication de Zoom.
@@ -39,70 +39,22 @@ def plot_amr_state(sim, active_patches, step, dt, t_val, N):
             ys, ye = p['i_start'], p['i_start'] + p['width']
             xs, xe = p['j_start'], p['j_start'] + p['width']
             depth = 0 # Inconnu
+            
+        width = xe - xs
+        height = ye - ys
+        
         # Calcul du facteur de zoom pour l'affichage (Base 3 car découpage 3x3)
         zoom_factor = 3**depth
         
         # Style visuel (Rouge pointillé comme l'ancienne)
         # On rend le trait plus fin si le zoom est profond pour ne pas cacher la physique
         line_width = max(1, 2.5 - 0.5 * depth) 
-        H_tot = N
-        W_tot = N
-
-        # 2. Style visuel dynamique
-        # Plus on zoome, plus le trait est fin pour ne pas cacher les pixels
-        line_width = max(1, 2.5 - 0.5 * depth)
-        if (depth ==0):
-            color = 'red'
-        elif(depth==1):
-            color = 'black'
-        else:
-            color = 'purple'
-        # 3. Gestion des COUPURES (Wrapping)
-        # Au lieu de 'slices', on crée des listes d'intervalles [début, fin]
         
-        # --- Découpage Vertical ---
-        if p['cross_v']:
-            # Le patch traverse le bord vertical -> 2 morceaux
-            # Morceau 1 : De ys jusqu'en bas (H_tot)
-            # Morceau 2 : Du haut (0) jusqu'à ye
-            y_intervals = [(ys, H_tot), (0, ye)]
-        else:
-            # Normal
-            y_intervals = [(ys, ye)]
-
-        # --- Découpage Horizontal ---
-        if p['cross_h']:
-            # Le patch traverse le bord horizontal -> 2 morceaux
-            # Morceau 1 : De xs jusqu'à droite (W_tot)
-            # Morceau 2 : De gauche (0) jusqu'à xe
-            x_intervals = [(xs, W_tot), (0, xe)]
-        else:
-            # Normal
-            x_intervals = [(xs, xe)]
-
-        # 4. Dessin des Rectangles
-        # On itère sur toutes les combinaisons (1, 2 ou 4 rectangles)
-        for (y_start, y_end) in y_intervals:
-            for (x_start, x_end) in x_intervals:
-                
-                # Calcul des dimensions de CE morceau spécifique
-                current_height = y_end - y_start
-                current_width = x_end - x_start
-                
-                # Création du rectangle
-                # Note : Matplotlib place l'origine (xy) en bas à gauche ou haut à gauche
-                # selon votre imshow(origin=...). 
-                # Ici (x_start, y_start) correspond à (colonne, ligne).
-                rect = patches.Rectangle(
-                    (x_start, y_start),   # (x, y) coin "début"
-                    current_width,        # Largeur
-                    current_height,       # Hauteur
-                    linewidth=line_width,
-                    edgecolor=color,
-                    facecolor='none',
-                    linestyle='--'
-                )
-                ax.add_patch(rect)
+        # Rectangle
+        rect = patches.Rectangle((xs, ys), width, height, 
+                                 linewidth=line_width, edgecolor='red', 
+                                 facecolor='none', linestyle='--')
+        ax.add_patch(rect)
         
         # Annotation du Zoom (Uniquement si ce n'est pas tout le domaine)
         if depth > 0:
@@ -124,6 +76,7 @@ def plot_amr_state(sim, active_patches, step, dt, t_val, N):
     # plt.savefig(f"frames/amr_{step:04d}.png", dpi=150)
     
     plt.show() # Nettoie la figure pour le tour suivant
+
 
 def plot_recursive_state(coarse_sim, fine_solvers, t, dt):
     """
