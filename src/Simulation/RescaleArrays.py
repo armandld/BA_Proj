@@ -1,7 +1,8 @@
 from scipy.ndimage import uniform_filter, zoom
 import numpy as np
+from Simulation.utils import zoom_hamilt, uniform_filter_hamilt
 
-def get_adaptive_flux(local_h, local_v, target_dim=3, mixing_ratio=0.3):
+def get_adaptive_flux(local_h, local_v, hamilt_params, target_dim=3, mixing_ratio=0.3, type_filter = True):
     """
     Version robuste aux échelles variables.
     Adapte le prétraitement selon la taille de l'entrée pour éviter le sur-lissage.
@@ -17,9 +18,15 @@ def get_adaptive_flux(local_h, local_v, target_dim=3, mixing_ratio=0.3):
     # On ne lisse que si l'image est nettement plus grande que la cible.
     # Règle empirique : il faut au moins 2 pixels pour en lisser 1 proprement.
     if min_side > target_dim:
+        if type_filter:
+            mode = 'wrap'
+        else:
+            mode = 'reflect'
         # Grand patch : on peut lisser pour réduire le bruit
-        proc_h = uniform_filter(proc_h, size=3, mode='wrap')
-        proc_v = uniform_filter(proc_v, size=3, mode='wrap')
+        proc_h = uniform_filter(proc_h, size=3, mode= mode)
+        proc_v = uniform_filter(proc_v, size=3, mode= mode)
+        if hamilt_params is not None:
+            hamilt_params = uniform_filter_hamilt(hamilt_params, size=3, mode= mode)
     else:
         # Tout petit patch (ex: 4x4 vers 3x3) : INTERDIT DE LISSER
         # On veut garder chaque pixel d'information brute.
@@ -44,5 +51,8 @@ def get_adaptive_flux(local_h, local_v, target_dim=3, mixing_ratio=0.3):
     # mais order=1 est un bon compromis général.
     mini_h = zoom(mixed_h, (zoom_y, zoom_x), order=1)
     mini_v = zoom(mixed_v, (zoom_y, zoom_x), order=1)
+    if hamilt_params is not None:
+        mini_hamilt_params = zoom_hamilt(hamilt_params, zoom_y= zoom_y, zoom_x= zoom_x, order=1)
+        return mini_h, mini_v, mini_hamilt_params
     
     return mini_h, mini_v

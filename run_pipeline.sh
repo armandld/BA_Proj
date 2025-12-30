@@ -204,7 +204,7 @@ fi
 # -----------------------------
 # Pipeline Execution
 # -----------------------------
-echo "ROOYT DIR: $ROOT_DIR"
+echo "ROOT DIR: $ROOT_DIR"
 run_stage "Main Pipeline" python "$SCRIPTS_LOC/pipeline.py" \
     --out-dir "$OUT_DIR" \
     --mode "$MODE" \
@@ -217,6 +217,14 @@ run_stage "Main Pipeline" python "$SCRIPTS_LOC/pipeline.py" \
     --backend "$BACKEND" \
     --shots "$NUM_SHOTS" \
     --method "$METHOD" \
+    $([ "$ONLY_MAPPING" = true ] && echo "--only-mapping") \
+    2>&1 | tee -a "$LOG_FILE"
+    $([ "$ONLY_OPTIMIZE" = true ] && echo "--only-optimize") \
+    2>&1 | tee -a "$LOG_FILE"
+    $([ "$ONLY_EXECUTE" = true ] && echo "--only-execute") \
+    2>&1 | tee -a "$LOG_FILE"
+    $([ "$ONLY_POSTPROCESS" = true ] && echo "--only-postprocess") \
+    2>&1 | tee -a "$LOG_FILE"
     $([ "$VERBOSE" = true ] && echo "--verbose") \
     2>&1 | tee -a "$LOG_FILE"
 

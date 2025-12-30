@@ -64,36 +64,9 @@ def counts_to_marginals(counts, num_qubits):
 # Main
 # ---------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(description="VQA Worker Test")
-    
-    # Arguments attendus par le script shell run_VQA_pipeline.sh
-    parser.add_argument("--in-file", required=True, help="Chemin fichier JSON entrées (Angles)")
-    parser.add_argument("--out-file", required=True, help="Chemin fichier JSON sortie (Probabilités)")
-    
-    # Paramètres quantiques
-    parser.add_argument("--shots", type=int, default=1000)
-    
-    # Arguments 'Dummy' pour compatibilité (ne pas enlever sinon argparse plante)
-    parser.add_argument("--backend", default="aer")
-    parser.add_argument("--depth", default=1)
-    parser.add_argument("--mode", default="simulator")
-    parser.add_argument("--method", default="COBYLA")
-    parser.add_argument("--opt_level", default="1")
-    parser.add_argument("--period_bound", action="store_true")
-
-    args = parser.parse_args()
+def TEST1(data_in, shots):
 
     print(f"--- [VQA WORKER] Démarrage ---")
-
-    # 1. Lecture et Validation des Entrées (Angles)
-    # -----------------------------------------------------
-    if not os.path.exists(args.in_file):
-        print(f"❌ Erreur: Fichier d'entrée introuvable: {args.in_file}")
-        return
-
-    with open(args.in_file, 'r') as f:
-        data_in = json.load(f)
 
     # Vérification simple du contenu
     # Le format attendu par pipeline.py est {'theta_h': [...], 'theta_v': [...]}
@@ -113,9 +86,9 @@ def main():
 
     # 2. Simulation (Génération aléatoire de Counts)
     # -----------------------------------------------------
-    print(f"⚙️  Génération de {args.shots} shots pour {num_qubits} qubits...")
+    print(f"⚙️  Génération de {shots} shots pour {num_qubits} qubits...")
     
-    counts = generate_random_counts(num_qubits, args.shots)
+    counts = generate_random_counts(num_qubits, shots)
     
     # Affichage console pour vérification immédiate
     print(f"📊 Résultat Counts (Extrait): {list(counts.items())[:3]} ...")
@@ -133,21 +106,13 @@ def main():
         probs[i] = 0
 
     if len(probs) >= 2:
-        probs[-1] = 0.95 # Qubit 0 instable
-        #probs[-2] = 0.85 # Qubit 1 instable"""
+        probs[9] = 0.95 # Qubit 0 instable
+        #probs[0] = 0.85 # Qubit 1 instable"""
 
     print("PROBABILITIES : ", probs)
-    # B. Sauvegarde pour la Pipeline (vqa_output.json)
-    with open(args.out_file, 'w') as f:
-        json.dump(probs, f)
-    print(f"💾 Probabilités sauvegardées dans: {args.out_file}")
 
-    # C. Sauvegarde Bonus (Format {String: Shots}) pour toi
-    # On sauvegarde ça dans un fichier 'debug_counts.json' au même endroit
-    debug_path = args.out_file.replace("vqa_output.json", "debug_counts.json")
-    with open(debug_path, 'w') as f:
-        json.dump(counts, f, indent=4)
-    print(f"💾 Counts bruts sauvegardés dans : {debug_path}")
+    return probs
+
 
 if __name__ == "__main__":
-    main()
+    TEST1()

@@ -7,12 +7,17 @@ from call_vqa_shell import call_vqa_shell
 
 from help_visual import visualize_vqa_step
 
-from Simulation.MixingVHarrays import get_adaptive_flux
+from Simulation.RescaleArrays import get_adaptive_flux
+
+from Simulation.HamiltParams import PhysicalMapper
+
+from Simulation.utils import slice_hamiltonian_params
 
 def recursive_vqa_scan(
     # Données physiques complètes (ne changent pas, on passe des références)
     full_phi_h, full_phi_v, 
     full_prev_h, full_prev_v, 
+    hamilt_params,
     
     # Paramètres de récursion
     bounds,        # Tuple (y_start, y_end, x_start, x_end) de la zone actuelle
@@ -54,10 +59,16 @@ def recursive_vqa_scan(
 
     # --- 1. Extraction et Préparation Locale --- 
     # On découpe les données physiques correspondant à la zone actuelle
+    local_hamilt_params = slice_hamiltonian_params(hamilt_params, y_s, y_e, x_s, x_e)
     local_h = full_phi_h[y_s:y_e, x_s:x_e]
     local_v = full_phi_v[y_s:y_e, x_s:x_e]
 
-    mini_h, mini_v = get_adaptive_flux(local_h, local_v, target_dim=target_dim, mixing_ratio=0.5)
+    mini_h, mini_v, mini_hamilt_params = get_adaptive_flux(
+        local_h, local_v, local_hamilt_params,
+        target_dim=target_dim,
+        mixing_ratio=0.5,
+        type_filter = depth ==0
+    )
     # Reconstruction du dictionnaire pour le mapper
     mini_Phi_dict = {'phi_horizontal': mini_h, 'phi_vertical': mini_v}
 
@@ -67,10 +78,10 @@ def recursive_vqa_scan(
         local_prev_v = full_prev_v[y_s:y_e, x_s:x_e]
 
         mini_prev_h, mini_prev_v = get_adaptive_flux(
-            local_prev_h,
-            local_prev_v,
+            local_prev_h, local_prev_v, None,
             target_dim=target_dim,
-            mixing_ratio=0.5
+            mixing_ratio=0.5,
+            type_filter = depth ==0
         )
         mini_Phi_prev_dict = {'phi_horizontal': mini_prev_h, 'phi_vertical': mini_prev_v}
     else:
@@ -80,13 +91,12 @@ def recursive_vqa_scan(
     # Le VQA analyse la zone et retourne 18 angles -> Probabilités sur la grille 3x3
     angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT)
     # Appel Shell (Simulé ou Réel) - Force la grille 3x3
-    probs = call_vqa_shell(angles, args, script_path="run_VQA_pipeline.sh", period_bound = depth==0)
+    probs = call_vqa_shell(angles, mini_hamilt_params, args, period_bound = depth==0)
 
-    # Visualiser les steps
-    visualize_vqa_step(local_h, local_v, bounds, depth)
+    # HELPER Visualiser les steps
+    #visualize_vqa_step(local_h, local_v, bounds, depth)
 
     if probs is None: return # Erreur technique
-
 
     # Décodage : 3x3 ProbMap
     num_edges = target_dim * target_dim
@@ -132,7 +142,7 @@ def recursive_vqa_scan(
 
                 # TURBULENCE DÉTECTÉE : On plonge plus profond 
                 recursive_vqa_scan(
-                    full_phi_h, full_phi_v, full_prev_h, full_prev_v,
+                    full_phi_h, full_phi_v, full_prev_h, full_prev_v, hamilt_params,
                     sub_bounds, depth + 1,
                     mapper, args, DT, active_patches,
                     target_dim = target_dim, max_depth = max_depth, min_size = min_size,
@@ -147,7 +157,19 @@ def recursive_vqa_scan(
                 })
 
 
-def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, target_dim=3, max_depth=4, max_patches=256, min_size=6, DT=0.1):
+def run_adaptive_vqa(
+    sim, mapper, args,
+    Phi_prev,
+    threshold=0.65,
+    target_dim=3,
+    max_depth=4,
+    max_patches=256,
+    min_size=6,
+    DT=0.1,
+    c_s=1,
+    eta=0.01,
+    Bz_guide=1
+    ):
     """
     Point d'entrée principal à appeler dans ton main().
     """
@@ -168,6 +190,9 @@ def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, target_dim=3, 
     H, W = full_h.shape
     initial_bounds = (0, H, 0, W)
     
+    Mapper = PhysicalMapper(c_s, eta, Bz_guide)
+    hamilt_params = Mapper.compute_coefficients(physics_state)
+
     # Liste qui recevra les résultats
     final_patches = []
     
@@ -175,7 +200,7 @@ def run_adaptive_vqa(sim, mapper, args, Phi_prev, threshold=0.65, target_dim=3, 
     
     # 2. Lancement de la récursion
     recursive_vqa_scan(
-        full_h, full_v, full_prev_h, full_prev_v,
+        full_h, full_v, full_prev_h, full_prev_v, hamilt_params,
         initial_bounds, depth=0,
         mapper=mapper, args=args, DT=DT,
         active_patches=final_patches,

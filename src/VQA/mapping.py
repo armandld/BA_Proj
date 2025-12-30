@@ -26,136 +26,183 @@ from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import PauliEvolutionGate, RGate
 from qiskit.quantum_info import SparsePauliOp
 
-from ZGR_QFT import ZGR_QFT_gate
-from ULA import ULA_gate
+from VQA.init_qbits_state import init_qbits_state
 
-from H_TEST import H_TEST_DIM_1, H_TEST_DIM_2
-
-from init_optimization_param import extract_initial_params_from_state, calcul_alpha_y, calcul_alpha_z, get_global_phase
-
-
-def init_qbits_state( theta_h, theta_v, psi_h, psi_v):
-    """Initialisation des qubits selon les angles fournis."""
-    num_qubits = 2*len(theta_h)  # Supposant une grille rectangulaire
-    qc = QuantumCircuit(num_qubits)
-
-    for i in range(len(theta_h)):
-        qc[2*i].RGate(theta_h[i], - psi_h[i] -np.pi/2)
-        qc[2*i+1].RGate(theta_v[i], - psi_v[i] -np.pi/2)
-
-    return qc
-
-def create_maxcut_hamiltonian(qc: QuantumCircuit) -> SparsePauliOp:
-
-    pauli_terms = []
-
-    
-    """Construct the MaxCut Hamiltonian H = 1/2 Σ_ij w_ij (I - Z_i Z_j)
-    num_qubits = qc.num_qubits
-    pauli_terms = []
-
-    for i, j, data in graph.edges(data=True):
-        weight = data.get("weight", 1.0)
-        z_term = ["I"] * num_qubits
-        z_term[i] = "Z"
-        z_term[j] = "Z"
-        pauli_terms.append(("".join(z_term), -0.5 * weight))
-        pauli_terms.append(("I" * num_qubits, 0.5 * weight))  # Constant offset
+def create_bounded_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
     """
-    return SparsePauliOp.from_list(pauli_terms)
+    Construit l'Hamiltonien MHD sur une grille torique (Périodique).
+    Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
+    """
+    sparse_list = []
+    
+    # Helpers pour récupérer l'index linéaire du qubit correspondant à un lien
+    # Qubits 0 à N^2-1 : Liens Horizontaux (H)
+    # Qubits N^2 à 2N^2-1 : Liens Verticaux (V)
+    offset_v = dim * dim
+    
+    def idx_H(y, x): return (y % dim) * dim + (x % dim)
+    def idx_V(y, x): return offset_v + (y % dim) * dim + (x % dim)
+
+    for i in range(dim):
+        for j in range(dim):
+            
+            # --- 1. SHEAR (Viscosité) : Interactions ZZ ---
+            # Horizontal Shear : Entre lien H(i,j) et H(i, j+1) (voisins sur la même ligne)
+            c_h = hamilt_params['C_edges'][0][i, j]
+            if abs(c_h) > 1e-6:
+                sparse_list.append(("ZZ", [idx_H(i, j), idx_H(i, j+1)], c_h))
+
+            # Vertical Shear : Entre lien V(i,j) et V(i+1, j) (voisins sur la même colonne)
+            c_v = hamilt_params['C_edges'][1][i, j]
+            if abs(c_v) > 1e-6:
+                sparse_list.append(("ZZ", [idx_V(i, j), idx_V(i+1, j)], c_v))
+    
+            # --- 2. VORTICITY (Plaquette) : Terme ZZZZ ---
+            # Une plaquette fermée implique : Haut -> Droite -> Bas -> Gauche
+            k_val = hamilt_params['K_plaquettes'][i, j]
+            if abs(k_val) > 1e-6:
+                qubits_plaquette = [
+                    idx_H(i, j),      # Haut (Lien H sur ligne i)
+                    idx_V(i, j+1),    # Droite (Lien V sur colonne j+1)
+                    idx_H(i+1, j),    # Bas (Lien H sur ligne i+1)
+                    idx_V(i, j)       # Gauche (Lien V sur colonne j)
+                ]
+                sparse_list.append(("ZZZZ", qubits_plaquette, k_val))
+
+            # --- 3. SHOCK (Divergence/Vertex) : Terme ZZZZ (Séparé !) ---
+            # Un noeud implique les 4 liens qui forment une croix (+) autour de lui.
+            # Entrant/Sortant pour tester la divergence div(B)=0
+            delta_val = hamilt_params['Delta_nodes'][i, j]
+            if abs(delta_val) > 1e-6:
+                qubits_vertex = [
+                    idx_H(i, j),      # Sortant Droite
+                    idx_H(i, j-1),    # Entrant Gauche (j-1)
+                    idx_V(i, j),      # Sortant Bas
+                    idx_V(i-1, j)     # Entrant Haut (i-1)
+                ]
+                sparse_list.append(("ZZZZ", qubits_vertex, delta_val))
+
+            # --- 4. KINK (Chiralité) : Termes XY - YX ---
+            # Horizontal Kink (le long de la ligne)
+            d_h = hamilt_params['D_edges'][0][i, j]
+            if abs(d_h) > 1e-6:
+                # Interaction entre H(i,j) et son voisin H(i,j+1)
+                q1, q2 = idx_H(i, j), idx_H(i, j+1)
+                sparse_list.append(("XY", [q1, q2], d_h))
+                sparse_list.append(("YX", [q1, q2], -d_h))
+
+            # Vertical Kink (le long de la colonne)
+            d_v = hamilt_params['D_edges'][1][i, j]
+            if abs(d_v) > 1e-6:
+                # Interaction entre V(i,j) et son voisin V(i+1,j)
+                q1, q2 = idx_V(i, j), idx_V(i+1, j)
+                sparse_list.append(("XY", [q1, q2], d_v))
+                sparse_list.append(("YX", [q1, q2], -d_v))
+
+            # --- 5. CONTROL (Champ Magnétique) ---
+            m_val = hamilt_params['M_nodes'][i, j]
+            if abs(m_val) > 1e-6:
+                # On applique le champ sur les liens sortants du noeud
+                sparse_list.append(("X", [idx_H(i, j)], m_val))
+                sparse_list.append(("X", [idx_V(i, j)], m_val))
+    
+
+def create_NO_bounded_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
+    """
+    Construit l'Hamiltonien MHD sur une grille torique (Périodique).
+    Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
+    """
+    sparse_list = []
+    
+    # Helpers pour récupérer l'index linéaire du qubit correspondant à un lien
+    # Qubits 0 à N^2-1 : Liens Horizontaux (H)
+    # Qubits N^2 à 2N^2-1 : Liens Verticaux (V)
+    offset_v = dim * dim
+    
+    def idx_H(y, x): return (y % dim) * dim + (x % dim)
+    def idx_V(y, x): return offset_v + (y % dim) * dim + (x % dim)
+
+    for i in range(dim):
+        for j in range(dim):
+            
+            # --- 1. SHEAR (Viscosité) : Interactions ZZ ---
+            # Horizontal Shear : Entre lien H(i,j) et H(i, j+1) (voisins sur la même ligne)
+            c_h = hamilt_params['C_edges'][0][i, j]
+            if abs(c_h) > 1e-6:
+                sparse_list.append(("ZZ", [idx_H(i, j), idx_H(i, j+1)], c_h))
+
+            # Vertical Shear : Entre lien V(i,j) et V(i+1, j) (voisins sur la même colonne)
+            c_v = hamilt_params['C_edges'][1][i, j]
+            if abs(c_v) > 1e-6:
+                sparse_list.append(("ZZ", [idx_V(i, j), idx_V(i+1, j)], c_v))
+    
+            # --- 2. VORTICITY (Plaquette) : Terme ZZZZ ---
+            # Une plaquette fermée implique : Haut -> Droite -> Bas -> Gauche
+            k_val = hamilt_params['K_plaquettes'][i, j]
+            if abs(k_val) > 1e-6:
+                qubits_plaquette = [
+                    idx_H(i, j),      # Haut (Lien H sur ligne i)
+                    idx_V(i, j+1),    # Droite (Lien V sur colonne j+1)
+                    idx_H(i+1, j),    # Bas (Lien H sur ligne i+1)
+                    idx_V(i, j)       # Gauche (Lien V sur colonne j)
+                ]
+                sparse_list.append(("ZZZZ", qubits_plaquette, k_val))
+
+            # --- 3. SHOCK (Divergence/Vertex) : Terme ZZZZ (Séparé !) ---
+            # Un noeud implique les 4 liens qui forment une croix (+) autour de lui.
+            # Entrant/Sortant pour tester la divergence div(B)=0
+            delta_val = hamilt_params['Delta_nodes'][i, j]
+            if abs(delta_val) > 1e-6:
+                qubits_vertex = [
+                    idx_H(i, j),      # Sortant Droite
+                    idx_H(i, j-1),    # Entrant Gauche (j-1)
+                    idx_V(i, j),      # Sortant Bas
+                    idx_V(i-1, j)     # Entrant Haut (i-1)
+                ]
+                sparse_list.append(("ZZZZ", qubits_vertex, delta_val))
+
+            # --- 4. KINK (Chiralité) : Termes XY - YX ---
+            # Horizontal Kink (le long de la ligne)
+            d_h = hamilt_params['D_edges'][0][i, j]
+            if abs(d_h) > 1e-6:
+                # Interaction entre H(i,j) et son voisin H(i,j+1)
+                q1, q2 = idx_H(i, j), idx_H(i, j+1)
+                sparse_list.append(("XY", [q1, q2], d_h))
+                sparse_list.append(("YX", [q1, q2], -d_h))
+
+            # Vertical Kink (le long de la colonne)
+            d_v = hamilt_params['D_edges'][1][i, j]
+            if abs(d_v) > 1e-6:
+                # Interaction entre V(i,j) et son voisin V(i+1,j)
+                q1, q2 = idx_V(i, j), idx_V(i+1, j)
+                sparse_list.append(("XY", [q1, q2], d_v))
+                sparse_list.append(("YX", [q1, q2], -d_v))
+
+            # --- 5. CONTROL (Champ Magnétique) ---
+            m_val = hamilt_params['M_nodes'][i, j]
+            if abs(m_val) > 1e-6:
+                # On applique le champ sur les liens sortants du noeud
+                sparse_list.append(("X", [idx_H(i, j)], m_val))
+                sparse_list.append(("X", [idx_V(i, j)], m_val))
 
 # -----------------------------
 # Main entry point
 # -----------------------------
-def main():
-    parser = argparse.ArgumentParser(description="Mapping VQA")
-    parser.add_argument("--out-dir", default="../data", help="Output directory for mapping")
-    parser.add_argument("--in-dir", default="../input/mapping_input.json", help="Input directory for mapping")
-    parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--depth", type=int, required=False, help="Depth of the ULA ansatz.")
-
-
-    args = parser.parse_args()
-
-    os.makedirs(args.out_dir, exist_ok=True)
-
-    # Number of qubits you want
-    depth = args.depth if args.depth else 2
-
-    if not os.path.exists(args.in_file):
-        print(f"❌ Erreur: Fichier d'entrée introuvable: {args.in_file}")
-        return
-
-    with open(args.in_file, 'r') as f:
-        data_in = json.load(f)
-
-    theta_h = data_in.get("theta_h", [])
-    theta_v = data_in.get("theta_v", [])
-    psi_h = data_in.get("psi_h", [])
-    psi_v = data_in.get("psi_v", [])
+def mapping(data_in, hamilt_params, bounded_cond):
+    dim = len(data_in["theta_h"])
+    theta_h = np.array(data_in.get("theta_h", []))
+    theta_v = np.array(data_in.get("theta_v", []))
+    psi_h   = np.array(data_in.get("psi_h",   []))
+    psi_v   = np.array(data_in.get("psi_v",   []))
 
     qc = init_qbits_state( theta_h, theta_v, psi_h, psi_v)
 
-    # Number of random edges you want
-    num_edges = args.edges
+    if bounded_cond:
+        cost_hamiltonian = create_bounded_hamiltonian(hamilt_params, dim)
+    else:
+        cost_hamiltonian = create_NO_bounded_hamiltonian(hamilt_params, dim)
 
-    # Seed for reproducibility
-    seed = 2
-    
-    random.seed(seed)
-    np.random.seed(seed)
-
-    # Create empty graph
-    G = nx.Graph()
-    G.add_nodes_from(np.arange(0, n, 1))
-
-    # Generate all possible edges without self-loops
-    possible_edges = [(i, j) for i in range(n) for j in range(i+1, n)]
-
-    # Randomly select edges
-    random_edges = random.sample(possible_edges, num_edges)
-
-    # Add edges with weight 1
-    weighted_edges = [(u, v, 1.0) for u, v in random_edges]
-    G.add_weighted_edges_from(weighted_edges)
-
-    
-
-    if args.verbose:
-        print(f"🔹 Using {args.backend.upper()} backend")
-        print("🔹 Graph edges:", list(G.edges))
-        # Draw the graph
-        pos = nx.spring_layout(G, seed=seed)  # layout with same seed
-        nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=700, font_size=14)
-        plt.show()  # non-blocking because interactive mode is on
-
-    # -----------------------------
-    # Map to Hamiltonian
-    # -----------------------------
-    num_qubits = G.number_of_nodes()
-
-    def build_max_cut_paulis(graph: nx.Graph) -> list[tuple[str, float]]:
-        """
-        Convert a NetworkX graph to a list of Pauli terms for MaxCut Hamiltonian.
-        Returns a list of (pauli_string, coefficient).
-        """
-        num_qubits = graph.number_of_nodes()
-        pauli_terms = []
-
-        for i, j, data in graph.edges(data=True):
-            weight = data.get("weight", 1.0)
-            z_term = ["I"] * num_qubits
-            z_term[i] = "Z"
-            z_term[j] = "Z"
-            pauli_terms.append(("".join(z_term), 0.5 * weight))
-            pauli_terms.append(("I" * num_qubits, -0.5 * weight))  # constant offset
-
-        return pauli_terms
-    
-    
-    pauli_list = build_max_cut_paulis(G)
-    cost_hamiltonian = SparsePauliOp.from_list(pauli_list)
-
+    """
     # -----------------------------
     # Prepare data for JSON
     # -----------------------------
@@ -165,57 +212,18 @@ def main():
         real_coeff = float(np.real_if_close(coeff))
         hamiltonian_terms.append([label, real_coeff])
 
-    edges = [(int(u), int(v)) for u, v in G.edges]
-
     mapping_data = {
-        "backend": args.backend,
         "num_qubits": num_qubits,
         "edges": edges,
         "hamiltonian": hamiltonian_terms,
-    }
+    }"""
 
     circuit = QAOAAnsatz(cost_operator=cost_hamiltonian, reps=2)
     circuit.measure_all()
     
     circuit.draw("mpl")
 
-    if args.verbose:
-        print("cost_hamiltonian : ",cost_hamiltonian)
-        plt.show()
-    
-    # -----------------------------
-    # Save mapping to JSON
-    # -----------------------------
-    out_file = os.path.join(args.out_dir, "mapping.json")
-    with open(out_file, "w") as f:
-        json.dump(mapping_data, f, indent=2)
-    circuit_file = os.path.join(args.out_dir, "qaoa_circuit.qpy")
-
-    with open(circuit_file, "wb") as f:
-        qpy.dump(circuit, f)  # saves the circuit to a binary file
-    
-    # Convert graph to a JSON-serializable format
-    graph_data = json_graph.node_link_data(G)
-
-    # Convert all node ids to int and edge weights to float
-    for node in graph_data["nodes"]:
-        node["id"] = int(node["id"])
-    for edge in graph_data["links"]:
-        edge["source"] = int(edge["source"])
-        edge["target"] = int(edge["target"])
-        if "weight" in edge:
-            edge["weight"] = float(edge["weight"])
-
-    graph_file = os.path.join(args.out_dir, "graph.json")
-    with open(graph_file, "w") as f:
-        json.dump(graph_data, f, indent=2)
-
-    if args.verbose:
-        print(f"✅ Mapping complete. Saved to {out_file}")
-        print("Hamiltonian terms:")
-        for label, coeff in hamiltonian_terms:
-            print(f"  {label} : {coeff}")
 
 
 if __name__ == "__main__":
-    main()
+    mapping(None, None, None)

@@ -74,7 +74,10 @@ def main():
                 max_depth= int(log(N)/log(VQA_N))+1,
                 max_patches=N,
                 min_size = 6,
-                DT=DT
+                DT=DT,
+                c_s = 1.0,
+                eta = 0.01,
+                Bz_guide = 1.0
             )
             mask_calcul = patches_to_mask((N,N), active_patches)
             plot_amr_state(sim, active_patches, t, DT, t)
