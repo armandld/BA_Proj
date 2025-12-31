@@ -73,14 +73,9 @@ class PhysicalMapper:
         )
         K_p = sum_corners / 4.0
 
-
-        # E. CONTROL TERM (M_k)
-        M_k = np.sqrt(B_mag_sq)
-
         return {
             "C_edges": (C_horiz, C_vert),
             "D_edges": (D_horiz, D_vert),
             "Delta_nodes": Delta_v,
-            "K_plaquettes": K_p,
-            "M_nodes": M_k
+            "K_plaquettes": K_p
         }

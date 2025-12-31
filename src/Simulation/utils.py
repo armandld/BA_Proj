@@ -35,7 +35,6 @@ def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, pad= 0):
     # 1. Termes définis sur les Noeuds (Nodes)
     # Ils ont la même taille que la grille de pixels
     local_params['Delta_nodes'] = extract(params['Delta_nodes'])
-    local_params['M_nodes']     = extract(params['M_nodes'])
 
     # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
     # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,

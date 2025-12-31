@@ -80,7 +80,7 @@ def recursive_vqa_scan(
         local_prev_h = get_periodic_patch(full_prev_h, y_s, y_e, x_s, x_e, pad)
         local_prev_v = get_periodic_patch(full_prev_v, y_s, y_e, x_s, x_e, pad)
 
-        mini_prev_h, mini_prev_v = get_adaptive_flux(
+        mini_prev_h, mini_prev_v, _ = get_adaptive_flux(
             local_prev_h, local_prev_v, None,
             target_dim=target_dim,
             mixing_ratio=0.5,

@@ -97,149 +97,83 @@ def build_observable(num_qubits, meas_config):
 # 3. MAIN EXECUTION
 # =========================================================
 
-def main():
-    parser = argparse.ArgumentParser(description="Execute Variational Optimization")
-    parser.add_argument("--out-dir", default="../data", help="Data directory")
-    parser.add_argument("--mode", default="simulator", choices=["simulator", "hardware"])
-    parser.add_argument("--backend", default="aer", choices=["aer", "estimator"])
-    parser.add_argument("--shots", type=int, default=1024)
-    parser.add_argument("--method", default="COBYLA", choices=["COBYLA", "L-BFGS-B", "Powell"])
-    parser.add_argument("--mu", type=float, default=1.0, help="Weight for the second circuit (H2)")
-    parser.add_argument("--verbose", action="store_true")
-    args = parser.parse_args()
+def execute(qc, cost_hamiltonian, mode, backend, shots, reps):
+    num_qubits = qc.num_qubits
 
-    if args.mode == "simulator":
+    initial_gamma = np.pi
+    initial_beta = np.pi / 2
+    init_params = [initial_beta, initial_beta, initial_gamma, initial_gamma]
+
+    # Select backend
+    if mode == "simulator":
         backend = Aer.get_backend('qasm_simulator')
     else:
         IBMQ.load_account()
         provider = IBMQ.get_provider(hub='ibm-q')
         backend = provider.get_backend('ibmq_qasm_simulator')  # choose hardware device
 
-    # Ignorer les warnings de param vector partiels lors du chargement QPY
-    warnings.filterwarnings("ignore", message="The ParameterVector: .* is not fully identical")
-
-    # 1. Chargement du Mapping
-    mapping_path = os.path.join(args.out_dir, "mapping.json")
-    with open(mapping_path, "r") as f:
-        mapping_data = json.load(f)
-
-    # 2. Chargement des Circuits Transpilés
-    circuits = []
-    observables = []
-    # Liste de listes d'indices pour lier x_global -> circuit_local
-    circuit_mappings = [] 
+    def cost_func_estimator(params, ansatz, hamiltonian, estimator):
+        # transform the observable defined on virtual qubits to
+        # an observable defined on all physical qubits
+        isa_hamiltonian = hamiltonian.apply_layout(ansatz.layout)
     
-    # Vecteur global initial et map de noms
-    x0, name_to_idx = build_parameter_map(mapping_data)
-    num_qubits = mapping_data["num_qubits"]
-
-    print(f"Loading {len(mapping_data['transpiled_circuits'])} circuits...")
+        pub = (ansatz, isa_hamiltonian, params)
+        job = estimator.run([pub])
     
-    for entry in mapping_data["transpiled_circuits"]:
-        # Load QPY
-        fpath = os.path.join(args.out_dir, entry["file"])
-        with open(fpath, "rb") as f:
-            qc = qpy.load(f)[0]
-            circuits.append(qc)
-        
-        logical_obs = build_observable(num_qubits, entry["measurement"])
+        results = job.result()[0]
+        cost = results.data.evs
+    
+        objective_func_vals.append(cost)
+    
+        return cost
 
-        # Build Observable (ex: 0.5 * Z0)
-        if qc.layout is not None:
-            obs = logical_obs.apply_layout(qc.layout)
-            observables.append(obs)
-        else:
-            observables.append(logical_obs)
-        
-        # Map Parameters
-        indices = map_circuit_params_to_global(qc, name_to_idx)
-        circuit_mappings.append(indices)
-
-    # 3. Setup Backend & Estimator
+    objective_func_vals = []  # Global variable
     with Session(backend=backend) as session:
-        estimator = Estimator(mode=session) # Utilisation Estimator V2 local
-        
-        # 4. Fonction de Coût Globale
-        # H_total = H_1 + mu * H_2
-        history = []
-
-        def cost_function(params_values):
-            # params_values est le vecteur x global fourni par l'optimiseur
-            
-            pubs = []
-            
-            # Préparation des PUBs (Primitive Unified Blocs) pour l'Estimator V2
-            # Chaque PUB est un tuple (circuit, observable, valeurs_parametres)
-            for i, qc in enumerate(circuits):
-                # Extraction des valeurs spécifiques pour ce circuit
-                # On utilise le mapping précalculé pour être très rapide
-                indices = circuit_mappings[i]
-                local_values = params_values[indices]
-                
-                # Note: Estimator V2 attend un tableau de valeurs 2D (shots, n_params) 
-                # ou 1D si 1 shot. Ici on passe [local_values] pour 1 set de paramètres.
-                pubs.append((qc, observables[i], local_values))
-                
-            # Exécution en batch (tous les circuits d'un coup)
-            job = estimator.run(pubs, precision=1.0/np.sqrt(args.shots))
-            results = job.result()
-            
-            total_cost = 0.0
-            
-            # Somme pondérée des résultats
-            # C1 (index 0) + mu * C2 (index 1)
-            # Note: Les coefficients Z (1.0 ou 0.5) sont DÉJÀ dans l'observable SparsePauliOp
-            
-            val1 = results[0].data.evs # Expectation value circuit 1
-            total_cost += val1
-            
-            if len(results) > 1:
-                val2 = results[1].data.evs # Expectation value circuit 2
-                total_cost += args.mu * val2
-                
-            history.append(total_cost)
-            if len(history) % 10 == 0:
-                print(f"Iter {len(history)}: Cost = {total_cost:.6f}")
-                
-            return total_cost
-
-        # 5. Lancement Optimisation
-        print(f"Starting optimization with {args.method} on {len(x0)} parameters...")
-        print(f"Initial Cost evaluation...")
-        
-        res = minimize(
-            cost_function,
-            x0,
-            method=args.method,
-            options={'maxiter': 200, 'disp': True}
+        # If using qiskit-ibm-runtime<0.24.0, change `mode=` to `session=`
+        estimator = Estimator(mode=session)
+        estimator.options.default_shots = shots
+        if mode != "simulator":
+            # Only set options for real hardware
+            estimator.options.dynamical_decoupling.enable = True
+            estimator.options.dynamical_decoupling.sequence_type = "XY4"
+            estimator.options.twirling.enable_gates = True
+            estimator.options.twirling.num_randomizations = "auto"
+    
+        result = minimize(
+            cost_func_estimator,
+            init_params,
+            args=(qc, cost_hamiltonian, estimator),
+            method="COBYLA",
+            tol=1e-2,
         )
+        print(result)
 
-        print("\nOptimization Result:")
-        print(f"Success: {res.success}")
-        print(f"Final Cost: {res.fun:.6f}")
-    
-    # 6. Sauvegarde et Affichage
     if args.verbose:
-        plt.figure(figsize=(10, 5))
-        plt.plot(history)
-        plt.xlabel("Iterations")
-        plt.ylabel("Cost Function")
-        plt.title("VQA Convergence")
-        plt.grid(True)
+        plt.figure(figsize=(12, 6))
+        plt.plot(objective_func_vals)
+        plt.xlabel("Iteration")
+        plt.ylabel("Cost")
         plt.show()
-
-    # Sauvegarde des résultats
-    result_data = {
-        "final_cost": res.fun,
-        "iterations": res.nfev,
-        "optimal_parameters": res.x.tolist(),
-        "history": [float(h) for h in history]
-    }
     
-    res_path = os.path.join(args.out_dir, "optimization_results.json")
-    with open(res_path, "w") as f:
-        json.dump(result_data, f, indent=2)
-    print(f"Results saved to {res_path}")
+    optimized_circuit = qc.assign_parameters(result.x)
+    optimized_circuit.draw("mpl", fold=False, idle_wires=False)
 
-if __name__ == "__main__":
-    main()
+    # If using qiskit-ibm-runtime<0.24.0, change `mode=` to `backend=`
+    sampler = Sampler(mode=backend)
+    sampler.options.default_shots = shots
+    
+    # Set simple error suppression/mitigation options
+    sampler.options.dynamical_decoupling.enable = True
+    sampler.options.dynamical_decoupling.sequence_type = "XY4"
+    sampler.options.twirling.enable_gates = True
+    sampler.options.twirling.num_randomizations = "auto"
+    
+    pub = (optimized_circuit,)
+    job = sampler.run([pub], shots=int(shots))
+    counts_int = job.result()[0].data.meas.get_int_counts()
+    counts_bin = job.result()[0].data.meas.get_counts()
+    shots = sum(counts_int.values())
+    final_distribution_int = {key: val / shots for key, val in counts_int.items()}
+    final_distribution_bin = {key: val / shots for key, val in counts_bin.items()}
+    print(final_distribution_int)
+    return final_distribution_int

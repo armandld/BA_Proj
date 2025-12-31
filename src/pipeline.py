@@ -60,8 +60,8 @@ def main():
     mask_calcul = None
     physics_state = sim.get_fluxes()
     Phi = mapper.compute_stress_flux(physics_state)
-    plot_grid_topology(grid)
-    plot_flux_on_edges(grid, Phi)
+    #plot_grid_topology(grid)
+    #plot_flux_on_edges(grid, Phi)
     for t in range(STEPS):
 
         sim.step_masked(mask_calcul)

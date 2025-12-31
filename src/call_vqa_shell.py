@@ -10,6 +10,12 @@ import matplotlib.pyplot as plt
 
 from VQA.TEST1 import TEST1
 
+from VQA.mapping import mapping
+
+from VQA.optimize import optimize
+
+from VQA.execute import execute
+
 def call_vqa_shell(angles_tuple, hamilt_params, args, period_bound=True):
     
     # 1. Sérialisation des données (Angles -> JSON)
@@ -20,6 +26,9 @@ def call_vqa_shell(angles_tuple, hamilt_params, args, period_bound=True):
         "psi_h": angles_tuple[2].tolist(),
         "psi_v": angles_tuple[3].tolist()
     }
-    print("Paramètres physiques de l'hamiltonien :", hamilt_params)
-    probs_list = TEST1(data, hamilt_params, args.shots, period_bound)
+    reps = 2
+    qc, cost_hamiltonian = mapping(data, hamilt_params, period_bound, reps)
+    qc = optimize(qc, args.backend, args.opt_level)
+    probs_list = execute(qc, cost_hamiltonian, args.mode, args.backend, args.shots, reps)
+    probs_list = TEST1(qc, args.backend, args.shots)
     return np.array(probs_list)
