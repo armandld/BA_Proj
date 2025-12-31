@@ -30,5 +30,5 @@ def call_vqa_shell(angles_tuple, hamilt_params, args, period_bound=True):
     qc, cost_hamiltonian = mapping(data, hamilt_params, period_bound, reps)
     qc = optimize(qc, args.backend, args.opt_level)
     probs_list = execute(qc, cost_hamiltonian, args.mode, args.backend, args.shots, reps)
-    probs_list = TEST1(qc, args.backend, args.shots)
+    #probs_list = TEST1(qc, args.backend, args.shots)
     return np.array(probs_list)

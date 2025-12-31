@@ -10,6 +10,7 @@ from scipy.optimize import minimize
 from collections import defaultdict
 from typing import Sequence
 
+from qiskit import IBMQ
 from qiskit import qpy
 from qiskit_aer import Aer
 from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator

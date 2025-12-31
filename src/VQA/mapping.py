@@ -74,18 +74,9 @@ def counts_to_marginals(counts, num_qubits):
 
 def mapping(data_in, hamilt_params, period_bound=True, reps=2):
 
-    # On adapte la lecture de dimension de mon tableau de données pour la séparation Halo/coeur
-    raw_theta = np.array(data_in.get("theta_h", []))
-    
-    # Détermine si l'entrée est plate (N^2) ou carrée (NxN)
-    if raw_theta.ndim == 1:
-        side_len = int(np.sqrt(len(raw_theta)))
-    else:
-        side_len = raw_theta.shape[0]
-
     # Gestion Halo : Si period_bound=True (Tore), halo=0. Sinon halo=2 (1px de chaque coté)
     halo_dim = 0 if period_bound else 2
-    dim = side_len - halo_dim
+    dim = len(data_in.get("theta_h", [])) - halo_dim
 
     theta_h = np.array(data_in.get("theta_h", []))
     theta_v = np.array(data_in.get("theta_v", []))
@@ -109,6 +100,8 @@ def mapping(data_in, hamilt_params, period_bound=True, reps=2):
     qc.barrier()
 
     qc.measure_all()
+
+    print("NUM QUBITS AU MAPPING:", qc.num_qubits)
 
     return qc, cost_hamiltonian
     

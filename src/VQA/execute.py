@@ -12,10 +12,9 @@ from scipy.optimize import minimize
 from collections import defaultdict
 from typing import Sequence
 
-
 from qiskit import qpy
 from qiskit_aer import Aer
-from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator
+from qiskit_ibm_runtime import QiskitRuntimeService, Session, EstimatorV2 as Estimator
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit.quantum_info import SparsePauliOp
 
@@ -98,19 +97,23 @@ def build_observable(num_qubits, meas_config):
 # =========================================================
 
 def execute(qc, cost_hamiltonian, mode, backend, shots, reps):
+    
+    qc.draw("mpl")
     num_qubits = qc.num_qubits
 
-    initial_gamma = np.pi
-    initial_beta = np.pi / 2
-    init_params = [initial_beta, initial_beta, initial_gamma, initial_gamma]
+    print("NUM QUBITS A EXECUTE :", num_qubits)
+
+    initial_beta = (np.pi / 2) * np.ones(reps)
+    initial_gamma = np.pi * np.ones(reps)
+
+    init_params = np.concatenate((initial_beta, initial_gamma))
 
     # Select backend
     if mode == "simulator":
         backend = Aer.get_backend('qasm_simulator')
     else:
-        IBMQ.load_account()
-        provider = IBMQ.get_provider(hub='ibm-q')
-        backend = provider.get_backend('ibmq_qasm_simulator')  # choose hardware device
+        service = QiskitRuntimeService()
+        backend = service.backend(backend)
 
     def cost_func_estimator(params, ansatz, hamiltonian, estimator):
         # transform the observable defined on virtual qubits to
@@ -147,13 +150,6 @@ def execute(qc, cost_hamiltonian, mode, backend, shots, reps):
             tol=1e-2,
         )
         print(result)
-
-    if args.verbose:
-        plt.figure(figsize=(12, 6))
-        plt.plot(objective_func_vals)
-        plt.xlabel("Iteration")
-        plt.ylabel("Cost")
-        plt.show()
     
     optimized_circuit = qc.assign_parameters(result.x)
     optimized_circuit.draw("mpl", fold=False, idle_wires=False)
