@@ -11,7 +11,7 @@ from Simulation.RescaleArrays import get_adaptive_flux
 
 from Simulation.HamiltParams import PhysicalMapper
 
-from Simulation.utils import slice_hamiltonian_params
+from Simulation.utils import slice_hamiltonian_params, get_periodic_patch
 
 def recursive_vqa_scan(
     # Données physiques complètes (ne changent pas, on passe des références)
@@ -49,6 +49,7 @@ def recursive_vqa_scan(
     height = y_e - y_s
     width = x_e - x_s
 
+    
     # Sécurité : Si la zone est trop petite ou vide, on arrête
     if height < min_size or width < min_size:
         # On considère cette toute petite zone comme un "patch final"
@@ -57,11 +58,13 @@ def recursive_vqa_scan(
         })
         return
 
+    pad = 1 if depth > 0 else 0
+
     # --- 1. Extraction et Préparation Locale --- 
     # On découpe les données physiques correspondant à la zone actuelle
-    local_hamilt_params = slice_hamiltonian_params(hamilt_params, y_s, y_e, x_s, x_e)
-    local_h = full_phi_h[y_s:y_e, x_s:x_e]
-    local_v = full_phi_v[y_s:y_e, x_s:x_e]
+    local_hamilt_params = slice_hamiltonian_params(hamilt_params, y_s, y_e, x_s, x_e, pad= pad)
+    local_h = get_periodic_patch(full_phi_h, y_s, y_e, x_s, x_e, pad)
+    local_v = get_periodic_patch(full_phi_v, y_s, y_e, x_s, x_e, pad)
 
     mini_h, mini_v, mini_hamilt_params = get_adaptive_flux(
         local_h, local_v, local_hamilt_params,
@@ -74,8 +77,8 @@ def recursive_vqa_scan(
 
     # Gestion du phi_prev (si disponible)
     if full_prev_h is not None:
-        local_prev_h = full_prev_h[y_s:y_e, x_s:x_e]
-        local_prev_v = full_prev_v[y_s:y_e, x_s:x_e]
+        local_prev_h = get_periodic_patch(full_prev_h, y_s, y_e, x_s, x_e, pad)
+        local_prev_v = get_periodic_patch(full_prev_v, y_s, y_e, x_s, x_e, pad)
 
         mini_prev_h, mini_prev_v = get_adaptive_flux(
             local_prev_h, local_prev_v, None,

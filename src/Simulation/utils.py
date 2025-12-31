@@ -1,16 +1,41 @@
+import numpy as np
 from scipy.ndimage import uniform_filter, zoom
 
-def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e):
+def get_periodic_patch(arr, y_s, y_e, x_s, x_e, pad=0):
+    """
+    Extrait un patch avec padding en respectant la périodicité globale (Tore).
+    Si on dépasse les bords, on va chercher les pixels de l'autre côté.
+    """
+    H, W = arr.shape
+    
+    # 1. Générer les plages d'indices théoriques (peuvent être négatifs ou > taille)
+    # Exemple : si y_s=0 et pad=1, on veut l'indice -1
+    y_range = np.arange(y_s - pad, y_e + pad)
+    x_range = np.arange(x_s - pad, x_e + pad)
+    
+    # 2. Appliquer le Modulo pour 'wrapper' les indices
+    # L'indice -1 devient H-1, l'indice H devient 0
+    y_indices = y_range % H
+    x_indices = x_range % W
+    
+    # 3. Extraction via np.ix_ (Meshgrid d'indices)
+    # Cela crée une copie du sous-tableau avec les bonnes valeurs enveloppées
+    return arr[np.ix_(y_indices, x_indices)]
+
+
+def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, pad= 0):
     """
     Découpe une sous-section des paramètres physiques pour un patch local.
     Gère intelligemment les tuples (C_edges, D_edges) et les matrices.
     """
     local_params = {}
+    def extract(arr):
+        return get_periodic_patch(arr, y_s, y_e, x_s, x_e, pad)
 
     # 1. Termes définis sur les Noeuds (Nodes)
     # Ils ont la même taille que la grille de pixels
-    local_params['Delta_nodes'] = params['Delta_nodes'][y_s:y_e, x_s:x_e]
-    local_params['M_nodes']     = params['M_nodes'][y_s:y_e, x_s:x_e]
+    local_params['Delta_nodes'] = extract(params['Delta_nodes'])
+    local_params['M_nodes']     = extract(params['M_nodes'])
 
     # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
     # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,
@@ -19,80 +44,18 @@ def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e):
     # C_shear
     c_horiz, c_vert = params['C_edges']
     local_params['C_edges'] = (
-        c_horiz[y_s:y_e, x_s:x_e], 
-        c_vert[y_s:y_e, x_s:x_e]
+        extract(c_horiz), 
+        extract(c_vert)
     )
 
     # D_kink
     d_horiz, d_vert = params['D_edges']
     local_params['D_edges'] = (
-        d_horiz[y_s:y_e, x_s:x_e], 
-        d_vert[y_s:y_e, x_s:x_e]
+        extract(d_horiz), 
+        extract(d_vert)
     )
 
     # 3. Termes définis sur les Plaquettes
-    local_params['K_plaquettes'] = params['K_plaquettes'][y_s:y_e, x_s:x_e]
-
-    return local_params
-
-def uniform_filter_hamilt(params, size, mode):
-    local_params = {}
-
-    # 1. Termes définis sur les Noeuds (Nodes)
-    # Ils ont la même taille que la grille de pixels
-    local_params['Delta_nodes'] = uniform_filter(params['Delta_nodes'], size= size, mode= mode)
-    local_params['M_nodes']     = uniform_filter(params['M_nodes'], size= size, mode= mode)
-
-    # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
-    # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,
-    # mais le slicing numpy [start:end] gère ça sans erreur (il s'arrête juste à la fin).
-    
-    # C_shear
-    c_horiz, c_vert = params['C_edges']
-    local_params['C_edges'] = (
-        uniform_filter(c_horiz, size= size, mode= mode), 
-        uniform_filter(c_vert, size= size, mode= mode)
-    )
-
-    # D_kink
-    d_horiz, d_vert = params['D_edges']
-    local_params['D_edges'] = (
-        uniform_filter(d_horiz, size= size, mode= mode),
-        uniform_filter(d_vert, size= size, mode= mode)
-    )
-
-    # 3. Termes définis sur les Plaquettes
-    local_params['K_plaquettes'] = uniform_filter(params['K_plaquettes'], size= size, mode= mode)
-
-    return local_params
-
-def zoom_hamilt(params, zoom_y, zoom_x, order=1):
-    local_params = {}
-
-    # 1. Termes définis sur les Noeuds (Nodes)
-    # Ils ont la même taille que la grille de pixels
-    local_params['Delta_nodes'] = zoom(params['Delta_nodes'], (zoom_y, zoom_x), order= order)
-    local_params['M_nodes']     = zoom(params['M_nodes'], (zoom_y, zoom_x), order= order)
-
-    # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
-    # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,
-    # mais le slicing numpy [start:end] gère ça sans erreur (il s'arrête juste à la fin).
-    
-    # C_shear
-    c_horiz, c_vert = params['C_edges']
-    local_params['C_edges'] = (
-        zoom(c_horiz, (zoom_y, zoom_x), order= order),
-        zoom(c_vert, (zoom_y, zoom_x), order= order)
-    )
-
-    # D_kink
-    d_horiz, d_vert = params['D_edges']
-    local_params['D_edges'] = (
-        zoom(d_horiz, (zoom_y, zoom_x), order= order),
-        zoom(d_vert, (zoom_y, zoom_x), order= order)
-    )
-
-    # 3. Termes définis sur les Plaquettes
-    local_params['K_plaquettes'] = zoom(params['K_plaquettes'], (zoom_y, zoom_x), order= order)
+    local_params['K_plaquettes'] = extract(params['K_plaquettes'])
 
     return local_params

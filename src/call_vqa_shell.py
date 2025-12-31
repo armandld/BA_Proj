@@ -21,5 +21,5 @@ def call_vqa_shell(angles_tuple, hamilt_params, args, period_bound=True):
         "psi_v": angles_tuple[3].tolist()
     }
     print("Paramètres physiques de l'hamiltonien :", hamilt_params)
-    probs_list = TEST1(data, args.shots) #hamilt_params, period_bound,
+    probs_list = TEST1(data, hamilt_params, args.shots, period_bound)
     return np.array(probs_list)

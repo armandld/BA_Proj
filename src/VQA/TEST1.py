@@ -64,12 +64,13 @@ def counts_to_marginals(counts, num_qubits):
 # Main
 # ---------------------------------------------------------
 
-def TEST1(data_in, shots):
+def TEST1(data_in, hamilt_params, shots, period_bound):
 
     print(f"--- [VQA WORKER] Démarrage ---")
 
     # Vérification simple du contenu
     # Le format attendu par pipeline.py est {'theta_h': [...], 'theta_v': [...]}
+
     theta_h = np.array(data_in.get("theta_h", [])).flatten()
     theta_v = np.array(data_in.get("theta_v", [])).flatten()
     psi_h   = np.array(data_in.get("psi_h",   [])).flatten()
@@ -81,7 +82,7 @@ def TEST1(data_in, shots):
     print(f"   -> Psi_h: {len(psi_h)} angles")
     print(f"   -> Psi_v: {len(psi_v)} angles")
     
-    num_qubits = 2*len(theta_h)
+    num_qubits = 18
     # (Ici on n'utilise pas les angles pour le calcul random, mais on prouve qu'on les a lus)
 
     # 2. Simulation (Génération aléatoire de Counts)
@@ -106,13 +107,10 @@ def TEST1(data_in, shots):
         probs[i] = 0
 
     if len(probs) >= 2:
-        probs[9] = 0.95 # Qubit 0 instable
+        probs[-1] = 0.95 # Qubit 0 instable
         #probs[0] = 0.85 # Qubit 1 instable"""
 
     print("PROBABILITIES : ", probs)
 
     return probs
 
-
-if __name__ == "__main__":
-    TEST1()
