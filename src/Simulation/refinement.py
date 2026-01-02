@@ -30,7 +30,7 @@ def recursive_vqa_scan(
     active_patches, # Liste où on stocke les zones finales identifiées
     
     # Hyper-paramètres
-    target_dim=4,    # Dimension de la grille d'entrée du VQA (ex: 3x3)
+    target_dim=3,    # Dimension de la grille d'entrée du VQA (ex: 3x3)
     max_depth=3,      # Combien de fois on peut zoomer (ex: 256 -> 85 -> 28 -> 9)
     min_size=4,       # Taille minimale d'un patch en pixels physiques
     threshold=0.6,    # Seuil pour dire "C'est turbulent, faut creuser"
@@ -62,7 +62,7 @@ def recursive_vqa_scan(
 
     # --- 1. Extraction et Préparation Locale --- 
     # On découpe les données physiques correspondant à la zone actuelle
-    local_hamilt_params = slice_hamiltonian_params(hamilt_params, y_s, y_e, x_s, x_e, pad= pad)
+    local_hamilt_params = slice_hamiltonian_params(hamilt_params, y_s, y_e, x_s, x_e, args.AdvAnomaliesEnable, pad= pad)
     local_h = get_periodic_patch(full_phi_h, y_s, y_e, x_s, x_e, pad)
     local_v = get_periodic_patch(full_phi_v, y_s, y_e, x_s, x_e, pad)
 
@@ -122,11 +122,11 @@ def recursive_vqa_scan(
 
     # Cas Récursif : On analyse les 9 sous-blocs suggérés par le VQA
     # Taille des sous-blocs
-    step_y = height // 3
-    step_x = width // 3
-        
-    for i in range(3):
-        for j in range(3):
+    step_y = height // target_dim
+    step_x = width // target_dim
+
+    for i in range(target_dim):
+        for j in range(target_dim):
             # Probabilité locale vue par le VQA pour ce sous-secteur
             local_prob = prob_map[i, j]
             #----------------------
@@ -135,13 +135,13 @@ def recursive_vqa_scan(
             new_threshold = threshold 
             # Coordonnées physiques du sous-secteur
             sub_y_s = y_s + i * step_y
-            sub_y_e = y_s + (i + 1) * step_y if i < 2 else y_e # Le dernier prend le reste
+            sub_y_e = y_s + (i + 1) * step_y if i < target_dim - 1 else y_e # Le dernier prend le reste
             sub_x_s = x_s + j * step_x
-            sub_x_e = x_s + (j + 1) * step_x if j < 2 else x_e
+            sub_x_e = x_s + (j + 1) * step_x if j < target_dim - 1 else x_e
 
             sub_bounds = (sub_y_s, sub_y_e, sub_x_s, sub_x_e)
 
-            if local_prob > threshold:
+            if local_prob > threshold or depth == 0:
 
                 # TURBULENCE DÉTECTÉE : On plonge plus profond 
                 recursive_vqa_scan(
@@ -198,8 +198,8 @@ def run_adaptive_vqa(
 
     # Liste qui recevra les résultats
     final_patches = []
-    
-    print(f"--- START RECURSIVE VQA SCAN (Budget: {max_patches} patches) ---")
+    if args.verbose:
+        print(f"--- START RECURSIVE VQA SCAN (Budget: {max_patches} patches) ---")
     
     # 2. Lancement de la récursion
     recursive_vqa_scan(
@@ -214,12 +214,13 @@ def run_adaptive_vqa(
         max_patches=max_patches
     )
     if len(final_patches) == 0:
-        print(">>> VQA found nothing active. Defaulting to FULL COMPUTATION.")
+        if args.verbose:
+            print(">>> VQA found nothing active. Defaulting to FULL COMPUTATION.")
         H, W = full_h.shape
         # On ajoute un gros patch qui couvre tout
         final_patches.append({
             'bounds': (0, H, 0, W), 'depth': 0, 'type': 'fallback'})
-    
-    print(f"--- SCAN COMPLETE: {len(final_patches)} Active Zones Identified ---")
-    print(final_patches)
+    if args.verbose:
+        print(f"--- SCAN COMPLETE: {len(final_patches)} Active Zones Identified ---")
+        print(final_patches)
     return final_patches

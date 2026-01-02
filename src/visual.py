@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-def plot_amr_state(sim, active_patches, step, dt, t_val):
+def plot_amr_state(sim, active_patches, step, dt, t_val, target_dim):
     """
     Affiche l'état MHD global (Courant Jz) et superpose les boîtes d'attention VQA.
     Style: RdBu (Rouge/Bleu) + Cadres Rouges pointillés + Indication de Zoom.
@@ -10,20 +10,26 @@ def plot_amr_state(sim, active_patches, step, dt, t_val):
     # 1. Calcul du Courant Jz pour l'esthétique "Fluide" (Curl of B)
     # Jz = dBy/dx - dBx/dy
     # np.gradient(arr, axis=1) est d/dx (colonnes), axis=0 est d/dy (lignes)
-    grad_By_x = np.gradient(sim.By, axis=1)
-    grad_Bx_y = np.gradient(sim.Bx, axis=0)
-    Jz = grad_By_x - grad_Bx_y
-    
+    _, _, _, _, Jz = sim.get_fluxes().values()
+
     # Création de la figure
     fig, ax = plt.subplots(figsize=(10, 9))
     
     # 2. Affichage du champ (Fond)
     # On utilise RdBu centré sur 0 (Blanc = Calme, Rouge/Bleu = Fort courant)
+    """
+    max_val_Jz = np.max(np.abs(Jz)) 
+    max_val_Bx = np.max(np.abs(Bx))
+    max_val_By = np.max(np.abs(By))
+    max_val_vx = np.max(np.abs(vx))
+    max_val_vy = np.max(np.abs(vy))
+    max_val = max(max_val_Jz, max_val_Bx, max_val_By, max_val_vx, max_val_vy)
+    """
     im = ax.imshow(Jz, origin='lower', cmap='RdBu', interpolation='nearest')
-    
+
     # Barre de couleur
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label('Current Density $J_z$ (Vorticity)', rotation=270, labelpad=15)
+    cbar.set_label(f"Current Density $J_z$ (Vorticity)", rotation=270, labelpad=15)
     
     # 3. Dessin des Patchs VQA (AMR)
     # On trie par profondeur pour dessiner les petits par-dessus les gros
@@ -44,7 +50,7 @@ def plot_amr_state(sim, active_patches, step, dt, t_val):
         height = ye - ys
         
         # Calcul du facteur de zoom pour l'affichage (Base 3 car découpage 3x3)
-        zoom_factor = 3**depth
+        zoom_factor = target_dim**depth
         
         # Style visuel (Rouge pointillé comme l'ancienne)
         # On rend le trait plus fin si le zoom est profond pour ne pas cacher la physique

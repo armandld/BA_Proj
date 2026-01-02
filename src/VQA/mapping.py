@@ -72,7 +72,7 @@ def counts_to_marginals(counts, num_qubits):
                 
     return (hits / total).tolist()
 
-def mapping(data_in, hamilt_params, period_bound=True, reps=2):
+def mapping(data_in, hamilt_params, advanced_anomalies_enabled=False, period_bound=True, reps=2):
 
     # Gestion Halo : Si period_bound=True (Tore), halo=0. Sinon halo=2 (1px de chaque coté)
     halo_dim = 0 if period_bound else 2
@@ -85,10 +85,10 @@ def mapping(data_in, hamilt_params, period_bound=True, reps=2):
 
     cost_hamiltonian = None
     if period_bound:
-        cost_hamiltonian = create_period_hamiltonian(hamilt_params, dim)
+        cost_hamiltonian = create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled)
     else:
         cost_hamiltonian, theta_h, theta_v, psi_h, psi_v = create_bounded_hamiltonian(
-            hamilt_params, dim, theta_h, theta_v, psi_h, psi_v
+            hamilt_params, dim, theta_h, theta_v, psi_h, psi_v, advanced_anomalies_enabled
         )
 
     qc = init_qbits_state(theta_h, theta_v, psi_h, psi_v)
@@ -96,61 +96,5 @@ def mapping(data_in, hamilt_params, period_bound=True, reps=2):
     ansatz = QAOAAnsatz(cost_operator=cost_hamiltonian, reps=reps, initial_state=qc)
 
     qc.compose(ansatz, inplace=True)
-
-    qc.barrier()
-
-    qc.measure_all()
-
-    print("NUM QUBITS AU MAPPING:", qc.num_qubits)
-
+    
     return qc, cost_hamiltonian
-    
-    qc.draw("mpl")
-
-    """
-    # -----------------------------
-    # Prepare data for JSON
-    # -----------------------------
-    hamiltonian_terms = []
-    for label, coeff in cost_hamiltonian.to_list():
-        # Convert complex → float safely
-        real_coeff = float(np.real_if_close(coeff))
-        hamiltonian_terms.append([label, real_coeff])
-
-    mapping_data = {
-        "num_qubits": num_qubits,
-        "edges": edges,
-        "hamiltonian": hamiltonian_terms,
-    }"""
-
-    num_qubits = 18
-    # (Ici on n'utilise pas les angles pour le calcul random, mais on prouve qu'on les a lus)
-
-    # 2. Simulation (Génération aléatoire de Counts)
-    # -----------------------------------------------------
-    print(f"⚙️  Génération de {1000} shots pour {num_qubits} qubits...")
-    
-    counts = generate_random_counts(num_qubits, 1000)
-    
-    # Affichage console pour vérification immédiate
-    print(f"📊 Résultat Counts (Extrait): {list(counts.items())[:3]} ...")
-
-    # 3. Traitement des Sorties
-    # -----------------------------------------------------
-    
-    # A. Conversion en Probabilités (CRITIQUE pour pipeline.py)
-    # pipeline.py attend une LISTE de floats, pas un dictionnaire.
-    probs = counts_to_marginals(counts, num_qubits)
-    
-    # DEBUG: Force une instabilité pour tester l'AMR visuellement
-    
-    for i in range(len(probs)):
-        probs[i] = 0
-
-    if len(probs) >= 2:
-        probs[-1] = 0.95 # Qubit 0 instable
-        #probs[0] = 0.85 # Qubit 1 instable"""
-
-    print("PROBABILITIES : ", probs)
-
-    return probs

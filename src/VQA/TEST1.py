@@ -13,6 +13,7 @@ import numpy as np
 def generate_random_counts(num_qubits, total_shots):
     """
     Génère un dictionnaire de counts { '0010': 120, ... } aléatoire.
+    Version corrigée pour éviter le crash sur randint(1, 0).
     """
     counts = {}
     remaining_shots = total_shots
@@ -28,17 +29,29 @@ def generate_random_counts(num_qubits, total_shots):
     
     # Distribution des shots
     for _ in range(num_active_states - 1):
-        if remaining_shots <= 0: break
-        shot_chunk = random.randint(1, remaining_shots // 2)
+        if remaining_shots <= 0: 
+            break
+            
+        # --- CORRECTION ---
+        upper_bound = remaining_shots // 2
+        
+        if upper_bound < 1:
+            # S'il ne reste qu'un seul shot (ou 0), on prend tout ce qui reste
+            shot_chunk = remaining_shots
+        else:
+            # Sinon on prend un nombre aléatoire entre 1 et la moitié
+            shot_chunk = random.randint(1, upper_bound)
+        # ------------------
+
         key = active_bitstrings.pop()
         counts[key] = counts.get(key, 0) + shot_chunk
         remaining_shots -= shot_chunk
         
-    # Le reste
-    if active_bitstrings:
+    # Le reste (shots restants) va au dernier état
+    if active_bitstrings and remaining_shots > 0:
         key = active_bitstrings[0]
         counts[key] = counts.get(key, 0) + remaining_shots
-        
+    
     return counts
 
 def counts_to_marginals(counts, num_qubits):
@@ -64,7 +77,7 @@ def counts_to_marginals(counts, num_qubits):
 # Main
 # ---------------------------------------------------------
 
-def TEST1(data_in, hamilt_params, shots, period_bound):
+def TEST1(data_in, hamilt_params, shots, period_bound, num_qubits):
 
     print(f"--- [VQA WORKER] Démarrage ---")
 
@@ -82,7 +95,7 @@ def TEST1(data_in, hamilt_params, shots, period_bound):
     print(f"   -> Psi_h: {len(psi_h)} angles")
     print(f"   -> Psi_v: {len(psi_v)} angles")
     
-    num_qubits = 18
+    num_qubits = num_qubits
     # (Ici on n'utilise pas les angles pour le calcul random, mais on prouve qu'on les a lus)
 
     # 2. Simulation (Génération aléatoire de Counts)

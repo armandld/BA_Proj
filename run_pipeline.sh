@@ -25,8 +25,9 @@ OPT_LEVEL=3
 GRID_SIZE=16
 DNS_RESOLUTION=256
 T_MAX=1.0
-DT=0.01
+DT=1e-4
 HYBRID_DT=0.1
+ADVANCED_ANOMALIES_ENABLE=false
 
 # -----------------------------
 # Path Configuration
@@ -99,6 +100,7 @@ display_help() {
     echo "  --t-max <float>                 Simulation end time (default: 1.0)"
     echo "  --dt <float>                    Time step size (default: 0.01)"
     echo "  --hybrid-dt <float>               Hybrid simulation time step size (default: 0.1)"
+    echo "  --AdvAnomaliesEnable            Enable advanced anomaly handling in mapping"
     echo ""
     echo "Stage control (choose one):"
     echo "  --only-mapping                  Run mapping stage only"
@@ -152,13 +154,14 @@ while [[ $# -gt 0 ]]; do
         --verbose) VERBOSE=true; shift ;;
         --skip-cleanup) SKIP_CLEANUP=true; shift ;;
         --depth) DEPTH="$2"; shift 2 ;;
-        --opt_level) OPT_LEVEL="$2"; shift 2 ;;
+        --opt-level) OPT_LEVEL="$2"; shift 2 ;;
         --method) METHOD="$2"; shift 2 ;;
         --grid-size) GRID_SIZE="$2"; shift 2 ;;
         --dns-resolution) DNS_RESOLUTION="$2"; shift 2 ;;
         --t-max) T_MAX="$2"; shift 2 ;;
         --dt) DT="$2"; shift 2 ;;
         --hybrid-dt) HYBRID_DT="$2"; shift 2 ;;
+        --AdvAnomaliesEnable) ADVANCED_ANOMALIES_ENABLE=true; shift ;;
         --only-mapping) ONLY_MAPPING=true; shift ;;
         --only-optimize) ONLY_OPTIMIZE=true; shift ;;
         --only-execute) ONLY_EXECUTE=true; shift ;;
@@ -217,16 +220,15 @@ run_stage "Main Pipeline" python "$SCRIPTS_LOC/pipeline.py" \
     --backend "$BACKEND" \
     --shots "$NUM_SHOTS" \
     --method "$METHOD" \
+    --opt-level "$OPT_LEVEL" \
+    $([ "$ADVANCED_ANOMALIES_ENABLE" = true ] && echo "--AdvAnomaliesEnable") \
+    $([ "$VERBOSE" = true ] && echo "--verbose") \
     $([ "$ONLY_MAPPING" = true ] && echo "--only-mapping") \
-    2>&1 | tee -a "$LOG_FILE"
     $([ "$ONLY_OPTIMIZE" = true ] && echo "--only-optimize") \
-    2>&1 | tee -a "$LOG_FILE"
     $([ "$ONLY_EXECUTE" = true ] && echo "--only-execute") \
-    2>&1 | tee -a "$LOG_FILE"
     $([ "$ONLY_POSTPROCESS" = true ] && echo "--only-postprocess") \
     2>&1 | tee -a "$LOG_FILE"
-    $([ "$VERBOSE" = true ] && echo "--verbose") \
-    2>&1 | tee -a "$LOG_FILE"
+
 
 # -----------------------------
 # ✅ Completion

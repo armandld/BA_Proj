@@ -19,7 +19,7 @@ class PhysicalMapper:
         self.d_kink = 2.0
         self.epsilon = 1e-6 # Stability term
 
-    def compute_coefficients(self, fields):
+    def compute_coefficients(self, fields, advanced_anomalies_enabled = False):
         # ... (Le début avec vx, vy, Rm_local, etc. reste identique) ...
         vx, vy = fields['vx'], fields['vy']
         Bx, By = fields['Bx'], fields['By']
@@ -43,22 +43,6 @@ class PhysicalMapper:
         # Vertical : Moyenne entre (i, j) et (i+1, j) (avec wrap)
         C_vert = (C_nodes + np.roll(C_nodes, -1, axis=0)) / 2
 
-
-        # B. SHOCK TERM (Delta_v) - Reste défini sur les noeuds
-        is_supersonic = (M_local > 1.0).astype(float)
-        Delta_v = self.delta_shock * is_supersonic * (M_local**2 - 1.0)
-
-
-        # C. KINK TERM (D_ij)
-        K_nodes = self.d_kink * (np.abs(helicity_density) * 1.256e-6) / (B_mag_sq + self.epsilon) 
-
-        # Horizontal : Moyenne entre (i, j) et (i, j+1)
-        D_horiz = (K_nodes + np.roll(K_nodes, -1, axis=1)) / 2
-        
-        # Vertical : Moyenne entre (i, j) et (i+1, j)
-        D_vert  = (K_nodes + np.roll(K_nodes, -1, axis=0)) / 2
-
-
         # D. VORTICITY TERM (K_p) - Plaquettes
         # Une plaquette au site (i,j) implique les 4 coins :
         # (i,j), (i, j+1), (i+1, j), (i+1, j+1)
@@ -73,9 +57,29 @@ class PhysicalMapper:
         )
         K_p = sum_corners / 4.0
 
+        if advanced_anomalies_enabled:
+            # B. SHOCK TERM (Delta_v) - Reste défini sur les noeuds
+            is_supersonic = (M_local > 1.0).astype(float)
+            Delta_v = self.delta_shock * is_supersonic * (M_local**2 - 1.0)
+
+
+            # C. KINK TERM (D_ij)
+            K_nodes = self.d_kink * (np.abs(helicity_density) * 1.256e-6) / (B_mag_sq + self.epsilon) 
+
+            # Horizontal : Moyenne entre (i, j) et (i, j+1)
+            D_horiz = (K_nodes + np.roll(K_nodes, -1, axis=1)) / 2
+            
+            # Vertical : Moyenne entre (i, j) et (i+1, j)
+            D_vert  = (K_nodes + np.roll(K_nodes, -1, axis=0)) / 2
+
+            return {
+                "C_edges": (C_horiz, C_vert),
+                "D_edges": (D_horiz, D_vert),
+                "Delta_nodes": Delta_v,
+                "K_plaquettes": K_p
+            }
+
         return {
             "C_edges": (C_horiz, C_vert),
-            "D_edges": (D_horiz, D_vert),
-            "Delta_nodes": Delta_v,
             "K_plaquettes": K_p
         }

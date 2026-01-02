@@ -23,7 +23,7 @@ def get_periodic_patch(arr, y_s, y_e, x_s, x_e, pad=0):
     return arr[np.ix_(y_indices, x_indices)]
 
 
-def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, pad= 0):
+def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, advanced_anomalies_enabled = False, pad= 0):
     """
     Découpe une sous-section des paramètres physiques pour un patch local.
     Gère intelligemment les tuples (C_edges, D_edges) et les matrices.
@@ -34,7 +34,8 @@ def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, pad= 0):
 
     # 1. Termes définis sur les Noeuds (Nodes)
     # Ils ont la même taille que la grille de pixels
-    local_params['Delta_nodes'] = extract(params['Delta_nodes'])
+    if advanced_anomalies_enabled:
+        local_params['Delta_nodes'] = extract(params['Delta_nodes'])
 
     # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
     # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,
@@ -48,11 +49,12 @@ def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, pad= 0):
     )
 
     # D_kink
-    d_horiz, d_vert = params['D_edges']
-    local_params['D_edges'] = (
-        extract(d_horiz), 
-        extract(d_vert)
-    )
+    if advanced_anomalies_enabled:
+        d_horiz, d_vert = params['D_edges']
+        local_params['D_edges'] = (
+            extract(d_horiz), 
+            extract(d_vert)
+        )
 
     # 3. Termes définis sur les Plaquettes
     local_params['K_plaquettes'] = extract(params['K_plaquettes'])

@@ -1,175 +1,132 @@
 # scripts/execute.py
-import argparse
-import json
-import os
-import random
-import networkx as nx
 import numpy as np
-import matplotlib.pyplot as plt
-import warnings
-
 from scipy.optimize import minimize
-from collections import defaultdict
-from typing import Sequence
+from qiskit_aer import AerSimulator
+from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator, SamplerV2 as Sampler
+from qiskit_ibm_runtime.fake_provider import FakeFez
 
-from qiskit import qpy
-from qiskit_aer import Aer
-from qiskit_ibm_runtime import QiskitRuntimeService, Session, EstimatorV2 as Estimator
-from qiskit_ibm_runtime import SamplerV2 as Sampler
-from qiskit.quantum_info import SparsePauliOp
-
-# =========================================================
-# 1. GESTION DES PARAMÈTRES GLOBAUX
-# =========================================================
-
-def build_parameter_map(mapping_data):
-    """
-    Construit le vecteur x0 global et une map {nom_param: index_dans_x0}.
-    """
-    x0 = []
-    name_to_idx = {}
-    current_idx = 0
-    
-    # L'ordre d'itération ici définit la structure de x0
-    # On itère sur les rôles: theta, phi, eps
-    for role, data in mapping_data["parameter_vectors"].items():
-        names = data["params"]
-        values = data["init_values"]
-        
-        if values is None or len(values) == 0:
-            # Si pas de valeurs, on met des 0 ou aléatoire
-            values = np.random.uniform(0, 2*np.pi, len(names)).tolist()
-            
-        if len(names) != len(values):
-            raise ValueError(f"Mismatch in length for {role}: {len(names)} names vs {len(values)} values.")
-            
-        for name, val in zip(names, values):
-            x0.append(val)
-            name_to_idx[name] = current_idx
-            current_idx += 1
-            
-    return np.array(x0), name_to_idx
-
-def map_circuit_params_to_global(circuit, name_to_idx):
-    """
-    Pour un circuit donné, crée une liste d'indices qui dit :
-    "Le paramètre #i de ce circuit correspond à l'index J du vecteur global x".
-    """
-    circuit_indices = []
-    for param in circuit.parameters:
-        p_name = param.name
-        if p_name not in name_to_idx:
-            raise KeyError(f"Parameter '{p_name}' in circuit '{circuit.name}' not found in global JSON mapping.")
-        circuit_indices.append(name_to_idx[p_name])
-    return circuit_indices
-
-# =========================================================
-# 2. CONSTRUCTION DES OBSERVABLES
-# =========================================================
-
-def build_observable(num_qubits, meas_config):
-    """
-    Construit l'opérateur SparsePauliOp pour la mesure.
-    Ex: qubit=0, pauli=Z, num_qubits=4 -> "IIIZ"
-    """
-    # Liste de coeffs et ops pour la somme
-    ops = []
-    coeffs = []
-    
-    for m in meas_config:
-        qubit_idx = m["qubit"]
-        pauli_char = m["pauli"]
-        coeff = m["coeff"]
-        
-        # Qiskit String Order: q3 q2 q1 q0
-        pauli_list = ["I"] * num_qubits
-        # On remplace à la position (N - 1 - k)
-        pauli_list[num_qubits - 1 - qubit_idx] = pauli_char
-        pauli_str = "".join(pauli_list)
-        
-        ops.append(pauli_str)
-        coeffs.append(coeff)
-        
-    return SparsePauliOp(ops, coeffs)
-
-# =========================================================
-# 3. MAIN EXECUTION
-# =========================================================
-
-def execute(qc, cost_hamiltonian, mode, backend, shots, reps):
-    
-    qc.draw("mpl")
-    num_qubits = qc.num_qubits
-
-    print("NUM QUBITS A EXECUTE :", num_qubits)
-
-    initial_beta = (np.pi / 2) * np.ones(reps)
-    initial_gamma = np.pi * np.ones(reps)
-
-    init_params = np.concatenate((initial_beta, initial_gamma))
-
-    # Select backend
-    if mode == "simulator":
-        backend = Aer.get_backend('qasm_simulator')
+def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
+    if verbose:
+        print(f"Initial Circuit:\n{qc.draw('text')}")
+        print("\n","\n")
+        print(f"Information about the circuit: \nNumber of qubits: {qc.num_qubits}\n Depth : {qc.depth()}")
+        print("\n","\n")
+        print(f"EXECUTION WITH :\nShots: {shots}\nRepetitions od the QAOA: {reps}\nMode: {mode} \nBackend: {backend_name}")
+    # 1. Configuration du Backend (doit correspondre à celui utilisé dans optimize)
+    if backend_name == "aer":
+        backend = AerSimulator()
+    elif backend_name == "estimator":
+        backend = FakeFez()
     else:
-        service = QiskitRuntimeService()
-        backend = service.backend(backend)
+        # Cas Runtime service réel à gérer ici si besoin
+        pass
+
+    # 2. Préparation de l'Hamiltonien ISA (Instruction Set Architecture)
+    # On le fait UNE SEULE FOIS en dehors de la boucle, pas 1000 fois.
+    # On applique le layout du circuit transpilé à l'opérateur.
+    if qc.layout is not None:
+        isa_hamiltonian = cost_hamiltonian.apply_layout(qc.layout)
+    else:
+        # Cas où Aer n'a pas imposé de layout spécifique (trivial)
+        isa_hamiltonian = cost_hamiltonian
+
+    # 3. Définition de la fonction de coût
+    objective_func_vals = []
 
     def cost_func_estimator(params, ansatz, hamiltonian, estimator):
-        # transform the observable defined on virtual qubits to
-        # an observable defined on all physical qubits
-        isa_hamiltonian = hamiltonian.apply_layout(ansatz.layout)
-    
-        pub = (ansatz, isa_hamiltonian, params)
+        # Note: 'ansatz' est déjà transpilé, 'hamiltonian' est déjà ISA.
+        # On passe juste les paramètres.
+        pub = (ansatz, hamiltonian, params)
+        
+        # Exécution
         job = estimator.run([pub])
-    
-        results = job.result()[0]
-        cost = results.data.evs
-    
+        result = job.result()[0]
+        cost = result.data.evs
+        
         objective_func_vals.append(cost)
-    
+        # Optionnel: print light pour suivre la progression
+        if len(objective_func_vals) % 10 == 0:
+            if verbose:
+                print(f"Iter {len(objective_func_vals)}: Cost = {cost}")
+            
         return cost
 
-    objective_func_vals = []  # Global variable
-    with Session(backend=backend) as session:
-        # If using qiskit-ibm-runtime<0.24.0, change `mode=` to `session=`
-        estimator = Estimator(mode=session)
-        estimator.options.default_shots = shots
-        if mode != "simulator":
-            # Only set options for real hardware
-            estimator.options.dynamical_decoupling.enable = True
-            estimator.options.dynamical_decoupling.sequence_type = "XY4"
-            estimator.options.twirling.enable_gates = True
-            estimator.options.twirling.num_randomizations = "auto"
+    # 4. Paramètres Initiaux
+    # Convention QAOA standard : Beta puis Gamma
+    initial_params = np.concatenate([
+        np.full(reps, np.pi / 2),  # Beta
+        np.full(reps, np.pi)       # Gamma
+    ])
+    if verbose:
+        print("\n--- Starting Optimization Loop ---")
     
+    # 5. Exécution de l'Optimisation
+    # Pour Aer local, pas besoin de Session context manager complexe
+    if mode == "simulator":
+        estimator = Estimator(mode=backend)
+        estimator.options.default_shots = shots
+        
         result = minimize(
             cost_func_estimator,
-            init_params,
-            args=(qc, cost_hamiltonian, estimator),
+            initial_params,
+            args=(qc, isa_hamiltonian, estimator),
             method="COBYLA",
             tol=1e-2,
+            options={'maxiter': 100} # Sécurité pour éviter boucle infinie
         )
-        print(result)
-    
-    optimized_circuit = qc.assign_parameters(result.x)
-    optimized_circuit.draw("mpl", fold=False, idle_wires=False)
+    else:
+        # Pour le vrai hardware via Runtime
+        with Session(backend=backend) as session:
+            estimator = Estimator(mode=session)
+            estimator.options.default_shots = shots
+            # Options de mitigation d'erreur
+            estimator.options.dynamical_decoupling.enable = True
+            estimator.options.twirling.enable_gates = True
+            
+            result = minimize(
+                cost_func_estimator,
+                initial_params,
+                args=(qc, isa_hamiltonian, estimator),
+                method="COBYLA",
+                tol=1e-2
+            )
+    if verbose:
+        print(f"Optimization success: {result.success}")
+        print(f"Optimal Params: {result.x}")
 
-    # If using qiskit-ibm-runtime<0.24.0, change `mode=` to `backend=`
-    sampler = Sampler(mode=backend)
+        # 6. Sampling Final (Mesure)
+        print("\n--- Final Sampling ---")
+    
+    # On assigne les paramètres optimaux
+    optimized_circuit = qc.assign_parameters(result.x)
+    
+    # C'est MAINTENANT qu'on ajoute les mesures pour le Sampler
+    optimized_circuit.measure_all()
+    
+    # Pour le sampler, il faut s'assurer que le circuit est transpilé pour inclure les mesures
+    # Si 'measure_all' ajoute des portes non natives, un petit transpile léger peut être requis,
+    # mais souvent sur Aer ça passe. Par sécurité :
+    # optimized_circuit = transpile(optimized_circuit, backend) 
+    
+    if mode == "simulator":
+        sampler = Sampler(mode=backend)
+    else:
+        # Réutilisation session impossible si fermée, on recrée pour l'exemple ou on intègre dans le 'with' au dessus
+        sampler = Sampler(mode=backend)
+        
     sampler.options.default_shots = shots
     
-    # Set simple error suppression/mitigation options
-    sampler.options.dynamical_decoupling.enable = True
-    sampler.options.dynamical_decoupling.sequence_type = "XY4"
-    sampler.options.twirling.enable_gates = True
-    sampler.options.twirling.num_randomizations = "auto"
-    
     pub = (optimized_circuit,)
-    job = sampler.run([pub], shots=int(shots))
-    counts_int = job.result()[0].data.meas.get_int_counts()
-    counts_bin = job.result()[0].data.meas.get_counts()
-    shots = sum(counts_int.values())
-    final_distribution_int = {key: val / shots for key, val in counts_int.items()}
-    final_distribution_bin = {key: val / shots for key, val in counts_bin.items()}
-    print(final_distribution_int)
-    return final_distribution_int
+    job = sampler.run([pub])
+    
+    # Récupération résultats (compatible V2)
+    pub_result = job.result()[0]
+    
+    # Gestion Bitstring vs Int
+    # data.meas.get_counts() retourne des bitstrings '0101'
+    counts_bin = pub_result.data.meas.get_counts()
+    
+    total_shots = sum(counts_bin.values())
+    final_distribution = {key: val / total_shots for key, val in counts_bin.items()}
+
+    return final_distribution

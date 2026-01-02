@@ -7,7 +7,6 @@ import os
 import matplotlib.pyplot as plt
 
 from qiskit_aer import AerSimulator
-from qiskit_ibm_runtime import QiskitRuntimeService
 from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime.fake_provider import FakeFez
@@ -15,7 +14,7 @@ from qiskit.transpiler import generate_preset_pass_manager
 from qiskit import qpy
 
 
-def optimize(qc, backend, opt_level):
+def optimize(qc, backend, opt_level, verbose):
 
     if backend == "aer":
         # Primitive V2 du simulateur Aer
@@ -30,10 +29,8 @@ def optimize(qc, backend, opt_level):
     # Create pass manager for transpilation
     pm = generate_preset_pass_manager(optimization_level= opt_level, backend=backend)
 
-    print("Optimization Level: ", opt_level)
-
     circuit = pm.run(qc)
+    if verbose:
+        print("Optimization Level: ", opt_level)
     
-    print("NUM QUBITS A OPTIMIZE:", circuit.num_qubits)
-
     return circuit

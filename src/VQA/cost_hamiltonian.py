@@ -17,7 +17,8 @@ def get_expected_Z(theta):
 def create_bounded_hamiltonian(
         hamilt_params, dim, 
         theta_h_full, theta_v_full, 
-        psi_h_full, psi_v_full
+        psi_h_full, psi_v_full,
+        advanced_anomalies_enabled = False
     ):
     """
     Construit l'Hamiltonien MHD avec conditions aux limites ouvertes (Halo).
@@ -107,72 +108,75 @@ def create_bounded_hamiltonian(
             # -----------------------------
             # 2. VORTICITY (Plaquette)
             # -----------------------------
-            k_val = hamilt_params['K_plaquettes'][i, j]
-            if abs(k_val) > 1e-6:
-                # Liste des potentiels candidats
-                candidates = [
-                    (idx_H(i, j),   1.0),              # Top (Toujours in)
-                    (idx_V(i, j+1), z_halo_right[i]),  # Right (Peut être out)
-                    (idx_H(i+1, j), z_halo_bottom[j]), # Bottom (Peut être out)
-                    (idx_V(i, j),   1.0)               # Left (Toujours in)
-                ]
-                
-                active_qubits = []
-                effective_k = k_val
-                
-                # Filtrage optimisé
-                for q_idx, halo_val in candidates:
-                    if q_idx != -1:
-                        active_qubits.append(q_idx)
-                    else:
-                        # Si le qubit est hors limite (Halo), il devient un coeff
-                        effective_k *= halo_val
-                
-                if active_qubits:
-                    # Utilisation de la lookup table pour éviter "Z"*len
-                    label = PAULI_Z[len(active_qubits)]
-                    sparse_list.append((label, active_qubits, effective_k))
+            if hamilt_params['K_plaquettes'] is not None:
+                k_val = hamilt_params['K_plaquettes'][i, j]
+                if abs(k_val) > 1e-6:
+                    # Liste des potentiels candidats
+                    candidates = [
+                        (idx_H(i, j),   1.0),              # Top (Toujours in)
+                        (idx_V(i, j+1), z_halo_right[i]),  # Right (Peut être out)
+                        (idx_H(i+1, j), z_halo_bottom[j]), # Bottom (Peut être out)
+                        (idx_V(i, j),   1.0)               # Left (Toujours in)
+                    ]
+                    
+                    active_qubits = []
+                    effective_k = k_val
+                    
+                    # Filtrage optimisé
+                    for q_idx, halo_val in candidates:
+                        if q_idx != -1:
+                            active_qubits.append(q_idx)
+                        else:
+                            # Si le qubit est hors limite (Halo), il devient un coeff
+                            effective_k *= halo_val
+                    
+                    if active_qubits:
+                        # Utilisation de la lookup table pour éviter "Z"*len
+                        label = PAULI_Z[len(active_qubits)]
+                        sparse_list.append((label, active_qubits, effective_k))
 
-            # -----------------------------
-            # 3. SHOCK (Vertex)
-            # -----------------------------
-            delta_val = hamilt_params['Delta_nodes'][i, j]
-            if abs(delta_val) > 1e-6:
-                candidates = [
-                    (idx_H(i, j),   1.0),            # Out Right
-                    (idx_H(i, j-1), z_halo_left[i]), # In Left (Peut être out)
-                    (idx_V(i, j),   1.0),            # Out Bottom
-                    (idx_V(i-1, j), z_halo_top[j])   # In Top (Peut être out)
-                ]
-                
-                active_qubits = []
-                effective_delta = delta_val
-                
-                for q_idx, halo_val in candidates:
-                    if q_idx != -1:
-                        active_qubits.append(q_idx)
-                    else:
-                        effective_delta *= halo_val
-                
-                if active_qubits:
-                    label = PAULI_Z[len(active_qubits)]
-                    sparse_list.append((label, active_qubits, effective_delta))
+            if advanced_anomalies_enabled:
+                # -----------------------------
+                # 3. SHOCK (Vertex)
+                # -----------------------------
+                if hamilt_params['K_plaquettes'] is not None:
+                    delta_val = hamilt_params['Delta_nodes'][i, j]
+                    if abs(delta_val) > 1e-6:
+                        candidates = [
+                            (idx_H(i, j),   1.0),            # Out Right
+                            (idx_H(i, j-1), z_halo_left[i]), # In Left (Peut être out)
+                            (idx_V(i, j),   1.0),            # Out Bottom
+                            (idx_V(i-1, j), z_halo_top[j])   # In Top (Peut être out)
+                        ]
+                        
+                        active_qubits = []
+                        effective_delta = delta_val
+                        
+                        for q_idx, halo_val in candidates:
+                            if q_idx != -1:
+                                active_qubits.append(q_idx)
+                            else:
+                                effective_delta *= halo_val
+                        
+                        if active_qubits:
+                            label = PAULI_Z[len(active_qubits)]
+                            sparse_list.append((label, active_qubits, effective_delta))
 
-            # -----------------------------
-            # 4. KINK (Chiralité)
-            # -----------------------------
-            # Ici on garde seulement les interactions internes complètes
-            d_h = hamilt_params['D_edges'][0][i, j]
-            q1, q2 = idx_H(i, j), idx_H(i, j+1)
-            if abs(d_h) > 1e-6 and q2 != -1:
-                sparse_list.append(("XY", [q1, q2], d_h))
-                sparse_list.append(("YX", [q1, q2], -d_h))
-
-            d_v = hamilt_params['D_edges'][1][i, j]
-            q1, q2 = idx_V(i, j), idx_V(i+1, j)
-            if abs(d_v) > 1e-6 and q2 != -1:
-                sparse_list.append(("XY", [q1, q2], d_v))
-                sparse_list.append(("YX", [q1, q2], -d_v))
+                # -----------------------------
+                # 4. KINK (Chiralité)
+                # -----------------------------
+                # Ici on garde seulement les interactions internes complètes
+                if hamilt_params['D_edges'] is not None:
+                    d_h = hamilt_params['D_edges'][0][i, j]
+                    q1, q2 = idx_H(i, j), idx_H(i, j+1)
+                    if abs(d_h) > 1e-6 and q2 != -1:
+                        sparse_list.append(("XY", [q1, q2], d_h))
+                        sparse_list.append(("YX", [q1, q2], -d_h))
+                    d_v = hamilt_params['D_edges'][1][i, j]
+                    q1, q2 = idx_V(i, j), idx_V(i+1, j)
+                    if abs(d_v) > 1e-6 and q2 != -1:
+                        sparse_list.append(("XY", [q1, q2], d_v))
+                        sparse_list.append(("YX", [q1, q2], -d_v))
 
     num_qubits = 2 * dim * dim
     
@@ -184,7 +188,7 @@ def create_bounded_hamiltonian(
 
 
 
-def create_period_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
+def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = False) -> SparsePauliOp:
     """
     Construit l'Hamiltonien MHD sur une grille torique (Périodique).
     Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
@@ -225,34 +229,35 @@ def create_period_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
                 ]
                 sparse_list.append(("ZZZZ", qubits_plaquette, k_val))
 
-            # --- 3. SHOCK (Divergence/Vertex) : Terme ZZZZ (Séparé !) ---
-            # Un noeud implique les 4 liens qui forment une croix (+) autour de lui.
-            # Entrant/Sortant pour tester la divergence div(B)=0
-            delta_val = hamilt_params['Delta_nodes'][i, j]
-            if abs(delta_val) > 1e-6:
-                qubits_vertex = [
-                    idx_H(i, j),      # Sortant Droite
-                    idx_H(i, j-1),    # Entrant Gauche (j-1)
-                    idx_V(i, j),      # Sortant Bas
-                    idx_V(i-1, j)     # Entrant Haut (i-1)
-                ]
-                sparse_list.append(("ZZZZ", qubits_vertex, delta_val))
+            if advanced_anomalies_enabled:
+                # --- 3. SHOCK (Divergence/Vertex) : Terme ZZZZ (Séparé !) ---
+                # Un noeud implique les 4 liens qui forment une croix (+) autour de lui.
+                # Entrant/Sortant pour tester la divergence div(B)=0
+                delta_val = hamilt_params['Delta_nodes'][i, j]
+                if abs(delta_val) > 1e-6:
+                    qubits_vertex = [
+                        idx_H(i, j),      # Sortant Droite
+                        idx_H(i, j-1),    # Entrant Gauche (j-1)
+                        idx_V(i, j),      # Sortant Bas
+                        idx_V(i-1, j)     # Entrant Haut (i-1)
+                    ]
+                    sparse_list.append(("ZZZZ", qubits_vertex, delta_val))
 
-            # --- 4. KINK (Chiralité) : Termes XY - YX ---
-            # Horizontal Kink (le long de la ligne)
-            d_h = hamilt_params['D_edges'][0][i, j]
-            if abs(d_h) > 1e-6:
-                # Interaction entre H(i,j) et son voisin H(i,j+1)
-                q1, q2 = idx_H(i, j), idx_H(i, j+1)
-                sparse_list.append(("XY", [q1, q2], d_h))
-                sparse_list.append(("YX", [q1, q2], -d_h))
+                # --- 4. KINK (Chiralité) : Termes XY - YX ---
+                # Horizontal Kink (le long de la ligne)
+                d_h = hamilt_params['D_edges'][0][i, j]
+                if abs(d_h) > 1e-6:
+                    # Interaction entre H(i,j) et son voisin H(i,j+1)
+                    q1, q2 = idx_H(i, j), idx_H(i, j+1)
+                    sparse_list.append(("XY", [q1, q2], d_h))
+                    sparse_list.append(("YX", [q1, q2], -d_h))
 
-            # Vertical Kink (le long de la colonne)
-            d_v = hamilt_params['D_edges'][1][i, j]
-            if abs(d_v) > 1e-6:
-                # Interaction entre V(i,j) et son voisin V(i+1,j)
-                q1, q2 = idx_V(i, j), idx_V(i+1, j)
-                sparse_list.append(("XY", [q1, q2], d_v))
-                sparse_list.append(("YX", [q1, q2], -d_v))
+                # Vertical Kink (le long de la colonne)
+                d_v = hamilt_params['D_edges'][1][i, j]
+                if abs(d_v) > 1e-6:
+                    # Interaction entre V(i,j) et son voisin V(i+1,j)
+                    q1, q2 = idx_V(i, j), idx_V(i+1, j)
+                    sparse_list.append(("XY", [q1, q2], d_v))
+                    sparse_list.append(("YX", [q1, q2], -d_v))
                 
     return SparsePauliOp.from_sparse_list(sparse_list, num_qubits=2*dim*dim)

@@ -1,164 +1,164 @@
 import numpy as np
-from .grid import PeriodicGrid
+from scipy.ndimage import zoom
 
 class MHDSolver:
     """
-    Solveur MHD 2D Incompressible Visco-Résistif.
-    Équations:
-      dv/dt = -(v.grad)v + (B.grad)B + nu*Lap(v)
-      dB/dt = -(v.grad)B + (B.grad)v + eta*Lap(B)
+    Solveur MHD 2D Stabilisé pour Proof-of-Concept.
+    Sécurités : 
+    - RK2 (Heun)
+    - Filtre Spatial (Shapiro)
+    - Gradient Clamping (Anti-Explosion)
     """
-    def __init__(self, grid: PeriodicGrid, dt=1e-3, Re=1000, Rm=1000):
+    def __init__(self, grid, dt=1e-4, Re=100, Rm=100):
         self.grid = grid
         self.dt = dt
-        self.nu = 1.0 / Re       # Viscosité
-        self.eta = 1.0 / Rm      # Résistivité
+        # On augmente la viscosité pour la stabilité (Re=100 est plus sûr que 1000)
+        self.nu = 1.0 / Re       
+        self.eta = 1.0 / Rm      
         
-        # Champs Physiques (Vitesse et Magnétique)
-        # Initialisés à 0
         self.vx = np.zeros((grid.N, grid.N))
         self.vy = np.zeros((grid.N, grid.N))
         self.Bx = np.zeros((grid.N, grid.N))
         self.By = np.zeros((grid.N, grid.N))
 
     def init_orszag_tang(self):
-        """
-        Configure les conditions initiales du Vortex d'Orszag-Tang.
-        Source: Eq 16 du papier.
-        v = (-sin y, sin x)
-        B = (-sin y, sin 2x)
-        """
         X, Y = self.grid.X, self.grid.Y
         self.vx = -np.sin(Y)
         self.vy =  np.sin(X)
         self.Bx = -np.sin(Y)
         self.By =  np.sin(2 * X)
+        self.enforce_incompressibility()
 
-    def time_step(self):
-        """Avance d'un pas de temps (Euler Explicite pour simplicité)"""
-        # 1. Calcul des gradients nécessaires
-        grad_vx_x, grad_vx_y = self.grid.grad(self.vx)
-        grad_vy_x, grad_vy_y = self.grid.grad(self.vy)
-        grad_Bx_x, grad_Bx_y = self.grid.grad(self.Bx)
-        grad_By_x, grad_By_y = self.grid.grad(self.By)
-        
-        # 2. Termes Advectifs (v . grad)
-        adv_v_x = self.vx * grad_vx_x + self.vy * grad_vx_y
-        adv_v_y = self.vx * grad_vy_x + self.vy * grad_vy_y
-        
-        adv_B_x = self.vx * grad_Bx_x + self.vy * grad_Bx_y
-        adv_B_y = self.vx * grad_By_x + self.vy * grad_By_y
-
-        # 3. Termes de Lorentz / Stretching (B . grad)
-        str_v_x = self.Bx * grad_vx_x + self.By * grad_vx_y
-        str_v_y = self.Bx * grad_vy_x + self.By * grad_vy_y
-        
-        str_B_x = self.Bx * grad_Bx_x + self.By * grad_Bx_y
-        str_B_y = self.Bx * grad_By_x + self.By * grad_By_y
-
-        # 4. Termes de Diffusion (Laplacien)
-        lap_vx = self.grid.laplacian(self.vx)
-        lap_vy = self.grid.laplacian(self.vy)
-        lap_Bx = self.grid.laplacian(self.Bx)
-        lap_By = self.grid.laplacian(self.By)
-
-        # 5. Mise à jour temporelle (Navier-Stokes + Induction)
-        # dv/dt = - Advection + Lorentz + Diffusion
-        self.vx += self.dt * (-adv_v_x + str_B_x + self.nu * lap_vx)
-        self.vy += self.dt * (-adv_v_y + str_B_y + self.nu * lap_vy)
-        
-        # dB/dt = - Advection + Stretching + Diffusion
-        self.Bx += self.dt * (-adv_B_x + str_v_x + self.eta * lap_Bx)
-        self.By += self.dt * (-adv_B_y + str_v_y + self.eta * lap_By)
-
-    def step_masked(self, mask=None):
+    def init_kelvin_helmholtz(self):
         """
-        Version Optimisée et Corrigée.
-        Gère correctement le cas 'Pas de Masque' et évite la duplication de code.
+        Instabilité de Kelvin-Helmholtz MHD avec Dérive (Drift).
+        - Crée une couche de cisaillement (Shear Layer) qui s'enroule en vortex.
+        - Ajoute une vitesse de fond pour forcer l'AMR à se déplacer rapidement.
         """
-        # 1. Gradients et Laplaciens GLOBAUX (Toujours calculés)
-        grad_vx_x, grad_vx_y = self.grid.grad(self.vx)
-        grad_vy_x, grad_vy_y = self.grid.grad(self.vy)
-        grad_Bx_x, grad_Bx_y = self.grid.grad(self.Bx)
-        grad_By_x, grad_By_y = self.grid.grad(self.By)
+        X, Y = self.grid.X, self.grid.Y
         
-        # 2. Diffusion de base (Calculée partout)
-        dvx = self.nu * self.grid.laplacian(self.vx)
-        dvy = self.nu * self.grid.laplacian(self.vy)
-        dBx = self.eta * self.grid.laplacian(self.Bx)
-        dBy = self.eta * self.grid.laplacian(self.By)
+        # 1. Vitesse : Profil en tanh (cisaillement doux)
+        # Le fluide au centre (y ~ pi) va dans un sens, les bords dans l'autre.
+        shear_width = 0.5
+        v_flow = np.tanh((Y - np.pi) / shear_width)
+        
+        # 2. Le "Drift" (Vitesse de fond)
+        # C'est CA qui rend l'anomalie difficile à attraper.
+        # Tout le système se déplace à V=10 vers la droite.
+        drift_velocity = 10.0 
+        
+        self.vx = v_flow + drift_velocity
+        self.vy = np.zeros_like(X) # Pas de vitesse verticale initiale majeure
 
-        # --- DEFINITION DU KERNEL PHYSIQUE (Moteur de calcul) ---
-        # Cette petite fonction locale contient TOUTE ta physique non-linéaire.
-        # On peut l'appeler sur la grille entière OU sur une sous-partie.
-        def nonlinear_kernel(vx, vy, Bx, By, 
-                             g_vx_x, g_vx_y, g_vy_x, g_vy_y, 
-                             g_Bx_x, g_Bx_y, g_By_x, g_By_y):
-            
-            # Advection (v . grad)
-            adv_v_x = vx * g_vx_x + vy * g_vx_y
-            adv_v_y = vx * g_vy_x + vy * g_vy_y
-            adv_B_x = vx * g_Bx_x + vy * g_Bx_y
-            adv_B_y = vx * g_By_x + vy * g_By_y
-            
-            # Lorentz / Stretching (B . grad)
-            str_v_x = Bx * g_vx_x + By * g_vx_y
-            str_v_y = Bx * g_vy_x + By * g_vy_y
-            str_B_x = Bx * g_Bx_x + By * g_Bx_y
-            str_B_y = Bx * g_By_x + By * g_By_y
-            
-            # Retourne les DELTAS (Forces)
-            return (-adv_v_x + str_v_x), (-adv_v_y + str_v_y), \
-                   (-adv_B_x + str_B_x), (-adv_B_y + str_B_y)
+        # 3. Champ Magnétique : Stabilisant faible
+        # B aligné avec le flux pour créer une tension magnétique
+        self.Bx = 0.1 * np.ones_like(X) 
+        self.By = np.zeros_like(X)
 
-        # 3. Application Conditionnelle
-        if mask is not None:
-            # --- CAS VQA : Calcul Haute Performance sur sous-ensemble ---
-            # On extrait les données (C'est très rapide en numpy)
-            res_vx, res_vy, res_Bx, res_By = nonlinear_kernel(
-                self.vx[mask], self.vy[mask], self.Bx[mask], self.By[mask],
-                grad_vx_x[mask], grad_vx_y[mask], grad_vy_x[mask], grad_vy_y[mask],
-                grad_Bx_x[mask], grad_Bx_y[mask], grad_By_x[mask], grad_By_y[mask]
-            )
-            # On injecte les résultats UNIQUEMENT sur le masque
-            dvx[mask] += res_vx
-            dvy[mask] += res_vy
-            dBx[mask] += res_Bx
-            dBy[mask] += res_By
-
-        else:
-            # --- CAS CLASSIQUE / WARM START : Calcul Global ---
-            # C'est ce qui te manquait !
-            res_vx, res_vy, res_Bx, res_By = nonlinear_kernel(
-                self.vx, self.vy, self.Bx, self.By,
-                grad_vx_x, grad_vx_y, grad_vy_x, grad_vy_y,
-                grad_Bx_x, grad_Bx_y, grad_By_x, grad_By_y
-            )
-            # On ajoute partout
-            dvx += res_vx
-            dvy += res_vy
-            dBx += res_Bx
-            dBy += res_By
-
-        # 4. Intégration
-        self.vx += self.dt * dvx
-        self.vy += self.dt * dvy
-        self.Bx += self.dt * dBx
-        self.By += self.dt * dBy
+        # 4. Perturbation (L'étincelle)
+        # On ajoute du bruit sur vy pour déclencher l'instabilité
+        # Sinon les lignes resteraient droites éternellement.
+        noise_amplitude = 0.1
+        perturbation = noise_amplitude * np.sin(X) * np.exp(-((Y - np.pi)**2) / (shear_width**2))
+        
+        self.vy += perturbation
+        
+        # Projection pour nettoyer la divergence initiale
+        self.enforce_incompressibility()
 
     def get_fluxes(self):
-        """
-        Prépare les données pour le Mapping Quantique (VQA).
-        Retourne Bx, By (Flux) et la Densité de Courant Jz (Curl B).
-        """
         grad_By_x, _ = self.grid.grad(self.By)
         _, grad_Bx_y = self.grid.grad(self.Bx)
-        Jz = grad_By_x - grad_Bx_y # J = rot B
+        Jz = grad_By_x - grad_Bx_y
+        return { 'vx': self.vx, 'vy': self.vy, 'Bx': self.Bx, 'By': self.By, 'Jz': Jz }
+
+    def enforce_incompressibility(self):
+        self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
+        self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
+
+    # --- NOYAU PHYSIQUE SÉCURISÉ ---
+    def compute_rhs(self, vx, vy, Bx, By):
+        """Calcule les dérivées avec CLAMPING pour éviter les NaN"""
         
-        return {
-            'vx': self.vx,
-            'vy': self.vy,
-            'Bx': self.Bx,
-            'By': self.By,
-            'Jz': Jz
-        }
+        # 1. Gradients
+        g_vx_x, g_vx_y = self.grid.grad(vx)
+        g_vy_x, g_vy_y = self.grid.grad(vy)
+        g_Bx_x, g_Bx_y = self.grid.grad(Bx)
+        g_By_x, g_By_y = self.grid.grad(By)
+        
+        # 2. Diffusion
+        diff_vx = self.nu * self.grid.laplacian(vx)
+        diff_vy = self.nu * self.grid.laplacian(vy)
+        diff_Bx = self.eta * self.grid.laplacian(Bx)
+        diff_By = self.eta * self.grid.laplacian(By)
+
+        # 3. Calcul des Termes Non-Linéaires
+        # On utilise np.clip pour éviter que (v * grad) ne produise l'infini lors d'un choc
+        LIMIT = 500.0 # Valeur arbitraire de sécurité
+        
+        def safe_mult(a, b):
+            return np.clip(a * b, -LIMIT, LIMIT)
+
+        adv_v_x = safe_mult(vx, g_vx_x) + safe_mult(vy, g_vx_y)
+        adv_v_y = safe_mult(vx, g_vx_y) + safe_mult(vy, g_vy_y)
+        adv_B_x = safe_mult(vx, g_Bx_x) + safe_mult(vy, g_Bx_y)
+        adv_B_y = safe_mult(vx, g_By_x) + safe_mult(vy, g_By_y)
+
+        lorentz_x = safe_mult(Bx, g_Bx_x) + safe_mult(By, g_Bx_y)
+        lorentz_y = safe_mult(Bx, g_By_x) + safe_mult(By, g_By_y)
+        stretch_x = safe_mult(Bx, g_vx_x) + safe_mult(By, g_vx_y)
+        stretch_y = safe_mult(Bx, g_vy_x) + safe_mult(By, g_vy_y)
+        
+        # Assemblage
+        rhs_vx = -adv_v_x + lorentz_x + diff_vx
+        rhs_vy = -adv_v_y + lorentz_y + diff_vy
+        rhs_Bx = -adv_B_x + stretch_x + diff_Bx
+        rhs_By = -adv_B_y + stretch_y + diff_By
+        
+        # Sécurité ultime sur les dérivées
+        return (np.clip(rhs_vx, -LIMIT, LIMIT), 
+                np.clip(rhs_vy, -LIMIT, LIMIT), 
+                np.clip(rhs_Bx, -LIMIT, LIMIT), 
+                np.clip(rhs_By, -LIMIT, LIMIT))
+
+    # --- SIMULATION STABILISÉE ---
+    def step_full(self):
+        # Predictor (RK2)
+        k1_vx, k1_vy, k1_Bx, k1_By = self.compute_rhs(self.vx, self.vy, self.Bx, self.By)
+        
+        vx_guess = self.vx + self.dt * k1_vx
+        vy_guess = self.vy + self.dt * k1_vy
+        Bx_guess = self.Bx + self.dt * k1_Bx
+        By_guess = self.By + self.dt * k1_By
+        
+        # Corrector
+        k2_vx, k2_vy, k2_Bx, k2_By = self.compute_rhs(vx_guess, vy_guess, Bx_guess, By_guess)
+        
+        self.vx += (self.dt / 2.0) * (k1_vx + k2_vx)
+        self.vy += (self.dt / 2.0) * (k1_vy + k2_vy)
+        self.Bx += (self.dt / 2.0) * (k1_Bx + k2_Bx)
+        self.By += (self.dt / 2.0) * (k1_By + k2_By)
+        
+        # Filtre de lissage (Nettoyage post-calcul)
+        self.vx = self.grid.smooth_field(self.vx)
+        self.vy = self.grid.smooth_field(self.vy)
+        self.Bx = self.grid.smooth_field(self.Bx)
+        self.By = self.grid.smooth_field(self.By)
+        
+        self.enforce_incompressibility()
+
+    def step_layered(self, patches, max_depth):
+        # Update simplifiée pour l'AMR (Euler + Clamping Fort)
+        rhs_vx, rhs_vy, rhs_Bx, rhs_By = self.compute_rhs(self.vx, self.vy, self.Bx, self.By)
+        
+        self.vx += self.dt * rhs_vx
+        self.vy += self.dt * rhs_vy
+        self.Bx += self.dt * rhs_Bx
+        self.By += self.dt * rhs_By
+        
+        self.vx = self.grid.smooth_field(self.vx)
+        self.vy = self.grid.smooth_field(self.vy)
+        self.Bx = self.grid.smooth_field(self.Bx)
+        self.By = self.grid.smooth_field(self.By)
+        
+        self.enforce_incompressibility()
