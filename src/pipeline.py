@@ -5,10 +5,12 @@ from math import log
 
 import numpy as np
 import matplotlib.pyplot as plt
+from types import SimpleNamespace
 
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
+from Simulation.HamiltParams import PhysicalMapper
 from Simulation.refinement import run_adaptive_vqa
 
 from visual import plot_amr_state
@@ -37,22 +39,78 @@ def main():
 
 
     args = parser.parse_args()
-    # 1. Configuration
-    N = args.dns_resolution          # Résolution moyenne (DNS)
-    VQA_N = args.grid_size      # Résolution Grossière
-    T_MAX = args.t_max         # Temps final
-    DT = args.dt           # Pas de temps
+
+    verbose = args.verbose
+    AdvAnomaliesEnable = args.AdvAnomaliesEnable
+
+    N = args.dns_resolution                   # Résolution moyenne (DNS)
+    VQA_N = args.grid_size                    # Résolution Grossière
+    T_MAX = args.t_max                        # Temps final
+    DT = args.dt                              # Pas de temps
     HYBRID = int(args.hybrid_dt / DT)         # Fréquence de mise à jour hybride
+
+    depth = args.depth
+    mode = args.mode
+    backend = args.backend
+    shots = args.shots
+    method = args.method
+    opt_level = args.opt_level
+
+    argus = SimpleNamespace(
+        depth=args.depth, 
+        mode=args.mode, 
+        backend=args.backend, 
+        shots=args.shots, 
+        method=args.method, 
+        opt_level=args.opt_level, 
+        AdvAnomaliesEnable=args.AdvAnomaliesEnable
+    )
+
+    pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, lambda_cost=0.5)
+
+def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lambda_cost=0.5):
+
+    #Paramètres physiques
+    c_s = 1.0
+    eta = 0.01
+    Bz_guide = 1.0
+
     STEPS = int(T_MAX / DT)
+
+    total_patches_used = 0
+    steps_hybrid_count = 0
     
     # 2. Initialisation
-    print(f"Initialisation Orszag-Tang (Grille {N}x{N}) avec pas de temps {DT} et hybrid every {HYBRID} steps pour un temp total de {T_MAX} ({STEPS} steps)...")
+    if verbose:
+        print(f"Initialisation Orszag-Tang (Grille {N}x{N}) avec pas de temps {DT} et hybrid every {HYBRID} steps pour un temp total de {T_MAX} ({STEPS} steps)...")
+    
     grid = PeriodicGrid(resolution_N=N)
     sim_quantum = MHDSolver(grid, dt=DT, Re=500, Rm=500) # A CHANGER: PARAMETRER R_max et R_e max
-    sim_quantum.init_kelvin_helmholtz()
+    sim_quantum.init_kelvin_helmholtz() #init_kelvin_helmholtz() init_orszag_tang()
     sim_temoin = MHDSolver(grid, dt=DT, Re=500, Rm=500)  # Pour la visualisation finale
-    sim_temoin.init_kelvin_helmholtz()
-    mapper = AngleMapper(v0=1.0, B0=1.0)
+    sim_temoin.init_kelvin_helmholtz() #init_kelvin_helmholtz() init_orszag_tang()
+    mapper = AngleMapper(v0=1.0, B0=1.0, w_shock=2.0, w_shear=1.0)
+
+    alpha =hyperparams.get('alpha',1.0) if hyperparams else 1.0
+    beta =hyperparams.get('beta',1.0) if hyperparams else 1.0
+    threshold=hyperparams.get('threshold',0.5) if hyperparams else 0.5
+
+    #Hamiltonian ones:
+    bias=hyperparams.get('bias',4.0) if hyperparams else 4.0
+    gamma1=hyperparams.get('gamma1',1.0) if hyperparams else 1.0
+    gamma2=hyperparams.get('gamma2',2.0) if hyperparams else 2.0
+    Rm_crit=hyperparams.get('Rm_crit',1000.0) if hyperparams else 1000.0
+    delta_shock=hyperparams.get('delta_shock',5.0) if hyperparams else 5.0
+    d_kink=hyperparams.get('d_kink',2.0) if hyperparams else 2.0
+    epsilon=hyperparams.get('epsilon',1e-6) if hyperparams else 1e-6
+    
+    
+    HamiltMapper = PhysicalMapper(c_s, eta, Bz_guide,
+            bias=bias, gamma1=gamma1, gamma2=gamma2,
+            Rm_crit=Rm_crit, delta_shock=delta_shock,
+            d_kink=d_kink, epsilon=epsilon
+        )
+
     active_patches = []
     max_depth = int(log(N)/log(VQA_N))+1
     
@@ -60,40 +118,47 @@ def main():
     Phi_prev = None
     physics_state = sim_quantum.get_fluxes()
     Phi = mapper.compute_stress_flux(physics_state)
-
-
-    if args.verbose:
+    """
+    if verbose:
         plot_grid_topology(grid)
         plot_flux_on_edges(grid, Phi)
-
+        print(f"Lancement pour {STEPS} pas de temps...")
+    """
     # 3. Boucle Temporelle
-    print(f"Lancement pour {STEPS} pas de temps...")
     for t in range(STEPS):
         if t % HYBRID == 0:
-            active_patches = run_adaptive_vqa(
-                sim_quantum, mapper, args, Phi_prev,
-                threshold=0.65,
+            active_patches, Phi = run_adaptive_vqa(
+                sim_quantum, mapper, HamiltMapper, argus, Phi_prev, #Phi_prev = Phi in this function
+                verbose=verbose,
+                alpha = alpha,
+                beta = beta,
+                threshold=threshold,
                 target_dim = VQA_N,
                 max_depth= max_depth,
                 max_patches=N,
                 min_size = 6,
-                DT=DT,
-                c_s = 1.0,
-                eta = 0.01,
-                Bz_guide = 1.0
+                DT=DT
             )
-            if args.verbose:
+            Phi_prev = Phi
+
+            total_patches_used += len(active_patches)
+            steps_hybrid_count += 1
+
+        sim_quantum.step_layered(active_patches, max_depth)
+        sim_temoin.step_full()
+        if t % HYBRID == 0 and verbose:
                 plot_amr_state(sim_quantum, active_patches, t, DT, t, VQA_N)
                 plot_amr_state(sim_temoin, [], t, DT, t, VQA_N)
 
-        sim_quantum.step_layered(active_patches, max_depth)
-        Phi_prev = Phi
-        sim_temoin.step_full()
-
         max_current = np.max(np.abs(physics_state['Jz']))
-        print(f"Step {t}/{STEPS} (t={t*DT:.2f}) - Max Jz: {max_current:.4f}")
-        
+        if verbose:
+            print(f"Step {t}/{STEPS} (t={t*DT:.4f}) - Max Jz: {max_current:.4f}")
 
+    return score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid_count, N**2)
+
+
+        
+"""
     # 4. Visualisation Finale
     print("Simulation terminée. Génération du plot comparatif...")
     final_state_quantum = sim_quantum.get_fluxes()
@@ -135,6 +200,67 @@ def main():
     plt.suptitle(f"Comparaison Finale Kelvin-Helmholtz", fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Ajuste pour le titre principal
     plt.show()
+"""
+
+def score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid_count, N_square):
+    """
+    Computes a multi-variable physical fidelity score.
+    Returns the average relative L2 error across all physical fields.
+    """
+    # 1. Get States
+    st_q = sim_quantum.get_fluxes()
+    st_t = sim_temoin.get_fluxes()
+
+    # 2. Define Variables to compare
+    # We include Jz because it captures fine-scale gradients (shocks)
+    # We include Bx, By because they capture magnetic topology
+    # We include vx, vy because they capture kinetic energy
+    variables = ['vx', 'vy', 'Bx', 'By', 'Jz']
+    
+    total_error = 0.0
+    detailed_errors = {}
+    
+    # 3. Compute Error for each field
+    for var in variables:
+        # Flattening ensures we compute one single scalar norm for the whole grid
+        # independent of shapes (e.g. .T issues)
+        arr_q = st_q[var].flatten()
+        arr_t = st_t[var].flatten()
+
+        # L2 Norm of the Difference
+        diff_norm = np.linalg.norm(arr_q - arr_t)
+        
+        # L2 Norm of the Ground Truth (Reference)
+        ref_norm = np.linalg.norm(arr_t)
+        
+        # Safety epsilon to avoid division by zero (e.g. if vy is 0 everywhere)
+        epsilon = 1e-10
+        
+        rel_err = diff_norm / (ref_norm + epsilon)
+        
+        detailed_errors[var] = rel_err
+        total_error += rel_err
+
+    # 4. Average Score
+    # This treats magnetic accuracy and kinetic accuracy with equal importance
+    final_score = total_error / len(variables)
+
+    if steps_hybrid_count > 0:
+        avg_patches = total_patches_used / steps_hybrid_count
+    else:
+        avg_patches = N_square # Cas par défaut (pire cas)
+        
+    patch_ratio = avg_patches / N_square
+    
+    # C. Score Total
+    # On cherche à MINIMISER le score.
+    # Score = Erreur + lambda * Coût
+    # lambda règle l'importance de l'économie. 
+    # Une valeur de 0.5 signifie qu'on tolère un peu d'erreur si on économise beaucoup de calcul.
+    
+    final_combined_score = phys_score + (lambda_cost * patch_ratio)
+
+    return final_combined_score
 
 if __name__ == "__main__":
     main()

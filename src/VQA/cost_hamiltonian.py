@@ -63,7 +63,20 @@ def create_bounded_hamiltonian(
 
     for i in range(dim):
         for j in range(dim):
-            
+            # -----------------------------
+            # 1. DATA VALIDITY
+            # -----------------------------
+
+            # --- Horizontal (H_i,j) ---
+            h_h = hamilt_params['H_edges'][0][i, j]
+            if abs(h_h) > 1e-6:
+                sparse_list.append(("Z", [idx_H(i, j)], h_h))
+
+            # --- Vertical (H_i,j) ---
+            h_v = hamilt_params['H_edges'][1][i, j]
+            if abs(h_v) > 1e-6:
+                sparse_list.append(("Z", [idx_V(i, j)], h_v))
+
             # -----------------------------
             # 1. SHEAR (Viscosité)
             # -----------------------------
@@ -205,6 +218,16 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
 
     for i in range(dim):
         for j in range(dim):
+            # --- 0. DATA VALIDITY : Interactions Z ---
+            # Horizontal VALID : Entre lien H(i,j) et H(i, j+1) (voisins sur la même ligne)
+            h_h = hamilt_params['H_edges'][0][i, j]
+            if abs(h_h) > 1e-6:
+                sparse_list.append(("Z", [idx_H(i, j)], h_h))
+
+            # Vertical VALID : Entre lien V(i,j) et V(i+1, j) (voisins sur la même colonne)
+            h_v = hamilt_params['H_edges'][1][i, j]
+            if abs(h_v) > 1e-6:
+                sparse_list.append(("Z", [idx_V(i, j)], h_v))
             
             # --- 1. SHEAR (Viscosité) : Interactions ZZ ---
             # Horizontal Shear : Entre lien H(i,j) et H(i, j+1) (voisins sur la même ligne)

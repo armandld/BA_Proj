@@ -6,12 +6,15 @@ from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator, SamplerV2 as S
 from qiskit_ibm_runtime.fake_provider import FakeFez
 
 def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
+
     if verbose:
-        print(f"Initial Circuit:\n{qc.draw('text')}")
+        for pauli, coeff in cost_hamiltonian.to_list():
+            print(f"  {pauli}: {coeff}")
+        #print(f"Initial Circuit:\n{qc.draw('text')}")
         print("\n","\n")
         print(f"Information about the circuit: \nNumber of qubits: {qc.num_qubits}\n Depth : {qc.depth()}")
-        print("\n","\n")
-        print(f"EXECUTION WITH :\nShots: {shots}\nRepetitions od the QAOA: {reps}\nMode: {mode} \nBackend: {backend_name}")
+        #print("\n","\n")
+        #print(f"EXECUTION WITH :\nShots: {shots}\nRepetitions od the QAOA: {reps}\nMode: {mode} \nBackend: {backend_name}")
     # 1. Configuration du Backend (doit correspondre à celui utilisé dans optimize)
     if backend_name == "aer":
         backend = AerSimulator()

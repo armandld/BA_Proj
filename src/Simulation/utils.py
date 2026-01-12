@@ -40,7 +40,12 @@ def slice_hamiltonian_params(params, y_s, y_e, x_s, x_e, advanced_anomalies_enab
     # 2. Termes définis sur les Arêtes (Edges) - Stockés sous forme de tuple (Horizontal, Vertical)
     # Note : Les matrices d'arêtes sont physiquement plus petites de 1 pixel dans une dimension,
     # mais le slicing numpy [start:end] gère ça sans erreur (il s'arrête juste à la fin).
-    
+    h_horiz, h_vert = params['H_edges']
+    local_params['H_edges'] = (
+        extract(h_horiz), 
+        extract(h_vert)
+    )
+
     # C_shear
     c_horiz, c_vert = params['C_edges']
     local_params['C_edges'] = (

@@ -1,7 +1,10 @@
 import numpy as np
 
 class PhysicalMapper:
-    def __init__(self, cs=1.0, eta=0.01, Bz_guide=1.0):
+    def __init__(self, 
+            cs=1.0, eta=0.01, Bz_guide=1.0, bias=4.0, gamma1=1.0, gamma2=2.0,
+            Rm_crit=1000.0, delta_shock=5.0, d_kink=2.0, epsilon=1e-6
+        ):
         """
         :param cs: Speed of sound (for Mach number)
         :param eta: Resistivity (for Reynolds number)
@@ -12,14 +15,15 @@ class PhysicalMapper:
         self.Bz = Bz_guide
         
         # Hyperparameters from your paper
-        self.gamma1 = 1.0
-        self.gamma2 = 2.0
-        self.Rm_crit = 1000.0
-        self.delta_shock = 5.0
-        self.d_kink = 2.0
-        self.epsilon = 1e-6 # Stability term
+        self.bias = bias
+        self.gamma1 = gamma1
+        self.gamma2 = gamma2
+        self.Rm_crit = Rm_crit
+        self.delta_shock = delta_shock
+        self.d_kink = d_kink
+        self.epsilon = epsilon # Stability term
 
-    def compute_coefficients(self, fields, advanced_anomalies_enabled = False):
+    def compute_coefficients(self, full_h, full_v, fields, threshold, AveragePhi, advanced_anomalies_enabled = False):
         # ... (Le début avec vx, vy, Rm_local, etc. reste identique) ...
         vx, vy = fields['vx'], fields['vy']
         Bx, By = fields['Bx'], fields['By']
@@ -32,6 +36,9 @@ class PhysicalMapper:
         helicity_density = Jz * self.Bz 
 
         # --- Hamiltonian Coefficients (VERSION PÉRIODIQUE / ROLL) ---
+        # DATA VALIDITY
+        H_horiz = self.bias * ((full_h- AveragePhi)/AveragePhi)
+        H_vert  = self.bias * ((full_v- AveragePhi)/AveragePhi)
 
         # A. SHEAR TERM (C_ij)
         C_nodes = self.gamma1 * (1 + Rm_local / self.Rm_crit)**(-self.gamma2)
@@ -73,6 +80,7 @@ class PhysicalMapper:
             D_vert  = (K_nodes + np.roll(K_nodes, -1, axis=0)) / 2
 
             return {
+                "H_edges": (H_horiz, H_vert),
                 "C_edges": (C_horiz, C_vert),
                 "D_edges": (D_horiz, D_vert),
                 "Delta_nodes": Delta_v,
@@ -80,6 +88,7 @@ class PhysicalMapper:
             }
 
         return {
+            "H_edges": (H_horiz, H_vert),
             "C_edges": (C_horiz, C_vert),
             "K_plaquettes": K_p
         }

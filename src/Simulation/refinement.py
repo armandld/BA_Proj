@@ -9,7 +9,6 @@ from help_visual import visualize_vqa_step
 
 from Simulation.RescaleArrays import get_adaptive_flux
 
-from Simulation.HamiltParams import PhysicalMapper
 
 from Simulation.utils import slice_hamiltonian_params, get_periodic_patch
 
@@ -28,13 +27,17 @@ def recursive_vqa_scan(
     
     # Accumulateur de résultats
     active_patches, # Liste où on stocke les zones finales identifiées
-    
+    AveragePhi,
+    AveragePhiDev,
     # Hyper-paramètres
+    alpha=1.0,
+    beta=1.0,
     target_dim=3,    # Dimension de la grille d'entrée du VQA (ex: 3x3)
     max_depth=3,      # Combien de fois on peut zoomer (ex: 256 -> 85 -> 28 -> 9)
     min_size=4,       # Taille minimale d'un patch en pixels physiques
     threshold=0.6,    # Seuil pour dire "C'est turbulent, faut creuser"
-    max_patches=256   # Budget computationnel
+    max_patches=256,   # Budget computationnel
+    verbose=False
 ):
     """
     Fonction récursive qui explore le domaine physique guidée par le VQA.
@@ -92,9 +95,9 @@ def recursive_vqa_scan(
         mini_Phi_prev_dict = mini_Phi_dict 
     # --- 2. L'Oracle VQA (Appel Quantique) ---
     # Le VQA analyse la zone et retourne 18 angles -> Probabilités sur la grille 3x3
-    angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, alpha=np.pi, beta=1.0, dt=DT)
+    angles = mapper.map_to_angles(mini_Phi_dict, mini_Phi_prev_dict, AveragePhi = AveragePhi, AveragePhiDev = AveragePhiDev, alpha= alpha, beta= beta, dt=DT)
     # Appel Shell (Simulé ou Réel) - Force la grille 3x3
-    probs = call_vqa_shell(angles, mini_hamilt_params, args, period_bound = depth==0)
+    probs = call_vqa_shell(angles, mini_hamilt_params, verbose, args, period_bound = depth==0)
 
     # HELPER Visualiser les steps
     #visualize_vqa_step(local_h, local_v, bounds, depth)
@@ -147,9 +150,10 @@ def recursive_vqa_scan(
                 recursive_vqa_scan(
                     full_phi_h, full_phi_v, full_prev_h, full_prev_v, hamilt_params,
                     sub_bounds, depth + 1,
-                    mapper, args, DT, active_patches,
+                    mapper, args, DT, active_patches, AveragePhi, AveragePhiDev,
                     target_dim = target_dim, max_depth = max_depth, min_size = min_size,
-                    threshold = new_threshold, max_patches = max_patches
+                    threshold = new_threshold, max_patches = max_patches,
+                    verbose=verbose
                 )
             else:
                 active_patches.append({
@@ -161,66 +165,76 @@ def recursive_vqa_scan(
 
 
 def run_adaptive_vqa(
-    sim, mapper, args,
+    sim, mapper, HamiltMapper, args,
     Phi_prev,
+    alpha=1.0,
+    beta=1.0,
     threshold=0.65,
     target_dim=3,
     max_depth=4,
     max_patches=256,
     min_size=6,
     DT=0.1,
-    c_s=1,
-    eta=0.01,
-    Bz_guide=1
+    verbose=False
     ):
     """
     Point d'entrée principal à appeler dans ton main().
     """
+
     # 1. Préparation des données complètes (Read-Only pour la récursion)
     physics_state = sim.get_fluxes()
     Phi = mapper.compute_stress_flux(physics_state)
-    
+
     full_h = Phi['phi_horizontal']
     full_v = Phi['phi_vertical']
     
-    if Phi_prev:
+    AveragePhi = 0.5*(np.mean(np.abs(full_h)) + np.mean(np.abs(full_v)))
+    
+    full_prev_h = None
+    full_prev_v = None
+    AveragePhiDev = None
+
+    if Phi_prev is not None:
         full_prev_h = Phi_prev['phi_horizontal']
         full_prev_v = Phi_prev['phi_vertical']
-    else:
-        full_prev_h = None
-        full_prev_v = None
+        AveragePhiDev = DT*0.5*(np.mean(np.abs(full_h-full_prev_h)) + np.mean(np.abs(full_v-full_prev_v)))
         
     H, W = full_h.shape
     initial_bounds = (0, H, 0, W)
     
-    Mapper = PhysicalMapper(c_s, eta, Bz_guide)
-    hamilt_params = Mapper.compute_coefficients(physics_state)
+    hamilt_params = HamiltMapper.compute_coefficients(
+        full_h, full_v, physics_state, threshold, AveragePhi,advanced_anomalies_enabled=args.AdvAnomaliesEnable)
 
     # Liste qui recevra les résultats
     final_patches = []
-    if args.verbose:
+    if verbose:
         print(f"--- START RECURSIVE VQA SCAN (Budget: {max_patches} patches) ---")
-    
+        print("Average Phi:", AveragePhi, "Average Phi Dev:", AveragePhiDev)
     # 2. Lancement de la récursion
     recursive_vqa_scan(
         full_h, full_v, full_prev_h, full_prev_v, hamilt_params,
         initial_bounds, depth=0,
         mapper=mapper, args=args, DT=DT,
         active_patches=final_patches,
+        AveragePhi= AveragePhi,
+        AveragePhiDev= AveragePhiDev,
+        alpha=alpha,
+        beta=beta,
         target_dim=target_dim,          # Grille d'entrée du VQA
         max_depth=max_depth,         # Profondeur max (256 -> ~3px)
         min_size=min_size,          # Taille min patch
         threshold=threshold,      # Sensibilité
-        max_patches=max_patches
+        max_patches=max_patches,
+        verbose=verbose
     )
     if len(final_patches) == 0:
-        if args.verbose:
+        if verbose:
             print(">>> VQA found nothing active. Defaulting to FULL COMPUTATION.")
         H, W = full_h.shape
         # On ajoute un gros patch qui couvre tout
         final_patches.append({
             'bounds': (0, H, 0, W), 'depth': 0, 'type': 'fallback'})
-    if args.verbose:
+    if verbose:
         print(f"--- SCAN COMPLETE: {len(final_patches)} Active Zones Identified ---")
         print(final_patches)
-    return final_patches
+    return final_patches, Phi

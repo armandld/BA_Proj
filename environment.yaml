@@ -24,7 +24,7 @@ dependencies:
   - tqdm          # Progress bars
   - networkx      # For graph problems (like your MaxCut)
   - h5py          # For saving/loading large data
-
+  - optuna        # Hyperparameter optimization
   # ----------------------------------------------------
   # 2. Pip Packages (for all Qiskit libraries)
   # ----------------------------------------------------
