@@ -1,9 +1,13 @@
 import optuna
 import json
 from pipeline import pipeline
+from types import SimpleNamespace
+
 
 # Target: 20% grid usage (LAMBDA_COST = 0.2). If we use more, we pay.
 LAMBDA_COST = 0.5
+
+N_TRIALS = 5  # Nombre total d'essais d'Optuna
 
 def objective(trial):
 
@@ -14,7 +18,16 @@ def objective(trial):
     HYBRID_DT = 4e-4
     HYBRID = int(HYBRID_DT / DT)
     verbose=False
-    args=None
+
+    argus_mock = SimpleNamespace(
+        depth=1,                # Profondeur quantique par défaut
+        mode="simulator",       # Simulation rapide
+        backend="aer",          # Backend Qiskit
+        shots=1000,
+        method="COBYLA",
+        opt_level=1,
+        AdvAnomaliesEnable=False # On active les anomalies avancées pour que l'IA apprenne à les régler
+    )
 
     # 1. Optuna choisit des valeurs
     #State ones
@@ -66,8 +79,8 @@ def objective(trial):
             T_MAX=T_MAX,
             DT=DT,
             HYBRID=HYBRID,
-            verbose=False,
-            argus=args,
+            verbose=True,
+            argus=argus_mock,
             hyperparams=HyperParams,
             lambda_cost=LAMBDA_COST
         )
@@ -102,7 +115,7 @@ if __name__ == "__main__":
     # --- B. OPTIMISATION ---
     print("Starting Optimization...")
     # n_trials=50 fera 1 essai avec vos valeurs initiales + 49 essais exploratoires
-    study.optimize(objective, n_trials=50)
+    study.optimize(objective, n_trials=N_TRIALS)
 
     # --- C. RÉSULTATS & SAUVEGARDE JSON ---
     print("\n------------------------------------------------")

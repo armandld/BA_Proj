@@ -154,8 +154,8 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         if verbose:
             print(f"Step {t}/{STEPS} (t={t*DT:.4f}) - Max Jz: {max_current:.4f}")
 
+    print("SCORE : ", score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid_count, N**2))
     return score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid_count, N**2)
-
 
         
 """
@@ -243,7 +243,7 @@ def score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid
 
     # 4. Average Score
     # This treats magnetic accuracy and kinetic accuracy with equal importance
-    final_score = total_error / len(variables)
+    phys_score = total_error / len(variables)
 
     if steps_hybrid_count > 0:
         avg_patches = total_patches_used / steps_hybrid_count
