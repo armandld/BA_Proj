@@ -37,8 +37,8 @@ class PhysicalMapper:
 
         # --- Hamiltonian Coefficients (VERSION PÉRIODIQUE / ROLL) ---
         # DATA VALIDITY
-        H_horiz = self.bias * ((full_h- AveragePhi)/AveragePhi)
-        H_vert  = self.bias * ((full_v- AveragePhi)/AveragePhi)
+        H_horiz = self.bias * ((full_h- threshold)/AveragePhi)
+        H_vert  = self.bias * ((full_v- threshold)/AveragePhi)
 
         # A. SHEAR TERM (C_ij)
         C_nodes = self.gamma1 * (1 + Rm_local / self.Rm_crit)**(-self.gamma2)

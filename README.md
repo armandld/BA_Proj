@@ -1,8 +1,10 @@
-# BA_Proj
-Quantum Computation on Plasma Physics
+# Research Project, Q-HAS: Quantum-Hierarchical Adaptive Steering, Armand Le Douarec
 
-Ce dépôt contient le code pour notre projet, utilisant **Python**, **C++** et **Qiskit**. Ce README explique comment configurer l’environnement de développement pour tous les membres de l’équipe et comment utiliser le code.
+We propose a hybrid quantum-classical architecture designed to optimize the simulation of magnetohydrodynamics (MHD) instabilities. Instead of solving the full dynamical equations on a fine grid, we utilize
+a Variational Quantum Algorithm (VQA) to identify topological defects (flux reconnections, turbulence
+onset) on a coarse-grained graph. This allows for targeted Adaptive Mesh Refinement (AMR).
 
+This repo contains all the code of my project, using  **Python**, **C++** and **Qiskit**. This README explains how to configure the env of development to run the code and how to run it. 
 ---
 
 ## 1️⃣ Structure du dépôt
@@ -11,12 +13,54 @@ Ce dépôt contient le code pour notre projet, utilisant **Python**, **C++** et 
 BA_Proj/
 ├── LICENSE
 ├── README.md
+├── TO DO LIST.rtf
+├── TrainHP_GoogleColab.sh
+├── TrainHyperParams.sh
+├── advanced_project_idea
+│   ├── Idée pour améliorer projet.rtf
+│   ├── Remarques.rtf
+│   └── papers
+├── algos_test_MHD
+│   ├── Variational
+│   └── helloworld.py
+├── best_hyperparams.json
+├── data
 ├── environment.yaml
+├── logs
+│   ├── pipeline[2026-01-13_13-23-39].log
+│   ├── pipeline[2026-01-13_13-25-19].log
+│   └── pipeline[2026-01-13_13-27-17].log
 ├── notebooks
+│   ├── A faire:developper.rtf
+│   ├── ALA.pdf
+│   ├── Feynman_formalism.pdf
+│   ├── MAIN.pdf
+│   ├── MAIN2.pdf
+│   ├── Q_adv_for_DE.pdf
+│   ├── VQA_research.pdf
+│   ├── ZGR_QFT.pdf
+│   ├── alternatin_prep.pdf
+│   ├── nonlin2_ex.pdf
+│   └── uniform_prep_controlled_rot.pdf
+├── run_pipeline.sh
 ├── setup_env.sh
 ├── src
+│   ├── Simulation
+│   ├── TrainHP_GoogleColab.py
+│   ├── TrainHyperParam.py
+│   ├── VQA
+│   ├── __pycache__
+│   ├── call_vqa_shell.py
+│   ├── help_visual.py
+│   ├── logs
+│   ├── patches.py
+│   ├── pipeline.py
+│   ├── run_VQA_pipeline.sh
+│   ├── utils.py
+│   └── visual.py
 ├── tutos
 │   ├── Max_cut
+│   ├── VQA
 │   └── helloworld.py
 └── update.sh
 ```
@@ -51,23 +95,55 @@ source setup_env.sh
 ```bash
 source update_env.sh
 ```
+# Train the hyperparameters guiding the Q-HAS algorithm using optuna:
 
-# Launch the current pipeline
-By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
-
-once in the project in ```bash BA_proj/```, type
+In order to guide the optimization of the parameters, all hyperparameters for the optimization (of the hyperparameters of the Q-HAS) are at the top of the ```bash setup_env.sh ```.
 
 ```bash
-bash algos_test_MHD/Variational/run_pipeline.sh --backend aer --numqbits 4 --opt_level 3 --depth 1
+bash TrainHyperParams.sh
 ```
-# Launch a tutorial
+
+Depending on which type of flux anomalies you are trying to identify through the Q-HAS, training only the adequate parameters of the Hamiltonian greatly shorten the timelength of the optimization.
+
+Of course, if the type of anomalies is not know training all of it remains the best option.
+
+# Launch the pipeline (all hyperparameters set):
 By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
 
-once in the project in ```bash BA_proj/```, type
-
 ```bash
-bash tutos/Max_cut/run_pipeline.sh --backend aer --nodes 10 --edges 12 --mode simulator --verbose
+bash run_pipeline.sh --backend aer --grid-size 2 --opt-level 1 --depth 1 --dns-resolution 256 --shots 1000 --t-max 9e-4 --dt 1e-4 --hybrid-dt 4e-4 --verbose
 ```
+
+The parameters describe the following in the Q-HAS:
+
+Options : 
+
+```bash  --backend <aer|estimator> ```      Quantum backend (default: aer)
+```bash  --mode <simulator|hardware> ```    Simulator or IBM Quantum (default: simulator)
+```bash  --shots <int> ```                  Number of shots (default: 1024)
+```bash  --numqbits <int> ```               Number of qubits (default: 4)
+```bash  --depth <int> ```                  Depth of the ULA ansatz (default: 2)
+```bash  --opt_level <0|1|2|3> ```          Optimization level for transpiler (default: 3)
+```bash  --out-dir <dir>  ```               Output directory (default: data)
+```bash  --verbose ```                      Enable verbose logging
+```bash  --skip-cleanup ```                 Skip deleting previous data
+```bash  --method <COBYLA|Nelder-Mead|Powell|L-BFGS-B> ``` Optimization method for minimize (default: COBYLA)
+
+Custom Domain Parameters:
+```bash  --grid-size <int> ```              Coarse grid dimension N (NxN) (default: 16)
+```bash  --dns-resolution <int> ```         High-Res Grid for Ground Truth (default: 256)
+```bash  --t-max <float> ```                Simulation end time (default: 1.0)
+```bash  --dt <float> ```                   Time step size (default: 0.01)
+```bash  --hybrid-dt <float> ```              Hybrid simulation time step size (default: 0.1)
+```bash  --AdvAnomaliesEnable ```            Enable advanced anomaly handling in mapping
+
+Stage control (choose one):
+```bash  --only-mapping ```                 Run mapping stage only
+```bash  --only-optimize ```                Run optimization stage only
+```bash  --only-execute ```                 Run execution stage only
+```bash  --only-postprocess ```             Run post-processing stage only
+
+
 ## Details if installation using .sh files do not work:
 
 ### Try the following
@@ -88,7 +164,8 @@ conda activate qiskit-project # TO ADAPT IF CHANGED
 
 ## Details if update using .sh files do not work:
 
-Avant de mettre à jour l’environnement, il est recommandé de faire un backup des packages pour pouvoir revenir à une version stable si nécessaire :
+Before updating the environment, it is recommended to do a backup of packages in order to allow yourself to reset to an older viable version if necessary :
+
 
 ### Update conda gestion
 
@@ -102,4 +179,13 @@ Usually :
 
 ```bash
 conda env update --name qiskit-project --file environment.yaml --prune # TO ADAPT IF CHANGED
+```
+
+# Launch a tutorial
+By decomposing the major parts of the computation, here is a result of a viable pipeline to use:
+
+once in the project in ```bash BA_proj/```, type
+
+```bash
+bash tutos/Max_cut/run_pipeline.sh --backend aer --nodes 10 --edges 12 --mode simulator --verbose
 ```
