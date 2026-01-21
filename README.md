@@ -1,6 +1,7 @@
-# Research Project, Q-HAS: Quantum-Hierarchical Adaptive Steering, Armand Le Douarec
+# Research Project, Armand Le Douarec
+# Q-HAS: Quantum-Hierarchical Adaptive Steering
 
-We propose a hybrid quantum-classical architecture designed to optimize the simulation of magnetohydrodynamics (MHD) instabilities. Instead of solving the full dynamical equations on a fine grid, we utilize
+I propose a hybrid quantum-classical architecture designed to optimize the simulation of magnetohydrodynamics (MHD) instabilities. Instead of solving the full dynamical equations on a fine grid, we utilize
 a Variational Quantum Algorithm (VQA) to identify topological defects (flux reconnections, turbulence
 onset) on a coarse-grained graph. This allows for targeted Adaptive Mesh Refinement (AMR).
 
@@ -119,28 +120,47 @@ The parameters describe the following in the Q-HAS:
 Options : 
 
 ```bash  --backend <aer|estimator> ```      Quantum backend (default: aer)
+
 ```bash  --mode <simulator|hardware> ```    Simulator or IBM Quantum (default: simulator)
+
 ```bash  --shots <int> ```                  Number of shots (default: 1024)
+
 ```bash  --numqbits <int> ```               Number of qubits (default: 4)
+
 ```bash  --depth <int> ```                  Depth of the ULA ansatz (default: 2)
+
 ```bash  --opt_level <0|1|2|3> ```          Optimization level for transpiler (default: 3)
+
 ```bash  --out-dir <dir>  ```               Output directory (default: data)
+
 ```bash  --verbose ```                      Enable verbose logging
+
 ```bash  --skip-cleanup ```                 Skip deleting previous data
+
 ```bash  --method <COBYLA|Nelder-Mead|Powell|L-BFGS-B> ``` Optimization method for minimize (default: COBYLA)
 
 Custom Domain Parameters:
+
 ```bash  --grid-size <int> ```              Coarse grid dimension N (NxN) (default: 16)
+
 ```bash  --dns-resolution <int> ```         High-Res Grid for Ground Truth (default: 256)
+
 ```bash  --t-max <float> ```                Simulation end time (default: 1.0)
+
 ```bash  --dt <float> ```                   Time step size (default: 0.01)
+
 ```bash  --hybrid-dt <float> ```              Hybrid simulation time step size (default: 0.1)
+
 ```bash  --AdvAnomaliesEnable ```            Enable advanced anomaly handling in mapping
 
 Stage control (choose one):
+
 ```bash  --only-mapping ```                 Run mapping stage only
+
 ```bash  --only-optimize ```                Run optimization stage only
+
 ```bash  --only-execute ```                 Run execution stage only
+
 ```bash  --only-postprocess ```             Run post-processing stage only
 
 
