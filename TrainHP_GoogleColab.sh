@@ -218,10 +218,10 @@ log "Output Dir: $OUT_DIR"
 log "Input File: $IN_FILE"
 log "=============================================================="
 
-if [ "$SKIP_CLEANUP" = false ]; then
-    log "🧹 Cleaning previous results..."
-    rm -rf "$OUT_DIR"/*
-fi
+#if [ "$SKIP_CLEANUP" = false ]; then
+#    log "🧹 Cleaning previous results..."
+#    rm -rf "$OUT_DIR"/*
+#fi
 
 # -----------------------------
 # Pipeline Execution

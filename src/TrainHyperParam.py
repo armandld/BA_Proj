@@ -29,13 +29,13 @@ db_path = os.path.join(data_dir, db_name)
 output_path = os.path.join(data_dir, "best_hyperparams.json")
 def objective(trial):
 
-    N=256
+    N=128
     VQA_N=2
     T_MAX=4e-3
     DT=1e-4
     HYBRID_DT = 4e-4
     HYBRID = int(HYBRID_DT / DT)
-    verbose=False
+    verbose=True
 
     argus_mock = SimpleNamespace(
         depth=1,                # Profondeur quantique par défaut

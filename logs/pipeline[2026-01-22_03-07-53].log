@@ -1,0 +1,14 @@
+[2026-01-22 03:07:57] ==============================================================
+[2026-01-22 03:07:57] 🚀 Starting Training Q-HAS' Hyper Parameters: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2026-01-22 03:07:57] Mode: simulator | Backend: aer | Shots: 100000 | Method: COBYLA
+[2026-01-22 03:07:57] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2026-01-22 03:07:57] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2026-01-22 03:07:57] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2026-01-22 03:07:57] ==============================================================
+[2026-01-22 03:07:57] 🧹 Cleaning previous results...
+[2026-01-22 03:07:57] ➡️ Stage: Training Hyperparameters
+[2026-01-22 03:07:57] ➡️ Stage: Training Hyperparameters
+[2026-01-22 03:07:57] Running: python /Users/Sayu/Desktop/BA_Proj/src/TrainHyperParam.py
+[2026-01-22 03:07:57] Running: python /Users/Sayu/Desktop/BA_Proj/src/TrainHyperParam.py
+[I 2026-01-22 03:08:12,363] A new study created in RDB with name: q_has_v1
+[I 2026-01-22 03:08:12,363] A new study created in RDB with name: q_has_v1
