@@ -1,4 +1,5 @@
 import optuna
+import os
 import json
 from pipeline import pipeline
 from types import SimpleNamespace
@@ -7,7 +8,16 @@ from types import SimpleNamespace
 # Target: 20% grid usage (LAMBDA_COST = 0.2). If we use more, we pay.
 LAMBDA_COST = 0.2
 
-N_TRIALS = 5  # Nombre total d'essais d'Optuna
+N_TRIALS = 100  # Nombre total d'essais d'Optuna
+
+# On récupère le dossier où se trouve le script actuel
+current_dir = os.path.dirname(os.path.abspath(__file__))
+data_dir = os.path.join(current_dir, "data")
+# On définit le nom du fichier de base de données
+db_name = "optuna_study.db"
+# On combine les deux pour avoir le "path" complet
+db_path = os.path.join(data_dir, db_name)
+output_path = os.path.join(data_dir, "best_hyperparams.json")
 
 def objective(trial):
 
@@ -26,23 +36,25 @@ def objective(trial):
         shots=1000,
         method="COBYLA",
         opt_level=1,
-        AdvAnomaliesEnable=False # On active les anomalies avancées pour que l'IA apprenne à les régler
+        AdvAnomaliesEnable=False # On desactive les anomalies avancées pour que l'IA apprenne à les régler
     )
 
     # 1. Optuna choisit des valeurs
     #State ones
     alpha_try = trial.suggest_float("alpha", 0, 10.0)
     beta_try = trial.suggest_float("beta", 0.5, 10.0)
-    thresh_try = trial.suggest_float("threshold", 0.1, 2.0)
+    thresh_try = trial.suggest_float("threshold", 0.1, 1.0)
 
     #Hamiltonian ones:
     bias_try=trial.suggest_float("bias", 1.0, 10.0)
     gamma1_try=trial.suggest_float("gamma1", 0.5, 3.0)
     gamma2_try=trial.suggest_float("gamma2", 0.5, 3.0)
     Rm_crit_try=trial.suggest_float("Rm_crit", 100.0, 1000.0)
+    """  
     delta_shock_try=trial.suggest_float("delta_shock", 1.0, 10.0)
     d_kink_try=trial.suggest_float("d_kink", 1.0, 5.0)
     epsilon_try=trial.suggest_float("epsilon", 1e-6, 1e-5)
+    """
 
     HyperParams = {
         'alpha': alpha_try,
@@ -51,11 +63,13 @@ def objective(trial):
         'bias': bias_try,
         'gamma1': gamma1_try,
         'gamma2': gamma2_try,
-        'Rm_crit': Rm_crit_try,
+        'Rm_crit': Rm_crit_try
+    }
+    """
         'delta_shock': delta_shock_try,
         'd_kink': d_kink_try,
         'epsilon': epsilon_try
-    }
+    """
 
     print(f"Testing with :")
     print(f"Bias={bias_try:.2f}")
@@ -65,9 +79,11 @@ def objective(trial):
     print(f"gamma1={gamma1_try:.2f}")
     print(f"gamma2={gamma2_try:.2f}")
     print(f"Rm_crit={Rm_crit_try:.2f}")
+    """
     print(f"delta_shock={delta_shock_try:.2f}")
     print(f"d_kink={d_kink_try:.2f}")
     print(f"epsilon={epsilon_try:.2f}")
+    """
     print("-----")
 
     # 2. On lance la simu avec ces valeurs
@@ -79,7 +95,7 @@ def objective(trial):
             T_MAX=T_MAX,
             DT=DT,
             HYBRID=HYBRID,
-            verbose=True,
+            verbose=verbose,
             argus=argus_mock,
             hyperparams=HyperParams,
             lambda_cost=LAMBDA_COST
@@ -92,8 +108,14 @@ def objective(trial):
 
 if __name__ == "__main__":
     # Création de l'étude
-    study = optuna.create_study(direction="minimize")
+    storage_url = f"sqlite:///{db_path}"
 
+    study = optuna.create_study(
+        study_name="q_has_v1",
+        storage=storage_url,
+        load_if_exists=True,
+        direction="minimize"
+    )
     # --- A. INITIALISATION (WARM START) ---
     # C'est ici qu'on force les valeurs initiales précises
     initial_params = {
@@ -104,11 +126,13 @@ if __name__ == "__main__":
         "gamma1": 1.0,
         "gamma2": 2.0,
         "Rm_crit": 1000.0,
+
+    }
+    """
         "delta_shock": 5.0,
         "d_kink": 2.0,
         "epsilon": 1e-6
-    }
-    
+    """
     print("Injecting initial known parameters...")
     study.enqueue_trial(initial_params)
 
@@ -123,9 +147,7 @@ if __name__ == "__main__":
     print("BEST SCORE:", study.best_value)
     print("------------------------------------------------")
 
-    # Sauvegarde dans un fichier JSON
-    output_path = "best_hyperparams.json"
-    
+    # Sauvegarde dans un fichier JSON    
     results = {
         "best_score": study.best_value,
         "best_params": study.best_params,

@@ -100,12 +100,13 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     gamma1=hyperparams.get('gamma1',1.0) if hyperparams else 1.0
     gamma2=hyperparams.get('gamma2',2.0) if hyperparams else 2.0
     Rm_crit=hyperparams.get('Rm_crit',1000.0) if hyperparams else 1000.0
-    delta_shock=hyperparams.get('delta_shock',5.0) if hyperparams else 5.0
-    d_kink=hyperparams.get('d_kink',2.0) if hyperparams else 2.0
-    epsilon=hyperparams.get('epsilon',1e-6) if hyperparams else 1e-6
+    delta_shock=hyperparams.get('delta_shock',5.0) if argus.AdvAnomaliesEnable and hyperparams else 5.0
+    d_kink=hyperparams.get('d_kink',2.0) if argus.AdvAnomaliesEnable and hyperparams else 2.0
+    epsilon=hyperparams.get('epsilon',1e-6) if argus.AdvAnomaliesEnable and hyperparams else 1e-6
+      
     
-    
-    HamiltMapper = PhysicalMapper(c_s, eta, Bz_guide,
+    HamiltMapper = PhysicalMapper(
+            c_s, eta, Bz_guide,
             bias=bias, gamma1=gamma1, gamma2=gamma2,
             Rm_crit=Rm_crit, delta_shock=delta_shock,
             d_kink=d_kink, epsilon=epsilon

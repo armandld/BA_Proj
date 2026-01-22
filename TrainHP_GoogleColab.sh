@@ -61,20 +61,39 @@ pipeline_log() {
 # -----------------------------
 # Conda Environment Detection
 # -----------------------------
-if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
-    # Extract the ENV_NAME variable from setup_env.sh
-    ENV_NAME=$(grep 'name:' $ENV_FILE | cut -d ' ' -f 2)
+# Vérifier si on est dans Google Colab
+if [ -d "/content" ]; then
+    echo "☁️ Environnement Google Colab détecté. Installation des dépendances via pip..."
     
-    if [ -z "$ENV_NAME" ]; then
-        echo "⚠️ Could not detect Conda environment from $ENV_FILE. Please activate manually."
-    else
-        echo "🔹 Detected Conda environment: $ENV_NAME"
-        # Activate it
-        source "$(conda info --base)/etc/profile.d/conda.sh"
-        conda activate "$ENV_NAME"
-    fi
+    # Mise à jour de pip (recommandé)
+    pip install --upgrade pip -q
+
+    # Installation silencieuse des dépendances de ton environment.yml
+    # On installe tout en une fois pour gagner du temps
+    pip install qiskit qiskit-aer qiskit-ibm-runtime qiskit-optimization \
+                qiskit-machine-learning qiskit-nature qiskit-finance \
+                pylatexenc optuna networkx h5py tqdm -q
+
+    echo "✅ Dépendances installées avec succès sur Colab."
 else
-    echo "⚠️ $ENV_FILE not found. Make sure the Conda environment is active."
+    # --- Code pour usage LOCAL uniquement ---
+    echo "💻 Usage local détecté. Recherche de Conda..."
+    
+    if [ -f "$ROOT_DIR/$ENV_FILE" ]; then
+        ENV_NAME=$(grep '^name:' "$ENV_FILE" | awk '{print $2}')
+        if [ -n "$ENV_NAME" ]; then
+            echo "🔹 Activation de l'environnement : $ENV_NAME"
+            CONDA_BASE=$(conda info --base 2>/dev/null)
+            if [ $? -eq 0 ]; then
+                source "$CONDA_BASE/etc/profile.d/conda.sh"
+                conda activate "$ENV_NAME"
+            else
+                echo "❌ Conda n'est pas installé sur ce système."
+            fi
+        fi
+    else
+        echo "⚠️ $ENV_FILE introuvable."
+    fi
 fi
 
 # -----------------------------
