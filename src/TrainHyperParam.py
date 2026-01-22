@@ -12,13 +12,21 @@ N_TRIALS = 100  # Nombre total d'essais d'Optuna
 
 # On récupère le dossier où se trouve le script actuel
 current_dir = os.path.dirname(os.path.abspath(__file__))
-data_dir = os.path.join(current_dir, "data")
-# On définit le nom du fichier de base de données
+
 db_name = "optuna_study.db"
-# On combine les deux pour avoir le "path" complet
+
+# On remonte d'un niveau pour atteindre la racine (/BA_Proj)
+project_root = os.path.dirname(current_dir)
+
+# On pointe vers le dossier data à la racine
+data_dir = os.path.join(project_root, "data")
+
+# On s'assure que le dossier existe (au cas où)
+os.makedirs(data_dir, exist_ok=True)
+
+# Chemins finaux
 db_path = os.path.join(data_dir, db_name)
 output_path = os.path.join(data_dir, "best_hyperparams.json")
-
 def objective(trial):
 
     N=256
