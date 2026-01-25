@@ -19,10 +19,9 @@ ONLY_MAPPING=false
 ONLY_OPTIMIZE=false
 ONLY_EXECUTE=false
 ONLY_POSTPROCESS=false
-NUM_QBITS=4
 REPS=2
-OPT_LEVEL=3
-GRID_SIZE=16
+OPT_LEVEL=1
+GRID_SIZE=2
 DNS_RESOLUTION=256
 T_MAX=1.0
 DT=1e-4
@@ -42,7 +41,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 OUT_DIR="$SCRIPT_DIR/data"
 IN_FILE="$SCRIPT_DIR/input/mapping_input.json"
 LOG_DIR="$OUT_DIR/../logs"
-LOG_FILE="$LOG_DIR/pipeline[$(date +'%Y-%m-%d_%H-%M-%S')].log"
+LOG_FILE="$LOG_DIR/pipeline_trial[$(date +'%Y-%m-%d_%H-%M-%S')].log"
 
 # Make sure directories exist
 mkdir -p "$OUT_DIR"

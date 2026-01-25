@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-def plot_amr_state(sim, active_patches, step, dt, t_val, target_dim):
+def plot_amr_state(sim, active_patches, t_val, target_dim):
     """
     Affiche l'état MHD global (Courant Jz) et superpose les boîtes d'attention VQA.
     Style: RdBu (Rouge/Bleu) + Cadres Rouges pointillés + Indication de Zoom.

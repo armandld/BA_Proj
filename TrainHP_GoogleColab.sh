@@ -19,10 +19,9 @@ ONLY_MAPPING=false
 ONLY_OPTIMIZE=false
 ONLY_EXECUTE=false
 ONLY_POSTPROCESS=false
-NUM_QBITS=4
-DEPTH=2
-OPT_LEVEL=3
-GRID_SIZE=16
+REPS=2
+OPT_LEVEL=1
+GRID_SIZE=2
 DNS_RESOLUTION=256
 T_MAX=1.0
 DT=1e-4
@@ -40,7 +39,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 OUT_DIR="$SCRIPT_DIR/data"
 IN_FILE="$SCRIPT_DIR/input/mapping_input.json"
 LOG_DIR="$OUT_DIR/../logs"
-LOG_FILE="$LOG_DIR/pipeline[$(date +'%Y-%m-%d_%H-%M-%S')].log"
+LOG_FILE="$LOG_DIR/pipeline_training[$(date +'%Y-%m-%d_%H-%M-%S')].log"
 
 # Make sure directories exist
 mkdir -p "$OUT_DIR"
@@ -107,7 +106,7 @@ display_help() {
     echo "  --mode <simulator|hardware>     Simulator or IBM Quantum (default: simulator)"
     echo "  --shots <int>                   Number of shots (default: 1024)"
     echo "  --numqbits <int>                Number of qubits (default: 4)"
-    echo "  --depth <int>                  Depth of the ULA ansatz (default: 2)"
+    echo "  --reps <int>                    Repetitions of the QAOA gates (default: 2)"
     echo "  --opt_level <0|1|2|3>          Optimization level for transpiler (default: 3)"
     echo "  --out-dir <dir>                 Output directory (default: data)"
     echo "  --verbose                       Enable verbose logging"
@@ -172,7 +171,7 @@ while [[ $# -gt 0 ]]; do
         --out-dir) OUT_DIR="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
         --skip-cleanup) SKIP_CLEANUP=true; shift ;;
-        --depth) DEPTH="$2"; shift 2 ;;
+        --reps) REPS="$2"; shift 2 ;;
         --opt-level) OPT_LEVEL="$2"; shift 2 ;;
         --method) METHOD="$2"; shift 2 ;;
         --grid-size) GRID_SIZE="$2"; shift 2 ;;

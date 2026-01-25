@@ -144,8 +144,8 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         sim_quantum.step_layered(active_patches, max_depth)
         sim_temoin.step_full()
         if t % HYBRID == 0 and verbose:
-                plot_amr_state(sim_quantum, active_patches, t, DT, t, VQA_N)
-                plot_amr_state(sim_temoin, [], t, DT, t, VQA_N)
+                plot_amr_state(sim_quantum, active_patches, t*DT, VQA_N)
+                plot_amr_state(sim_temoin, [], t*DT, VQA_N)
 
         max_current = np.max(np.abs(physics_state['Jz']))
         if verbose:

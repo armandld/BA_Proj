@@ -40,7 +40,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 OUT_DIR="$SCRIPT_DIR/data"
 IN_FILE="$SCRIPT_DIR/input/mapping_input.json"
 LOG_DIR="$OUT_DIR/../logs"
-LOG_FILE="$LOG_DIR/pipeline[$(date +'%Y-%m-%d_%H-%M-%S')].log"
+LOG_FILE="$LOG_DIR/pipeline_training[$(date +'%Y-%m-%d_%H-%M-%S')].log"
 
 # Make sure directories exist
 mkdir -p "$OUT_DIR"
@@ -199,11 +199,10 @@ log "Output Dir: $OUT_DIR"
 log "Input File: $IN_FILE"
 log "=============================================================="
 
-#if [ "$SKIP_CLEANUP" = false ]; then
-#    log "🧹 Cleaning previous results..."
-#    rm -rf "$OUT_DIR"/*
-#fi
-
+if [ "$SKIP_CLEANUP" = false ]; then
+    log "🧹 Cleaning previous results..."
+    rm -rf "$OUT_DIR"/*
+fi
 # -----------------------------
 # Pipeline Execution
 # -----------------------------

@@ -31,21 +31,21 @@ def objective(trial):
 
     N=128
     VQA_N=2
-    T_MAX=4e-3
-    DT=1e-4
-    HYBRID_DT = 4e-4
+    T_MAX=0.8
+    DT=1e-3
+    HYBRID_DT = 8e-3
     HYBRID = int(HYBRID_DT / DT)
     verbose=False
 
     argus_mock = SimpleNamespace(
-        depth=1,                # Profondeur quantique par défaut
+        reps=2,                # Profondeur quantique par défaut
         mode="simulator",       # Simulation rapide
         backend="aer",          # Backend Qiskit
-        shots=1000,
+        shots=1024,              # Nombre de shots
         method="COBYLA",
         opt_level=1,
         AdvAnomaliesEnable=False, # On desactive les anomalies avancées pour que l'IA apprenne à les régler
-        K_opt=100,   # Max iterations for optimizer
+        K_opt=50,   # Max iterations for optimizer
         eps=1e-2     # Convergence tolerance
     )
 
