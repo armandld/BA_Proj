@@ -17,6 +17,9 @@ BA_Proj/
 ├── TO DO LIST.rtf
 ├── TrainHP_GoogleColab.sh
 ├── TrainHyperParams.sh
+├── Train_results
+│   ├── best_hyperparams.json
+│   └── optuna_study.db
 ├── advanced_project_idea
 │   ├── Idée pour améliorer projet.rtf
 │   ├── Remarques.rtf
@@ -30,9 +33,17 @@ BA_Proj/
 ├── logs
 │   ├── pipeline[2026-01-13_13-23-39].log
 │   ├── pipeline[2026-01-13_13-25-19].log
-│   └── pipeline[2026-01-13_13-27-17].log
+│   ├── pipeline[2026-01-13_13-27-17].log
+│   ├── pipeline[2026-01-22_03-07-53].log
+│   ├── pipeline[2026-01-22_03-08-59].log
+│   ├── pipeline[2026-01-22_03-18-06].log
+│   ├── pipeline[2026-01-22_03-19-56].log
+│   ├── pipeline[2026-01-25_17-24-57].log
+│   ├── pipeline[2026-01-25_17-26-40].log
+│   ├── pipeline[2026-01-25_17-27-59].log
+│   └── pipeline[2026-01-25_17-28-30].log
 ├── notebooks
-│   ├── A faire:developper.rtf
+│   ├── A faire_developper.rtf
 │   ├── ALA.pdf
 │   ├── Feynman_formalism.pdf
 │   ├── MAIN.pdf
@@ -47,10 +58,8 @@ BA_Proj/
 ├── setup_env.sh
 ├── src
 │   ├── Simulation
-│   ├── TrainHP_GoogleColab.py
 │   ├── TrainHyperParam.py
 │   ├── VQA
-│   ├── __pycache__
 │   ├── call_vqa_shell.py
 │   ├── help_visual.py
 │   ├── logs
@@ -64,6 +73,7 @@ BA_Proj/
 │   ├── VQA
 │   └── helloworld.py
 └── update.sh
+
 ```
 
 The ```bash src/``` folder will contain the codes executed for this project.
