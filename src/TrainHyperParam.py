@@ -35,7 +35,7 @@ def objective(trial):
     DT=1e-4
     HYBRID_DT = 4e-4
     HYBRID = int(HYBRID_DT / DT)
-    verbose=True
+    verbose=False
 
     argus_mock = SimpleNamespace(
         depth=1,                # Profondeur quantique par défaut

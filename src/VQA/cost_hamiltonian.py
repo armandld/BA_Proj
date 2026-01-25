@@ -1,4 +1,4 @@
-# scripts/mapping.py
+# scripts/cost_hamiltonian.py
 
 import argparse
 import json

@@ -43,7 +43,7 @@ class MHDSolver:
         shear_width = 0.5
         v_flow = np.tanh((Y - np.pi/2) / shear_width) - np.tanh((Y - 3*np.pi/2) / shear_width) - 1.0
         
-        drift_velocity = 10.0
+        drift_velocity = 0.5
         self.vx = v_flow + drift_velocity
         self.vy = np.zeros_like(X)
 

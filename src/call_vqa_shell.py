@@ -28,10 +28,10 @@ def call_vqa_shell(angles_tuple, hamilt_params, verbose, args, period_bound=True
         "psi_h": angles_tuple[2].tolist(),
         "psi_v": angles_tuple[3].tolist()
     }
-    reps = 2
+    reps = args.reps
     qc, cost_hamiltonian = mapping(data, hamilt_params, args.AdvAnomaliesEnable, period_bound, reps)
     qc = optimize(qc, args.backend, args.opt_level, verbose)
-    probs_list = execute(qc, cost_hamiltonian, args.mode, args.backend, args.shots, reps, verbose)
+    probs_list = execute(qc, cost_hamiltonian, args.mode, args.backend, args.shots, reps, args.K_opt, args.eps, verbose)
     probs_list = postprocess(probs_list, qc.num_qubits, verbose)
     #probs_list = TEST1(data, args.backend, args.shots, period_bound, args.grid_size * args.grid_size * 2)
     return np.array(probs_list)

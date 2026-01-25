@@ -5,7 +5,7 @@ from qiskit_aer import AerSimulator
 from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator, SamplerV2 as Sampler
 from qiskit_ibm_runtime.fake_provider import FakeFez
 
-def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
+def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, verbose):
 
     if verbose:
         for pauli, coeff in cost_hamiltonian.to_list():
@@ -55,10 +55,10 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
         return cost
 
     # 4. Paramètres Initiaux
-    # Convention QAOA standard : Beta puis Gamma
+    # Convention QAOA standard : Gamma puis Omega
     initial_params = np.concatenate([
-        np.full(reps, np.pi / 2),  # Beta
-        np.full(reps, np.pi)       # Gamma
+        np.full(reps, np.pi / 2),  # Gamma
+        np.full(reps, 0)       # Omega
     ])
     if verbose:
         print("\n--- Starting Optimization Loop ---")
@@ -74,8 +74,8 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
             initial_params,
             args=(qc, isa_hamiltonian, estimator),
             method="COBYLA",
-            tol=1e-2,
-            options={'maxiter': 100} # Sécurité pour éviter boucle infinie
+            tol=eps,
+            options={'maxiter': K_opt} # Sécurité pour éviter boucle infinie
         )
     else:
         # Pour le vrai hardware via Runtime
@@ -91,7 +91,8 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, verbose):
                 initial_params,
                 args=(qc, isa_hamiltonian, estimator),
                 method="COBYLA",
-                tol=1e-2
+                tol=eps,
+                options={'maxiter': K_opt} # Sécurité pour éviter boucle infinie
             )
     if verbose:
         print(f"Optimization success: {result.success}")

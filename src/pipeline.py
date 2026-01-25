@@ -30,13 +30,14 @@ def main():
     parser.add_argument("--t-max", type=float, default=1.0, help="Simulation end time")
     parser.add_argument("--dt", type=float, default=1e-4, help="Time step size")
     parser.add_argument("--hybrid-dt", type=float, default=0.1, help="Hybrid simulation time step size")
-    parser.add_argument("--depth", type=int, required=False, help="Depth of the ULA ansatz.")
+    parser.add_argument("--reps", type=int, default=-1, required=False, help="Number of repetitions for the QAOA ansatz.")
     parser.add_argument("--mode", default="simulator", choices=["simulator", "hardware"])
     parser.add_argument("--backend", default="aer", choices=["aer", "estimator"])
     parser.add_argument("--shots", type=int, default=1024)
     parser.add_argument("--method", default="COBYLA", choices=["COBYLA", "L-BFGS-B", "Powell"])
     parser.add_argument("--opt-level", type=int, default=1, choices=[0,1,2,3], help="Optimization level for transpilation.")
-
+    parser.add_argument("--K-opt", type=int, default=100, help="Maximum number of iterations for the optimizer.")
+    parser.add_argument("--eps", type=float, default=1e-2, help="Convergence tolerance for the optimizer.")
 
     args = parser.parse_args()
 
@@ -49,21 +50,17 @@ def main():
     DT = args.dt                              # Pas de temps
     HYBRID = int(args.hybrid_dt / DT)         # Fréquence de mise à jour hybride
 
-    depth = args.depth
-    mode = args.mode
-    backend = args.backend
-    shots = args.shots
-    method = args.method
-    opt_level = args.opt_level
-
+    
     argus = SimpleNamespace(
-        depth=args.depth, 
+        reps=args.reps if args.reps > 0 else (VQA_N-1) * 2, # 2 for 2D, 3 for 3D 
         mode=args.mode, 
         backend=args.backend, 
         shots=args.shots, 
         method=args.method, 
         opt_level=args.opt_level, 
-        AdvAnomaliesEnable=args.AdvAnomaliesEnable
+        AdvAnomaliesEnable=args.AdvAnomaliesEnable,
+        K_opt=100,   # Max iterations for optimizer
+        eps=1e-2     # Convergence tolerance
     )
 
     pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, lambda_cost=0.5)
@@ -235,9 +232,9 @@ def score(sim_quantum, sim_temoin, lambda_cost, total_patches_used, steps_hybrid
         ref_norm = np.linalg.norm(arr_t)
         
         # Safety epsilon to avoid division by zero (e.g. if vy is 0 everywhere)
-        epsilon = 1e-10
+        epsilon_security = 1e-10
         
-        rel_err = diff_norm / (ref_norm + epsilon)
+        rel_err = diff_norm / (ref_norm + epsilon_security)
         
         detailed_errors[var] = rel_err
         total_error += rel_err
