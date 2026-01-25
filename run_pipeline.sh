@@ -20,13 +20,15 @@ ONLY_OPTIMIZE=false
 ONLY_EXECUTE=false
 ONLY_POSTPROCESS=false
 NUM_QBITS=4
-DEPTH=2
+REPS=2
 OPT_LEVEL=3
 GRID_SIZE=16
 DNS_RESOLUTION=256
 T_MAX=1.0
 DT=1e-4
 HYBRID_DT=0.1
+K_OPT=100
+EPSILON=1e-2
 ADVANCED_ANOMALIES_ENABLE=false
 
 # -----------------------------
@@ -88,7 +90,7 @@ display_help() {
     echo "  --mode <simulator|hardware>     Simulator or IBM Quantum (default: simulator)"
     echo "  --shots <int>                   Number of shots (default: 1024)"
     echo "  --numqbits <int>                Number of qubits (default: 4)"
-    echo "  --depth <int>                  Depth of the ULA ansatz (default: 2)"
+    echo "  --reps <int>                    Repetitions of the ULA ansatz (default: 2)"
     echo "  --opt_level <0|1|2|3>          Optimization level for transpiler (default: 3)"
     echo "  --out-dir <dir>                 Output directory (default: data)"
     echo "  --verbose                       Enable verbose logging"
@@ -100,6 +102,8 @@ display_help() {
     echo "  --t-max <float>                 Simulation end time (default: 1.0)"
     echo "  --dt <float>                    Time step size (default: 0.01)"
     echo "  --hybrid-dt <float>               Hybrid simulation time step size (default: 0.1)"
+    echo "  --K-opt <int>                   Maximum optimizer iterations (default: 100)"
+    echo "  --eps <float>                   Convergence tolerance for optimizer (default: 1e-2)"
     echo "  --AdvAnomaliesEnable            Enable advanced anomaly handling in mapping"
     echo ""
     echo "Stage control (choose one):"
@@ -153,7 +157,7 @@ while [[ $# -gt 0 ]]; do
         --out-dir) OUT_DIR="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
         --skip-cleanup) SKIP_CLEANUP=true; shift ;;
-        --depth) DEPTH="$2"; shift 2 ;;
+        --reps) REPS="$2"; shift 2 ;;
         --opt-level) OPT_LEVEL="$2"; shift 2 ;;
         --method) METHOD="$2"; shift 2 ;;
         --grid-size) GRID_SIZE="$2"; shift 2 ;;
@@ -161,6 +165,8 @@ while [[ $# -gt 0 ]]; do
         --t-max) T_MAX="$2"; shift 2 ;;
         --dt) DT="$2"; shift 2 ;;
         --hybrid-dt) HYBRID_DT="$2"; shift 2 ;;
+        --K-opt) K_OPT="$2"; shift 2 ;;
+        --eps) EPSILON="$2"; shift 2 ;;
         --AdvAnomaliesEnable) ADVANCED_ANOMALIES_ENABLE=true; shift ;;
         --only-mapping) ONLY_MAPPING=true; shift ;;
         --only-optimize) ONLY_OPTIMIZE=true; shift ;;
@@ -216,11 +222,13 @@ run_stage "Main Pipeline" python "$SCRIPTS_LOC/pipeline.py" \
     --t-max "$T_MAX" \
     --dt "$DT" \
     --hybrid-dt "$HYBRID_DT" \
-    --depth "$DEPTH" \
+    --reps "$REPS" \
     --backend "$BACKEND" \
     --shots "$NUM_SHOTS" \
     --method "$METHOD" \
     --opt-level "$OPT_LEVEL" \
+    --K-opt "$K_OPT" \
+    --eps "$EPSILON" \
     $([ "$ADVANCED_ANOMALIES_ENABLE" = true ] && echo "--AdvAnomaliesEnable") \
     $([ "$VERBOSE" = true ] && echo "--verbose") \
     $([ "$ONLY_MAPPING" = true ] && echo "--only-mapping") \

@@ -19,7 +19,7 @@ db_name = "optuna_study.db"
 project_root = os.path.dirname(current_dir)
 
 # On pointe vers le dossier data à la racine
-data_dir = os.path.join(project_root, "data")
+data_dir = os.path.join(project_root, "Train_results")
 
 # On s'assure que le dossier existe (au cas où)
 os.makedirs(data_dir, exist_ok=True)

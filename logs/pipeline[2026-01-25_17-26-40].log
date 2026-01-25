@@ -1,0 +1,28 @@
+[2026-01-25 17:26:44] ==============================================================
+[2026-01-25 17:26:44] 🚀 Starting Q-HAS: Quantum-Hierarchical Adaptive Steering Pipeline - Variational Workflow
+[2026-01-25 17:26:44] Mode: simulator | Backend: aer | Shots: 1000 | Method: COBYLA
+[2026-01-25 17:26:44] Script Path: /Users/Sayu/Desktop/BA_Proj/src
+[2026-01-25 17:26:44] Output Dir: /Users/Sayu/Desktop/BA_Proj/data
+[2026-01-25 17:26:44] Input File: /Users/Sayu/Desktop/BA_Proj/input/mapping_input.json
+[2026-01-25 17:26:44] ==============================================================
+[2026-01-25 17:26:44] 🧹 Cleaning previous results...
+[2026-01-25 17:26:44] ➡️ Stage: Main Pipeline
+[2026-01-25 17:26:44] ➡️ Stage: Main Pipeline
+[2026-01-25 17:26:44] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 4e-3 --dt 1e-4 --hybrid-dt 4e-4 --depth 1 --backend aer --shots 1000 --method COBYLA --opt-level 1 --K-opt 100 --eps 1e-2 --verbose
+[2026-01-25 17:26:44] Running: python /Users/Sayu/Desktop/BA_Proj/src/pipeline.py --out-dir /Users/Sayu/Desktop/BA_Proj/data --mode simulator --grid-size 2 --dns-resolution 256 --t-max 4e-3 --dt 1e-4 --hybrid-dt 4e-4 --depth 1 --backend aer --shots 1000 --method COBYLA --opt-level 1 --K-opt 100 --eps 1e-2 --verbose
+usage: pipeline.py [-h] [--out-dir OUT_DIR] [--in-file IN_FILE] [--verbose]
+                   [--AdvAnomaliesEnable] [--grid-size GRID_SIZE]
+                   [--dns-resolution DNS_RESOLUTION] [--t-max T_MAX] [--dt DT]
+                   [--hybrid-dt HYBRID_DT] [--reps REPS]
+                   [--mode {simulator,hardware}] [--backend {aer,estimator}]
+                   [--shots SHOTS] [--method {COBYLA,L-BFGS-B,Powell}]
+                   [--opt-level {0,1,2,3}] [--K-opt K_OPT] [--eps EPS]
+pipeline.py: error: unrecognized arguments: --depth 1
+usage: pipeline.py [-h] [--out-dir OUT_DIR] [--in-file IN_FILE] [--verbose]
+                   [--AdvAnomaliesEnable] [--grid-size GRID_SIZE]
+                   [--dns-resolution DNS_RESOLUTION] [--t-max T_MAX] [--dt DT]
+                   [--hybrid-dt HYBRID_DT] [--reps REPS]
+                   [--mode {simulator,hardware}] [--backend {aer,estimator}]
+                   [--shots SHOTS] [--method {COBYLA,L-BFGS-B,Powell}]
+                   [--opt-level {0,1,2,3}] [--K-opt K_OPT] [--eps EPS]
+pipeline.py: error: unrecognized arguments: --depth 1
