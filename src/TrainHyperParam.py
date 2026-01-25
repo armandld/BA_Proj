@@ -8,7 +8,7 @@ from types import SimpleNamespace
 # Target: 20% grid usage (LAMBDA_COST = 0.2). If we use more, we pay.
 LAMBDA_COST = 0.2
 
-N_TRIALS = 100  # Nombre total d'essais d'Optuna
+N_TRIALS = 1000  # Nombre total d'essais d'Optuna
 
 # On récupère le dossier où se trouve le script actuel
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,7 @@ def objective(trial):
 
     N=128
     VQA_N=2
-    T_MAX=0.8
+    T_MAX=5e-2
     DT=1e-3
     HYBRID_DT = 8e-3
     HYBRID = int(HYBRID_DT / DT)

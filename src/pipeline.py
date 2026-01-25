@@ -87,18 +87,22 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     sim_temoin.init_kelvin_helmholtz() #init_kelvin_helmholtz() init_orszag_tang()
     mapper = AngleMapper(v0=1.0, B0=1.0, w_shock=2.0, w_shear=1.0)
 
-    alpha =hyperparams.get('alpha',1.0) if hyperparams else 1.0
-    beta =hyperparams.get('beta',1.0) if hyperparams else 1.0
-    threshold=hyperparams.get('threshold',0.5) if hyperparams else 0.5
+    hp = hyperparams or {}
 
-    #Hamiltonian ones:
-    bias=hyperparams.get('bias',4.0) if hyperparams else 4.0
-    gamma1=hyperparams.get('gamma1',1.0) if hyperparams else 1.0
-    gamma2=hyperparams.get('gamma2',2.0) if hyperparams else 2.0
-    Rm_crit=hyperparams.get('Rm_crit',1000.0) if hyperparams else 1000.0
-    delta_shock=hyperparams.get('delta_shock',5.0) if argus.AdvAnomaliesEnable and hyperparams else 5.0
-    d_kink=hyperparams.get('d_kink',2.0) if argus.AdvAnomaliesEnable and hyperparams else 2.0
-    epsilon=hyperparams.get('epsilon',1e-6) if argus.AdvAnomaliesEnable and hyperparams else 1e-6
+    alpha       = hp.get('alpha', 1.0)
+    beta        = hp.get('beta', 1.0)
+    threshold   = hp.get('threshold', 0.5)
+
+    # Hamiltonian
+    bias        = hp.get('bias', 4.0)
+    gamma1      = hp.get('gamma1', 1.0)
+    gamma2      = hp.get('gamma2', 2.0)
+    Rm_crit     = hp.get('Rm_crit', 1000.0)
+
+    # Anomalies avancées (avec ta condition argus)
+    delta_shock = hp.get('delta_shock', 5.0) if argus.AdvAnomaliesEnable else 5.0
+    d_kink      = hp.get('d_kink', 2.0)      if argus.AdvAnomaliesEnable else 2.0
+    epsilon     = hp.get('epsilon', 1e-6)    if argus.AdvAnomaliesEnable else 1e-6
       
     
     HamiltMapper = PhysicalMapper(
