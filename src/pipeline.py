@@ -42,7 +42,6 @@ def main():
     args = parser.parse_args()
 
     verbose = args.verbose
-    AdvAnomaliesEnable = args.AdvAnomaliesEnable
 
     N = args.dns_resolution                   # Résolution moyenne (DNS)
     VQA_N = args.grid_size                    # Résolution Grossière
@@ -68,9 +67,9 @@ def main():
 def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lambda_cost=0.5):
 
     #Paramètres physiques
-    c_s = 1.0
-    eta = 0.01
-    Bz_guide = 1.0
+    eta = 0.001       # Faible résistivité pour laisser l'instabilité grandir
+    Bz_guide = 0.1    # Faible champ guide pour la stabilité
+    c_s = 1.0         # Référence de vitesse acoustique
 
     STEPS = int(T_MAX / DT)
 
@@ -82,9 +81,9 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         print(f"Initialisation Orszag-Tang (Grille {N}x{N}) avec pas de temps {DT} et hybrid every {HYBRID} steps pour un temp total de {T_MAX} ({STEPS} steps)...")
     
     grid = PeriodicGrid(resolution_N=N)
-    sim_quantum = MHDSolver(grid, dt=DT, Re=500, Rm=500) # A CHANGER: PARAMETRER R_max et R_e max
+    sim_quantum = MHDSolver(grid, dt=DT, Re=1000, Rm=1000) # A CHANGER: PARAMETRER R_max et R_e max
     sim_quantum.init_kelvin_helmholtz() #init_kelvin_helmholtz() init_orszag_tang()
-    sim_temoin = MHDSolver(grid, dt=DT, Re=500, Rm=500)  # Pour la visualisation finale
+    sim_temoin = MHDSolver(grid, dt=DT, Re=1000, Rm=1000)  # Pour la visualisation finale
     sim_temoin.init_kelvin_helmholtz() #init_kelvin_helmholtz() init_orszag_tang()
     mapper = AngleMapper(v0=1.0, B0=1.0, w_shock=2.0, w_shear=1.0)
 

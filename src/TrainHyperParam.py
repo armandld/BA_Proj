@@ -44,20 +44,22 @@ def objective(trial):
         shots=1000,
         method="COBYLA",
         opt_level=1,
-        AdvAnomaliesEnable=False # On desactive les anomalies avancées pour que l'IA apprenne à les régler
+        AdvAnomaliesEnable=False, # On desactive les anomalies avancées pour que l'IA apprenne à les régler
+        K_opt=100,   # Max iterations for optimizer
+        eps=1e-2     # Convergence tolerance
     )
 
     # 1. Optuna choisit des valeurs
     #State ones
-    alpha_try = trial.suggest_float("alpha", 0, 10.0)
-    beta_try = trial.suggest_float("beta", 0.5, 10.0)
-    thresh_try = trial.suggest_float("threshold", 0.1, 1.0)
+    alpha_try = trial.suggest_float("alpha", 0.1, 4.0)
+    beta_try = trial.suggest_float("beta", 1.0, 15.0)
+    thresh_try = trial.suggest_float("threshold", 0.3, 0.9)
 
     #Hamiltonian ones:
-    bias_try=trial.suggest_float("bias", 1.0, 10.0)
-    gamma1_try=trial.suggest_float("gamma1", 0.5, 3.0)
-    gamma2_try=trial.suggest_float("gamma2", 0.5, 3.0)
-    Rm_crit_try=trial.suggest_float("Rm_crit", 100.0, 1000.0)
+    bias_try=trial.suggest_float("bias", 2.0, 10.0)
+    gamma1_try=trial.suggest_float("gamma1", 0.5, 4.0)
+    gamma2_try=trial.suggest_float("gamma2", 0.1, 2.5)
+    Rm_crit_try=trial.suggest_float("Rm_crit", 100.0, 2000.0)
     """  
     delta_shock_try=trial.suggest_float("delta_shock", 1.0, 10.0)
     d_kink_try=trial.suggest_float("d_kink", 1.0, 5.0)
@@ -127,14 +129,16 @@ if __name__ == "__main__":
     # --- A. INITIALISATION (WARM START) ---
     # C'est ici qu'on force les valeurs initiales précises
     initial_params = {
-        "alpha": 1.0,
-        "beta": 1.0,
-        "threshold": 0.5,
-        "bias": 4.0,
-        "gamma1": 1.0,
-        "gamma2": 2.0,
-        "Rm_crit": 1000.0,
-
+        # Mapping
+        "alpha": 0.5,        # Moins de poids à l'amplitude statique
+        "beta": 6.0,         # MAXIMISE la prédiction (sensibilité à la dérivée)
+        "threshold": 0.65,   # Seuil de décision sélectif
+        
+        # Hamiltonien
+        "bias": 5.0,         # Force la stabilité par défaut
+        "gamma1": 2.0,       # Couplage spatial fort
+        "gamma2": 1.2,       # Décroissance du couplage avec Rm
+        "Rm_crit": 600.0     # Seuil de transition turbulente
     }
     """
         "delta_shock": 5.0,
