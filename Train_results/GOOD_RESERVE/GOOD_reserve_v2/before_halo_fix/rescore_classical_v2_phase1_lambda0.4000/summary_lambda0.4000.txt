@@ -1,0 +1,40 @@
+=================================================================
+Lambda Rescore Summary  (lambda_cost = 0.4000)
+=================================================================
+Total completed trials: 37
+
+Best trial (new ranking): #22
+  new_score    = 0.195903
+  original_score = 0.195903
+  phys_score   = 0.016798
+  patch_ratio  = 0.643663
+
+  Per-scenario (new lambda):
+        Kelvin-Helmholtz: loss=0.180014  phys=0.002020  patch=0.6250
+       Lamb-Oseen Vortex: loss=0.232969  phys=0.060087  patch=0.6652
+          Harris Tearing: loss=0.181735  phys=0.004429  patch=0.6250
+      Island Coalescence: loss=0.188893  phys=0.000658  patch=0.6595
+
+  Best params:
+         threshold_amr = 0.3228115420561065
+
+Top 10 trials (re-ranked):
+     #   new_score  orig_score      phys     patch
+  ────  ──────────  ──────────  ────────  ────────
+    22    0.195903    0.195903  0.016798    0.6437
+    25    0.196285    0.196285  0.016632    0.6454
+    29    0.196414    0.196414  0.016621    0.6459
+    21    0.198273    0.198273  0.022464    0.6378
+     7    0.198350    0.198350  0.022574    0.6378
+    24    0.198970    0.198970  0.016628    0.6548
+    28    0.198970    0.198970  0.016628    0.6548
+    23    0.200654    0.200654  0.014145    0.6669
+    26    0.202211    0.202211  0.013469    0.6741
+    27    0.202562    0.202562  0.013461    0.6753
+
+Biggest rank changes vs original:
+  Trial # 22: moved   0 places DOWN
+  Trial # 25: moved   0 places DOWN
+  Trial # 29: moved   0 places DOWN
+  Trial # 21: moved   0 places DOWN
+  Trial #  7: moved   0 places DOWN

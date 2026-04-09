@@ -1,0 +1,40 @@
+=================================================================
+Lambda Rescore Summary  (lambda_cost = 0.4000)
+=================================================================
+Total completed trials: 125
+
+Best trial (new ranking): #42
+  new_score    = 0.214770
+  original_score = 0.214770
+  phys_score   = 0.039413
+  patch_ratio  = 0.653162
+
+  Per-scenario (new lambda):
+        Kelvin-Helmholtz: loss=0.268167  phys=0.001386  patch=0.9351
+          Harris Tearing: loss=0.181735  phys=0.004429  patch=0.6250
+             Orszag-Tang: loss=0.246759  phys=0.057950  patch=0.7188
+               MHD Rotor: loss=0.162417  phys=0.093885  patch=0.3337
+
+  Best params:
+         threshold_amr = 0.14959824837662078
+
+Top 10 trials (re-ranked):
+     #   new_score  orig_score      phys     patch
+  ────  ──────────  ──────────  ────────  ────────
+    42    0.214770    0.214770  0.039413    0.6532
+    92    0.215255    0.215255  0.017111    0.7106
+   117    0.215349    0.215349  0.020218    0.7032
+   110    0.215585    0.215585  0.018708    0.7078
+   111    0.215585    0.215585  0.018708    0.7078
+   113    0.215645    0.215645  0.019945    0.7049
+     1    0.215786    0.215786  0.018521    0.7089
+    23    0.215786    0.215786  0.018521    0.7089
+    93    0.215786    0.215786  0.018521    0.7089
+   115    0.215786    0.215786  0.018521    0.7089
+
+Biggest rank changes vs original:
+  Trial # 42: moved   0 places DOWN
+  Trial # 92: moved   0 places DOWN
+  Trial #117: moved   0 places DOWN
+  Trial #110: moved   0 places DOWN
+  Trial #111: moved   0 places DOWN

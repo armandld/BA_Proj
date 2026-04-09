@@ -1,0 +1,19 @@
+[2025-10-20 01:10:36] ==============================================================
+[2025-10-20 01:10:36] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-20 01:10:36] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-20 01:10:36] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-20 01:10:36] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-20 01:10:36] ==============================================================
+[2025-10-20 01:10:36] 🧹 Cleaning previous results...
+[2025-10-20 01:10:36] ➡️ Stage: Mapping
+[2025-10-20 01:10:36] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+[('ZZIIIIIIII', 2), ('IZZIIIIIII', 2), ('IIZZIIIIII', 2), ('IIIZZIIIII', 2), ('IIIIZZIIII', 2), ('IIIIIZZIII', 2), ('IIIIIIZZII', 2), ('IIIIIIIZZI', 2), ('IIIIIIIIZZ', 2), ('XXIIIIIIII', 1), ('IXXIIIIIII', 1), ('IIXXIIIIII', 1), ('IIIXXIIIII', 1), ('IIIIXXIIII', 1), ('IIIIIXXIII', 1), ('IIIIIIXXII', 1), ('IIIIIIIXXI', 1), ('IIIIIIIIXX', 1), ('YYIIIIIIII', 3), ('IYYIIIIIII', 3), ('IIYYIIIIII', 3), ('IIIYYIIIII', 3), ('IIIIYYIIII', 3), ('IIIIIYYIII', 3), ('IIIIIIYYII', 3), ('IIIIIIIYYI', 3), ('IIIIIIIIYY', 3)]
+0.17453292519943295
+Circuit for calculating the real part of the overlap in S via Hadamard test
+Number of layers of 2Q operations 37585
+[2025-10-20 01:10:49] ✅ Stage 'Mapping' completed successfully.
+[2025-10-20 01:10:49] ==============================================================
+[2025-10-20 01:10:49] 🎉 Quantum VQA pipeline completed successfully!
+[2025-10-20 01:10:49] Results saved in: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-20 01:10:49] Full log: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results/../logs/pipeline[2025-10-20_01-10-32].log
+[2025-10-20 01:10:49] ==============================================================

@@ -1,0 +1,9 @@
+[2025-10-19 19:09:46] ==============================================================
+[2025-10-19 19:09:46] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 19:09:46] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 19:09:46] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 19:09:46] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 19:09:46] ==============================================================
+[2025-10-19 19:09:46] 🧹 Cleaning previous results...
+[2025-10-19 19:09:46] ➡️ Stage: Mapping
+[2025-10-19 19:09:46] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose

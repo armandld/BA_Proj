@@ -1,0 +1,26 @@
+[2025-10-19 19:30:32] ==============================================================
+[2025-10-19 19:30:32] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 19:30:32] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 19:30:32] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 19:30:32] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 19:30:32] ==============================================================
+[2025-10-19 19:30:32] 🧹 Cleaning previous results...
+[2025-10-19 19:30:32] ➡️ Stage: Mapping
+[2025-10-19 19:30:32] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+management.get:WARNING:2025-10-19 19:30:42,263: Loading default saved account
+[0.06947377]
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 125, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 99, in main
+    service = QiskitRuntimeService()
+              ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/qiskit_runtime_service.py", line 196, in __init__
+    self._account = self._discover_account(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/qiskit_runtime_service.py", line 427, in _discover_account
+    account = AccountManager.get(filename=filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/accounts/management.py", line 210, in get
+    raise AccountNotFoundError(
+qiskit_ibm_runtime.accounts.exceptions.AccountNotFoundError: "Unable to find account. Please make sure an account with the channel name 'ibm_quantum_platform' is saved."

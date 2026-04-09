@@ -1,0 +1,16 @@
+[2025-10-19 18:35:21] ==============================================================
+[2025-10-19 18:35:21] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 18:35:21] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 18:35:21] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 18:35:21] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 18:35:21] ==============================================================
+[2025-10-19 18:35:21] 🧹 Cleaning previous results...
+[2025-10-19 18:35:21] ➡️ Stage: Mapping
+[2025-10-19 18:35:21] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 78, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 71, in main
+    display(circuit.draw("mpl"))
+    ^^^^^^^
+NameError: name 'display' is not defined

@@ -1,0 +1,24 @@
+[2025-10-19 20:52:02] ==============================================================
+[2025-10-19 20:52:02] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 20:52:02] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 20:52:02] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 20:52:02] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:52:02] ==============================================================
+[2025-10-19 20:52:02] 🧹 Cleaning previous results...
+[2025-10-19 20:52:02] ➡️ Stage: Mapping
+[2025-10-19 20:52:02] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+🔹 Démarrage de l'optimisation VQE (cela peut prendre du temps)...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 119, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 100, in main
+    estimator = Estimator()
+                ^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/estimator.py", line 125, in __init__
+    BasePrimitiveV2.__init__(self, mode=mode, options=options)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/base_primitive.py", line 123, in __init__
+    self._mode, self._service, self._backend = _get_mode_service_backend(mode)
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit_ibm_runtime/base_primitive.py", line 93, in _get_mode_service_backend
+    raise ValueError("A backend or session must be specified.")
+ValueError: A backend or session must be specified.

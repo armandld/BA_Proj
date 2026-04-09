@@ -1,0 +1,30 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : classical_v2_phase2
+Total trials   : 127
+Completed      : 120
+Pruned         : 0
+Parameters     : ['threshold_amr']
+
+Best trial     : #64
+Best score     : 0.196597
+Best params    : {'threshold_amr': 0.09728355229129856}
+
+  Per-scenario breakdown (best trial):
+             Orszag-Tang:  loss=0.253105  phys=0.020915  patch=0.8336
+                          [vx=0.0133, vy=0.0162, Bx=0.0114, By=0.0165, Jz=0.0472]
+               MHD Rotor:  loss=0.140089  phys=0.053645  patch=0.3562
+                          [vx=0.0316, vy=0.0876, Bx=0.0161, By=0.0758, Jz=0.0571]
+
+Top 5 trials:
+  # 64  score=0.196597  {'threshold_amr': 0.09728355229129856}
+        [ot=0.2531, rotor=0.1401]
+  # 80  score=0.196597  {'threshold_amr': 0.09732703636491241}
+        [ot=0.2531, rotor=0.1401]
+  # 57  score=0.196856  {'threshold_amr': 0.08628920341882626}
+        [ot=0.2550, rotor=0.1387]
+  #109  score=0.196975  {'threshold_amr': 0.09633270947436988}
+        [ot=0.2539, rotor=0.1401]
+  #106  score=0.196994  {'threshold_amr': 0.08970987471692879}
+        [ot=0.2521, rotor=0.1419]

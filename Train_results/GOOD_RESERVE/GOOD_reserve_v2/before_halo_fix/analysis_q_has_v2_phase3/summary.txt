@@ -1,0 +1,38 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : q_has_v2_phase3
+Total trials   : 227
+Completed      : 177
+Pruned         : 0
+Parameters     : ['beta', 'threshold_amr', 'gamma_hydro', 'gamma_mag', 'kappa', 'w_z_frac', 'beta_grad', 'beta_curl', 'beta_xpoint']
+
+Best trial     : #159
+Best score     : 0.245580
+Best params    : {'beta': 1.6481496092568404, 'threshold_amr': 0.128933204713395, 'gamma_hydro': 1.3342997097001874, 'gamma_mag': 2.23181470627752, 'kappa': 5.537667773318349, 'w_z_frac': 0.30214911806928935, 'beta_grad': 1.7604706677363633, 'beta_curl': 1.3922808301281842, 'beta_xpoint': 1.1802869220907222}
+
+  Per-scenario breakdown (best trial):
+        Kelvin-Helmholtz:  loss=0.265187  phys=0.001398  patch=0.9247
+                          [vx=0.0001, vy=0.0017, Bx=0.0002, By=0.0019, Jz=0.0031]
+       Lamb-Oseen Vortex:  loss=0.254403  phys=0.018196  patch=0.8449
+                          [vx=0.0062, vy=0.0055, Bx=0.0106, By=0.0266, Jz=0.0421]
+          Harris Tearing:  loss=0.225056  phys=0.009237  patch=0.7646
+                          [vx=0.0089, vy=0.0302, Bx=0.0001, By=0.0067, Jz=0.0003]
+      Island Coalescence:  loss=0.269102  phys=0.000946  patch=0.9395
+                          [vx=0.0012, vy=0.0026, Bx=0.0000, By=0.0008, Jz=0.0001]
+             Orszag-Tang:  loss=0.259816  phys=0.090289  patch=0.6836
+                          [vx=0.0687, vy=0.0714, Bx=0.0676, By=0.0599, Jz=0.1839]
+               MHD Rotor:  loss=0.199917  phys=0.129051  patch=0.3771
+                          [vx=0.1020, vy=0.1433, Bx=0.0612, By=0.1530, Jz=0.1857]
+
+Top 5 trials:
+  #159  score=0.245580  {'beta': 1.6481496092568404, 'threshold_amr': 0.128933204713395, 'gamma_hydro': 1.3342997097001874, 'gamma_mag': 2.23181470627752, 'kappa': 5.537667773318349, 'w_z_frac': 0.30214911806928935, 'beta_grad': 1.7604706677363633, 'beta_curl': 1.3922808301281842, 'beta_xpoint': 1.1802869220907222}
+        [kh=0.2652, vortex=0.2544, tearing=0.2251, coalescence=0.2691, ot=0.2598, rotor=0.1999]
+  #111  score=0.246749  {'beta': 0.6844223733151403, 'threshold_amr': 0.14255210305395571, 'gamma_hydro': 1.2830112599386125, 'gamma_mag': 2.870244064446529, 'kappa': 11.637683562634852, 'w_z_frac': 0.05923756968713969, 'beta_grad': 0.447488417835264, 'beta_curl': 1.261529621568407, 'beta_xpoint': 0.28877755594295834}
+        [kh=0.2827, vortex=0.2533, tearing=0.2334, coalescence=0.2788, ot=0.2716, rotor=0.1607]
+  #199  score=0.247168  {'beta': 1.4036510602892172, 'threshold_amr': 0.10060204033332179, 'gamma_hydro': 1.2901402135336653, 'gamma_mag': 2.8213284645845835, 'kappa': 12.045649501268118, 'w_z_frac': 0.20741681865421333, 'beta_grad': 0.4615165748406391, 'beta_curl': 0.46888913060497667, 'beta_xpoint': 0.34288379122295815}
+        [kh=0.2710, vortex=0.2622, tearing=0.2866, coalescence=0.2796, ot=0.2360, rotor=0.1475]
+  #174  score=0.248471  {'beta': 0.7347482375539723, 'threshold_amr': 0.16631571167751458, 'gamma_hydro': 1.11534947672217, 'gamma_mag': 2.979049959349396, 'kappa': 6.856216147252576, 'w_z_frac': 0.19802774032737092, 'beta_grad': 1.2861783554917594, 'beta_curl': 0.40250454701607713, 'beta_xpoint': 0.9089159513513894}
+        [kh=0.2780, vortex=0.2502, tearing=0.2697, coalescence=0.2778, ot=0.2488, rotor=0.1662]
+  #114  score=0.248753  {'beta': 1.0766408688917066, 'threshold_amr': 0.14102817271333926, 'gamma_hydro': 1.7579679025922321, 'gamma_mag': 2.7528336319021838, 'kappa': 12.357561066757732, 'w_z_frac': 0.25894335021000886, 'beta_grad': 0.9417991989775134, 'beta_curl': 1.516565200893804, 'beta_xpoint': 0.24960231207130815}
+        [kh=0.2808, vortex=0.2500, tearing=0.2800, coalescence=0.2729, ot=0.2601, rotor=0.1488]

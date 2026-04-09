@@ -1,0 +1,46 @@
+[2025-10-19 00:33:13] ==============================================================
+[2025-10-19 00:33:13] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 00:33:13] Mode: simulator | Backend: aer | Shots: 1e5
+[2025-10-19 00:33:13] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts
+[2025-10-19 00:33:13] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-10-19 00:33:13] ==============================================================
+[2025-10-19 00:33:13] 🧹 Cleaning previous results...
+[2025-10-19 00:33:13] ➡️ Stage: Mapping
+[2025-10-19 00:33:13] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/mapping.py --backend aer --nodes 5 --edges 6 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/networkx/readwrite/json_graph/node_link.py:145: FutureWarning: 
+The default value will be `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_data(G, edges="links") to preserve current behavior, or
+  nx.node_link_data(G, edges="edges") for forward compatibility.
+  warnings.warn(
+🔹 Using AER backend
+🔹 Graph edges: [(np.int64(0), 1), (np.int64(0), 2), (np.int64(0), 3), (np.int64(1), 4), (np.int64(2), 4), (np.int64(2), 3)]
+cost_hamiltonian :  SparsePauliOp(['ZZIII', 'IIIII', 'ZIZII', 'IIIII', 'ZIIZI', 'IIIII', 'IZIIZ', 'IIIII', 'IIZIZ', 'IIIII', 'IIZZI', 'IIIII'],
+              coeffs=[ 0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j,
+ -0.5+0.j,  0.5+0.j, -0.5+0.j,  0.5+0.j, -0.5+0.j])
+✅ Mapping complete. Saved to /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results/mapping.json
+Hamiltonian terms:
+  ZZIII : 0.5
+  IIIII : -0.5
+  ZIZII : 0.5
+  IIIII : -0.5
+  ZIIZI : 0.5
+  IIIII : -0.5
+  IZIIZ : 0.5
+  IIIII : -0.5
+  IIZIZ : 0.5
+  IIIII : -0.5
+  IIZZI : 0.5
+  IIIII : -0.5
+[2025-10-19 00:33:19] ✅ Stage 'Mapping' completed successfully.
+[2025-10-19 00:33:19] ➡️ Stage: Optimization
+[2025-10-19 00:33:19] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+[2025-10-19 00:33:25] ✅ Stage 'Optimization' completed successfully.
+[2025-10-19 00:33:25] ➡️ Stage: Execution
+[2025-10-19 00:33:25] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/scripts/execute.py --mode simulator --backend aer --shots 1e5 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+usage: execute.py [-h] [--mode {simulator,hardware}]
+                  [--backend {aer,estimator}] [--shots SHOTS]
+                  [--out-dir OUT_DIR] [--verbose]
+execute.py: error: argument --shots: invalid int value: '1e5'

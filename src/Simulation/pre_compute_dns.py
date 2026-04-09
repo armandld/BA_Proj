@@ -1,0 +1,94 @@
+from Simulation.grid import PeriodicGrid
+from Simulation.solver import MHDSolver
+
+def _init_dns_scenario(sim, scenario):
+    """Dispatch IC pour le DNS de pré-calcul."""
+    init_map = {
+        'orszag_tang':       sim.init_orszag_tang,
+        'kelvin_helmholtz':  sim.init_kelvin_helmholtz,
+        'magnetic_twist':    sim.init_magnetic_twist,
+        'noisy_uniform':     sim.init_noisy_uniform,
+        'harris_tearing':    sim.init_harris_tearing,
+        'double_tearing':    sim.init_double_tearing,
+        'lamb_oseen_vortex': sim.init_lamb_oseen_vortex,
+        'island_coalescence': sim.init_island_coalescence,
+        'mhd_rotor':         sim.init_mhd_rotor,
+        'ghost_twisting':     sim.init_ghost_twisting,
+    }
+    init_map[scenario]()
+
+
+def precompute_dns(phase_config):
+    """Compute the DNS trajectory once and return a lightweight trace.
+
+    Memory optimization: we store the full field snapshots (fluxes) only at
+    hybrid-update boundaries and at the final step.  The per-step dt is
+    always stored (it's a single scalar, negligible memory).  This reduces
+    memory usage by ~60x compared to storing fluxes at every micro-step.
+
+    For N=256, T_MAX=3.0, ~1000 steps:
+      Before: ~1000 * 5 arrays * 256^2 * 8 bytes ~ 2.5 GB
+      After:  ~1000 scalars + ~60 snapshots       ~ 150 MB
+    """
+    N = phase_config["N"]
+    DT = phase_config["DT"]
+    HYBRID_DT = phase_config.get("HYBRID_DT", 0.05)
+
+    grid = PeriodicGrid(resolution_N=N)
+    sim_dns = MHDSolver(grid, dt=DT, Re=phase_config["Re"], Rm=phase_config["Rm"])
+    scenario = phase_config.get("scenario", "orszag_tang")
+    _init_dns_scenario(sim_dns, scenario)
+
+    t_current = 0.0
+    T_MAX = phase_config["T_MAX"]
+    T_START = phase_config.get("T_START", 0.0)
+
+    dns_trace = {}
+    hot_start_state = None
+    step = 0
+    next_snapshot_time = T_START - HYBRID_DT  # First snapshot at the hot-start time
+
+    while t_current < T_MAX:
+        dt = sim_dns.adapt_dt(cfl_target=0.4)
+        dt = min(dt, T_MAX - t_current)
+
+        # Capture Hot-Start state
+        if t_current >= T_START and hot_start_state is None:
+            print(f"Hot-Start captured at t={t_current:.4f}")
+            hot_start_state = {
+                'vx': sim_dns.vx.copy(), 'vy': sim_dns.vy.copy(),
+                'Bx': sim_dns.Bx.copy(), 'By': sim_dns.By.copy(),
+                't_current': t_current,
+                'step': step
+            }
+
+        entry = {'dt': dt}
+
+        # Détection des frontières avec epsilon
+        is_hybrid_boundary = (t_current >= next_snapshot_time - 1e-9 and t_current >= T_START - HYBRID_DT - 1e-9)
+        is_last_step = (t_current + dt >= T_MAX - 1e-9)
+
+        if is_hybrid_boundary or is_last_step:
+            entry['fluxes'] = sim_dns.get_fluxes()
+            if is_hybrid_boundary:
+                next_snapshot_time += HYBRID_DT
+
+        dns_trace[step] = entry
+        sim_dns.step_full(record_stats=False)
+        t_current += dt
+        step += 1
+
+        # Safety: abort if DNS diverges (garbage data would poison all trials)
+        if sim_dns.is_diverged():
+            raise RuntimeError(
+                f"DNS diverged during precomputation at step {step-1} "
+                f"(t={t_current:.4f}). Lower DT or reduce Re/Rm."
+            )
+
+    # AJOUT CRITIQUE : Force la sauvegarde des flux au tout dernier index réel
+    if step > 0:
+        dns_trace[step - 1]['fluxes'] = sim_dns.get_fluxes()
+
+    n_snapshots = sum(1 for v in dns_trace.values() if 'fluxes' in v)
+    print(f"DNS pre-computed: {step} steps, {n_snapshots} flux snapshots stored.")
+    return dns_trace, hot_start_state

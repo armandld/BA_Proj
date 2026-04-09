@@ -1,0 +1,16 @@
+[2025-10-19 19:07:59] ==============================================================
+[2025-10-19 19:07:59] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 19:07:59] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 19:07:59] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 19:07:59] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 19:07:59] ==============================================================
+[2025-10-19 19:07:59] 🧹 Cleaning previous results...
+[2025-10-19 19:07:59] ➡️ Stage: Mapping
+[2025-10-19 19:07:59] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 105, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 44, in main
+    job = sampler.run(aux_circuits, shots=shots)
+                      ^^^^^^^^^^^^
+NameError: name 'aux_circuits' is not defined

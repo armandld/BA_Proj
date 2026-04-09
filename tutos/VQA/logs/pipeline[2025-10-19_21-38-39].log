@@ -1,0 +1,35 @@
+[2025-10-19 21:38:44] ==============================================================
+[2025-10-19 21:38:44] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 21:38:44] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 21:38:44] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 21:38:44] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 21:38:44] ==============================================================
+[2025-10-19 21:38:44] 🧹 Cleaning previous results...
+[2025-10-19 21:38:44] ➡️ Stage: Mapping
+[2025-10-19 21:38:44] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 180, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 113, in main
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=3)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/utils/deprecation.py", line 184, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/utils/deprecation.py", line 184, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/utils/deprecation.py", line 184, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  [Previous line repeated 1 more time]
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/transpiler/preset_passmanagers/generate_preset_pass_manager.py", line 304, in generate_preset_pass_manager
+    backend = BackendV2Converter(backend)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/utils/deprecation.py", line 97, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/providers/backend_compat.py", line 414, in __init__
+    self._config = self._backend.configuration()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'EstimatorV2' object has no attribute 'configuration'

@@ -1,0 +1,37 @@
+[2025-10-19 20:59:19] ==============================================================
+[2025-10-19 20:59:19] 🚀 Starting Quantum MaxCut Pipeline
+[2025-10-19 20:59:19] Mode: simulator | Backend: aer | Shots: 100000
+[2025-10-19 20:59:19] Script Path: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts
+[2025-10-19 20:59:19] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results
+[2025-10-19 20:59:19] ==============================================================
+[2025-10-19 20:59:19] 🧹 Cleaning previous results...
+[2025-10-19 20:59:19] ➡️ Stage: Mapping
+[2025-10-19 20:59:19] Running: python /Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/VQA/results --verbose
+🔹 Démarrage de l'optimisation VQE (cela peut prendre du temps)...
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 125, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/tutos/VQA/scripts/mapping.py", line 112, in main
+    result = minimize(
+             ^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_minimize.py", line 744, in minimize
+    res = _minimize_cobyla(fun, x0, args, constraints, callback=callback,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 35, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_cobyla_py.py", line 278, in _minimize_cobyla
+    sf = _prepare_scalar_function(fun, x0, args=args, jac=_jac)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_optimize.py", line 291, in _prepare_scalar_function
+    sf = ScalarFunction(fun, x0, args, grad, hess,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 223, in __init__
+    self._update_fun()
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 295, in _update_fun
+    fx = self._wrapped_fun(self.x)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/scipy/optimize/_differentiable_functions.py", line 21, in wrapped
+    fx = fun(np.copy(x), *args)
+         ^^^^^^^^^^^^^^^^^^^^^^
+TypeError: cost_func_ssvqe() missing 2 required positional arguments: 'hamiltonian' and 'estimator'

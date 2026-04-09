@@ -1,0 +1,38 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : classical_v2_phase3
+Total trials   : 59
+Completed      : 47
+Pruned         : 0
+Parameters     : ['threshold_amr']
+
+Best trial     : #27
+Best score     : 0.229778
+Best params    : {'threshold_amr': 0.2151015203330192}
+
+  Per-scenario breakdown (best trial):
+        Kelvin-Helmholtz:  loss=0.209936  phys=0.001813  patch=0.7302
+                          [vx=0.0001, vy=0.0019, Bx=0.0002, By=0.0022, Jz=0.0047]
+       Lamb-Oseen Vortex:  loss=0.244682  phys=0.026437  patch=0.7903
+                          [vx=0.0086, vy=0.0077, Bx=0.0143, By=0.0379, Jz=0.0638]
+          Harris Tearing:  loss=0.181735  phys=0.004429  patch=0.6250
+                          [vx=0.0025, vy=0.0182, Bx=0.0001, By=0.0011, Jz=0.0003]
+      Island Coalescence:  loss=0.230239  phys=0.000579  patch=0.8044
+                          [vx=0.0006, vy=0.0017, Bx=0.0000, By=0.0005, Jz=0.0001]
+             Orszag-Tang:  loss=0.237153  phys=0.089425  patch=0.6065
+                          [vx=0.0680, vy=0.0698, Bx=0.0498, By=0.0621, Jz=0.1975]
+               MHD Rotor:  loss=0.274926  phys=0.259401  patch=0.3137
+                          [vx=0.1862, vy=0.4143, Bx=0.0937, By=0.3498, Jz=0.2529]
+
+Top 5 trials:
+  # 27  score=0.229778  {'threshold_amr': 0.2151015203330192}
+        [kh=0.2099, vortex=0.2447, tearing=0.1817, coalescence=0.2302, ot=0.2372, rotor=0.2749]
+  # 39  score=0.230652  {'threshold_amr': 0.16370701057307785}
+        [kh=0.2589, vortex=0.2567, tearing=0.1817, coalescence=0.2459, ot=0.2578, rotor=0.1828]
+  # 26  score=0.231137  {'threshold_amr': 0.2247477717578037}
+        [kh=0.2055, vortex=0.2435, tearing=0.1817, coalescence=0.2270, ot=0.2342, rotor=0.2949]
+  # 37  score=0.231619  {'threshold_amr': 0.17478865759488416}
+        [kh=0.2486, vortex=0.2547, tearing=0.1817, coalescence=0.2382, ot=0.2511, rotor=0.2154]
+  # 44  score=0.231703  {'threshold_amr': 0.17472681588707042}
+        [kh=0.2486, vortex=0.2547, tearing=0.1817, coalescence=0.2382, ot=0.2516, rotor=0.2154]

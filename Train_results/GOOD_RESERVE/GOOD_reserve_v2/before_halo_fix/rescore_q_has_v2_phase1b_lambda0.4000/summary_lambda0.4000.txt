@@ -1,0 +1,48 @@
+=================================================================
+Lambda Rescore Summary  (lambda_cost = 0.4000)
+=================================================================
+Total completed trials: 184
+
+Best trial (new ranking): #81
+  new_score    = 0.214489
+  original_score = 0.214489
+  phys_score   = 0.034646
+  patch_ratio  = 0.664096
+
+  Per-scenario (new lambda):
+        Kelvin-Helmholtz: loss=0.213917  phys=0.001897  patch=0.7440
+       Lamb-Oseen Vortex: loss=0.248427  phys=0.131195  patch=0.5415
+          Harris Tearing: loss=0.181735  phys=0.004429  patch=0.6250
+      Island Coalescence: loss=0.213877  phys=0.001065  patch=0.7459
+
+  Best params:
+                  beta = 0.7195214586530685
+         threshold_amr = 0.31664075322681756
+           gamma_hydro = 2.127954180842541
+             gamma_mag = 0.5856664745040279
+                 kappa = 12.558640989350833
+              w_z_frac = 0.18025573468258707
+             beta_grad = 1.744060606058018
+             beta_curl = 0.9404606759980869
+           beta_xpoint = 1.666084305818531
+
+Top 10 trials (re-ranked):
+     #   new_score  orig_score      phys     patch
+  ────  ──────────  ──────────  ────────  ────────
+    81    0.214489    0.214489  0.034646    0.6641
+    28    0.214878    0.214878  0.031423    0.6735
+    67    0.218121    0.218121  0.042911    0.6561
+   152    0.219015    0.219015  0.028174    0.6961
+   163    0.219573    0.219573  0.018230    0.7229
+    92    0.219985    0.219985  0.030239    0.6944
+   130    0.221519    0.221519  0.050256    0.6497
+    66    0.221543    0.221543  0.027303    0.7071
+    14    0.221639    0.221639  0.030196    0.7002
+   148    0.221796    0.221796  0.032078    0.6961
+
+Biggest rank changes vs original:
+  Trial # 81: moved   0 places DOWN
+  Trial # 28: moved   0 places DOWN
+  Trial # 67: moved   0 places DOWN
+  Trial #152: moved   0 places DOWN
+  Trial #163: moved   0 places DOWN

@@ -1,0 +1,24 @@
+[2025-11-21 15:45:43] ==============================================================
+[2025-11-21 15:45:43] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:45:43] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:45:43] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:45:43] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:45:43] ==============================================================
+[2025-11-21 15:45:43] 🧹 Cleaning previous results...
+[2025-11-21 15:45:43] ➡️ Stage: Mapping
+[2025-11-21 15:45:43] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Liste A:  [1, 2, 3]
+Liste B:  [0, 1, 2, 3]
+[2025-11-21 15:45:50] ✅ Stage 'Mapping' completed successfully.
+[2025-11-21 15:45:50] ➡️ Stage: Optimization
+[2025-11-21 15:45:50] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/optimize.py --backend aer --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/optimize.py", line 60, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/optimize.py", line 27, in main
+    mapping = load_mapping(f"{args.out_dir}/mapping.json")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/optimize.py", line 17, in load_mapping
+    with open(file_path, "r") as f:
+         ^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results/mapping.json'

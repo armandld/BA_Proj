@@ -1,0 +1,43 @@
+Fig 12 — Depth-Resolved Analysis
+N=256, max_depth=5
+
+
+==================================================
+Scenario: Kelvin-Helmholtz
+==================================================
+  Depth 0: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 1: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 2: QA=19.7 patches (0.0% GT), CL=14.0 patches (0.0% GT), Agreement=100.0%
+  Depth 3: QA=17.7 patches (0.0% GT), CL=40.0 patches (0.0% GT), Agreement=100.0%
+  Depth 4: QA=110.7 patches (0.0% GT), CL=74.0 patches (0.0% GT), Agreement=100.0%
+  Depth 5: QA=528.0 patches (89.4% GT), CL=566.0 patches (92.8% GT), Agreement=91.9%
+
+==================================================
+Scenario: Harris Tearing
+==================================================
+  Depth 0: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 1: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 2: QA=16.7 patches (0.0% GT), CL=32.0 patches (0.0% GT), Agreement=100.0%
+  Depth 3: QA=112.3 patches (0.0% GT), CL=64.0 patches (0.0% GT), Agreement=100.0%
+  Depth 4: QA=59.3 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 5: QA=248.7 patches (80.0% GT), CL=256.0 patches (82.4% GT), Agreement=99.2%
+
+==================================================
+Scenario: MHD Rotor
+==================================================
+  Depth 0: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 1: QA=10.7 patches (0.0% GT), CL=12.0 patches (0.0% GT), Agreement=100.0%
+  Depth 2: QA=10.3 patches (0.0% GT), CL=2.0 patches (0.0% GT), Agreement=100.0%
+  Depth 3: QA=24.7 patches (0.0% GT), CL=18.0 patches (0.0% GT), Agreement=100.0%
+  Depth 4: QA=43.0 patches (0.0% GT), CL=38.0 patches (0.0% GT), Agreement=100.0%
+  Depth 5: QA=100.3 patches (75.8% GT), CL=114.0 patches (87.9% GT), Agreement=97.2%
+
+==================================================
+Scenario: Orszag-Tang
+==================================================
+  Depth 0: QA=0.0 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 1: QA=0.3 patches (0.0% GT), CL=0.0 patches (0.0% GT), Agreement=100.0%
+  Depth 2: QA=28.0 patches (0.0% GT), CL=33.0 patches (0.0% GT), Agreement=100.0%
+  Depth 3: QA=82.7 patches (0.0% GT), CL=58.0 patches (0.0% GT), Agreement=100.0%
+  Depth 4: QA=121.0 patches (0.0% GT), CL=120.0 patches (0.0% GT), Agreement=100.0%
+  Depth 5: QA=116.7 patches (26.3% GT), CL=152.0 patches (35.8% GT), Agreement=92.6%

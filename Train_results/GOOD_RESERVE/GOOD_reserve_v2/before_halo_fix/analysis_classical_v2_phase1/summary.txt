@@ -1,0 +1,34 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : classical_v2_phase1
+Total trials   : 44
+Completed      : 37
+Pruned         : 0
+Parameters     : ['threshold_amr']
+
+Best trial     : #22
+Best score     : 0.195903
+Best params    : {'threshold_amr': 0.3228115420561065}
+
+  Per-scenario breakdown (best trial):
+        Kelvin-Helmholtz:  loss=0.180014  phys=0.002020  patch=0.6250
+                          [vx=0.0001, vy=0.0020, Bx=0.0002, By=0.0023, Jz=0.0054]
+       Lamb-Oseen Vortex:  loss=0.232969  phys=0.060087  patch=0.6652
+                          [vx=0.0187, vy=0.0177, Bx=0.0360, By=0.0832, Jz=0.1448]
+          Harris Tearing:  loss=0.181735  phys=0.004429  patch=0.6250
+                          [vx=0.0025, vy=0.0182, Bx=0.0001, By=0.0011, Jz=0.0003]
+      Island Coalescence:  loss=0.188893  phys=0.000658  patch=0.6595
+                          [vx=0.0008, vy=0.0013, Bx=0.0000, By=0.0011, Jz=0.0001]
+
+Top 5 trials:
+  # 22  score=0.195903  {'threshold_amr': 0.3228115420561065}
+        [kh=0.1800, vortex=0.2330, tearing=0.1817, coalescence=0.1889]
+  # 25  score=0.196285  {'threshold_amr': 0.31997095102348155}
+        [kh=0.1800, vortex=0.2328, tearing=0.1817, coalescence=0.1906]
+  # 29  score=0.196414  {'threshold_amr': 0.3190322053476838}
+        [kh=0.1800, vortex=0.2333, tearing=0.1817, coalescence=0.1906]
+  # 21  score=0.198273  {'threshold_amr': 0.3258749298536406}
+        [kh=0.1800, vortex=0.2496, tearing=0.1817, coalescence=0.1818]
+  #  7  score=0.198350  {'threshold_amr': 0.32631578947368417}
+        [kh=0.1800, vortex=0.2499, tearing=0.1817, coalescence=0.1818]

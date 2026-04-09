@@ -1,0 +1,20 @@
+[2025-11-21 15:39:06] ==============================================================
+[2025-11-21 15:39:06] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:39:06] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:39:06] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:39:06] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:39:06] ==============================================================
+[2025-11-21 15:39:06] 🧹 Cleaning previous results...
+[2025-11-21 15:39:06] ➡️ Stage: Mapping
+[2025-11-21 15:39:06] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+THETA SHAPE :  (8, 8)
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 153, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 82, in main
+    qc.append(CU_state,[0]+list(range(1, num_qbits)))
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/quantumcircuit.py", line 2553, in append
+    operation.broadcast_arguments(expanded_qargs, expanded_cargs)
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/gate.py", line 228, in broadcast_arguments
+    raise CircuitError(
+qiskit.circuit.exceptions.CircuitError: 'The amount of qubit(3)/clbit(0) arguments does not match the gate expectation (4).'

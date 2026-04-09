@@ -1,0 +1,40 @@
+Fig 17 — Topological Correction Attribution
+N=256, threshold=0.1496
+
+Panel A: Accuracy by ZZ Coupling Quartile (all scenarios pooled)
+  Q1 (weakest): Q-HAS=0.817  Classical=0.850
+  Q2: Q-HAS=0.730  Classical=0.770
+  Q3: Q-HAS=0.612  Classical=0.515
+  Q4 (strongest): Q-HAS=0.529  Classical=0.606
+
+Panel B: Flip Accuracy by Dominant Term
+
+  KH:
+    ZZ (spatial): 0.333 (45 flips)
+    ZZZZ (topology): 0.500 (14 flips)
+    Z (bias): 0.431 (58 flips)
+
+  Tearing:
+    ZZ (spatial): 0.765 (68 flips)
+    ZZZZ (topology): 0.000 (8 flips)
+    Z (bias): 0.000 (41 flips)
+
+  Rotor:
+    ZZ (spatial): 0.429 (14 flips)
+    ZZZZ (topology): 0.491 (53 flips)
+    Z (bias): 0.333 (15 flips)
+
+  OT:
+    ZZ (spatial): 0.378 (45 flips)
+    ZZZZ (topology): 0.663 (92 flips)
+    Z (bias): 0.200 (5 flips)
+
+Panel C: QAOA Advantage by Topological Regime
+  KH: rich=-0.042 (n=432), smooth=-0.012 (n=432)
+        Q-HAS: rich=0.322 smooth=0.889  Classical: rich=0.363 smooth=0.900
+  Tearing: rich=+0.038 (n=292), smooth=-0.082 (n=292)
+        Q-HAS: rich=0.729 smooth=0.760  Classical: rich=0.692 smooth=0.842
+  Rotor: rich=-0.057 (n=122), smooth=-0.008 (n=122)
+        Q-HAS: rich=0.631 smooth=0.762  Classical: rich=0.689 smooth=0.770
+  OT: rich=+0.053 (n=206), smooth=+0.024 (n=206)
+        Q-HAS: rich=0.675 smooth=0.714  Classical: rich=0.621 smooth=0.689

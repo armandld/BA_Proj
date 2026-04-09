@@ -1,0 +1,123 @@
+/usr/local/lib/python3.12/dist-packages/samplomatic/__init__.py:20: UserWarning: 
+You have imported samplomatic==0.17.1 which is in 
+beta development. Please expect breaking changes between 
+minor versions and pin your dependencies accordingly.
+  _warn_once_per_version(
+======================================================================
+Fig 15: Decision Flip Analysis (N=256, depth=5)
+  Q-HAS threshold:  0.1496
+  Classical threshold: 0.1496
+======================================================================
+
+────────────────────────────────────────────────────────────
+  Analyzing: Kelvin-Helmholtz
+────────────────────────────────────────────────────────────
+  Total cells evaluated: 904
+  Decision flips: 125 (13.8%)
+    QAOA correct:    43 (QAOA decision matches GT)
+    Classical correct: 82 (Classical decision matches GT)
+    Net benefit: -39 flips where QAOA is better
+    GT threshold used: mean(gt_error) = 0.0447
+    Depth 0: 4 cells, 0 flips
+    Depth 1: 16 cells, 5 flips
+    Depth 2: 64 cells, 18 flips
+    Depth 3: 184 cells, 25 flips
+    Depth 4: 636 cells, 77 flips
+
+────────────────────────────────────────────────────────────
+  Analyzing: Harris Tearing
+────────────────────────────────────────────────────────────
+  Total cells evaluated: 584
+  Decision flips: 109 (18.7%)
+    QAOA correct:    45 (QAOA decision matches GT)
+    Classical correct: 64 (Classical decision matches GT)
+    Net benefit: -19 flips where QAOA is better
+    GT threshold used: mean(gt_error) = 0.0635
+    Depth 0: 4 cells, 0 flips
+    Depth 1: 16 cells, 8 flips
+    Depth 2: 64 cells, 32 flips
+    Depth 3: 192 cells, 45 flips
+    Depth 4: 308 cells, 24 flips
+
+────────────────────────────────────────────────────────────
+  Analyzing: MHD Rotor
+────────────────────────────────────────────────────────────
+  Total cells evaluated: 240
+  Decision flips: 76 (31.7%)
+    QAOA correct:    33 (QAOA decision matches GT)
+    Classical correct: 43 (Classical decision matches GT)
+    Net benefit: -10 flips where QAOA is better
+    GT threshold used: mean(gt_error) = 0.4466
+    Depth 0: 4 cells, 0 flips
+    Depth 1: 16 cells, 6 flips
+    Depth 2: 16 cells, 6 flips
+    Depth 3: 60 cells, 16 flips
+    Depth 4: 144 cells, 48 flips
+
+────────────────────────────────────────────────────────────
+  Analyzing: Orszag-Tang
+────────────────────────────────────────────────────────────
+  Total cells evaluated: 408
+  Decision flips: 145 (35.5%)
+    QAOA correct:    69 (QAOA decision matches GT)
+    Classical correct: 76 (Classical decision matches GT)
+    Net benefit: -7 flips where QAOA is better
+    GT threshold used: mean(gt_error) = 0.2470
+    Depth 0: 4 cells, 0 flips
+    Depth 1: 16 cells, 6 flips
+    Depth 2: 60 cells, 29 flips
+    Depth 3: 136 cells, 40 flips
+    Depth 4: 192 cells, 70 flips
+
+Saved -> /content/BA_Proj/figures_code/../figures/phase1/fig15_decision_flip_analysis.png
+
+======================================================================
+GLOBAL DECISION FLIP ANALYSIS
+======================================================================
+
+Across all scenarios:
+  Total cells:     2136
+  Total flips:     455 (21.3%)
+  Mean |correction|: 0.2077
+  Mean |dist to thr|: 0.2002
+  Ratio:           1.038
+
+  |correction| / |distance to threshold| distribution:
+    P25: 0.221
+    P50: 0.730
+    P75: 3.638
+    P90: 12.300
+    P95: 29.254
+    P99: 149.356
+    Fraction > 1.0 (can flip): 44.5%
+
+  Spearman correlation |δ| vs GT error: ρ=0.113 (p=0.0000)
+  → Corrections target high-error regions
+
+  WHY FLIPS HAPPEN (ZZ + neighbor analysis):
+  Metric                              No flip      Flipped    Ratio
+  ──────────────────────────────────────────────────────────────
+  Median ZZ energy                     0.0000       0.0078 783334.11x
+  Mean GT error                        0.1238       0.1700     1.37x
+  Mean neighbors above thr             1.3022       0.7319     0.56x
+
+  Flip direction: 352 pushed UP (toward refine), 103 pushed DOWN (toward skip)
+
+  OVERALL ACCURACY (all cells, GT threshold = mean):
+    QAOA correct:      925/2136 (43.3%)
+    Classical correct:  996/2136 (46.6%)
+    Net: Classical by 71 cells
+
+  PER-SCENARIO ACCURACY:
+    Kelvin-Helmholtz    : QAOA 554/904 (61.3%) CL 593/904 (65.6%) → Classical
+    Harris Tearing      : QAOA 455/584 (77.9%) CL 474/584 (81.2%) → Classical
+    MHD Rotor           : QAOA 163/240 (67.9%) CL 173/240 (72.1%) → Classical
+    Orszag-Tang         : QAOA 280/408 (68.6%) CL 287/408 (70.3%) → Classical
+
+======================================================================
+CONCLUSION
+======================================================================
+Flip rate is 21.3% — corrections DO change decisions.
+  QAOA correct: 925/2136
+  Classical correct: 996/2136
+  → Classical is MORE accurate by 71 cells

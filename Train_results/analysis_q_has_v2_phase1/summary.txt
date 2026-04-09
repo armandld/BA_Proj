@@ -1,0 +1,34 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : q_has_v2_phase1
+Total trials   : 202
+Completed      : 178
+Pruned         : 0
+Parameters     : ['beta', 'w_z_frac', 'sigma', 'beta_curl', 'beta_xpoint']
+
+Best trial     : #4
+Best score     : 0.213428
+Best params    : {'beta': 9.935639342817401, 'w_z_frac': 10.395947170474118, 'sigma': 0.02298137250311738, 'beta_curl': 4.268566851401075, 'beta_xpoint': 2.3947566296568494}
+
+  Per-scenario breakdown (best trial):
+        Kelvin-Helmholtz:  loss=0.238966  phys=0.003991  patch=0.8264
+                          [vx=0.0001, vy=0.0026, Bx=0.0003, By=0.0046, Jz=0.0123]
+          Harris Tearing:  loss=0.190427  phys=0.006764  patch=0.6496
+                          [vx=0.0065, vy=0.0226, Bx=0.0001, By=0.0043, Jz=0.0003]
+             Orszag-Tang:  loss=0.267545  phys=0.063719  patch=0.7771
+                          [vx=0.0377, vy=0.0412, Bx=0.0396, By=0.0477, Jz=0.1525]
+               MHD Rotor:  loss=0.156775  phys=0.064860  patch=0.3866
+                          [vx=0.0461, vy=0.0873, Bx=0.0235, By=0.0794, Jz=0.0880]
+
+Top 5 trials:
+  #  4  score=0.213428  {'beta': 9.935639342817401, 'w_z_frac': 10.395947170474118, 'sigma': 0.02298137250311738, 'beta_curl': 4.268566851401075, 'beta_xpoint': 2.3947566296568494}
+        [kh=0.2390, tearing=0.1904, ot=0.2675, rotor=0.1568]
+  # 86  score=0.220277  {'beta': 6.004985863772391, 'w_z_frac': 52.99289920180154, 'sigma': 0.1938329946870386, 'beta_curl': 2.2856679454331674, 'beta_xpoint': 2.3094136405089722}
+        [kh=0.2393, tearing=0.1817, ot=0.3048, rotor=0.1553]
+  # 30  score=0.220853  {'beta': 8.274247409100546, 'w_z_frac': 42.843970257128056, 'sigma': 0.1838262290886851, 'beta_curl': 4.824918659987318, 'beta_xpoint': 0.841655831899581}
+        [kh=0.2533, tearing=0.2066, ot=0.2795, rotor=0.1440]
+  #185  score=0.220975  {'beta': 8.04207287333089, 'w_z_frac': 6.93514403804838, 'sigma': 0.19919448989740984, 'beta_curl': 4.253742161083631, 'beta_xpoint': 1.7669244553749945}
+        [kh=0.2414, tearing=0.2221, ot=0.2837, rotor=0.1367]
+  # 73  score=0.221427  {'beta': 7.947903380689302, 'w_z_frac': 26.85233560828491, 'sigma': 0.17033955230992204, 'beta_curl': 3.7435833393349527, 'beta_xpoint': 1.7716184060785023}
+        [kh=0.2607, tearing=0.1817, ot=0.2608, rotor=0.1825]

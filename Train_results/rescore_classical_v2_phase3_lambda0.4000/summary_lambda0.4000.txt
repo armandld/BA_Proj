@@ -1,0 +1,42 @@
+=================================================================
+Lambda Rescore Summary  (lambda_cost = 0.4000)
+=================================================================
+Total completed trials: 47
+
+Best trial (new ranking): #27
+  new_score    = 0.229778
+  original_score = 0.229778
+  phys_score   = 0.063681
+  patch_ratio  = 0.645023
+
+  Per-scenario (new lambda):
+        Kelvin-Helmholtz: loss=0.209936  phys=0.001813  patch=0.7302
+       Lamb-Oseen Vortex: loss=0.244682  phys=0.026437  patch=0.7903
+          Harris Tearing: loss=0.181735  phys=0.004429  patch=0.6250
+      Island Coalescence: loss=0.230239  phys=0.000579  patch=0.8044
+             Orszag-Tang: loss=0.237153  phys=0.089425  patch=0.6065
+               MHD Rotor: loss=0.274926  phys=0.259401  patch=0.3137
+
+  Best params:
+         threshold_amr = 0.2151015203330192
+
+Top 10 trials (re-ranked):
+     #   new_score  orig_score      phys     patch
+  ────  ──────────  ──────────  ────────  ────────
+    27    0.229778    0.229778  0.063681    0.6450
+    39    0.230652    0.230652  0.039469    0.7086
+    26    0.231137    0.231137  0.068373    0.6380
+    37    0.231619    0.231619  0.047730    0.6913
+    44    0.231703    0.231703  0.047709    0.6917
+    42    0.232047    0.232047  0.047606    0.6931
+    32    0.233639    0.233639  0.047830    0.6982
+    43    0.233929    0.233929  0.054872    0.6816
+    38    0.234568    0.234568  0.055104    0.6832
+    40    0.234984    0.234984  0.047815    0.7029
+
+Biggest rank changes vs original:
+  Trial # 27: moved   0 places DOWN
+  Trial # 39: moved   0 places DOWN
+  Trial # 26: moved   0 places DOWN
+  Trial # 37: moved   0 places DOWN
+  Trial # 44: moved   0 places DOWN

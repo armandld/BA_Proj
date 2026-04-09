@@ -1,0 +1,19 @@
+[2025-11-21 14:13:10] ==============================================================
+[2025-11-21 14:13:10] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 14:13:10] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 14:13:10] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 14:13:10] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 14:13:10] ==============================================================
+[2025-11-21 14:13:10] 🧹 Cleaning previous results...
+[2025-11-21 14:13:10] ➡️ Stage: Mapping
+[2025-11-21 14:13:11] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 152, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 73, in main
+    CU_state = UnitaryGate(theta).control(1)
+               ^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/library/generalized_gates/unitary.py", line 97, in __init__
+    input_dim, output_dim = data.shape
+    ^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 2)

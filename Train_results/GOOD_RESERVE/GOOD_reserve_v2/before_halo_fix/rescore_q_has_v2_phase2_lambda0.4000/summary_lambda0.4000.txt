@@ -1,0 +1,46 @@
+=================================================================
+Lambda Rescore Summary  (lambda_cost = 0.4000)
+=================================================================
+Total completed trials: 139
+
+Best trial (new ranking): #123
+  new_score    = 0.188112
+  original_score = 0.188112
+  phys_score   = 0.063694
+  patch_ratio  = 0.499158
+
+  Per-scenario (new lambda):
+             Orszag-Tang: loss=0.227349  phys=0.054490  patch=0.6595
+               MHD Rotor: loss=0.148875  phys=0.072897  patch=0.3388
+
+  Best params:
+                  beta = 1.7709997543745462
+         threshold_amr = 0.13481085527230813
+           gamma_hydro = 1.2497418135304397
+             gamma_mag = 3.400463206235539
+                 kappa = 5.4447032809956415
+              w_z_frac = 0.07230132354812575
+             beta_grad = 0.6698223307332885
+             beta_curl = 1.25686575637166
+           beta_xpoint = 0.17668125552015015
+
+Top 10 trials (re-ranked):
+     #   new_score  orig_score      phys     patch
+  ────  ──────────  ──────────  ────────  ────────
+   123    0.188112    0.188112  0.063694    0.4992
+   130    0.189055    0.189055  0.067277    0.4935
+   102    0.199509    0.199509  0.077113    0.5055
+    97    0.200078    0.200078  0.070757    0.5234
+   104    0.201510    0.201510  0.088835    0.4832
+    94    0.201837    0.201837  0.062444    0.5503
+    77    0.201940    0.201940  0.056938    0.5644
+    90    0.206841    0.206841  0.068426    0.5529
+   143    0.208437    0.208437  0.063967    0.5696
+   111    0.209370    0.209370  0.094010    0.4978
+
+Biggest rank changes vs original:
+  Trial #123: moved   0 places DOWN
+  Trial #130: moved   0 places DOWN
+  Trial #102: moved   0 places DOWN
+  Trial # 97: moved   0 places DOWN
+  Trial #104: moved   0 places DOWN

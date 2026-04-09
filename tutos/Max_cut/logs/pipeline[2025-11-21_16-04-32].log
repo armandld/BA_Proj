@@ -1,0 +1,16 @@
+[2025-11-21 16:04:36] ==============================================================
+[2025-11-21 16:04:36] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 16:04:36] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 16:04:36] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 16:04:36] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 16:04:36] ==============================================================
+[2025-11-21 16:04:36] 🧹 Cleaning previous results...
+[2025-11-21 16:04:36] ➡️ Stage: Mapping
+[2025-11-21 16:04:36] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 159, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 88, in main
+    qc.append(CU_state.adjoint(),[0]+list(range(1, num_qbits+1)))
+              ^^^^^^^^^^^^^^^^
+AttributeError: 'ControlledGate' object has no attribute 'adjoint'

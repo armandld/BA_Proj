@@ -1,0 +1,19 @@
+[2025-11-21 15:59:17] ==============================================================
+[2025-11-21 15:59:17] 🚀 Starting Quantum MaxCut Pipeline
+[2025-11-21 15:59:18] Mode: simulator | Backend: aer | Shots: 100000
+[2025-11-21 15:59:18] Script Path: /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts
+[2025-11-21 15:59:18] Output Dir: /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results
+[2025-11-21 15:59:18] ==============================================================
+[2025-11-21 15:59:18] 🧹 Cleaning previous results...
+[2025-11-21 15:59:18] ➡️ Stage: Mapping
+[2025-11-21 15:59:18] Running: python /Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py --backend aer --numqbits 3 --out-dir /Users/Sayu/Desktop/BA_Proj/tutos/Max_cut/results --verbose
+Traceback (most recent call last):
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 157, in <module>
+    main()
+  File "/Users/Sayu/Desktop/BA_Proj/algos_test_MHD/Variational/scripts/mapping.py", line 86, in main
+    qc.append(AndGate([0,qc.qubits[k]],qc.qubits[num_qbits+ k]))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/qiskit-project/lib/python3.11/site-packages/qiskit/circuit/library/boolean_logic/quantum_and.py", line 157, in __init__
+    super().__init__("and", num_variable_qubits + 1, [])
+                            ~~~~~~~~~~~~~~~~~~~~^~~
+TypeError: can only concatenate list (not "int") to list

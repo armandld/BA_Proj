@@ -1,0 +1,30 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : q_has_v2_phase2
+Total trials   : 161
+Completed      : 139
+Pruned         : 0
+Parameters     : ['beta', 'threshold_amr', 'gamma_hydro', 'gamma_mag', 'kappa', 'w_z_frac', 'beta_grad', 'beta_curl', 'beta_xpoint']
+
+Best trial     : #123
+Best score     : 0.188112
+Best params    : {'beta': 1.7709997543745462, 'threshold_amr': 0.13481085527230813, 'gamma_hydro': 1.2497418135304397, 'gamma_mag': 3.400463206235539, 'kappa': 5.4447032809956415, 'w_z_frac': 0.07230132354812575, 'beta_grad': 0.6698223307332885, 'beta_curl': 1.25686575637166, 'beta_xpoint': 0.17668125552015015}
+
+  Per-scenario breakdown (best trial):
+             Orszag-Tang:  loss=0.227349  phys=0.054490  patch=0.6595
+                          [vx=0.0376, vy=0.0398, Bx=0.0298, By=0.0355, Jz=0.1297]
+               MHD Rotor:  loss=0.148875  phys=0.072897  patch=0.3388
+                          [vx=0.0503, vy=0.0957, Bx=0.0289, By=0.0935, Jz=0.0961]
+
+Top 5 trials:
+  #123  score=0.188112  {'beta': 1.7709997543745462, 'threshold_amr': 0.13481085527230813, 'gamma_hydro': 1.2497418135304397, 'gamma_mag': 3.400463206235539, 'kappa': 5.4447032809956415, 'w_z_frac': 0.07230132354812575, 'beta_grad': 0.6698223307332885, 'beta_curl': 1.25686575637166, 'beta_xpoint': 0.17668125552015015}
+        [ot=0.2273, rotor=0.1489]
+  #130  score=0.189055  {'beta': 1.7743022997709772, 'threshold_amr': 0.13441121611649756, 'gamma_hydro': 1.301518429138376, 'gamma_mag': 3.0062851639165857, 'kappa': 6.955411338572091, 'w_z_frac': 0.20987850457955712, 'beta_grad': 0.8556072195114737, 'beta_curl': 1.4631737607056678, 'beta_xpoint': 0.24580254229724313}
+        [ot=0.2539, rotor=0.1242]
+  #102  score=0.199509  {'beta': 1.7920311427835551, 'threshold_amr': 0.12131034241399906, 'gamma_hydro': 1.1303141494261375, 'gamma_mag': 0.6003010209163409, 'kappa': 8.36249612758939, 'w_z_frac': 0.08201731897218283, 'beta_grad': 0.7762131631362897, 'beta_curl': 0.24606907916487988, 'beta_xpoint': 0.3226178376118616}
+        [ot=0.2563, rotor=0.1427]
+  # 97  score=0.200078  {'beta': 0.7136667242004338, 'threshold_amr': 0.12268737676545537, 'gamma_hydro': 1.5550781477524749, 'gamma_mag': 3.0443384187418783, 'kappa': 8.329419791575969, 'w_z_frac': 0.10020400107204505, 'beta_grad': 0.21770497103014722, 'beta_curl': 0.15006324982043845, 'beta_xpoint': 0.30723194747461124}
+        [ot=0.2441, rotor=0.1560]
+  #104  score=0.201510  {'beta': 0.9376855487309009, 'threshold_amr': 0.12170714737937137, 'gamma_hydro': 1.3693469949532693, 'gamma_mag': 0.9178103100139207, 'kappa': 9.32280100810097, 'w_z_frac': 0.06670238557655042, 'beta_grad': 0.6362272106875343, 'beta_curl': 0.24993752143130524, 'beta_xpoint': 0.310966922638322}
+        [ot=0.2449, rotor=0.1581]

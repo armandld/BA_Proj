@@ -1,0 +1,34 @@
+============================================================
+Q-HAS Hyperparameter Analysis Summary
+============================================================
+Study          : q_has_v2_phase1b_agr
+Total trials   : 94
+Completed      : 79
+Pruned         : 0
+Parameters     : ['beta', 'threshold_amr', 'gamma_hydro', 'gamma_mag', 'kappa', 'w_z_frac', 'beta_grad', 'beta_curl', 'beta_xpoint']
+
+Best trial     : #52
+Best score     : 0.150835
+Best params    : {'beta': 4.441275041962883, 'threshold_amr': 0.2481770355189367, 'gamma_hydro': 2.3569820001699866, 'gamma_mag': 1.1566209652881896, 'kappa': 13.28512278152799, 'w_z_frac': 0.49259437288557695, 'beta_grad': 1.480729077009881, 'beta_curl': 0.8161027673009308, 'beta_xpoint': 1.356933878340058}
+
+  Per-scenario breakdown (best trial):
+        Kelvin-Helmholtz:  loss=0.165558  phys=0.005795  patch=0.7465
+                          [vx=0.0001, vy=0.0026, Bx=0.0002, By=0.0050, Jz=0.0210]
+       Lamb-Oseen Vortex:  loss=0.153999  phys=0.007823  patch=0.6855
+                          [vx=0.0058, vy=0.0031, Bx=0.0033, By=0.0077, Jz=0.0192]
+          Harris Tearing:  loss=0.137445  phys=0.003367  patch=0.6250
+                          [vx=0.0049, vy=0.0097, Bx=0.0001, By=0.0018, Jz=0.0004]
+      Island Coalescence:  loss=0.146338  phys=0.000804  patch=0.6756
+                          [vx=0.0015, vy=0.0016, Bx=0.0000, By=0.0009, Jz=0.0001]
+
+Top 5 trials:
+  # 52  score=0.150835  {'beta': 4.441275041962883, 'threshold_amr': 0.2481770355189367, 'gamma_hydro': 2.3569820001699866, 'gamma_mag': 1.1566209652881896, 'kappa': 13.28512278152799, 'w_z_frac': 0.49259437288557695, 'beta_grad': 1.480729077009881, 'beta_curl': 0.8161027673009308, 'beta_xpoint': 1.356933878340058}
+        [kh=0.1656, vortex=0.1540, tearing=0.1374, coalescence=0.1463]
+  # 42  score=0.156231  {'beta': 1.1293931448360415, 'threshold_amr': 0.22231192587760315, 'gamma_hydro': 2.918609436364993, 'gamma_mag': 1.0400589964245692, 'kappa': 13.384185758173082, 'w_z_frac': 0.12140560257802117, 'beta_grad': 1.9002689254084897, 'beta_curl': 1.3562054777204222, 'beta_xpoint': 0.3384137120594697}
+        [kh=0.1796, vortex=0.1577, tearing=0.1405, coalescence=0.1471]
+  #  6  score=0.159446  {'beta': 0.7659020170729317, 'threshold_amr': 0.6036832980170763, 'gamma_hydro': 0.7861787293582458, 'gamma_mag': 3.2176779372596886, 'kappa': 7.184613808396653, 'w_z_frac': 0.4053850346425618, 'beta_grad': 0.43319125381732965, 'beta_curl': 0.8663825076346593, 'beta_xpoint': 0.21659562690866482}
+        [kh=0.1177, vortex=0.2822, tearing=0.1889, coalescence=0.0490]
+  # 80  score=0.159572  {'beta': 0.6389491212771717, 'threshold_amr': 0.27102712659285805, 'gamma_hydro': 2.1478734869591145, 'gamma_mag': 0.29607382900701074, 'kappa': 14.456011771933236, 'w_z_frac': 0.3915436562225423, 'beta_grad': 0.4329220437024936, 'beta_curl': 0.9391826009108234, 'beta_xpoint': 0.22468056340320566}
+        [kh=0.1816, vortex=0.1648, tearing=0.1374, coalescence=0.1545]
+  #  9  score=0.160394  {'beta': 0.8, 'threshold_amr': 0.3, 'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 15.0, 'w_z_frac': 0.1, 'beta_grad': 2.0, 'beta_curl': 1.0, 'beta_xpoint': 0.5}
+        [kh=0.1551, vortex=0.1888, tearing=0.1529, coalescence=0.1448]

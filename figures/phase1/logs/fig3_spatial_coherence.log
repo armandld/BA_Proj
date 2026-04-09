@@ -1,0 +1,43 @@
+/usr/local/lib/python3.12/dist-packages/samplomatic/__init__.py:20: UserWarning: 
+You have imported samplomatic==0.17.1 which is in 
+beta development. Please expect breaking changes between 
+minor versions and pin your dependencies accordingly.
+  _warn_once_per_version(
+Fig 3: Spatial Coherence (N=256, 3 trials)
+
+==================================================
+--- KH ---
+  Compactness (P/A):    QA=0.050+/-0.001  CL=0.040+/-0.000  (lower=better)
+  Component density:    QA=0.06+/-0.00  CL=0.06+/-0.00  (lower=better)
+  Components:           QA=2.0  CL=2.0
+  GT precision (p75):   QA=0.488  CL=0.452
+
+==================================================
+--- Tearing ---
+  Compactness (P/A):    QA=0.072+/-0.002  CL=0.070+/-0.000  (lower=better)
+  Component density:    QA=0.12+/-0.00  CL=0.12+/-0.00  (lower=better)
+  Components:           QA=2.0  CL=2.0
+  GT precision (p75):   QA=0.984  CL=0.984
+
+==================================================
+--- Rotor ---
+  Compactness (P/A):    QA=0.142+/-0.003  CL=0.067+/-0.000  (lower=better)
+  Component density:    QA=0.50+/-0.15  CL=0.14+/-0.00  (lower=better)
+  Components:           QA=3.0  CL=1.0
+  GT precision (p75):   QA=1.000  CL=1.000
+
+==================================================
+--- OT ---
+  Compactness (P/A):    QA=0.219+/-0.005  CL=0.190+/-0.000  (lower=better)
+  Component density:    QA=2.04+/-0.08  CL=0.93+/-0.00  (lower=better)
+  Components:           QA=13.7  CL=9.0
+  GT precision (p75):   QA=0.721  CL=0.760
+
+Saved: /content/BA_Proj/figures_code/../figures/phase1/fig3_spatial_coherence.png
+
+============================================================
+SPATIAL COHERENCE SUMMARY (mean across scenarios)
+  Compactness (P/A):  QA=0.121 vs CL=0.092 (lower=better)
+  Component density:  QA=0.68 vs CL=0.31 (lower=better)
+  Components:         QA=5.2 vs CL=3.5
+  GT precision (p75): QA=0.798 vs CL=0.799 (higher=better)
