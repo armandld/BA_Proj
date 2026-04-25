@@ -49,6 +49,13 @@ class VQARuntime:
             from qiskit_aer import AerSimulator
             self._backend = AerSimulator(method='statevector')
             self._init_aer_primitives()
+        elif self.backend_name == "matrix_product_state":
+            from qiskit_aer import AerSimulator
+            # MPS simulator: scales to larger qubit counts when entanglement
+            # is limited (local 2D Hamiltonians). bond_dim auto-grows, can be
+            # capped via matrix_product_state_max_bond_dimension if needed.
+            self._backend = AerSimulator(method='matrix_product_state')
+            self._init_aer_primitives()
         elif self.backend_name == "aer":
             from qiskit_aer import AerSimulator
             self._backend = AerSimulator()
@@ -101,7 +108,9 @@ class VQARuntime:
         For aer/estimator: full transpilation to ISA-compliant native gates.
         """
         from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-        level = 0 if self.backend_name == "state_vector" else self.opt_level
+        # MPS and state_vector are ideal simulators — no routing/coupling needed
+        level = 0 if self.backend_name in ("state_vector",
+                                           "matrix_product_state") else self.opt_level
         pm = generate_preset_pass_manager(
             optimization_level=level, backend=self._backend
         )

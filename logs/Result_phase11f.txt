@@ -1,0 +1,70 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11f
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11f  -  phase11f_multiseed
+============================================================
+========================================================================================
+  Phase 11F: multi-seed (n=10) re-run of phase 11 + 11B
+  dim=4  N=256  max-snaps/cfg=30
+========================================================================================
+
+  built dataset: 440 snapshots across 4 scenarios
+
+  RANDOM SPLIT (val_frac=30%, by snapshot)
+    F1 mean-field GBT : 0.968 +/- 0.013   (n=10 seeds)
+    F1 stencil   GBT  : 0.974 +/- 0.012
+    F1 classical thr  : 0.460 +/- 0.017
+
+  LOSO (4 folds)
+  held-out             F1_class +/- s    F1_site +/- s    F1_sten +/- s
+  harris_tearing       0.400 +/- 0.000     0.000 +/- 0.000     0.000 +/- 0.000
+  kelvin_helmholtz     0.400 +/- 0.000     0.344 +/- 0.000     0.400 +/- 0.000
+  mhd_rotor            0.672 +/- 0.000     0.084 +/- 0.000     0.233 +/- 0.000
+  orszag_tang          0.264 +/- 0.000     0.327 +/- 0.000     0.226 +/- 0.000
+
+  LOSO mean-field across folds (n=4): 0.189 +/- 0.150
+  LOSO classical  across folds (n=4): 0.434 +/- 0.148
+  mean across-seed std per fold: 0.000   (decomposes solver noise vs scenario noise)
+
+  saved: multiseed_N256_dim4.npz
+
+Phase 11F complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 22:35 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

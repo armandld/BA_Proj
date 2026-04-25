@@ -1,0 +1,95 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11  -  phase11_upper_bound
+============================================================
+========================================================================================
+  Phase 11A: per-site (mean-field) and stencil (neighbourhood) ceilings
+  dim=4  N=256  max-snaps/cfg=30
+========================================================================================
+
+  built dataset: 440 snaps, 7040 cells   site-feats=9, stencil-feats=45  [10.8s]
+  split: 308 train snaps, 132 val snaps
+
+  [baseline] classical: thr*=0.120  F1_train=0.458  F1_val=0.475
+
+  [Q1] mean-field ceiling (per-site features, 9 inputs):
+  model      F1_val      AUC    thr    fit_s
+  lr          0.598    0.816   0.56      0.4
+  rf          0.971    0.999   0.67      2.7
+  gbt         0.980    1.000   0.06      2.6
+  -> mean-field ceiling = 0.980  (best model: gbt)
+
+  [Q2] neighbourhood ceiling (stencil features, 45 inputs):
+  gbt-sten    0.980    1.000   0.05      4.4
+
+  ------------------------------------------------------------------------------------
+  classical baseline      F1 = 0.475
+  mean-field ceiling      F1 = 0.980   (delta vs classical = +0.505)
+  neighbourhood ceiling   F1 = 0.980   (delta vs mean-field = +0.000)
+  ------------------------------------------------------------------------------------
+
+  INTERPRETATION:
+  * mean-field ceiling beats classical by +0.505  ==>  a learned bias could help.
+  * stencil ~= mean-field  ==>  ZZ/ZZZZ couplings cannot add value: no local Hamiltonian (even with couplings) will exceed the mean-field ceiling by more than noise.
+
+  per-scenario (val set only):
+  scenario                n   class    site    sten   d_site  d_sten
+  harris_tearing        416   0.375   0.932   0.923   +0.557  -0.009
+  kelvin_helmholtz      608   0.443   0.986   0.991   +0.542  +0.006
+  mhd_rotor             512   0.805   1.000   1.000   +0.195  +0.000
+  orszag_tang           576   0.435   0.988   0.988   +0.553  +0.000
+
+  feature importance (permutation on gbt, val):
+    score_classical    drop = +0.311
+    |v|^2              drop = +0.107
+    |B|^2              drop = +0.337
+    |omega_z|          drop = +0.028
+    |J_z|              drop = +0.111
+    |grad_v|^2         drop = +0.081
+    |grad_B|^2         drop = +0.270
+    det_grad_B         drop = +0.027
+    Re                 drop = +0.030
+
+  saved: upper_bound_N256_dim4.npz
+
+Phase 11A complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 00:00 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 16 avr 23:24 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

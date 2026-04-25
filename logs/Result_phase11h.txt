@@ -1,0 +1,68 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11h
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11h  -  phase11h_random_split_bootstrap
+============================================================
+========================================================================================
+  Phase 11H: random-split bootstrap CI
+  dim=4  N=256  max-snaps/cfg=80  n_boot=500  val_frac=0.3
+========================================================================================
+
+  built dataset: 440 snapshots across 4 scenarios
+
+  n_val_snaps=132  n_val_cells=2112
+
+  F1_class       = 0.471  [0.423, 0.514]
+  F1_site (GBT)  = 0.986  [0.972, 0.995]
+  F1_stencil     = 0.990  [0.978, 0.998]
+  delta site-cls = +0.514  [+0.466, +0.555]   p(site <= class) = 0.000
+  delta sten-sit = +0.004  [+0.000, +0.009]
+
+  INTERPRETATION:
+  * F1_site CI strictly above F1_class CI: the random-split
+    ceiling is significantly higher than the classical
+    indicator (as expected; this is the non-collapsed regime).
+  * stencil-vs-site gap CI upper bound = +0.009 (tightness of the formal ceiling proposition).
+
+  saved: random_split_bootstrap_N256_dim4.npz
+
+Phase 11H complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 23:53 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 22:35 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

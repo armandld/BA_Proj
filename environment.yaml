@@ -54,3 +54,6 @@ dependencies:
 
     # --- Testing ---
     - 'pytest'                 # Testing framework
+
+    # --- Optimisation (noisy black-box) ---
+    - 'cma'                    # CMA-ES for phase 10 training

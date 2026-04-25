@@ -1,0 +1,140 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     13
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 13  -  phase13_aggregate
+============================================================
+========================================================================================
+  Q-HAS study summary    N=256  dim=4
+========================================================================================
+
+HEADLINE F1 (val split by snapshot)
+----------------------------------------------------------------------------------------
+  quantity                                               F1  source              
+  ----------------------------------------------------------------------------------
+  Classical AMR indicator (score > thr*)              0.475  phase 11            
+  Mean-field ceiling -- logistic regression           0.604  phase 11            
+  Mean-field ceiling -- random forest                 0.975  phase 11            
+  Mean-field ceiling -- gradient boosting             0.989  phase 11            
+  Neighbourhood ceiling -- GBT on stencil             0.991  phase 11            
+  Learned mean-field Hamiltonian h_i = w.phi - b      0.598  phase 11c           
+  QAOA  (v2 H, joint over scenarios)                     --  phase 5             
+  SA    (v2 H, joint over scenarios)                  0.342  phase 7             
+  VQC   (PCA-reduced features)                           --  phase 12            
+  QKE   (quantum kernel + SVC)                           --  phase 12            
+
+LEAVE-ONE-SCENARIO-OUT (cross-scenario generalisation)
+----------------------------------------------------------------------------------------
+  Classical F1                     0.434 +/- 0.148
+  Mean-field LOSO F1               0.191 +/- 0.152
+  Stencil    LOSO F1               0.215 +/- 0.142
+  per fold:
+    held-out                class     site     sten
+    orszag_tang             0.264    0.327    0.226
+    harris_tearing          0.400    0.000    0.000
+    kelvin_helmholtz        0.400    0.353    0.400
+    mhd_rotor               0.672    0.084    0.233
+
+LEARNED MEAN-FIELD WEIGHTS (standardised features)
+----------------------------------------------------------------------------------------
+  feature                   w_std
+  score_classical          +1.467
+  |J_z|                    +1.462
+  |grad_B|^2               -1.034
+  |grad_v|^2               -0.533
+  |omega_z|                +0.506
+  |v|^2                    -0.275
+  det_grad_B               +0.117
+  Re                       -0.038
+  |B|^2                    -0.012
+
+PHASE 10 TRAINED (c_bias*, thr*) OUTCOMES
+----------------------------------------------------------------------------------------
+  mode                             F1_val  theta*                          
+  joint                                --  --                              
+  scenario-orszag_tang                 --  --                              
+  scenario-harris_tearing              --  --                              
+  scenario-kelvin_helmholtz            --  --                              
+  scenario-mhd_rotor                   --  --                              
+
+QAOA / SA PER CONFIG (v2 Hamiltonian)
+----------------------------------------------------------------------------------------
+  SA   file                                                          F1
+  sa_baseline_harris_tearing_Re1200_N256_dim4_v2.npz           [0.72727273 0.72727273 0.72727273 0.60869565 0.72727273 0.33333333
+ 0.         0.         0.         0.        ]
+  sa_baseline_harris_tearing_Re1600_N256_dim4_v2.npz           [0.72727273 0.72727273 0.8        0.54545455 0.47619048 0.31578947
+ 0.         0.         0.         0.        ]
+  sa_baseline_harris_tearing_Re400_N256_dim4_v2.npz            [0.         0.         0.         0.         0.33333333 0.4
+ 0.60869565 0.72727273 0.60869565 0.66666667]
+  sa_baseline_harris_tearing_Re800_N256_dim4_v2.npz            [0.72727273 0.72727273 0.72727273 0.72727273 0.35294118 0.44444444
+ 0.         0.         0.         0.        ]
+  sa_baseline_kelvin_helmholtz_Re1200_N256_dim4_v2.npz         [0.         0.         0.31578947 0.4        0.4        0.25
+ 0.42105263 0.4        0.47619048 0.57142857]
+  sa_baseline_kelvin_helmholtz_Re1600_N256_dim4_v2.npz         [0.         0.         0.25       0.25       0.33333333 0.22222222
+ 0.31578947 0.5        0.44444444 0.5       ]
+  sa_baseline_kelvin_helmholtz_Re400_N256_dim4_v2.npz          [0.         0.         0.33333333 0.25       0.23529412 0.33333333
+ 0.5        0.42105263 0.52631579 0.54545455]
+  sa_baseline_kelvin_helmholtz_Re800_N256_dim4_v2.npz          [0.         0.         0.35294118 0.25       0.22222222 0.35294118
+ 0.47619048 0.42105263 0.5        0.57142857]
+  sa_baseline_mhd_rotor_Re1200_N256_dim4_v2.npz                [0.    0.375 0.4   0.4   0.375 0.4   0.375 0.4   0.4   0.375]
+  sa_baseline_mhd_rotor_Re1600_N256_dim4_v2.npz                [0.    0.375 0.375 0.4   0.375 0.375 0.375 0.4   0.4   0.4  ]
+  sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz                 [0.    0.4   0.375 0.4   0.4   0.4   0.4   0.375 0.4   0.4  ]
+  sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz                 [0.    0.4   0.4   0.4   0.375 0.375 0.4   0.375 0.375 0.4  ]
+  sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz              [0.         0.         0.22222222 0.22222222 0.22222222 0.54545455
+ 0.54545455 0.54545455 0.44444444 0.66666667]
+  sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz              [0.         0.         0.22222222 0.22222222 0.22222222 0.54545455
+ 0.54545455 0.54545455 0.54545455 0.66666667]
+  sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz               [0.         0.         0.22222222 0.28571429 0.22222222 0.4
+ 0.60869565 0.54545455 0.54545455 0.66666667]
+  sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz               [0.         0.         0.22222222 0.22222222 0.22222222 0.47619048
+ 0.54545455 0.54545455 0.54545455 0.66666667]
+
+KEY DELTAS AND VERDICTS
+----------------------------------------------------------------------------------------
+  mean-field ceiling beats classical by +0.515
+  stencil ceiling  beats mean-field by +0.002
+  ==> Hamiltonian couplings (ZZ/ZZZZ) add NO measurable value. QAOA cannot outperform SA or a site-wise argmin on the optimal H.
+  ==> a learned bias Hamiltonian can IN PRINCIPLE reach a much higher F1 than the classical indicator.
+  learned mean-field H    F1 gain over classical = +0.124   (phase 11c)
+========================================================================================
+
+  saved: SUMMARY_N256_dim4.txt
+  saved: SUMMARY_N256_dim4.csv
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 00:00 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 16 avr 23:23 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 16 avr 23:24 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,8K 17 avr 00:02 study/results/v1h_loso_N256_dim4.npz

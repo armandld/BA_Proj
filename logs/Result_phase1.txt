@@ -1,0 +1,235 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     1
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 1  -  phase1_dns_sweep
+============================================================
+Phase 1: DNS sweep - 16 runs
+  Scenarios: ['orszag_tang', 'harris_tearing', 'kelvin_helmholtz', 'mhd_rotor']
+  Re values: [400, 800, 1200, 1600]
+  Resolution: N=256
+
+[1/16] orszag_tang Re=400 N=256
+  [orszag_tang Re=400 N=256] Starting DNS, t_max=3.0
+    t=0.402/3.0 step=94 dt=3.87e-03 snapshots=5 wall=10s
+    t=0.902/3.0 step=239 dt=3.12e-03 snapshots=10 wall=26s
+    t=1.401/3.0 step=409 dt=2.84e-03 snapshots=15 wall=45s
+    t=1.902/3.0 step=589 dt=2.65e-03 snapshots=20 wall=65s
+    t=2.401/3.0 step=777 dt=2.70e-03 snapshots=25 wall=88s
+    t=2.901/3.0 step=973 dt=2.40e-03 snapshots=30 wall=112s
+  [orszag_tang Re=400] Done: 30 snapshots, 1015 steps, wall=117s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_orszag_tang_Re400_N256.npz (26.3 MB)
+
+[2/16] orszag_tang Re=800 N=256
+  [orszag_tang Re=800 N=256] Starting DNS, t_max=3.0
+    t=0.401/3.0 step=94 dt=3.87e-03 snapshots=5 wall=11s
+    t=0.901/3.0 step=239 dt=3.11e-03 snapshots=10 wall=29s
+    t=1.403/3.0 step=412 dt=2.78e-03 snapshots=15 wall=51s
+    t=1.902/3.0 step=599 dt=2.50e-03 snapshots=20 wall=74s
+    t=2.402/3.0 step=800 dt=2.52e-03 snapshots=25 wall=100s
+    t=2.900/3.0 step=1003 dt=2.31e-03 snapshots=30 wall=126s
+  [orszag_tang Re=800] Done: 30 snapshots, 1047 steps, wall=131s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_orszag_tang_Re800_N256.npz (26.3 MB)
+
+[3/16] orszag_tang Re=1200 N=256
+  [orszag_tang Re=1200 N=256] Starting DNS, t_max=3.0
+    t=0.401/3.0 step=94 dt=3.87e-03 snapshots=5 wall=13s
+    t=0.900/3.0 step=239 dt=3.10e-03 snapshots=10 wall=31s
+    t=1.400/3.0 step=412 dt=2.76e-03 snapshots=15 wall=53s
+    t=1.902/3.0 step=603 dt=2.44e-03 snapshots=20 wall=77s
+    t=2.401/3.0 step=810 dt=2.45e-03 snapshots=25 wall=103s
+    t=2.900/3.0 step=1017 dt=2.28e-03 snapshots=30 wall=129s
+  [orszag_tang Re=1200] Done: 30 snapshots, 1062 steps, wall=134s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_orszag_tang_Re1200_N256.npz (26.3 MB)
+
+[4/16] orszag_tang Re=1600 N=256
+  [orszag_tang Re=1600 N=256] Starting DNS, t_max=3.0
+    t=0.401/3.0 step=94 dt=3.87e-03 snapshots=5 wall=13s
+    t=0.903/3.0 step=240 dt=3.10e-03 snapshots=10 wall=31s
+    t=1.402/3.0 step=413 dt=2.75e-03 snapshots=15 wall=53s
+    t=1.902/3.0 step=605 dt=2.40e-03 snapshots=20 wall=76s
+    t=2.401/3.0 step=816 dt=2.42e-03 snapshots=25 wall=102s
+    t=2.900/3.0 step=1027 dt=2.26e-03 snapshots=30 wall=128s
+  [orszag_tang Re=1600] Done: 30 snapshots, 1072 steps, wall=134s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_orszag_tang_Re1600_N256.npz (26.3 MB)
+
+[5/16] harris_tearing Re=400 N=256
+  [harris_tearing Re=400 N=256] Starting DNS, t_max=2.0
+    t=0.402/2.0 step=41 dt=9.80e-03 snapshots=5 wall=5s
+    t=0.901/2.0 step=92 dt=9.77e-03 snapshots=10 wall=11s
+    t=1.409/2.0 step=144 dt=9.75e-03 snapshots=15 wall=18s
+    t=1.905/2.0 step=195 dt=9.73e-03 snapshots=20 wall=24s
+  [harris_tearing Re=400] Done: 20 snapshots, 205 steps, wall=25s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_harris_tearing_Re400_N256.npz (15.5 MB)
+
+[6/16] harris_tearing Re=800 N=256
+  [harris_tearing Re=800 N=256] Starting DNS, t_max=2.0
+    t=0.402/2.0 step=41 dt=9.80e-03 snapshots=5 wall=5s
+    t=0.901/2.0 step=92 dt=9.77e-03 snapshots=10 wall=11s
+    t=1.408/2.0 step=144 dt=9.74e-03 snapshots=15 wall=18s
+    t=1.904/2.0 step=195 dt=9.72e-03 snapshots=20 wall=24s
+  [harris_tearing Re=800] Done: 20 snapshots, 205 steps, wall=25s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_harris_tearing_Re800_N256.npz (15.5 MB)
+
+[7/16] harris_tearing Re=1200 N=256
+  [harris_tearing Re=1200 N=256] Starting DNS, t_max=2.0
+    t=0.402/2.0 step=41 dt=9.80e-03 snapshots=5 wall=5s
+    t=0.901/2.0 step=92 dt=9.77e-03 snapshots=10 wall=11s
+    t=1.408/2.0 step=144 dt=9.74e-03 snapshots=15 wall=17s
+    t=1.904/2.0 step=195 dt=9.71e-03 snapshots=20 wall=24s
+  [harris_tearing Re=1200] Done: 20 snapshots, 205 steps, wall=25s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_harris_tearing_Re1200_N256.npz (15.5 MB)
+
+[8/16] harris_tearing Re=1600 N=256
+  [harris_tearing Re=1600 N=256] Starting DNS, t_max=2.0
+    t=0.402/2.0 step=41 dt=9.80e-03 snapshots=5 wall=5s
+    t=0.901/2.0 step=92 dt=9.77e-03 snapshots=10 wall=11s
+    t=1.408/2.0 step=144 dt=9.74e-03 snapshots=15 wall=18s
+    t=1.904/2.0 step=195 dt=9.71e-03 snapshots=20 wall=24s
+  [harris_tearing Re=1600] Done: 20 snapshots, 205 steps, wall=25s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_harris_tearing_Re1600_N256.npz (15.5 MB)
+
+[9/16] kelvin_helmholtz Re=400 N=256
+  [kelvin_helmholtz Re=400 N=256] Starting DNS, t_max=3.0
+    t=0.400/3.0 step=65 dt=6.16e-03 snapshots=5 wall=8s
+    t=0.905/3.0 step=147 dt=6.15e-03 snapshots=10 wall=18s
+    t=1.402/3.0 step=228 dt=6.14e-03 snapshots=15 wall=28s
+    t=1.905/3.0 step=310 dt=6.12e-03 snapshots=20 wall=38s
+    t=2.406/3.0 step=392 dt=6.09e-03 snapshots=25 wall=49s
+    t=2.904/3.0 step=474 dt=6.06e-03 snapshots=30 wall=62s
+  [kelvin_helmholtz Re=400] Done: 30 snapshots, 490 steps, wall=65s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_kelvin_helmholtz_Re400_N256.npz (25.1 MB)
+
+[10/16] kelvin_helmholtz Re=800 N=256
+  [kelvin_helmholtz Re=800 N=256] Starting DNS, t_max=3.0
+    t=0.400/3.0 step=65 dt=6.15e-03 snapshots=5 wall=10s
+    t=0.905/3.0 step=147 dt=6.15e-03 snapshots=10 wall=20s
+    t=1.402/3.0 step=228 dt=6.14e-03 snapshots=15 wall=30s
+    t=1.905/3.0 step=310 dt=6.12e-03 snapshots=20 wall=40s
+    t=2.405/3.0 step=392 dt=6.09e-03 snapshots=25 wall=50s
+    t=2.903/3.0 step=474 dt=6.05e-03 snapshots=30 wall=61s
+  [kelvin_helmholtz Re=800] Done: 30 snapshots, 491 steps, wall=63s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_kelvin_helmholtz_Re800_N256.npz (25.1 MB)
+
+[11/16] kelvin_helmholtz Re=1200 N=256
+  [kelvin_helmholtz Re=1200 N=256] Starting DNS, t_max=3.0
+    t=0.400/3.0 step=65 dt=6.15e-03 snapshots=5 wall=8s
+    t=0.905/3.0 step=147 dt=6.15e-03 snapshots=10 wall=18s
+    t=1.402/3.0 step=228 dt=6.14e-03 snapshots=15 wall=28s
+    t=1.905/3.0 step=310 dt=6.12e-03 snapshots=20 wall=39s
+    t=2.405/3.0 step=392 dt=6.09e-03 snapshots=25 wall=50s
+    t=2.903/3.0 step=474 dt=6.05e-03 snapshots=30 wall=62s
+  [kelvin_helmholtz Re=1200] Done: 30 snapshots, 491 steps, wall=65s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_kelvin_helmholtz_Re1200_N256.npz (25.1 MB)
+
+[12/16] kelvin_helmholtz Re=1600 N=256
+  [kelvin_helmholtz Re=1600 N=256] Starting DNS, t_max=3.0
+    t=0.400/3.0 step=65 dt=6.15e-03 snapshots=5 wall=8s
+    t=0.905/3.0 step=147 dt=6.15e-03 snapshots=10 wall=20s
+    t=1.402/3.0 step=228 dt=6.14e-03 snapshots=15 wall=31s
+    t=1.905/3.0 step=310 dt=6.12e-03 snapshots=20 wall=42s
+    t=2.405/3.0 step=392 dt=6.09e-03 snapshots=25 wall=53s
+    t=2.903/3.0 step=474 dt=6.05e-03 snapshots=30 wall=64s
+  [kelvin_helmholtz Re=1600] Done: 30 snapshots, 491 steps, wall=67s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_kelvin_helmholtz_Re1600_N256.npz (25.1 MB)
+
+[13/16] mhd_rotor Re=400 N=256
+  [mhd_rotor Re=400 N=256] Starting DNS, t_max=1.5
+    t=0.200/1.5 step=150 dt=1.25e-03 snapshots=5 wall=19s
+    t=0.450/1.5 step=338 dt=1.42e-03 snapshots=10 wall=43s
+    t=0.701/1.5 step=506 dt=1.57e-03 snapshots=15 wall=64s
+    t=0.951/1.5 step=657 dt=1.73e-03 snapshots=20 wall=83s
+    t=1.201/1.5 step=797 dt=1.84e-03 snapshots=25 wall=101s
+    t=1.451/1.5 step=931 dt=1.89e-03 snapshots=30 wall=118s
+  [mhd_rotor Re=400] Done: 30 snapshots, 957 steps, wall=121s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_mhd_rotor_Re400_N256.npz (26.2 MB)
+
+[14/16] mhd_rotor Re=800 N=256
+  [mhd_rotor Re=800 N=256] Starting DNS, t_max=1.5
+    t=0.201/1.5 step=151 dt=1.24e-03 snapshots=5 wall=20s
+    t=0.451/1.5 step=341 dt=1.40e-03 snapshots=10 wall=44s
+    t=0.701/1.5 step=511 dt=1.54e-03 snapshots=15 wall=65s
+    t=0.951/1.5 step=666 dt=1.69e-03 snapshots=20 wall=85s
+    t=1.201/1.5 step=809 dt=1.78e-03 snapshots=25 wall=103s
+    t=1.451/1.5 step=948 dt=1.82e-03 snapshots=30 wall=121s
+  [mhd_rotor Re=800] Done: 30 snapshots, 975 steps, wall=124s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_mhd_rotor_Re800_N256.npz (26.2 MB)
+
+[15/16] mhd_rotor Re=1200 N=256
+  [mhd_rotor Re=1200 N=256] Starting DNS, t_max=1.5
+    t=0.201/1.5 step=151 dt=1.24e-03 snapshots=5 wall=19s
+    t=0.451/1.5 step=342 dt=1.40e-03 snapshots=10 wall=43s
+    t=0.701/1.5 step=513 dt=1.53e-03 snapshots=15 wall=64s
+    t=0.950/1.5 step=669 dt=1.67e-03 snapshots=20 wall=84s
+    t=1.200/1.5 step=814 dt=1.76e-03 snapshots=25 wall=102s
+    t=1.451/1.5 step=955 dt=1.78e-03 snapshots=30 wall=121s
+  [mhd_rotor Re=1200] Done: 30 snapshots, 983 steps, wall=124s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_mhd_rotor_Re1200_N256.npz (26.3 MB)
+
+[16/16] mhd_rotor Re=1600 N=256
+  [mhd_rotor Re=1600 N=256] Starting DNS, t_max=1.5
+    t=0.201/1.5 step=151 dt=1.23e-03 snapshots=5 wall=19s
+    t=0.451/1.5 step=342 dt=1.39e-03 snapshots=10 wall=44s
+    t=0.701/1.5 step=514 dt=1.53e-03 snapshots=15 wall=66s
+    t=0.951/1.5 step=672 dt=1.65e-03 snapshots=20 wall=86s
+    t=1.200/1.5 step=818 dt=1.75e-03 snapshots=25 wall=105s
+    t=1.451/1.5 step=960 dt=1.76e-03 snapshots=30 wall=123s
+  [mhd_rotor Re=1600] Done: 30 snapshots, 989 steps, wall=127s
+  Saved: /Users/Sayu/Desktop/BA_Proj/study/results/dns_mhd_rotor_Re1600_N256.npz (26.3 MB)
+
+============================================================
+Phase 1 complete.
+  orszag_tang Re=400: 30 snaps, 117s [OK]
+  orszag_tang Re=800: 30 snaps, 131s [OK]
+  orszag_tang Re=1200: 30 snaps, 134s [OK]
+  orszag_tang Re=1600: 30 snaps, 134s [OK]
+  harris_tearing Re=400: 20 snaps, 25s [OK]
+  harris_tearing Re=800: 20 snaps, 25s [OK]
+  harris_tearing Re=1200: 20 snaps, 25s [OK]
+  harris_tearing Re=1600: 20 snaps, 25s [OK]
+  kelvin_helmholtz Re=400: 30 snaps, 65s [OK]
+  kelvin_helmholtz Re=800: 30 snaps, 63s [OK]
+  kelvin_helmholtz Re=1200: 30 snaps, 65s [OK]
+  kelvin_helmholtz Re=1600: 30 snaps, 67s [OK]
+  mhd_rotor Re=400: 30 snaps, 121s [OK]
+  mhd_rotor Re=800: 30 snaps, 124s [OK]
+  mhd_rotor Re=1200: 30 snaps, 124s [OK]
+  mhd_rotor Re=1600: 30 snaps, 127s [OK]
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:58 study/results/sa_baseline_mhd_rotor_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 14 avr 01:43 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 14 avr 13:55 study/results/upper_bound_loso_N256_dim4.npz

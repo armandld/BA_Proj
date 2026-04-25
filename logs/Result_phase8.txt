@@ -1,0 +1,181 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     8
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 8  -  phase8_depth_report
+============================================================
+====================================================================================================
+  Phase 8: QAOA compiled-circuit depth report (v2 Hamiltonian)
+====================================================================================================
+  scenario              Re  dim   eps  nZZ_f  nZZ_p  nK_f  nK_p  drop%  depth    2q   total
+  ------------------------------------------------------------------------------------------------
+  orszag_tang          400    2  0.00      8      8     4     4   0.0     72    64     112
+  orszag_tang          400    2  0.05      8      8     4     4   0.0     72    64     112
+  orszag_tang          400    2  0.10      8      8     4     4   0.0     72    64     112
+  orszag_tang          400    2  0.20      8      8     4     4   0.0     72    64     112
+  orszag_tang          400    4  0.00     32     32    16    16   0.0    138   256     448
+  orszag_tang          400    4  0.05     32     32    16    16   0.0    138   256     448
+  orszag_tang          400    4  0.10     32     32    16    16   0.0    138   256     448
+  orszag_tang          400    4  0.20     32     32    16    16   0.0    138   256     448
+  orszag_tang          800    2  0.00      8      8     4     4   0.0     72    64     112
+  orszag_tang          800    2  0.05      8      8     4     4   0.0     72    64     112
+  orszag_tang          800    2  0.10      8      8     4     4   0.0     72    64     112
+  orszag_tang          800    2  0.20      8      8     4     4   0.0     72    64     112
+  orszag_tang          800    4  0.00     32     32    16    16   0.0    138   256     448
+  orszag_tang          800    4  0.05     32     32    16    16   0.0    138   256     448
+  orszag_tang          800    4  0.10     32     32    16    16   0.0    138   256     448
+  orszag_tang          800    4  0.20     32     32    16    16   2.5    138   256     444
+  orszag_tang         1200    2  0.00      8      8     4     4   0.0     72    64     112
+  orszag_tang         1200    2  0.05      8      8     4     4   0.0     72    64     112
+  orszag_tang         1200    2  0.10      8      8     4     4   0.0     72    64     112
+  orszag_tang         1200    2  0.20      8      8     4     4   0.0     72    64     112
+  orszag_tang         1200    4  0.00     32     32    16    16   0.0    138   256     448
+  orszag_tang         1200    4  0.05     32     32    16    16   0.0    138   256     448
+  orszag_tang         1200    4  0.10     32     32    16    16   0.0    138   256     448
+  orszag_tang         1200    4  0.20     32     32    16    16   5.0    138   256     440
+  orszag_tang         1600    2  0.00      8      8     4     4   0.0     72    64     112
+  orszag_tang         1600    2  0.05      8      8     4     4   0.0     72    64     112
+  orszag_tang         1600    2  0.10      8      8     4     4   0.0     72    64     112
+  orszag_tang         1600    2  0.20      8      8     4     4   0.0     72    64     112
+  orszag_tang         1600    4  0.00     32     32    16    16   0.0    138   256     448
+  orszag_tang         1600    4  0.05     32     32    16    16   0.0    138   256     448
+  orszag_tang         1600    4  0.10     32     32    16    16   0.0    138   256     448
+  orszag_tang         1600    4  0.20     32     32    16    16   5.0    138   256     440
+  harris_tearing       400    2  0.00      8      8     4     4   0.0     72    64     112
+  harris_tearing       400    2  0.05      8      8     4     4   0.0     72    64     112
+  harris_tearing       400    2  0.10      8      8     4     4   0.0     72    64     112
+  harris_tearing       400    2  0.20      8      8     4     4   0.0     72    64     112
+  harris_tearing       400    4  0.00     32     32    16    16   0.0    138   256     448
+  harris_tearing       400    4  0.05     32     24    16    16  10.0    138   240     432
+  harris_tearing       400    4  0.10     32     24    16    16  10.0    138   240     432
+  harris_tearing       400    4  0.20     32     24    16    16  10.0    138   240     432
+  harris_tearing       800    2  0.00      8      8     4     4   0.0     72    64     112
+  harris_tearing       800    2  0.05      8      8     4     4   0.0     72    64     112
+  harris_tearing       800    2  0.10      8      8     4     4   0.0     72    64     112
+  harris_tearing       800    2  0.20      8      8     4     4   0.0     72    64     112
+  harris_tearing       800    4  0.00     32     32    16    16   0.0    138   256     448
+  harris_tearing       800    4  0.05     32     24    16    16  10.0    138   240     432
+  harris_tearing       800    4  0.10     32     24    16    16  10.0    138   240     432
+  harris_tearing       800    4  0.20     32     24    16    16  10.0    138   240     432
+  harris_tearing      1200    2  0.00      8      8     4     4   0.0     72    64     112
+  harris_tearing      1200    2  0.05      8      8     4     4   0.0     72    64     112
+  harris_tearing      1200    2  0.10      8      8     4     4   0.0     72    64     112
+  harris_tearing      1200    2  0.20      8      8     4     4   0.0     72    64     112
+  harris_tearing      1200    4  0.00     32     32    16    16   0.0    138   256     448
+  harris_tearing      1200    4  0.05     32     24    16    16  10.0    138   240     432
+  harris_tearing      1200    4  0.10     32     24    16    16  10.0    138   240     432
+  harris_tearing      1200    4  0.20     32     24    16    16  10.0    138   240     432
+  harris_tearing      1600    2  0.00      8      8     4     4   0.0     72    64     112
+  harris_tearing      1600    2  0.05      8      8     4     4   0.0     72    64     112
+  harris_tearing      1600    2  0.10      8      8     4     4   0.0     72    64     112
+  harris_tearing      1600    2  0.20      8      8     4     4   0.0     72    64     112
+  harris_tearing      1600    4  0.00     32     32    16    16   0.0    138   256     448
+  harris_tearing      1600    4  0.05     32     24    16    16  10.0    138   240     432
+  harris_tearing      1600    4  0.10     32     24    16    16  10.0    138   240     432
+  harris_tearing      1600    4  0.20     32     24    16    16  10.0    138   240     432
+  kelvin_helmholtz     400    2  0.00      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     400    2  0.05      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     400    2  0.10      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     400    2  0.20      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     400    4  0.00     32     32    16    16   0.0    138   256     448
+  kelvin_helmholtz     400    4  0.05     32     24    16    16  10.0    138   240     432
+  kelvin_helmholtz     400    4  0.10     32     24    16    11  16.2    110   180     362
+  kelvin_helmholtz     400    4  0.20     32     24    16    10  17.5    105   168     348
+  kelvin_helmholtz     800    2  0.00      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     800    2  0.05      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     800    2  0.10      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     800    2  0.20      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz     800    4  0.00     32     32    16    16   0.0    138   256     448
+  kelvin_helmholtz     800    4  0.05     32     24    16    16  10.0    138   240     432
+  kelvin_helmholtz     800    4  0.10     32     24    16    11  16.2    110   180     362
+  kelvin_helmholtz     800    4  0.20     32     24    16    10  17.5    105   168     348
+  kelvin_helmholtz    1200    2  0.00      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1200    2  0.05      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1200    2  0.10      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1200    2  0.20      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1200    4  0.00     32     32    16    16   0.0    138   256     448
+  kelvin_helmholtz    1200    4  0.05     32     24    16    16  10.0    138   240     432
+  kelvin_helmholtz    1200    4  0.10     32     24    16    11  16.2    110   180     362
+  kelvin_helmholtz    1200    4  0.20     32     24    16    10  17.5    105   168     348
+  kelvin_helmholtz    1600    2  0.00      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1600    2  0.05      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1600    2  0.10      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1600    2  0.20      8      8     4     4   0.0     72    64     112
+  kelvin_helmholtz    1600    4  0.00     32     32    16    16   0.0    138   256     448
+  kelvin_helmholtz    1600    4  0.05     32     24    16    16  10.0    138   240     432
+  kelvin_helmholtz    1600    4  0.10     32     24    16    11  16.2    110   180     362
+  kelvin_helmholtz    1600    4  0.20     32     24    16    10  17.5    105   168     348
+  mhd_rotor            400    2  0.00      8      8     4     4   0.0     72    64     112
+  mhd_rotor            400    2  0.05      8      8     4     4   0.0     72    64     112
+  mhd_rotor            400    2  0.10      8      8     4     4   0.0     72    64     112
+  mhd_rotor            400    2  0.20      8      8     4     4   0.0     72    64     112
+  mhd_rotor            400    4  0.00     32     32    16    16   0.0    138   256     448
+  mhd_rotor            400    4  0.05     32     18    16    11  23.8    109   168     350
+  mhd_rotor            400    4  0.10     32     12    16     8  45.0     71   120     280
+  mhd_rotor            400    4  0.20     32     12    16     8  45.0     71   120     280
+  mhd_rotor            800    2  0.00      8      8     4     4   0.0     72    64     112
+  mhd_rotor            800    2  0.05      8      8     4     4   0.0     72    64     112
+  mhd_rotor            800    2  0.10      8      8     4     4   0.0     72    64     112
+  mhd_rotor            800    2  0.20      8      8     4     4   0.0     72    64     112
+  mhd_rotor            800    4  0.00     32     32    16    16   0.0    138   256     448
+  mhd_rotor            800    4  0.05     32     18    16    11  23.8    109   168     350
+  mhd_rotor            800    4  0.10     32     12    16     8  35.0     72   120     296
+  mhd_rotor            800    4  0.20     32     12    16     8  45.0     71   120     280
+  mhd_rotor           1200    2  0.00      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1200    2  0.05      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1200    2  0.10      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1200    2  0.20      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1200    4  0.00     32     32    16    16   0.0    138   256     448
+  mhd_rotor           1200    4  0.05     32     18    16    11  23.8    109   168     350
+  mhd_rotor           1200    4  0.10     32     12    16     8  35.0     72   120     296
+  mhd_rotor           1200    4  0.20     32     12    16     8  50.0     70   120     272
+  mhd_rotor           1600    2  0.00      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1600    2  0.05      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1600    2  0.10      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1600    2  0.20      8      8     4     4   0.0     72    64     112
+  mhd_rotor           1600    4  0.00     32     32    16    16   0.0    138   256     448
+  mhd_rotor           1600    4  0.05     32     18    16    11  23.8    109   168     350
+  mhd_rotor           1600    4  0.10     32     12    16     8  35.0     72   120     296
+  mhd_rotor           1600    4  0.20     32     12    16     8  55.0     70   120     264
+
+  CSV: /Users/Sayu/Desktop/BA_Proj/study/results/depth_report_N256.csv
+
+Phase 8 complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:52 study/results/sa_baseline_kelvin_helmholtz_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:53 study/results/sa_baseline_kelvin_helmholtz_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:54 study/results/sa_baseline_kelvin_helmholtz_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:55 study/results/sa_baseline_kelvin_helmholtz_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:02 study/results/sa_baseline_mhd_rotor_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 18:02 study/results/sa_baseline_mhd_rotor_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:03 study/results/sa_baseline_mhd_rotor_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:58 study/results/sa_baseline_mhd_rotor_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz

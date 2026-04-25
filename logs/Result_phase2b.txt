@@ -1,0 +1,93 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     2b
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 2b  -  phase2b_percentile_sensitivity
+============================================================
+========================================================================================
+  Phase 2B: Sensitivity of LOSO ceiling to L2_PERCENTILE_HARD
+  dim=4  N=256  max-snaps/cfg=30
+  percentiles: [60, 70, 75, 80, 85, 90]
+========================================================================================
+
+  16 configs available across 4 scenario(s)
+  percentile pos_rate  f1_class   f1_site     delta
+  -------------------------------------------------
+          60    0.400     0.645     0.422    -0.224   [12.4s]
+          70    0.300     0.521     0.215    -0.306   [11.4s]
+          75    0.250     0.434     0.189    -0.245   [11.8s]
+          80    0.200     0.354     0.098    -0.256   [21.4s]
+          85    0.150     0.294     0.043    -0.251   [12.8s]
+          90    0.100     0.220     0.057    -0.163   [13.9s]
+
+  per-fold breakdown:
+     p  held                 n_val  f1_class   f1_site     delta
+    60  orszag_tang           1920     0.571     0.498    -0.073
+    60  harris_tearing        1280     0.571     0.571    +0.000
+    60  kelvin_helmholtz      1920     0.571     0.571    +0.000
+    60  mhd_rotor             1920     0.867     0.046    -0.821
+    70  orszag_tang           1920     0.406     0.394    -0.012
+    70  harris_tearing        1280     0.462     0.000    -0.462
+    70  kelvin_helmholtz      1920     0.462     0.395    -0.066
+    70  mhd_rotor             1920     0.755     0.070    -0.685
+    75  orszag_tang           1920     0.264     0.327    +0.063
+    75  harris_tearing        1280     0.400     0.000    -0.400
+    75  kelvin_helmholtz      1920     0.400     0.344    -0.056
+    75  mhd_rotor             1920     0.672     0.084    -0.588
+    80  orszag_tang           1920     0.173     0.163    -0.010
+    80  harris_tearing        1280     0.333     0.000    -0.333
+    80  kelvin_helmholtz      1920     0.333     0.020    -0.313
+    80  mhd_rotor             1920     0.576     0.208    -0.368
+    85  orszag_tang           1920     0.138     0.037    -0.101
+    85  harris_tearing        1280     0.253     0.000    -0.253
+    85  kelvin_helmholtz      1920     0.269     0.135    -0.134
+    85  mhd_rotor             1920     0.518     0.000    -0.518
+    90  orszag_tang           1920     0.102     0.018    -0.083
+    90  harris_tearing        1280     0.171     0.000    -0.171
+    90  kelvin_helmholtz      1920     0.188     0.209    +0.022
+    90  mhd_rotor             1920     0.419     0.000    -0.419
+
+  INTERPRETATION:
+  * max(F1_site - F1_class) = -0.163 over p in [60, 70, 75, 80, 85, 90]  ==> the LOSO collapse is ROBUST to the percentile choice. The local-Hamiltonian hypothesis fails for ANY reasonable hard-patch definition.
+
+  saved: percentile_sensitivity_N256_dim4.npz
+
+Phase 2B complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 23:53 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 22:35 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

@@ -1,0 +1,224 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     2
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 2  -  phase2_hard_patches
+============================================================
+Phase 2: Hard patch identification
+  Patch dims: [2, 4]
+
+Analyzing: dns_harris_tearing_Re1200_N256.npz
+  Loaded: dns_harris_tearing_Re1200_N256.npz (harris_tearing Re=1200 N=256, 20 snapshots)
+    dim=2: L2 threshold=1.000496, hard=20/80 (25.0%)
+      Hard patch scores:  mean=0.8216 std=0.0507 [0.6740, 0.8660]
+      Easy patch scores:  mean=0.8458 std=0.0329
+    dim=4: L2 threshold=0.273954, hard=80/320 (25.0%)
+      Hard patch scores:  mean=0.7590 std=0.0931 [0.4985, 0.8660]
+      Easy patch scores:  mean=0.7157 std=0.0695
+    Saved: patches_harris_tearing_Re1200_N256_dim2.npz (3 KB)
+    Saved: patches_harris_tearing_Re1200_N256_dim4.npz (6 KB)
+
+Analyzing: dns_harris_tearing_Re1600_N256.npz
+  Loaded: dns_harris_tearing_Re1600_N256.npz (harris_tearing Re=1600 N=256, 20 snapshots)
+    dim=2: L2 threshold=1.000497, hard=20/80 (25.0%)
+      Hard patch scores:  mean=0.8191 std=0.0490 [0.6740, 0.8392]
+      Easy patch scores:  mean=0.8462 std=0.0345
+    dim=4: L2 threshold=0.273408, hard=80/320 (25.0%)
+      Hard patch scores:  mean=0.7584 std=0.0925 [0.4985, 0.8646]
+      Easy patch scores:  mean=0.7154 std=0.0700
+    Saved: patches_harris_tearing_Re1600_N256_dim2.npz (3 KB)
+    Saved: patches_harris_tearing_Re1600_N256_dim4.npz (6 KB)
+
+Analyzing: dns_harris_tearing_Re400_N256.npz
+  Loaded: dns_harris_tearing_Re400_N256.npz (harris_tearing Re=400 N=256, 20 snapshots)
+    dim=2: L2 threshold=1.000492, hard=20/80 (25.0%)
+      Hard patch scores:  mean=0.8189 std=0.0489 [0.6740, 0.8392]
+      Easy patch scores:  mean=0.8403 std=0.0371
+    dim=4: L2 threshold=0.277874, hard=80/320 (25.0%)
+      Hard patch scores:  mean=0.7688 std=0.0678 [0.6980, 0.8651]
+      Easy patch scores:  mean=0.7124 std=0.0738
+    Saved: patches_harris_tearing_Re400_N256_dim2.npz (3 KB)
+    Saved: patches_harris_tearing_Re400_N256_dim4.npz (6 KB)
+
+Analyzing: dns_harris_tearing_Re800_N256.npz
+  Loaded: dns_harris_tearing_Re800_N256.npz (harris_tearing Re=800 N=256, 20 snapshots)
+    dim=2: L2 threshold=1.000495, hard=20/80 (25.0%)
+      Hard patch scores:  mean=0.8295 std=0.0534 [0.6740, 0.8660]
+      Easy patch scores:  mean=0.8431 std=0.0351
+    dim=4: L2 threshold=0.275065, hard=80/320 (25.0%)
+      Hard patch scores:  mean=0.7587 std=0.0932 [0.4985, 0.8660]
+      Easy patch scores:  mean=0.7163 std=0.0696
+    Saved: patches_harris_tearing_Re800_N256_dim2.npz (3 KB)
+    Saved: patches_harris_tearing_Re800_N256_dim4.npz (6 KB)
+
+Analyzing: dns_kelvin_helmholtz_Re1200_N256.npz
+  Loaded: dns_kelvin_helmholtz_Re1200_N256.npz (kelvin_helmholtz Re=1200 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.855763, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.8585 std=0.0052 [0.8490, 0.8655]
+      Easy patch scores:  mean=0.8208 std=0.0621
+    dim=4: L2 threshold=0.292781, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.7918 std=0.0477 [0.7302, 0.8659]
+      Easy patch scores:  mean=0.7927 std=0.0657
+    Saved: patches_kelvin_helmholtz_Re1200_N256_dim2.npz (4 KB)
+    Saved: patches_kelvin_helmholtz_Re1200_N256_dim4.npz (9 KB)
+
+Analyzing: dns_kelvin_helmholtz_Re1600_N256.npz
+  Loaded: dns_kelvin_helmholtz_Re1600_N256.npz (kelvin_helmholtz Re=1600 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.855859, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.8585 std=0.0052 [0.8489, 0.8655]
+      Easy patch scores:  mean=0.8210 std=0.0621
+    dim=4: L2 threshold=0.292521, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.7912 std=0.0478 [0.7299, 0.8659]
+      Easy patch scores:  mean=0.7929 std=0.0657
+    Saved: patches_kelvin_helmholtz_Re1600_N256_dim2.npz (4 KB)
+    Saved: patches_kelvin_helmholtz_Re1600_N256_dim4.npz (9 KB)
+
+Analyzing: dns_kelvin_helmholtz_Re400_N256.npz
+  Loaded: dns_kelvin_helmholtz_Re400_N256.npz (kelvin_helmholtz Re=400 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.855002, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.8587 std=0.0050 [0.8496, 0.8654]
+      Easy patch scores:  mean=0.8199 std=0.0619
+    dim=4: L2 threshold=0.293849, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.7914 std=0.0478 [0.7308, 0.8659]
+      Easy patch scores:  mean=0.7927 std=0.0654
+    Saved: patches_kelvin_helmholtz_Re400_N256_dim2.npz (4 KB)
+    Saved: patches_kelvin_helmholtz_Re400_N256_dim4.npz (9 KB)
+
+Analyzing: dns_kelvin_helmholtz_Re800_N256.npz
+  Loaded: dns_kelvin_helmholtz_Re800_N256.npz (kelvin_helmholtz Re=800 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.855573, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.8586 std=0.0051 [0.8492, 0.8654]
+      Easy patch scores:  mean=0.8206 std=0.0620
+    dim=4: L2 threshold=0.292967, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.7914 std=0.0476 [0.7305, 0.8659]
+      Easy patch scores:  mean=0.7928 std=0.0656
+    Saved: patches_kelvin_helmholtz_Re800_N256_dim2.npz (4 KB)
+    Saved: patches_kelvin_helmholtz_Re800_N256_dim4.npz (9 KB)
+
+Analyzing: dns_mhd_rotor_Re1200_N256.npz
+  Loaded: dns_mhd_rotor_Re1200_N256.npz (mhd_rotor Re=1200 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.739349, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.6705 std=0.0469 [0.5474, 0.7496]
+      Easy patch scores:  mean=0.6246 std=0.1165
+    dim=4: L2 threshold=0.809160, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.6361 std=0.1055 [0.3138, 0.8487]
+      Easy patch scores:  mean=0.0510 std=0.0854
+    Saved: patches_mhd_rotor_Re1200_N256_dim2.npz (4 KB)
+    Saved: patches_mhd_rotor_Re1200_N256_dim4.npz (9 KB)
+
+Analyzing: dns_mhd_rotor_Re1600_N256.npz
+  Loaded: dns_mhd_rotor_Re1600_N256.npz (mhd_rotor Re=1600 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.741476, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.6754 std=0.0553 [0.5501, 0.8038]
+      Easy patch scores:  mean=0.6211 std=0.1110
+    dim=4: L2 threshold=0.814311, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.6347 std=0.1027 [0.3357, 0.8514]
+      Easy patch scores:  mean=0.0533 std=0.0803
+    Saved: patches_mhd_rotor_Re1600_N256_dim2.npz (4 KB)
+    Saved: patches_mhd_rotor_Re1600_N256_dim4.npz (9 KB)
+
+Analyzing: dns_mhd_rotor_Re400_N256.npz
+  Loaded: dns_mhd_rotor_Re400_N256.npz (mhd_rotor Re=400 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.723795, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.6989 std=0.0505 [0.5985, 0.7917]
+      Easy patch scores:  mean=0.6360 std=0.1069
+    dim=4: L2 threshold=0.769827, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.6517 std=0.0997 [0.4566, 0.8478]
+      Easy patch scores:  mean=0.0526 std=0.1043
+    Saved: patches_mhd_rotor_Re400_N256_dim2.npz (4 KB)
+    Saved: patches_mhd_rotor_Re400_N256_dim4.npz (9 KB)
+
+Analyzing: dns_mhd_rotor_Re800_N256.npz
+  Loaded: dns_mhd_rotor_Re800_N256.npz (mhd_rotor Re=800 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.734929, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.6756 std=0.0491 [0.5741, 0.8022]
+      Easy patch scores:  mean=0.6443 std=0.1102
+    dim=4: L2 threshold=0.798780, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.6521 std=0.0994 [0.3971, 0.8474]
+      Easy patch scores:  mean=0.0515 std=0.0962
+    Saved: patches_mhd_rotor_Re800_N256_dim2.npz (4 KB)
+    Saved: patches_mhd_rotor_Re800_N256_dim4.npz (9 KB)
+
+Analyzing: dns_orszag_tang_Re1200_N256.npz
+  Loaded: dns_orszag_tang_Re1200_N256.npz (orszag_tang Re=1200 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.856220, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.5769 std=0.1223 [0.3396, 0.7280]
+      Easy patch scores:  mean=0.6752 std=0.0967
+    dim=4: L2 threshold=0.711603, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.3909 std=0.2004 [0.1208, 0.7559]
+      Easy patch scores:  mean=0.5161 std=0.1888
+    Saved: patches_orszag_tang_Re1200_N256_dim2.npz (4 KB)
+    Saved: patches_orszag_tang_Re1200_N256_dim4.npz (9 KB)
+
+Analyzing: dns_orszag_tang_Re1600_N256.npz
+  Loaded: dns_orszag_tang_Re1600_N256.npz (orszag_tang Re=1600 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.856488, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.5782 std=0.1260 [0.3343, 0.7204]
+      Easy patch scores:  mean=0.6713 std=0.1013
+    dim=4: L2 threshold=0.711920, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.3975 std=0.1989 [0.1155, 0.7562]
+      Easy patch scores:  mean=0.5109 std=0.1933
+    Saved: patches_orszag_tang_Re1600_N256_dim2.npz (4 KB)
+    Saved: patches_orszag_tang_Re1600_N256_dim4.npz (9 KB)
+
+Analyzing: dns_orszag_tang_Re400_N256.npz
+  Loaded: dns_orszag_tang_Re400_N256.npz (orszag_tang Re=400 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.855225, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.5811 std=0.0617 [0.4077, 0.6662]
+      Easy patch scores:  mean=0.6841 std=0.0970
+    dim=4: L2 threshold=0.707276, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.4144 std=0.1703 [0.1700, 0.7512]
+      Easy patch scores:  mean=0.5394 std=0.1712
+    Saved: patches_orszag_tang_Re400_N256_dim2.npz (4 KB)
+    Saved: patches_orszag_tang_Re400_N256_dim4.npz (9 KB)
+
+Analyzing: dns_orszag_tang_Re800_N256.npz
+  Loaded: dns_orszag_tang_Re800_N256.npz (orszag_tang Re=800 N=256, 30 snapshots)
+    dim=2: L2 threshold=0.856161, hard=30/120 (25.0%)
+      Hard patch scores:  mean=0.5860 std=0.0908 [0.4328, 0.7244]
+      Easy patch scores:  mean=0.6804 std=0.1038
+    dim=4: L2 threshold=0.710428, hard=120/480 (25.0%)
+      Hard patch scores:  mean=0.3935 std=0.1907 [0.1323, 0.7537]
+      Easy patch scores:  mean=0.5268 std=0.1846
+    Saved: patches_orszag_tang_Re800_N256_dim2.npz (4 KB)
+    Saved: patches_orszag_tang_Re800_N256_dim4.npz (9 KB)
+
+Phase 2 complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:58 study/results/sa_baseline_mhd_rotor_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 14 avr 01:43 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 14 avr 13:55 study/results/upper_bound_loso_N256_dim4.npz

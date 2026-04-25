@@ -1,0 +1,568 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     10
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 10  -  phase10_train_hamiltonian
+============================================================
+========================================================================================
+  Phase 10: training of v2 (c_bias, thr_amr)
+  theta = (log10 c_bias, thr_amr) ; w_zz=2, w_zzzz=1 (fixed)
+  modes: ['per-scenario', 'joint']
+  optimiser=cma  budget/run=80
+========================================================================================
+
+
+### MODE: per-scenario ###
+  [scenario:orszag_tang] dataset: 120 pairs -> train 84, val 36 (val_fixed=24)
+  [scenario:orszag_tang] optimiser: CMA-ES, budget 80, sigma0=0.5, popsize=6
+    [scenario:orszag_tang] step   1  c=  0.619  thr=0.139  F1_tr=0.273  F1_val=0.381   [4.9s]
+    [scenario:orszag_tang] step   2  c=  0.100  thr=0.467  F1_tr=0.259  F1_val=0.381   [4.6s]
+    [scenario:orszag_tang] step   3  c=  0.127  thr=0.021  F1_tr=0.297  F1_val=0.381   [4.5s]
+    [scenario:orszag_tang] step   4  c=  1.784  thr=0.038  F1_tr=0.420  F1_val=0.381   [4.5s]
+    [scenario:orszag_tang] step   5  c=  0.296  thr=0.020  F1_tr=0.311  F1_val=0.381   [4.6s]
+    [scenario:orszag_tang] step   6  c=  1.887  thr=0.584  F1_tr=0.045  F1_val=0.087   [4.6s]
+    [scenario:orszag_tang] step   7  c=  0.655  thr=0.219  F1_tr=0.299  F1_val=0.087   [4.6s]
+    [scenario:orszag_tang] step   8  c=  0.419  thr=0.106  F1_tr=0.280  F1_val=0.087   [4.7s]
+    [scenario:orszag_tang] step   9  c=  1.140  thr=0.158  F1_tr=0.337  F1_val=0.087   [4.9s]
+    [scenario:orszag_tang] step  10  c=  2.012  thr=0.035  F1_tr=0.397  F1_val=0.087   [5.2s]
+    [scenario:orszag_tang] step  11  c=  2.248  thr=0.060  F1_tr=0.377  F1_val=0.384   [4.9s]
+    [scenario:orszag_tang] step  12  c=  0.529  thr=0.189  F1_tr=0.365  F1_val=0.384   [4.9s]
+    [scenario:orszag_tang] step  13  c=  2.929  thr=0.052  F1_tr=0.421  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  14  c=  7.883  thr=0.159  F1_tr=0.448  F1_val=0.384   [4.9s]
+    [scenario:orszag_tang] step  15  c=  6.285  thr=0.025  F1_tr=0.272  F1_val=0.384   [4.9s]
+    [scenario:orszag_tang] step  16  c=  0.386  thr=0.238  F1_tr=0.441  F1_val=0.377   [5.0s]
+    [scenario:orszag_tang] step  17  c= 11.046  thr=0.135  F1_tr=0.388  F1_val=0.377   [5.1s]
+    [scenario:orszag_tang] step  18  c=  0.475  thr=0.055  F1_tr=0.320  F1_val=0.377   [5.4s]
+    [scenario:orszag_tang] step  19  c=  4.547  thr=0.172  F1_tr=0.339  F1_val=0.377   [5.2s]
+    [scenario:orszag_tang] step  20  c=  1.988  thr=0.022  F1_tr=0.335  F1_val=0.377   [5.3s]
+    [scenario:orszag_tang] step  21  c=  1.992  thr=0.049  F1_tr=0.360  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  22  c=  2.318  thr=0.298  F1_tr=0.327  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  23  c=  1.683  thr=0.183  F1_tr=0.394  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  24  c=  2.059  thr=0.064  F1_tr=0.338  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  25  c=  2.814  thr=0.036  F1_tr=0.313  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  26  c=  1.441  thr=0.217  F1_tr=0.394  F1_val=0.379   [5.3s]
+    [scenario:orszag_tang] step  27  c=  2.459  thr=0.078  F1_tr=0.325  F1_val=0.379   [5.1s]
+    [scenario:orszag_tang] step  28  c=  0.633  thr=0.026  F1_tr=0.282  F1_val=0.379   [5.4s]
+    [scenario:orszag_tang] step  29  c=  1.903  thr=0.024  F1_tr=0.385  F1_val=0.379   [5.6s]
+    [scenario:orszag_tang] step  30  c=  6.011  thr=0.305  F1_tr=0.311  F1_val=0.379   [5.3s]
+    [scenario:orszag_tang] step  31  c=  2.166  thr=0.158  F1_tr=0.311  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  32  c=  1.662  thr=0.107  F1_tr=0.418  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  33  c=  6.485  thr=0.134  F1_tr=0.358  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  34  c=  2.635  thr=0.306  F1_tr=0.237  F1_val=0.384   [5.5s]
+    [scenario:orszag_tang] step  35  c=  1.127  thr=0.062  F1_tr=0.314  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  36  c=  2.500  thr=0.050  F1_tr=0.461  F1_val=0.384   [5.6s]
+    [scenario:orszag_tang] step  37  c=  2.868  thr=0.081  F1_tr=0.434  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  38  c=  6.635  thr=0.022  F1_tr=0.399  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  39  c=  6.829  thr=0.185  F1_tr=0.364  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  40  c=  0.868  thr=0.204  F1_tr=0.321  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  41  c=  2.519  thr=0.085  F1_tr=0.288  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  42  c=  2.692  thr=0.025  F1_tr=0.286  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  43  c=  8.284  thr=0.020  F1_tr=0.399  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  44  c=  2.520  thr=0.206  F1_tr=0.328  F1_val=0.384   [5.5s]
+    [scenario:orszag_tang] step  45  c=  2.836  thr=0.055  F1_tr=0.276  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  46  c=  3.006  thr=0.114  F1_tr=0.326  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  47  c=  1.729  thr=0.146  F1_tr=0.304  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  48  c=  1.397  thr=0.029  F1_tr=0.404  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  49  c=  2.984  thr=0.040  F1_tr=0.353  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  50  c= 11.899  thr=0.025  F1_tr=0.324  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  51  c=  2.507  thr=0.109  F1_tr=0.330  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  52  c=  1.484  thr=0.021  F1_tr=0.364  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  53  c=  0.521  thr=0.096  F1_tr=0.272  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  54  c=  2.812  thr=0.158  F1_tr=0.391  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  55  c=  2.989  thr=0.143  F1_tr=0.338  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  56  c=  2.540  thr=0.136  F1_tr=0.453  F1_val=0.384   [5.5s]
+    [scenario:orszag_tang] step  57  c=  3.224  thr=0.146  F1_tr=0.417  F1_val=0.384   [5.5s]
+    [scenario:orszag_tang] step  58  c=  2.500  thr=0.132  F1_tr=0.431  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  59  c=  2.853  thr=0.168  F1_tr=0.317  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  60  c=  0.688  thr=0.164  F1_tr=0.309  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  61  c=  3.765  thr=0.107  F1_tr=0.312  F1_val=0.384   [5.5s]
+    [scenario:orszag_tang] step  62  c=  2.931  thr=0.106  F1_tr=0.381  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  63  c=  2.011  thr=0.045  F1_tr=0.398  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  64  c=  1.908  thr=0.206  F1_tr=0.259  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  65  c=  1.639  thr=0.261  F1_tr=0.334  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  66  c=  2.643  thr=0.172  F1_tr=0.374  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  67  c=  2.800  thr=0.034  F1_tr=0.425  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  68  c=  2.138  thr=0.026  F1_tr=0.332  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  69  c=  3.028  thr=0.025  F1_tr=0.370  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  70  c=  1.988  thr=0.067  F1_tr=0.282  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  71  c=  3.366  thr=0.071  F1_tr=0.418  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  72  c=  4.262  thr=0.184  F1_tr=0.344  F1_val=0.384   [5.4s]
+    [scenario:orszag_tang] step  73  c=  1.108  thr=0.021  F1_tr=0.336  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  74  c=  1.692  thr=0.061  F1_tr=0.346  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  75  c=  2.438  thr=0.021  F1_tr=0.231  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  76  c=  2.467  thr=0.040  F1_tr=0.345  F1_val=0.384   [5.2s]
+    [scenario:orszag_tang] step  77  c=  3.026  thr=0.182  F1_tr=0.274  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  78  c=  2.486  thr=0.026  F1_tr=0.368  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  79  c=  1.592  thr=0.039  F1_tr=0.318  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  80  c=  1.318  thr=0.043  F1_tr=0.292  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  81  c=  3.363  thr=0.020  F1_tr=0.411  F1_val=0.384   [5.1s]
+    [scenario:orszag_tang] step  82  c=  2.375  thr=0.098  F1_tr=0.307  F1_val=0.384   [5.0s]
+    [scenario:orszag_tang] step  83  c=  2.241  thr=0.020  F1_tr=0.312  F1_val=0.384   [5.3s]
+    [scenario:orszag_tang] step  84  c=  2.136  thr=0.022  F1_tr=0.369  F1_val=0.384   [4.9s]
+
+  [scenario:orszag_tang] re-evaluating top-5 candidates on val_fixed (24 pairs)...
+    cand 1: c=  2.500 thr=0.050  val F1=0.384  class=0.384
+    cand 2: c=  2.540 thr=0.136  val F1=0.384  class=0.374
+    cand 3: c=  7.883 thr=0.159  val F1=0.384  class=0.365
+    cand 4: c=  0.386 thr=0.238  val F1=0.322  class=0.337
+    cand 5: c=  2.868 thr=0.081  val F1=0.384  class=0.384
+
+  [scenario:orszag_tang] BEST: c_bias=2.500 thr=0.050  F1_val=0.384  classical=0.384  delta=+0.000  OK
+  [scenario:orszag_tang] wall-time: 610s
+
+  saved: train_scenario-orszag_tang_N256_dim4.npz
+  [scenario:harris_tearing] dataset: 80 pairs -> train 56, val 24 (val_fixed=24)
+  [scenario:harris_tearing] optimiser: CMA-ES, budget 80, sigma0=0.5, popsize=6
+    [scenario:harris_tearing] step   1  c=  0.619  thr=0.139  F1_tr=0.287  F1_val=0.305   [5.3s]
+    [scenario:harris_tearing] step   2  c=  0.100  thr=0.467  F1_tr=0.281  F1_val=0.305   [5.3s]
+    [scenario:harris_tearing] step   3  c=  0.127  thr=0.021  F1_tr=0.362  F1_val=0.305   [5.3s]
+    [scenario:harris_tearing] step   4  c=  1.784  thr=0.038  F1_tr=0.297  F1_val=0.305   [5.2s]
+    [scenario:harris_tearing] step   5  c=  0.296  thr=0.020  F1_tr=0.224  F1_val=0.305   [5.2s]
+    [scenario:harris_tearing] step   6  c=  1.887  thr=0.584  F1_tr=0.234  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step   7  c=  1.439  thr=0.096  F1_tr=0.362  F1_val=0.292   [5.3s]
+    [scenario:harris_tearing] step   8  c=  0.963  thr=0.021  F1_tr=0.374  F1_val=0.292   [5.3s]
+    [scenario:harris_tearing] step   9  c=  0.131  thr=0.092  F1_tr=0.284  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  10  c=  0.189  thr=0.094  F1_tr=0.248  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  11  c=  0.218  thr=0.133  F1_tr=0.151  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  12  c=  1.380  thr=0.050  F1_tr=0.328  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  13  c=  1.332  thr=0.062  F1_tr=0.287  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  14  c=  3.916  thr=0.163  F1_tr=0.221  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  15  c=  0.847  thr=0.184  F1_tr=0.248  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  16  c=  0.123  thr=0.060  F1_tr=0.440  F1_val=0.256   [5.2s]
+    [scenario:harris_tearing] step  17  c=  0.439  thr=0.285  F1_tr=0.387  F1_val=0.256   [5.2s]
+    [scenario:harris_tearing] step  18  c=  0.234  thr=0.074  F1_tr=0.248  F1_val=0.256   [5.2s]
+    [scenario:harris_tearing] step  19  c=  0.802  thr=0.020  F1_tr=0.372  F1_val=0.256   [5.1s]
+    [scenario:harris_tearing] step  20  c=  0.164  thr=0.022  F1_tr=0.406  F1_val=0.256   [5.2s]
+    [scenario:harris_tearing] step  21  c=  0.269  thr=0.036  F1_tr=0.268  F1_val=0.296   [5.1s]
+    [scenario:harris_tearing] step  22  c=  2.212  thr=0.217  F1_tr=0.188  F1_val=0.296   [5.3s]
+    [scenario:harris_tearing] step  23  c=  0.335  thr=0.132  F1_tr=0.340  F1_val=0.296   [5.2s]
+    [scenario:harris_tearing] step  24  c=  0.140  thr=0.033  F1_tr=0.343  F1_val=0.296   [5.2s]
+    [scenario:harris_tearing] step  25  c=  0.100  thr=0.066  F1_tr=0.359  F1_val=0.296   [5.2s]
+    [scenario:harris_tearing] step  26  c=  0.268  thr=0.053  F1_tr=0.298  F1_val=0.287   [5.3s]
+    [scenario:harris_tearing] step  27  c=  0.122  thr=0.035  F1_tr=0.260  F1_val=0.287   [5.1s]
+    [scenario:harris_tearing] step  28  c=  0.498  thr=0.090  F1_tr=0.249  F1_val=0.287   [5.2s]
+    [scenario:harris_tearing] step  29  c=  0.177  thr=0.032  F1_tr=0.265  F1_val=0.287   [5.1s]
+    [scenario:harris_tearing] step  30  c=  2.529  thr=0.069  F1_tr=0.380  F1_val=0.287   [5.2s]
+    [scenario:harris_tearing] step  31  c=  0.955  thr=0.102  F1_tr=0.301  F1_val=0.286   [5.2s]
+    [scenario:harris_tearing] step  32  c=  0.456  thr=0.044  F1_tr=0.460  F1_val=0.286   [5.2s]
+    [scenario:harris_tearing] step  33  c=  0.547  thr=0.251  F1_tr=0.376  F1_val=0.286   [5.1s]
+    [scenario:harris_tearing] step  34  c=  8.885  thr=0.201  F1_tr=0.221  F1_val=0.286   [5.2s]
+    [scenario:harris_tearing] step  35  c=  0.244  thr=0.020  F1_tr=0.344  F1_val=0.286   [5.1s]
+    [scenario:harris_tearing] step  36  c=  0.170  thr=0.071  F1_tr=0.257  F1_val=0.281   [5.3s]
+    [scenario:harris_tearing] step  37  c=  0.401  thr=0.124  F1_tr=0.484  F1_val=0.281   [5.1s]
+    [scenario:harris_tearing] step  38  c=  0.151  thr=0.127  F1_tr=0.286  F1_val=0.281   [5.1s]
+    [scenario:harris_tearing] step  39  c=  0.368  thr=0.327  F1_tr=0.243  F1_val=0.281   [5.2s]
+    [scenario:harris_tearing] step  40  c=  6.733  thr=0.112  F1_tr=0.262  F1_val=0.281   [5.2s]
+    [scenario:harris_tearing] step  41  c=  0.493  thr=0.113  F1_tr=0.240  F1_val=0.290   [5.2s]
+    [scenario:harris_tearing] step  42  c=  0.105  thr=0.020  F1_tr=0.323  F1_val=0.290   [5.2s]
+    [scenario:harris_tearing] step  43  c=  1.066  thr=0.142  F1_tr=0.212  F1_val=0.290   [5.3s]
+    [scenario:harris_tearing] step  44  c=  0.122  thr=0.020  F1_tr=0.360  F1_val=0.290   [5.2s]
+    [scenario:harris_tearing] step  45  c=  0.152  thr=0.101  F1_tr=0.230  F1_val=0.290   [5.2s]
+    [scenario:harris_tearing] step  46  c=  0.126  thr=0.046  F1_tr=0.320  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  47  c=  0.164  thr=0.039  F1_tr=0.333  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  48  c=  0.124  thr=0.164  F1_tr=0.259  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  49  c=  0.101  thr=0.020  F1_tr=0.255  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  50  c=  3.696  thr=0.072  F1_tr=0.231  F1_val=0.292   [5.2s]
+    [scenario:harris_tearing] step  51  c=  0.197  thr=0.068  F1_tr=0.232  F1_val=0.276   [5.2s]
+    [scenario:harris_tearing] step  52  c=  0.310  thr=0.048  F1_tr=0.390  F1_val=0.276   [5.2s]
+    [scenario:harris_tearing] step  53  c=  9.536  thr=0.117  F1_tr=0.431  F1_val=0.276   [5.1s]
+    [scenario:harris_tearing] step  54  c=  0.193  thr=0.123  F1_tr=0.312  F1_val=0.276   [5.4s]
+    [scenario:harris_tearing] step  55  c=  0.801  thr=0.062  F1_tr=0.277  F1_val=0.276   [5.2s]
+    [scenario:harris_tearing] step  56  c=  0.782  thr=0.027  F1_tr=0.391  F1_val=0.283   [5.1s]
+    [scenario:harris_tearing] step  57  c=  0.816  thr=0.085  F1_tr=0.340  F1_val=0.283   [5.1s]
+    [scenario:harris_tearing] step  58  c=  0.855  thr=0.023  F1_tr=0.296  F1_val=0.283   [5.1s]
+    [scenario:harris_tearing] step  59  c=  0.361  thr=0.109  F1_tr=0.266  F1_val=0.283   [5.1s]
+    [scenario:harris_tearing] step  60  c=  0.146  thr=0.159  F1_tr=0.335  F1_val=0.283   [5.3s]
+    [scenario:harris_tearing] step  61  c=  1.593  thr=0.073  F1_tr=0.333  F1_val=0.302   [5.1s]
+    [scenario:harris_tearing] step  62  c=  1.436  thr=0.026  F1_tr=0.446  F1_val=0.302   [5.1s]
+    [scenario:harris_tearing] step  63  c=  5.640  thr=0.125  F1_tr=0.288  F1_val=0.302   [5.2s]
+    [scenario:harris_tearing] step  64  c=  0.102  thr=0.039  F1_tr=0.199  F1_val=0.302   [5.2s]
+    [scenario:harris_tearing] step  65  c=  0.342  thr=0.069  F1_tr=0.329  F1_val=0.302   [5.1s]
+    [scenario:harris_tearing] step  66  c=  0.266  thr=0.071  F1_tr=0.329  F1_val=0.280   [5.3s]
+    [scenario:harris_tearing] step  67  c=  3.456  thr=0.081  F1_tr=0.356  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  68  c=  5.764  thr=0.020  F1_tr=0.333  F1_val=0.280   [5.1s]
+    [scenario:harris_tearing] step  69  c=  5.249  thr=0.100  F1_tr=0.440  F1_val=0.280   [5.2s]
+    [scenario:harris_tearing] step  70  c=  1.464  thr=0.020  F1_tr=0.279  F1_val=0.280   [5.1s]
+    [scenario:harris_tearing] step  71  c=  1.069  thr=0.179  F1_tr=0.421  F1_val=0.297   [5.6s]
+    [scenario:harris_tearing] step  72  c=  0.104  thr=0.332  F1_tr=0.190  F1_val=0.297   [5.2s]
+    [scenario:harris_tearing] step  73  c= 18.368  thr=0.366  F1_tr=0.275  F1_val=0.297   [5.2s]
+    [scenario:harris_tearing] step  74  c=  1.234  thr=0.088  F1_tr=0.342  F1_val=0.297   [5.1s]
+    [scenario:harris_tearing] step  75  c= 12.434  thr=0.022  F1_tr=0.345  F1_val=0.297   [5.2s]
+    [scenario:harris_tearing] step  76  c=  3.138  thr=0.036  F1_tr=0.127  F1_val=0.308   [5.1s]
+    [scenario:harris_tearing] step  77  c=  0.150  thr=0.221  F1_tr=0.408  F1_val=0.308   [5.1s]
+    [scenario:harris_tearing] step  78  c=  7.241  thr=0.029  F1_tr=0.402  F1_val=0.308   [5.2s]
+    [scenario:harris_tearing] step  79  c=  0.164  thr=0.033  F1_tr=0.363  F1_val=0.308   [5.2s]
+    [scenario:harris_tearing] step  80  c=  0.107  thr=0.021  F1_tr=0.333  F1_val=0.308   [5.2s]
+    [scenario:harris_tearing] step  81  c=  3.033  thr=0.250  F1_tr=0.319  F1_val=0.294   [5.1s]
+    [scenario:harris_tearing] step  82  c=  0.411  thr=0.260  F1_tr=0.367  F1_val=0.294   [5.3s]
+    [scenario:harris_tearing] step  83  c=  1.839  thr=0.092  F1_tr=0.137  F1_val=0.294   [5.1s]
+    [scenario:harris_tearing] step  84  c=  1.010  thr=0.090  F1_tr=0.400  F1_val=0.294   [5.2s]
+
+  [scenario:harris_tearing] re-evaluating top-5 candidates on val_fixed (24 pairs)...
+    cand 1: c=  0.401 thr=0.124  val F1=0.278  class=0.322
+    cand 2: c=  0.456 thr=0.044  val F1=0.281  class=0.322
+    cand 3: c=  1.436 thr=0.026  val F1=0.293  class=0.322
+    cand 4: c=  5.249 thr=0.100  val F1=0.301  class=0.322
+    cand 5: c=  0.123 thr=0.060  val F1=0.277  class=0.322
+
+  [scenario:harris_tearing] BEST: c_bias=5.249 thr=0.100  F1_val=0.301  classical=0.322  delta=-0.021  OK
+  [scenario:harris_tearing] wall-time: 609s
+
+  saved: train_scenario-harris_tearing_N256_dim4.npz
+  [scenario:kelvin_helmholtz] dataset: 120 pairs -> train 84, val 36 (val_fixed=24)
+  [scenario:kelvin_helmholtz] optimiser: CMA-ES, budget 80, sigma0=0.5, popsize=6
+    [scenario:kelvin_helmholtz] step   1  c=  0.619  thr=0.139  F1_tr=0.286  F1_val=0.318   [5.3s]
+    [scenario:kelvin_helmholtz] step   2  c=  0.100  thr=0.467  F1_tr=0.391  F1_val=0.318   [5.2s]
+    [scenario:kelvin_helmholtz] step   3  c=  0.127  thr=0.021  F1_tr=0.442  F1_val=0.318   [5.2s]
+    [scenario:kelvin_helmholtz] step   4  c=  1.784  thr=0.038  F1_tr=0.420  F1_val=0.318   [5.3s]
+    [scenario:kelvin_helmholtz] step   5  c=  0.296  thr=0.020  F1_tr=0.309  F1_val=0.318   [5.2s]
+    [scenario:kelvin_helmholtz] step   6  c=  1.887  thr=0.584  F1_tr=0.370  F1_val=0.362   [5.1s]
+    [scenario:kelvin_helmholtz] step   7  c=  1.182  thr=0.128  F1_tr=0.284  F1_val=0.362   [5.2s]
+    [scenario:kelvin_helmholtz] step   8  c=  0.850  thr=0.022  F1_tr=0.316  F1_val=0.362   [5.2s]
+    [scenario:kelvin_helmholtz] step   9  c=  0.146  thr=0.073  F1_tr=0.357  F1_val=0.362   [5.1s]
+    [scenario:kelvin_helmholtz] step  10  c=  0.150  thr=0.116  F1_tr=0.393  F1_val=0.362   [5.2s]
+    [scenario:kelvin_helmholtz] step  11  c=  0.170  thr=0.156  F1_tr=0.370  F1_val=0.322   [5.2s]
+    [scenario:kelvin_helmholtz] step  12  c=  1.165  thr=0.080  F1_tr=0.248  F1_val=0.322   [5.4s]
+    [scenario:kelvin_helmholtz] step  13  c=  0.249  thr=0.113  F1_tr=0.345  F1_val=0.322   [5.2s]
+    [scenario:kelvin_helmholtz] step  14  c=  0.802  thr=0.028  F1_tr=0.414  F1_val=0.322   [5.2s]
+    [scenario:kelvin_helmholtz] step  15  c=  0.667  thr=0.253  F1_tr=0.334  F1_val=0.322   [5.3s]
+    [scenario:kelvin_helmholtz] step  16  c=  0.332  thr=0.463  F1_tr=0.326  F1_val=0.321   [5.1s]
+    [scenario:kelvin_helmholtz] step  17  c=  1.412  thr=0.410  F1_tr=0.299  F1_val=0.321   [5.3s]
+    [scenario:kelvin_helmholtz] step  18  c=  0.279  thr=0.261  F1_tr=0.376  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  19  c=  0.438  thr=0.020  F1_tr=0.289  F1_val=0.321   [5.3s]
+    [scenario:kelvin_helmholtz] step  20  c=  0.184  thr=0.134  F1_tr=0.405  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  21  c=  0.177  thr=0.180  F1_tr=0.284  F1_val=0.305   [5.2s]
+    [scenario:kelvin_helmholtz] step  22  c=  0.172  thr=0.394  F1_tr=0.446  F1_val=0.305   [5.2s]
+    [scenario:kelvin_helmholtz] step  23  c=  0.185  thr=0.026  F1_tr=0.401  F1_val=0.305   [5.1s]
+    [scenario:kelvin_helmholtz] step  24  c=  0.204  thr=0.045  F1_tr=0.332  F1_val=0.305   [5.1s]
+    [scenario:kelvin_helmholtz] step  25  c=  0.377  thr=0.344  F1_tr=0.444  F1_val=0.305   [5.9s]
+    [scenario:kelvin_helmholtz] step  26  c=  0.101  thr=0.161  F1_tr=0.230  F1_val=0.335   [5.1s]
+    [scenario:kelvin_helmholtz] step  27  c=  0.265  thr=0.290  F1_tr=0.410  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  28  c=  0.143  thr=0.499  F1_tr=0.308  F1_val=0.335   [5.3s]
+    [scenario:kelvin_helmholtz] step  29  c=  0.245  thr=0.412  F1_tr=0.378  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  30  c=  0.413  thr=0.029  F1_tr=0.326  F1_val=0.335   [5.1s]
+    [scenario:kelvin_helmholtz] step  31  c=  0.536  thr=0.322  F1_tr=0.403  F1_val=0.320   [5.2s]
+    [scenario:kelvin_helmholtz] step  32  c=  0.307  thr=0.397  F1_tr=0.336  F1_val=0.320   [5.2s]
+    [scenario:kelvin_helmholtz] step  33  c=  2.766  thr=0.411  F1_tr=0.313  F1_val=0.320   [5.2s]
+    [scenario:kelvin_helmholtz] step  34  c=  1.109  thr=0.083  F1_tr=0.341  F1_val=0.320   [5.2s]
+    [scenario:kelvin_helmholtz] step  35  c=  0.147  thr=0.456  F1_tr=0.418  F1_val=0.320   [5.2s]
+    [scenario:kelvin_helmholtz] step  36  c=  0.488  thr=0.515  F1_tr=0.320  F1_val=0.335   [5.1s]
+    [scenario:kelvin_helmholtz] step  37  c=  0.325  thr=0.414  F1_tr=0.314  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  38  c=  0.285  thr=0.593  F1_tr=0.273  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  39  c=  2.030  thr=0.473  F1_tr=0.423  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  40  c=  0.364  thr=0.040  F1_tr=0.299  F1_val=0.335   [5.2s]
+    [scenario:kelvin_helmholtz] step  41  c=  0.299  thr=0.383  F1_tr=0.431  F1_val=0.313   [5.1s]
+    [scenario:kelvin_helmholtz] step  42  c=  0.107  thr=0.559  F1_tr=0.376  F1_val=0.313   [5.2s]
+    [scenario:kelvin_helmholtz] step  43  c=  1.469  thr=0.279  F1_tr=0.334  F1_val=0.313   [5.2s]
+    [scenario:kelvin_helmholtz] step  44  c=  0.103  thr=0.483  F1_tr=0.317  F1_val=0.313   [5.1s]
+    [scenario:kelvin_helmholtz] step  45  c=  0.524  thr=0.495  F1_tr=0.379  F1_val=0.313   [5.2s]
+    [scenario:kelvin_helmholtz] step  46  c=  0.246  thr=0.467  F1_tr=0.312  F1_val=0.321   [5.1s]
+    [scenario:kelvin_helmholtz] step  47  c=  0.166  thr=0.577  F1_tr=0.337  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  48  c=  0.878  thr=0.599  F1_tr=0.246  F1_val=0.321   [5.1s]
+    [scenario:kelvin_helmholtz] step  49  c=  0.344  thr=0.460  F1_tr=0.346  F1_val=0.321   [5.3s]
+    [scenario:kelvin_helmholtz] step  50  c=  0.489  thr=0.159  F1_tr=0.335  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  51  c=  0.152  thr=0.503  F1_tr=0.361  F1_val=0.333   [5.2s]
+    [scenario:kelvin_helmholtz] step  52  c=  0.759  thr=0.590  F1_tr=0.376  F1_val=0.333   [5.2s]
+    [scenario:kelvin_helmholtz] step  53  c=  0.167  thr=0.459  F1_tr=0.348  F1_val=0.333   [5.2s]
+    [scenario:kelvin_helmholtz] step  54  c=  0.100  thr=0.481  F1_tr=0.306  F1_val=0.333   [5.2s]
+    [scenario:kelvin_helmholtz] step  55  c=  0.859  thr=0.529  F1_tr=0.258  F1_val=0.333   [5.2s]
+    [scenario:kelvin_helmholtz] step  56  c=  0.639  thr=0.522  F1_tr=0.271  F1_val=0.366   [5.2s]
+    [scenario:kelvin_helmholtz] step  57  c=  0.985  thr=0.532  F1_tr=0.364  F1_val=0.366   [5.1s]
+    [scenario:kelvin_helmholtz] step  58  c=  0.609  thr=0.527  F1_tr=0.313  F1_val=0.366   [5.2s]
+    [scenario:kelvin_helmholtz] step  59  c=  0.937  thr=0.478  F1_tr=0.392  F1_val=0.366   [5.1s]
+    [scenario:kelvin_helmholtz] step  60  c=  0.104  thr=0.315  F1_tr=0.342  F1_val=0.366   [5.2s]
+    [scenario:kelvin_helmholtz] step  61  c=  1.521  thr=0.556  F1_tr=0.281  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  62  c=  0.927  thr=0.543  F1_tr=0.434  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  63  c=  0.356  thr=0.599  F1_tr=0.417  F1_val=0.321   [5.3s]
+    [scenario:kelvin_helmholtz] step  64  c=  0.564  thr=0.335  F1_tr=0.337  F1_val=0.321   [5.2s]
+    [scenario:kelvin_helmholtz] step  65  c=  0.506  thr=0.226  F1_tr=0.369  F1_val=0.321   [5.3s]
+    [scenario:kelvin_helmholtz] step  66  c=  0.951  thr=0.416  F1_tr=0.294  F1_val=0.343   [5.3s]
+    [scenario:kelvin_helmholtz] step  67  c=  1.009  thr=0.596  F1_tr=0.390  F1_val=0.343   [5.1s]
+    [scenario:kelvin_helmholtz] step  68  c=  0.598  thr=0.600  F1_tr=0.305  F1_val=0.343   [5.2s]
+    [scenario:kelvin_helmholtz] step  69  c=  1.181  thr=0.600  F1_tr=0.295  F1_val=0.343   [5.5s]
+    [scenario:kelvin_helmholtz] step  70  c=  0.513  thr=0.547  F1_tr=0.308  F1_val=0.343   [5.3s]
+    [scenario:kelvin_helmholtz] step  71  c=  1.432  thr=0.545  F1_tr=0.288  F1_val=0.328   [5.3s]
+    [scenario:kelvin_helmholtz] step  72  c=  2.220  thr=0.370  F1_tr=0.322  F1_val=0.328   [5.3s]
+    [scenario:kelvin_helmholtz] step  73  c=  0.148  thr=0.537  F1_tr=0.396  F1_val=0.328   [5.2s]
+    [scenario:kelvin_helmholtz] step  74  c=  0.527  thr=0.445  F1_tr=0.384  F1_val=0.328   [5.3s]
+    [scenario:kelvin_helmholtz] step  75  c=  0.652  thr=0.583  F1_tr=0.417  F1_val=0.328   [5.2s]
+    [scenario:kelvin_helmholtz] step  76  c=  0.865  thr=0.525  F1_tr=0.255  F1_val=0.313   [5.1s]
+    [scenario:kelvin_helmholtz] step  77  c=  2.709  thr=0.345  F1_tr=0.333  F1_val=0.313   [5.2s]
+    [scenario:kelvin_helmholtz] step  78  c=  0.748  thr=0.565  F1_tr=0.369  F1_val=0.313   [5.1s]
+    [scenario:kelvin_helmholtz] step  79  c=  0.311  thr=0.465  F1_tr=0.363  F1_val=0.313   [5.2s]
+    [scenario:kelvin_helmholtz] step  80  c=  0.267  thr=0.407  F1_tr=0.359  F1_val=0.313   [5.1s]
+    [scenario:kelvin_helmholtz] step  81  c=  0.379  thr=0.573  F1_tr=0.259  F1_val=0.344   [5.2s]
+    [scenario:kelvin_helmholtz] step  82  c=  1.247  thr=0.502  F1_tr=0.392  F1_val=0.344   [5.2s]
+    [scenario:kelvin_helmholtz] step  83  c=  0.234  thr=0.593  F1_tr=0.389  F1_val=0.344   [5.3s]
+    [scenario:kelvin_helmholtz] step  84  c=  0.267  thr=0.579  F1_tr=0.343  F1_val=0.344   [5.3s]
+
+  [scenario:kelvin_helmholtz] re-evaluating top-5 candidates on val_fixed (24 pairs)...
+    cand 1: c=  0.172 thr=0.394  val F1=0.332  class=0.360
+    cand 2: c=  0.377 thr=0.344  val F1=0.355  class=0.360
+    cand 3: c=  0.127 thr=0.021  val F1=0.290  class=0.360
+    cand 4: c=  0.927 thr=0.543  val F1=0.324  class=0.360
+    cand 5: c=  0.299 thr=0.383  val F1=0.328  class=0.360
+
+  [scenario:kelvin_helmholtz] BEST: c_bias=0.377 thr=0.344  F1_val=0.355  classical=0.360  delta=-0.005  OK
+  [scenario:kelvin_helmholtz] wall-time: 610s
+
+  saved: train_scenario-kelvin_helmholtz_N256_dim4.npz
+  [scenario:mhd_rotor] dataset: 120 pairs -> train 84, val 36 (val_fixed=24)
+  [scenario:mhd_rotor] optimiser: CMA-ES, budget 80, sigma0=0.5, popsize=6
+    [scenario:mhd_rotor] step   1  c=  0.619  thr=0.139  F1_tr=0.358  F1_val=0.371   [5.3s]
+    [scenario:mhd_rotor] step   2  c=  0.100  thr=0.467  F1_tr=0.315  F1_val=0.371   [5.3s]
+    [scenario:mhd_rotor] step   3  c=  0.127  thr=0.021  F1_tr=0.357  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step   4  c=  1.784  thr=0.038  F1_tr=0.395  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step   5  c=  0.296  thr=0.020  F1_tr=0.377  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step   6  c=  1.887  thr=0.584  F1_tr=0.333  F1_val=0.483   [5.2s]
+    [scenario:mhd_rotor] step   7  c=  0.795  thr=0.208  F1_tr=0.385  F1_val=0.483   [5.1s]
+    [scenario:mhd_rotor] step   8  c=  0.507  thr=0.098  F1_tr=0.337  F1_val=0.483   [5.3s]
+    [scenario:mhd_rotor] step   9  c=  1.202  thr=0.171  F1_tr=0.394  F1_val=0.483   [5.2s]
+    [scenario:mhd_rotor] step  10  c=  2.185  thr=0.027  F1_tr=0.367  F1_val=0.483   [5.2s]
+    [scenario:mhd_rotor] step  11  c=  2.448  thr=0.045  F1_tr=0.397  F1_val=0.386   [5.1s]
+    [scenario:mhd_rotor] step  12  c=  0.645  thr=0.179  F1_tr=0.441  F1_val=0.386   [5.3s]
+    [scenario:mhd_rotor] step  13  c=  1.386  thr=0.151  F1_tr=0.409  F1_val=0.386   [5.2s]
+    [scenario:mhd_rotor] step  14  c=  1.983  thr=0.332  F1_tr=0.398  F1_val=0.386   [5.2s]
+    [scenario:mhd_rotor] step  15  c=  3.792  thr=0.126  F1_tr=0.486  F1_val=0.386   [5.1s]
+    [scenario:mhd_rotor] step  16  c=  1.059  thr=0.265  F1_tr=0.310  F1_val=0.371   [5.3s]
+    [scenario:mhd_rotor] step  17  c=  9.581  thr=0.067  F1_tr=0.428  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step  18  c=  0.625  thr=0.092  F1_tr=0.355  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step  19  c= 14.315  thr=0.264  F1_tr=0.481  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step  20  c=  1.890  thr=0.071  F1_tr=0.414  F1_val=0.371   [5.2s]
+    [scenario:mhd_rotor] step  21  c=  1.503  thr=0.024  F1_tr=0.408  F1_val=0.378   [5.2s]
+    [scenario:mhd_rotor] step  22  c=  0.640  thr=0.291  F1_tr=0.350  F1_val=0.378   [5.1s]
+    [scenario:mhd_rotor] step  23  c=  4.043  thr=0.398  F1_tr=0.512  F1_val=0.378   [5.5s]
+    [scenario:mhd_rotor] step  24  c=  3.198  thr=0.217  F1_tr=0.412  F1_val=0.378   [5.1s]
+    [scenario:mhd_rotor] step  25  c= 14.127  thr=0.220  F1_tr=0.517  F1_val=0.378   [5.2s]
+    [scenario:mhd_rotor] step  26  c=  2.616  thr=0.514  F1_tr=0.309  F1_val=0.494   [5.2s]
+    [scenario:mhd_rotor] step  27  c=  9.962  thr=0.300  F1_tr=0.487  F1_val=0.494   [5.2s]
+    [scenario:mhd_rotor] step  28  c=  0.459  thr=0.196  F1_tr=0.366  F1_val=0.494   [5.3s]
+    [scenario:mhd_rotor] step  29  c=  5.845  thr=0.181  F1_tr=0.497  F1_val=0.494   [5.2s]
+    [scenario:mhd_rotor] step  30  c= 66.249  thr=0.599  F1_tr=0.055  F1_val=0.494   [5.2s]
+    [scenario:mhd_rotor] step  31  c= 14.485  thr=0.155  F1_tr=0.514  F1_val=0.514   [5.2s]
+    [scenario:mhd_rotor] step  32  c=  6.197  thr=0.202  F1_tr=0.547  F1_val=0.514   [5.2s]
+    [scenario:mhd_rotor] step  33  c= 14.529  thr=0.039  F1_tr=0.412  F1_val=0.514   [5.1s]
+    [scenario:mhd_rotor] step  34  c= 98.850  thr=0.143  F1_tr=0.511  F1_val=0.514   [5.2s]
+    [scenario:mhd_rotor] step  35  c=  2.783  thr=0.279  F1_tr=0.465  F1_val=0.514   [5.2s]
+    [scenario:mhd_rotor] step  36  c=  2.898  thr=0.100  F1_tr=0.393  F1_val=0.429   [5.1s]
+    [scenario:mhd_rotor] step  37  c=  8.422  thr=0.149  F1_tr=0.499  F1_val=0.429   [5.2s]
+    [scenario:mhd_rotor] step  38  c=  1.106  thr=0.123  F1_tr=0.382  F1_val=0.429   [5.4s]
+    [scenario:mhd_rotor] step  39  c=  5.677  thr=0.033  F1_tr=0.435  F1_val=0.429   [5.2s]
+    [scenario:mhd_rotor] step  40  c= 98.313  thr=0.192  F1_tr=0.666  F1_val=0.429   [5.2s]
+    [scenario:mhd_rotor] step  41  c= 10.538  thr=0.163  F1_tr=0.496  F1_val=0.511   [5.2s]
+    [scenario:mhd_rotor] step  42  c=  2.732  thr=0.303  F1_tr=0.452  F1_val=0.511   [5.2s]
+    [scenario:mhd_rotor] step  43  c= 26.411  thr=0.094  F1_tr=0.458  F1_val=0.511   [5.1s]
+    [scenario:mhd_rotor] step  44  c=  7.283  thr=0.357  F1_tr=0.486  F1_val=0.511   [5.2s]
+    [scenario:mhd_rotor] step  45  c= 25.216  thr=0.139  F1_tr=0.514  F1_val=0.511   [5.1s]
+    [scenario:mhd_rotor] step  46  c= 19.896  thr=0.234  F1_tr=0.533  F1_val=0.513   [5.2s]
+    [scenario:mhd_rotor] step  47  c=  4.171  thr=0.241  F1_tr=0.508  F1_val=0.513   [5.3s]
+    [scenario:mhd_rotor] step  48  c=  5.681  thr=0.036  F1_tr=0.388  F1_val=0.513   [5.2s]
+    [scenario:mhd_rotor] step  49  c= 25.933  thr=0.228  F1_tr=0.560  F1_val=0.513   [5.2s]
+    [scenario:mhd_rotor] step  50  c= 42.184  thr=0.228  F1_tr=0.512  F1_val=0.513   [5.2s]
+    [scenario:mhd_rotor] step  51  c= 14.229  thr=0.297  F1_tr=0.486  F1_val=0.518   [5.1s]
+    [scenario:mhd_rotor] step  52  c=  9.377  thr=0.141  F1_tr=0.496  F1_val=0.518   [5.2s]
+    [scenario:mhd_rotor] step  53  c=  0.810  thr=0.254  F1_tr=0.408  F1_val=0.518   [5.1s]
+    [scenario:mhd_rotor] step  54  c= 14.816  thr=0.345  F1_tr=0.549  F1_val=0.518   [5.1s]
+    [scenario:mhd_rotor] step  55  c= 46.453  thr=0.199  F1_tr=0.538  F1_val=0.518   [5.2s]
+    [scenario:mhd_rotor] step  56  c= 47.606  thr=0.228  F1_tr=0.558  F1_val=0.564   [5.2s]
+    [scenario:mhd_rotor] step  57  c= 45.770  thr=0.186  F1_tr=0.586  F1_val=0.564   [5.3s]
+    [scenario:mhd_rotor] step  58  c= 45.733  thr=0.233  F1_tr=0.636  F1_val=0.564   [5.2s]
+    [scenario:mhd_rotor] step  59  c= 67.335  thr=0.195  F1_tr=0.564  F1_val=0.564   [5.3s]
+    [scenario:mhd_rotor] step  60  c= 86.801  thr=0.421  F1_tr=0.853  F1_val=0.564   [5.2s]
+    [scenario:mhd_rotor] step  61  c= 76.139  thr=0.209  F1_tr=0.629  F1_val=0.607   [5.2s]
+    [scenario:mhd_rotor] step  62  c= 58.871  thr=0.288  F1_tr=0.661  F1_val=0.607   [5.1s]
+    [scenario:mhd_rotor] step  63  c=  8.628  thr=0.367  F1_tr=0.288  F1_val=0.607   [5.2s]
+    [scenario:mhd_rotor] step  64  c= 33.460  thr=0.491  F1_tr=0.228  F1_val=0.607   [5.2s]
+    [scenario:mhd_rotor] step  65  c=  9.846  thr=0.572  F1_tr=0.307  F1_val=0.607   [5.2s]
+    [scenario:mhd_rotor] step  66  c= 57.279  thr=0.365  F1_tr=0.727  F1_val=0.800   [5.1s]
+    [scenario:mhd_rotor] step  67  c= 80.547  thr=0.196  F1_tr=0.586  F1_val=0.800   [5.5s]
+    [scenario:mhd_rotor] step  68  c= 33.155  thr=0.278  F1_tr=0.594  F1_val=0.800   [5.3s]
+    [scenario:mhd_rotor] step  69  c= 59.317  thr=0.142  F1_tr=0.548  F1_val=0.800   [5.2s]
+    [scenario:mhd_rotor] step  70  c= 99.431  thr=0.381  F1_tr=0.948  F1_val=0.800   [5.2s]
+    [scenario:mhd_rotor] step  71  c= 47.235  thr=0.185  F1_tr=0.564  F1_val=0.550   [5.2s]
+    [scenario:mhd_rotor] step  72  c=  2.487  thr=0.230  F1_tr=0.427  F1_val=0.550   [5.2s]
+    [scenario:mhd_rotor] step  73  c= 13.493  thr=0.546  F1_tr=0.225  F1_val=0.550   [5.1s]
+    [scenario:mhd_rotor] step  74  c= 87.802  thr=0.480  F1_tr=0.663  F1_val=0.550   [5.2s]
+    [scenario:mhd_rotor] step  75  c= 31.301  thr=0.367  F1_tr=0.509  F1_val=0.550   [5.2s]
+    [scenario:mhd_rotor] step  76  c= 69.855  thr=0.381  F1_tr=0.777  F1_val=0.875   [5.3s]
+    [scenario:mhd_rotor] step  77  c= 18.405  thr=0.382  F1_tr=0.563  F1_val=0.875   [5.1s]
+    [scenario:mhd_rotor] step  78  c= 43.408  thr=0.369  F1_tr=0.671  F1_val=0.875   [5.3s]
+    [scenario:mhd_rotor] step  79  c= 59.996  thr=0.465  F1_tr=0.485  F1_val=0.875   [5.2s]
+    [scenario:mhd_rotor] step  80  c= 59.945  thr=0.511  F1_tr=0.297  F1_val=0.875   [5.2s]
+    [scenario:mhd_rotor] step  81  c= 35.650  thr=0.271  F1_tr=0.592  F1_val=0.562   [5.2s]
+    [scenario:mhd_rotor] step  82  c= 68.676  thr=0.402  F1_tr=0.518  F1_val=0.562   [5.2s]
+    [scenario:mhd_rotor] step  83  c= 29.401  thr=0.365  F1_tr=0.522  F1_val=0.562   [5.2s]
+    [scenario:mhd_rotor] step  84  c= 36.432  thr=0.382  F1_tr=0.519  F1_val=0.562   [5.2s]
+
+  [scenario:mhd_rotor] re-evaluating top-5 candidates on val_fixed (24 pairs)...
+    cand 1: c= 99.431 thr=0.381  val F1=0.902  class=0.973
+    cand 2: c= 86.801 thr=0.421  val F1=0.880  class=0.963
+    cand 3: c= 69.855 thr=0.381  val F1=0.868  class=0.973
+    cand 4: c= 57.279 thr=0.365  val F1=0.721  class=0.973
+    cand 5: c= 43.408 thr=0.369  val F1=0.652  class=0.973
+
+  [scenario:mhd_rotor] BEST: c_bias=99.431 thr=0.381  F1_val=0.902  classical=0.973  delta=-0.071  BOUND!
+  [scenario:mhd_rotor] wall-time: 609s
+
+  saved: train_scenario-mhd_rotor_N256_dim4.npz
+
+### MODE: joint ###
+  [joint] dataset: 440 pairs -> train 308, val 132 (val_fixed=24)
+  [joint] optimiser: CMA-ES, budget 80, sigma0=0.5, popsize=6
+    [joint] step   1  c=  0.619  thr=0.139  F1_tr=0.343  F1_val=0.322   [5.2s]
+    [joint] step   2  c=  0.100  thr=0.467  F1_tr=0.379  F1_val=0.322   [5.2s]
+    [joint] step   3  c=  0.127  thr=0.021  F1_tr=0.292  F1_val=0.322   [5.2s]
+    [joint] step   4  c=  1.784  thr=0.038  F1_tr=0.300  F1_val=0.322   [5.3s]
+    [joint] step   5  c=  0.296  thr=0.020  F1_tr=0.252  F1_val=0.322   [5.3s]
+    [joint] step   6  c=  1.887  thr=0.584  F1_tr=0.285  F1_val=0.297   [5.1s]
+    [joint] step   7  c=  1.374  thr=0.153  F1_tr=0.308  F1_val=0.297   [5.1s]
+    [joint] step   8  c=  0.381  thr=0.175  F1_tr=0.320  F1_val=0.297   [5.2s]
+    [joint] step   9  c=  0.338  thr=0.513  F1_tr=0.285  F1_val=0.297   [5.0s]
+    [joint] step  10  c=  0.316  thr=0.419  F1_tr=0.406  F1_val=0.297   [5.2s]
+    [joint] step  11  c=  0.465  thr=0.408  F1_tr=0.312  F1_val=0.242   [5.1s]
+    [joint] step  12  c=  0.938  thr=0.148  F1_tr=0.367  F1_val=0.242   [5.1s]
+    [joint] step  13  c=  0.710  thr=0.329  F1_tr=0.278  F1_val=0.242   [5.2s]
+    [joint] step  14  c=  2.646  thr=0.253  F1_tr=0.320  F1_val=0.242   [5.1s]
+    [joint] step  15  c=  1.232  thr=0.440  F1_tr=0.301  F1_val=0.242   [5.1s]
+    [joint] step  16  c=  0.222  thr=0.583  F1_tr=0.243  F1_val=0.302   [5.2s]
+    [joint] step  17  c=  1.647  thr=0.564  F1_tr=0.386  F1_val=0.302   [5.1s]
+    [joint] step  18  c=  0.115  thr=0.436  F1_tr=0.325  F1_val=0.302   [5.2s]
+    [joint] step  19  c=  0.398  thr=0.330  F1_tr=0.222  F1_val=0.302   [5.2s]
+    [joint] step  20  c=  0.592  thr=0.591  F1_tr=0.281  F1_val=0.302   [5.1s]
+    [joint] step  21  c=  0.912  thr=0.600  F1_tr=0.243  F1_val=0.252   [5.2s]
+    [joint] step  22  c=  8.214  thr=0.419  F1_tr=0.332  F1_val=0.252   [5.6s]
+    [joint] step  23  c=  0.108  thr=0.404  F1_tr=0.284  F1_val=0.252   [5.2s]
+    [joint] step  24  c=  0.258  thr=0.499  F1_tr=0.256  F1_val=0.252   [5.1s]
+    [joint] step  25  c= 11.858  thr=0.576  F1_tr=0.276  F1_val=0.252   [5.2s]
+    [joint] step  26  c=  0.155  thr=0.596  F1_tr=0.241  F1_val=0.263   [5.1s]
+    [joint] step  27  c=  3.972  thr=0.588  F1_tr=0.218  F1_val=0.263   [5.3s]
+    [joint] step  28  c=  1.101  thr=0.320  F1_tr=0.223  F1_val=0.263   [5.1s]
+    [joint] step  29  c=  9.058  thr=0.495  F1_tr=0.278  F1_val=0.263   [5.2s]
+    [joint] step  30  c=  0.502  thr=0.374  F1_tr=0.222  F1_val=0.263   [5.3s]
+    [joint] step  31  c= 11.802  thr=0.585  F1_tr=0.170  F1_val=0.130   [5.2s]
+    [joint] step  32  c= 12.620  thr=0.480  F1_tr=0.286  F1_val=0.130   [5.0s]
+    [joint] step  33  c= 64.766  thr=0.566  F1_tr=0.215  F1_val=0.130   [5.1s]
+    [joint] step  34  c=  2.401  thr=0.465  F1_tr=0.202  F1_val=0.130   [5.0s]
+    [joint] step  35  c=  9.145  thr=0.355  F1_tr=0.331  F1_val=0.130   [5.0s]
+    [joint] step  36  c= 79.881  thr=0.459  F1_tr=0.308  F1_val=0.393   [5.3s]
+    [joint] step  37  c= 32.394  thr=0.423  F1_tr=0.270  F1_val=0.393   [5.2s]
+    [joint] step  38  c= 10.761  thr=0.246  F1_tr=0.328  F1_val=0.393   [5.3s]
+    [joint] step  39  c= 34.082  thr=0.595  F1_tr=0.203  F1_val=0.393   [5.2s]
+    [joint] step  40  c=  0.148  thr=0.600  F1_tr=0.406  F1_val=0.393   [5.2s]
+    [joint] step  41  c= 19.203  thr=0.427  F1_tr=0.382  F1_val=0.381   [5.2s]
+    [joint] step  42  c= 63.642  thr=0.106  F1_tr=0.390  F1_val=0.381   [5.0s]
+    [joint] step  43  c= 15.348  thr=0.221  F1_tr=0.296  F1_val=0.381   [5.1s]
+    [joint] step  44  c=  0.337  thr=0.492  F1_tr=0.271  F1_val=0.381   [5.2s]
+    [joint] step  45  c=  0.377  thr=0.496  F1_tr=0.341  F1_val=0.381   [5.1s]
+    [joint] step  46  c=  0.528  thr=0.592  F1_tr=0.303  F1_val=0.235   [5.2s]
+    [joint] step  47  c=  0.105  thr=0.569  F1_tr=0.344  F1_val=0.235   [5.2s]
+    [joint] step  48  c=  0.297  thr=0.487  F1_tr=0.405  F1_val=0.235   [5.2s]
+    [joint] step  49  c=  0.101  thr=0.577  F1_tr=0.269  F1_val=0.235   [5.2s]
+    [joint] step  50  c= 14.116  thr=0.416  F1_tr=0.401  F1_val=0.235   [5.3s]
+    [joint] step  51  c=  0.279  thr=0.528  F1_tr=0.240  F1_val=0.263   [5.4s]
+    [joint] step  52  c=  0.730  thr=0.453  F1_tr=0.393  F1_val=0.263   [5.2s]
+    [joint] step  53  c= 71.313  thr=0.447  F1_tr=0.347  F1_val=0.263   [5.3s]
+    [joint] step  54  c=  0.246  thr=0.425  F1_tr=0.252  F1_val=0.263   [5.1s]
+    [joint] step  55  c=  2.416  thr=0.333  F1_tr=0.371  F1_val=0.263   [5.2s]
+    [joint] step  56  c=  2.470  thr=0.374  F1_tr=0.283  F1_val=0.321   [5.0s]
+    [joint] step  57  c=  2.374  thr=0.314  F1_tr=0.408  F1_val=0.321   [5.2s]
+    [joint] step  58  c=  2.258  thr=0.383  F1_tr=0.347  F1_val=0.321   [5.1s]
+    [joint] step  59  c=  5.339  thr=0.302  F1_tr=0.451  F1_val=0.321   [5.4s]
+    [joint] step  60  c= 34.282  thr=0.567  F1_tr=0.237  F1_val=0.321   [5.2s]
+    [joint] step  61  c=  1.184  thr=0.267  F1_tr=0.277  F1_val=0.311   [5.2s]
+    [joint] step  62  c=  1.406  thr=0.335  F1_tr=0.345  F1_val=0.311   [5.1s]
+    [joint] step  63  c=  0.262  thr=0.566  F1_tr=0.216  F1_val=0.311   [5.2s]
+    [joint] step  64  c= 45.770  thr=0.242  F1_tr=0.490  F1_val=0.311   [5.3s]
+    [joint] step  65  c= 54.702  thr=0.168  F1_tr=0.269  F1_val=0.311   [5.2s]
+    [joint] step  66  c= 12.175  thr=0.225  F1_tr=0.439  F1_val=0.375   [5.1s]
+    [joint] step  67  c=  5.115  thr=0.225  F1_tr=0.283  F1_val=0.375   [5.3s]
+    [joint] step  68  c=  2.226  thr=0.377  F1_tr=0.260  F1_val=0.375   [5.3s]
+    [joint] step  69  c=  2.650  thr=0.220  F1_tr=0.314  F1_val=0.375   [5.2s]
+    [joint] step  70  c= 19.477  thr=0.314  F1_tr=0.452  F1_val=0.375   [5.3s]
+    [joint] step  71  c= 33.347  thr=0.063  F1_tr=0.360  F1_val=0.350   [5.3s]
+    [joint] step  72  c=  7.258  thr=0.162  F1_tr=0.456  F1_val=0.350   [5.3s]
+    [joint] step  73  c= 84.099  thr=0.417  F1_tr=0.544  F1_val=0.350   [5.2s]
+    [joint] step  74  c= 10.134  thr=0.047  F1_tr=0.388  F1_val=0.350   [5.3s]
+    [joint] step  75  c= 91.814  thr=0.135  F1_tr=0.328  F1_val=0.350   [5.3s]
+    [joint] step  76  c= 34.568  thr=0.027  F1_tr=0.412  F1_val=0.348   [5.3s]
+    [joint] step  77  c=  0.350  thr=0.361  F1_tr=0.365  F1_val=0.348   [5.3s]
+    [joint] step  78  c= 88.784  thr=0.080  F1_tr=0.348  F1_val=0.348   [5.3s]
+    [joint] step  79  c= 37.323  thr=0.348  F1_tr=0.315  F1_val=0.348   [5.2s]
+    [joint] step  80  c= 21.505  thr=0.388  F1_tr=0.363  F1_val=0.348   [5.3s]
+    [joint] step  81  c= 14.694  thr=0.286  F1_tr=0.451  F1_val=0.359   [5.1s]
+    [joint] step  82  c=  5.861  thr=0.032  F1_tr=0.381  F1_val=0.359   [5.1s]
+    [joint] step  83  c= 31.358  thr=0.406  F1_tr=0.433  F1_val=0.359   [5.3s]
+    [joint] step  84  c= 58.409  thr=0.377  F1_tr=0.455  F1_val=0.359   [5.3s]
+
+  [joint] re-evaluating top-5 candidates on val_fixed (24 pairs)...
+    cand 1: c= 84.099 thr=0.417  val F1=0.481  class=0.484
+    cand 2: c= 45.770 thr=0.242  val F1=0.393  class=0.466
+    cand 3: c=  7.258 thr=0.162  val F1=0.354  class=0.451
+    cand 4: c= 58.409 thr=0.377  val F1=0.380  class=0.490
+    cand 5: c= 19.477 thr=0.314  val F1=0.400  class=0.486
+
+  [joint] BEST: c_bias=84.099 thr=0.417  F1_val=0.481  classical=0.484  delta=-0.003  OK
+  [joint] wall-time: 605s
+
+  saved: train_joint_N256_dim4.npz
+
+========================================================================================
+  CROSS-MODE COMPARISON  (the scientific payload)
+========================================================================================
+  tag                            c_bias*    thr*  F1_val  class   delta  bnd
+  scenario:orszag_tang             2.500   0.050   0.384  0.384  +0.000     
+  scenario:harris_tearing          5.249   0.100   0.301  0.322  -0.021     
+  scenario:kelvin_helmholtz        0.377   0.344   0.355  0.360  -0.005     
+  scenario:mhd_rotor              99.431   0.381   0.902  0.973  -0.071  YES
+  joint                           84.099   0.417   0.481  0.484  -0.003     
+
+  c_bias*  range: [0.377, 99.431]  ratio max/min = 263.80x
+  thr*     range: [0.050, 0.417]  ratio max/min = 8.38x
+
+  Interpretation:
+    * (c*, thr*) VARIES across scenarios (c spread 263.8x, thr spread 8.4x)
+      -> v2 Hamiltonian is not scenario-universal; this is itself a thesis finding.
+    * mean F1_val per-scenario = 0.486  vs  joint = 0.481
+    * WARNING: some optima hit the search bounds; the true optimum may lie outside. Re-run with wider bounds.
+
+  saved compare: train_COMPARE_N256_dim4.npz
+
+Phase 10 complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 18:02 study/results/sa_baseline_mhd_rotor_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:03 study/results/sa_baseline_mhd_rotor_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:58 study/results/sa_baseline_mhd_rotor_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz

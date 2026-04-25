@@ -8,6 +8,56 @@
 
 ---
 
+> ### ⚠ Falsification update (2026)
+>
+> The claim above reflects the V1 evaluation (random-split by snapshot). A
+> subsequent falsification study, running the stricter cross-scenario
+> **leave-one-scenario-out (LOSO)** protocol over the same 4 instability
+> classes (N = 256, 4 Re values, seed = 0), **reverses the V1 conclusion**:
+>
+> |                                  | random-split | LOSO (4 folds) |
+> |----------------------------------|:------------:|:--------------:|
+> | classical multi-indicator F1     | 0.475        | 0.434          |
+> | mean-field ceiling F1 (9 feats)  | **0.989**    | **0.191 ± 0.152** |
+> | neighbourhood ceiling F1         | 0.991        | 0.215 ± 0.142  |
+> | learned linear H F1              | 0.598        | 0.391          |
+>
+> The apparent ceiling of 0.989 is **scenario-memorisation**: when every
+> snapshot of a held-out instability class is moved to the validation set,
+> the ceiling collapses by ≈ 5× and falls *below* the classical baseline.
+> Harris-tearing LOSO F1 goes to 0.000.
+>
+> This is robust to the hard-patch percentile (delta < 0 at every
+> p ∈ {60,70,75,80,85,90}), significant under snapshot-level paired
+> bootstrap (p_H0 < 0.001 on harris / rotor folds), and **not** rescued by
+> per-scenario specialisation (off-diagonal transfer F1 ≈ 0; a runtime
+> scenario detector would need ≥ 72% accuracy to break even vs classical).
+>
+> **Consequence.** On the v2 parameter-free Hamiltonian, simulated
+> annealing already reaches the exact ground state and still loses to
+> classical by 0.073 F1 (phase 7). No amount of QAOA depth or better
+> hardware can beat SA on the same H. The binding constraint on Q-HAS
+> is not solver quality but **feature locality across instability
+> classes** — the 9 physical features do not span the direction along
+> which L2 coarsening error varies across scenarios.
+>
+> **Pointers to the evidence:**
+> - `logs/FINDINGS.md` — one-page summary of the three claims.
+> - `docs/review_phases_1_to_11c.md` — full phase-by-phase review of the
+>   15 study phases, with file paths, what each computes, and the
+>   scientific question it rules out.
+> - `docs/v1_vs_study.md` — map from the V1 findings below to the new
+>   Claims A / B / C, and what V1 covers that V2 does not.
+> - `figures/fig1_ceiling_bar.png`, `figures/fig2_loso_scatter.png` —
+>   result figures reproducible from `figures/make_result_figs.py`.
+>
+> The V1 sections below (training landscape, Figs. 0–16, etc.) are
+> retained as the historical record. Read them **through the LOSO lens**:
+> the V1 0.66% "advantage" lives inside the 0.989 random-split ceiling
+> and disappears under cross-scenario evaluation.
+
+---
+
 ## Overview
 
 Q-HAS is a hybrid quantum-classical simulation framework that optimizes the identification and resolution of **magnetohydrodynamics (MHD) instabilities**. Instead of solving the full dynamical equations on a fine grid everywhere (classic DNS approach), the system uses a **Variational Quantum Algorithm (VQA)** to detect topological defects (flux reconnections, turbulence onset) on a coarse-grained graph, then applies **Adaptive Mesh Refinement (AMR)** only where the quantum algorithm identifies anomalies.
@@ -1109,6 +1159,13 @@ bash generate_figures.sh --phase 1
 
 ## Key Results & Conclusions
 
+> **Read this section alongside the [Falsification update](#q-has-quantum-hierarchical-adaptive-steering) at the top of the README.** The
+> "0.66% Q-HAS advantage" reported here is under V1's random-split
+> evaluation and does not survive the LOSO protocol. The authoritative
+> numbers are in `logs/FINDINGS.md`; the *mechanism* that explains why
+> the V1 advantage disappears (scenario-memorisation inside the 0.989
+> random-split ceiling) is documented in `docs/review_phases_1_to_11c.md`.
+
 ### Training Results
 
 | Method | Best Score | Best Trial | Trials Run |
@@ -1618,3 +1675,482 @@ Each fix was validated by the Hamiltonian diagnostic test suite: `test_hamiltoni
 | **VQA returns `None`** | Check conda env is active, `--shots >= 1`, `--grid-size` is 2 or 3 |
 | **Debugging** | Use `--verbose` for real-time AMR plots + diagnostics. Logs in `logs/` |
 | **Google Colab** | Use `bash TrainHP_GoogleColab.sh` - auto-detects Colab, installs via pip, syncs to Google Drive |
+
+---
+
+# Part 2 - The Physics-First Hamiltonian Study (`study/`)
+
+> **TL;DR of Part 2.** Part 1 describes the full Q-HAS pipeline with the *trained* v1 Hamiltonian (~8 hyperparameters). Part 2 covers a second line of work in `study/` that isolates the **science question**: does a quantum advantage exist *for this problem at all*, independently of any specific Hamiltonian? The study strips the Hamiltonian to a physics-first, parameter-free form (v2), runs QAOA against simulated annealing on identical objectives, and -- crucially -- introduces a **falsifiable upper bound** (phases 11/11b/11c) that decides in advance whether the problem admits a Hamiltonian-based quantum advantage. The result is a rigorous negative finding: the optimal local Hamiltonian for MHD adaptive mesh refinement is **separable**, so no QAOA-style algorithm can outperform site-wise argmin. The methodology itself is reusable for any scientific-ML/QAOA study.
+
+## Table of Contents -- Part 2
+
+1. [Motivation and scientific question](#2-1-motivation-and-scientific-question)
+2. [The v2 Hamiltonian (parameter-free)](#2-2-the-v2-hamiltonian-parameter-free)
+3. [Phase catalogue (phases 0-10)](#2-3-phase-catalogue-phases-0-10)
+4. [Falsification study (phases 11-13)](#2-4-falsification-study-phases-11-13)
+5. [Results tables](#2-5-results-tables)
+6. [Discussion, limitations, roadmap](#2-6-discussion-limitations-roadmap)
+7. [How to reproduce Part 2](#2-7-how-to-reproduce-part-2)
+
+---
+
+## 2.1 Motivation and scientific question
+
+Part 1 produced a working Q-HAS pipeline. It optimises a multi-term cost Hamiltonian (Z-bias + ZZ spatial coupling + ZZZZ plaquette) via QAOA, and shows behavioural differences with classical AMR (noise resilience, topology awareness, temporal anticipation -- see Sec. 1.*). But it leaves open the central scientific question:
+
+> **Is there a quantum advantage for MHD-AMR decision making, or does QAOA merely track what a classical optimiser would do on the same objective?**
+
+This is *not* answered by running QAOA and comparing it to a classical AMR *indicator* (different objectives), nor by showing QAOA reaches low energy (so does simulated annealing). It requires:
+
+1. a Hamiltonian justified from physics rather than fitted to the task (so conclusions are not attributable to an over-tuned cost),
+2. a classical control that minimises **exactly the same Hamiltonian** (so any QAOA / classical gap is due to the optimiser),
+3. a **falsifiable upper bound** on what *any* Ising Hamiltonian of this form can achieve (so the absence of improvement from QAOA can be attributed either to the optimiser *or* to the problem structure, decisively).
+
+Part 2 builds those three ingredients.
+
+### Scope
+
+- 4 canonical 2D MHD scenarios: `orszag_tang`, `harris_tearing`, `kelvin_helmholtz`, `mhd_rotor`.
+- 4 Reynolds numbers per scenario: Re ∈ {400, 800, 1200, 1600} with unit magnetic Prandtl (Rm = Re).
+- DNS at N = 128 (quick tier) and N = 256 (higher resolution).
+- Coarse patch grids at dim ∈ {2, 4}; dim = 4 (16 patches, 32 qubits) is the default for coefficient / upper-bound analysis, dim = 2 (4 patches, 8 qubits) for QAOA exact diagonalisation.
+- 30 snapshots per (scenario, Re) after discarding warm-up, so the full dataset at dim = 4 is 16 configs x 30 snaps x 16 cells = **7 680 labelled cells**.
+
+### Ground truth
+
+A cell is labelled "hard" (should be refined) iff its L2 reconstruction error, measured by downsampling the DNS field and then upsampling back, exceeds a per-(scenario, Re) quantile. The dataset is class-balanced around ~30% positives. This GT is *independent* of any Hamiltonian; the Hamiltonian is evaluated *against* it.
+
+### Output
+
+Every phase writes one or more `.npz` files into `study/results/`, with deterministic filenames of the form `<phase>_<scenario>_Re<Re>_N<N>_dim<D>.npz`. Phase 13 aggregates them into a single `SUMMARY_N<N>_dim<D>.txt` + `.csv` that is the canonical results table.
+
+## 2.2 The v2 Hamiltonian (parameter-free)
+
+The v1 Hamiltonian in Part 1 has ~8 trainable hyperparameters (thresholds, sigmas, slope coefficients, etc.). Every comparison with a classical baseline is then vulnerable to the objection *"you tuned the quantum thing and you can't tune the classical one the same way."* The v2 Hamiltonian is constructed to make the comparison fair: **zero trainable parameters inside the Hamiltonian** (modulo a single refinement threshold `thr_amr` that is a physical choice, not a tuned knob).
+
+### Form
+
+Let `i` index cells on a dim x dim coarse grid. The Ising Hamiltonian has three terms:
+
+```
+H(s) = sum_i  h_i * s_i                                                  (Z bias)
+     + sum_<i,j in edge> C_{ij} * s_i * s_j                               (ZZ coupling)
+     + sum_p in plaquette K_p * s_{p,1} * s_{p,2} * s_{p,3} * s_{p,4}     (ZZZZ coupling)
+```
+
+where `s_i ∈ {+1, -1}` (spin convention: +1 = "don't refine", -1 = "refine"). The coefficients are defined by the physical fields at the coarse grid:
+
+```
+h_i   = - c_bias * median(|C|, |K|) * (score_i - thr_amr)
+C_ij  = - w_ZZ    * | jump_ij |  / <| jump |>
+K_p   = - w_ZZZZ * (|omega_z,p| + |J_z,p|) / (max|omega_z| + max|J_z|)
+```
+
+- `jump_ij` = magnitude of the MHD field jump across the edge `(i, j)` (kinetic + magnetic contributions stacked).
+- `score_i` = the existing classical AMR indicator, a weighted mix of `|omega_z|` and `|J_z|` with an asymmetry term (see Part 1, Sec. "Scoring and Evaluation").
+- `thr_amr` = the refinement threshold (a physical choice, default 0.15, sometimes swept).
+- `c_bias` = Z-bias scale (default 0.1). The only lever between "bias wins / Hamiltonian = classical indicator" and "couplings win / Hamiltonian ignores the bias".
+
+The code is in `src/Simulation/HamiltParams_v2.py`; the build is triggered from every study/ phase that uses `build_patch_hamiltonian(..., use_v2=True)`.
+
+### Why these choices
+
+- **All coefficients are domain-normalised ratios.** Each term is scale-invariant, so the Hamiltonian transfers across Re without re-fitting.
+- **Ferromagnetic couplings (negative sign).** Spatial coherence: neighbours tend to make the same decision, so refined patches cluster (Part 1 Sec. "Topology Identification").
+- **Plaquette term captures circulation.** Vorticity + current magnitudes on a 2x2 block -- non-trivially quantum in the sense that it is an irreducible 4-body interaction.
+- **Bias proportional to `score_i - thr_amr`.** If `c_bias` is large, the ground state collapses to the classical "score > thr" decision rule; if small, the ferromagnetic couplings dominate and the state becomes uniform. In between is where a Hamiltonian optimiser could, in principle, correct an over- or under-triggered classical indicator using neighbour information.
+
+### What is still tunable
+
+Nothing inside the Hamiltonian itself. The two remaining levers -- both physical rather than statistical -- are:
+
+| lever        | role                                                           | default |
+|--------------|----------------------------------------------------------------|---------|
+| `c_bias`     | Z-bias vs coupling balance                                     | 0.1     |
+| `thr_amr`    | refinement threshold of the classical score                    | 0.15    |
+
+Phases 10 / 10a explore these systematically (analytical MF derivation + closed-loop CMA-ES training) and land on `(c_bias, thr_amr)` values that vary strongly by scenario (from 0.38 on KH to ~100 on mhd_rotor). That heterogeneity is itself a finding, and phase 11 explains it.
+
+## 2.3 Phase catalogue (phases 0-10)
+
+Each phase is an independent Python entry-point under `study/`. They share `study/config.py` (scenarios, Re values, Hamiltonian defaults) and write deterministic `.npz` files into `study/results/`. Dependencies are one-directional: phase `k` consumes the outputs of earlier phases, never its own or later ones. That makes any phase re-runnable without re-running the upstream simulation.
+
+### Phase 0 -- Sanity check (`phase0_sanity_check.py`)
+
+Verifies that the DNS solver and patch-extraction code are stable before expensive phases 1-2 run. Outputs to stdout only.
+
+### Phase 1 -- DNS sweep (`phase1_dns_sweep.py`)
+
+Integrates the 2D compressible MHD equations for each (scenario, Re) pair, saves snapshots at fixed physical intervals after a warm-up that lets the instability develop. Output:
+
+```
+results/dns_<scenario>_Re<Re>_N<N>.npz
+  vx, vy, Bx, By : (n_snapshots, N, N) float64
+  meta_*         : scenario, Re, dt, t_max, ...
+```
+
+Runtime: ~1 min / config at N = 128, ~5 min / config at N = 256.
+
+### Phase 2 -- Hard patch identification (`phase2_hard_patches.py`)
+
+For each snapshot, downsamples DNS to dim x dim, upsamples back to N x N, computes the per-patch L2 reconstruction error, and records which patches are "hard" (above a per-config quantile threshold). Two dim values are produced simultaneously (default 2 and 4 in `run_study_v2.sh`). Output:
+
+```
+results/patches_<scenario>_Re<Re>_N<N>_dim<D>.npz
+  l2_errors     : (n_snapshots, D, D) float64
+  l2_threshold  : scalar
+  hard_mask     : bool
+```
+
+### Phase 3 -- Hamiltonian coefficient analysis (`phase3_coefficients.py`)
+
+Applies the v2 `PhysicalMapperV2` to every snapshot of every config, records the distribution of `h_i`, `C_ij`, `K_p`, and checks threshold stability across snapshots. Useful as a sanity check on the Hamiltonian form itself before committing to diagonalisation. Output: `results/coefficients_*_v2.npz`.
+
+### Phase 4 -- Exact diagonalisation (`phase4_exact_diag.py`)
+
+For dim = 2 (8 qubits = 256 states) and each promising snapshot, builds the full Ising matrix, computes `eigh`, and extracts:
+
+- ground state `|gs>` and ground energy `E_0`,
+- marginals `<s_i>` in the ground state,
+- the implied decision `refine(i) = [<s_i> < 0]`,
+- F1 against the L2-hard ground truth.
+
+Output: `results/exact_diag_*_v2.npz`. This is the *theoretical best* that any unconstrained ground-state optimiser can achieve on the given Hamiltonian; QAOA and SA are benchmarked against it.
+
+### Phase 5 -- QAOA evaluation (`phase5_qaoa_eval.py`)
+
+QAOA with reps ∈ {2, 3} on the same Hamiltonian as phase 4 (dim = 2), plus dim = 3 (18 qubits, MPS backend) if `--mps` is passed. Uses COBYLA on the parameter vector `(gamma, beta)`, 80 optimiser iterations, 10 random restarts. Reports F1 against GT and overlap with the exact ground state from phase 4. Output: `results/qaoa_*_v2.npz`. Supports `--warm-start` (classical greedy init) and `--prune-eps` (drop coefficients below `eps * max(|coeffs|)`).
+
+### Phase 6 -- Detection-rate verification (`phase6_verify.py`)
+
+Computes the hard-patch detection rate of:
+
+1. the classical score with its optimal threshold,
+2. the Hamiltonian mean-field decoding,
+3. the exact ground-state decoding,
+
+on dim = 4 patches, to verify that the *expected* ordering holds (classical score <= Hamiltonian <= exact GS). Output: `results/verify_*_v2.npz`.
+
+### Phase 7 -- Simulated-annealing baseline (`phase7_sa_baseline.py`)
+
+Multi-restart SA (default: 2 000 sweeps, 10 restarts) minimising **the same Ising + ZZZZ Hamiltonian** that QAOA sees in phase 5. This is the fair classical control. Supports `--classical-warm` (warm-start from the classical-score decision). Output: `results/sa_baseline_*_v2.npz`.
+
+### Phase 8 -- Depth / pruning report (`phase8_depth_report.py`)
+
+For QAOA depth p ∈ {1, 2, 3} and coefficient pruning eps ∈ {0, 0.05, 0.1, 0.2}, reports the two-qubit gate count and the resulting F1. Useful for NISQ-feasibility arguments. Output: `results/depth_report_*.npz`.
+
+### Phase 10a -- Analytical MF init (`phase10a_analytical.py`)
+
+Derives `(c_bias*, thr_amr*)` analytically rather than by black-box optimisation:
+
+1. `thr_amr*` is the 1-D F1-maximiser of `(score > thr)` against the GT.
+2. `c_bias*` is the log-grid maximiser of the mean-field F1 of the *full* Ising + plaquette graph (zero-temperature Glauber dynamics) against the GT.
+
+Output: `results/analytical_N{N}_dim{D}.npz` -- a row per scenario, a row per config, and one `joint` row. Phase 10 picks this file up automatically as its initial point. Runtime: ~3 min at N = 256, dim = 4.
+
+### Phase 10 -- Closed-loop Hamiltonian training (`phase10_train_hamiltonian.py`)
+
+CMA-ES (fallback: adaptive Nelder-Mead) on `(c_bias, thr_amr)` with a **frozen** validation set, top-K re-evaluation, and three training modes controlled by CLI:
+
+- `--mode per-config`  : one `(c*, thr*)` per (scenario, Re), 16 runs.
+- `--mode scenario`    : one per scenario, pooled over Re, 4 runs.
+- `--mode joint`       : one for the whole dataset, 1 run.
+
+The three modes run by default so the dispersion of the optima becomes visible. 40 iterations per run, ~1-2 min each. Output: `results/train_<mode>_<tag>_N{N}_dim{D}.npz` with the final `(c_bias*, thr_amr*, f1_val_best)`. A comparison summary `train_COMPARE_N{N}_dim{D}.npz` is written at the end.
+
+The key empirical observation from phase 10: on the N = 256, dim = 4 run, the best `c_bias*` varies by **~260x across scenarios** (0.38 on KH, ~100 on mhd_rotor); the best `delta` (F1 gain over the classical indicator at the frozen val split) never exceeds 0 by more than noise. This is what motivated phase 11: the optimisation is not failing, the Hamiltonian *form* is hitting its intrinsic ceiling.
+
+## 2.4 Falsification study (phases 11-13)
+
+The first 10 phases give a working pipeline and a training curve that plateaus. That on its own is a weak conclusion: "maybe our optimiser is bad, maybe our Hamiltonian form is too rigid, maybe there's a better parameterisation we haven't tried." The falsification study resolves this by bounding **from above** what any local Hamiltonian of this shape can achieve, using a classical ML proxy. It reframes the negative QAOA result as a structural property of the problem rather than a methodological shortcoming.
+
+### Principle
+
+A mean-field Hamiltonian with per-site bias `h_i` and any couplings `C_ij`, `K_p` defines a decision rule
+
+```
+refine(i) = [<s_i>_gs < 0]
+```
+
+where `<s_i>_gs` is the ground-state marginal. For couplings bounded in magnitude (which is the case after domain normalisation), ground-state marginals cannot use information that is not present in the local field values `phi_i` themselves -- they can only *combine* neighbour values via the coupling graph. Consequently:
+
+- **Mean-field upper bound.** Any local-bias Hamiltonian's F1 is upper-bounded by the F1 of the **best classifier reading only `phi_i`** (the features at cell i). We estimate that ceiling with a gradient-boosted tree, a random forest and a logistic regression -- three inductive biases. If they converge, the bound is credible.
+- **Neighbourhood upper bound.** Any Hamiltonian with up-to-k-hop couplings is upper-bounded by the best classifier reading `{phi_j}_{j ~ i at distance <= k}`. We use k = 1 (self + 4 periodic neighbours = 45 features) -- the maximum a ZZ + ZZZZ Hamiltonian can transmit in one ground-state relaxation. A cheap diagnostic that precedes any QAOA investment.
+
+The gap "neighbourhood ceiling minus mean-field ceiling" is the **maximum residual F1 that the couplings could contribute**. If it is below noise, couplings are useless regardless of their exact form; QAOA, SA, or any other minimiser of the Hamiltonian collapses to a site-wise argmin of `h_i`.
+
+### Phase 11 -- Upper bound diagnostic (`phase11_upper_bound.py`)
+
+Per cell i, extract 9 features from the MHD field:
+
+| # | feature             | physical meaning                            |
+|---|---------------------|---------------------------------------------|
+| 1 | `score_classical`   | existing AMR indicator (phase-1 mapper)      |
+| 2 | `\|v\|^2`           | kinetic energy density                       |
+| 3 | `\|B\|^2`           | magnetic energy density                      |
+| 4 | `\|omega_z\|`       | vorticity magnitude                          |
+| 5 | `\|J_z\|`           | current density magnitude                    |
+| 6 | `\|grad v\|^2`      | kinetic gradient norm                        |
+| 7 | `\|grad B\|^2`      | magnetic gradient norm                       |
+| 8 | `det(grad B)`       | X-point / O-point indicator                  |
+| 9 | `Re`                | Reynolds, broadcast as scalar                |
+
+Three classifiers probe the mean-field ceiling:
+
+- logistic regression (linear sanity baseline),
+- random forest (high-variance non-linear),
+- HistGradientBoosting (low-variance non-linear).
+
+One classifier probes the neighbourhood ceiling (GBT on 45 stencil features: self + N/S/E/W periodic neighbours). Train/val split is **by snapshot** (30% held out), avoiding per-snapshot cell leakage.
+
+Output: `results/upper_bound_N{N}_dim{D}.npz` with the three mean-field F1s, the stencil F1, AUC, per-scenario breakdown, and permutation importance. Printed verdict lines codify the three deltas:
+
+```
+if delta_site_vs_class  < 0.02 : no local-bias H beats classical
+if delta_stencil_vs_site < 0.02 : ZZ / ZZZZ couplings cannot add value
+if delta_stencil_vs_class < 0.02 : no local H (with or without couplings) helps -> pivot to VQC/QKE
+```
+
+### Phase 11b -- Leave-One-Scenario-Out validation (`phase11b_loso.py`)
+
+Random snapshot splits can leak inter-scenario signatures: a classifier may learn *which scenario we are in* from e.g. the broadcast `Re` or the characteristic energy density, and exploit per-scenario quantile thresholds in the label. To detect that, phase 11b holds out **an entire scenario** for validation and trains on the remaining three, then cycles through all four folds. Reports `F1 +/- std` across folds for classical / site / stencil, and prints a stricter verdict. This is the honest generalisation test: *can a Hamiltonian fitted on OT+Tearing+KH identify hard patches in an unseen mhd_rotor?*
+
+Output: `results/upper_bound_loso_N{N}_dim{D}.npz`.
+
+### Phase 11c -- Learned mean-field Hamiltonian (`phase11c_learned_h.py`)
+
+Makes the mean-field ceiling *concrete*: a learned Hamiltonian whose bias is a learned linear combination of the 9 features,
+
+```
+h_i = w . phi_i - b
+```
+
+fitted by logistic regression. The couplings (`C_ij`, `K_p`) stay at their v2 parameter-free values. By phase 11's result, their magnitude is irrelevant for the F1; they matter only for the QAOA / SA minimisation dynamics on the same `H`. The `--loso` flag also evaluates the learned H cross-scenario.
+
+Output: `results/learned_h_N{N}_dim{D}.npz`, including the standardised and raw-space weights `(w, b)` so the Hamiltonian is reproducible.
+
+### Phase 12 -- Quantum-classifier baselines (`phase12_vqc.py`)
+
+Tests the *other* quantum paradigm -- quantum classifiers rather than Hamiltonian minimisation -- on the same 9-feature dataset, reduced to `d_q = 4` qubits via PCA for circuit feasibility.
+
+- **VQC** (Variational Quantum Classifier): `ZZFeatureMap(reps=2)` + `RealAmplitudes(reps=2)` trained with COBYLA against cross-entropy.
+- **QKE** (Quantum Kernel Estimation): fidelity kernel `K(x, y) = |<phi(x) | phi(y)>|^2` from the same `ZZFeatureMap`, fed to a classical SVC.
+
+Both are compared against classical baselines (LR, GBT) on the **same PCA features**, so the comparison isolates the quantum transformation. The verdict is explicit:
+
+- `delta_quantum_vs_classical >= 0.02` : quantum advantage in the *classifier* paradigm, worth a chapter.
+- `delta ~= 0`                          : both paradigms ruled out, presentable as a closed-loop falsification.
+
+Output: `results/vqc_N{N}_dim{D}.npz`.
+
+Runtime: VQC ~30 min on a laptop at 1500 / 500 split with 80 COBYLA iters. Subsample size and circuit depth are CLI-tunable.
+
+### Phase 13 -- Cross-phase aggregation (`phase13_aggregate.py`)
+
+Collects every available `.npz` (from phases 5, 7, 10, 11, 11b, 11c, 12) and writes a single master report:
+
+```
+results/SUMMARY_N{N}_dim{D}.txt   # human-readable summary table
+results/SUMMARY_N{N}_dim{D}.csv   # scalar keys -> values for scripts
+```
+
+The text file is the canonical results table: it lists the classical baseline, the three mean-field ceilings, the neighbourhood ceiling, the LOSO mean +/- std, the learned H outcome, the trained `(c_bias*, thr_amr*)` per mode, the QAOA / SA per-config F1, and the VQC / QKE results. Verdicts are derived from the saved deltas.
+
+## 2.5 Results tables
+
+All numbers below come from N = 256, dim = 4, 30 snapshots / config, seed = 0. The raw log is `logs/Result_phase11.txt`; the aggregated summary will be in `study/results/SUMMARY_N256_dim4.txt` once phase 13 is run.
+
+### Headline: F1 ceilings (phase 11, random split by snapshot)
+
+| quantity                                    | F1     | delta vs classical | delta vs site |
+|---------------------------------------------|--------|--------------------|---------------|
+| **Classical AMR indicator** (score > thr*)  | 0.475  | --                 | --            |
+| Mean-field ceiling -- logistic regression   | 0.604  | +0.129             | --            |
+| Mean-field ceiling -- random forest         | 0.975  | +0.500             | --            |
+| **Mean-field ceiling -- HistGBT**           | **0.989** | **+0.515**      | --            |
+| **Neighbourhood ceiling** -- GBT on stencil | **0.991** | +0.516          | **+0.002**    |
+
+The three mean-field classifiers converge on F1 ~0.97-0.99 (within their respective inductive biases, consistent with a real per-site signal rather than a single-model artefact). The neighbourhood ceiling adds **+0.002** F1 -- within noise. **Couplings are useless.**
+
+### Per-scenario breakdown (phase 11 val set)
+
+| scenario          | n cells | F1 classical | F1 site (GBT) | F1 stencil | delta site | delta stencil |
+|-------------------|---------|--------------|---------------|------------|------------|----------------|
+| harris_tearing    |   416   |    0.375     |     0.980     |   0.980    |   +0.605   |   +0.000       |
+| kelvin_helmholtz  |   608   |    0.443     |     0.985     |   0.988    |   +0.542   |   +0.003       |
+| mhd_rotor         |   512   |    0.805     |     1.000     |   1.000    |   +0.195   |   +0.000       |
+| orszag_tang       |   576   |    0.435     |     0.991     |   0.994    |   +0.556   |   +0.003       |
+
+`mhd_rotor` starts already easy for the classical indicator (0.805), so its residual gain is smaller. The other three gain +0.54 to +0.61 F1 from the learned mean-field classifier. Couplings never add more than 0.003 F1 on any scenario.
+
+### Feature importance (permutation on best GBT, val)
+
+| feature             | F1 drop when shuffled |
+|---------------------|-----------------------|
+| `\|B\|^2`           | +0.324                |
+| `score_classical`   | +0.321                |
+| `\|grad_B\|^2`      | +0.246                |
+| `\|J_z\|`           | +0.144                |
+| `\|v\|^2`           | +0.097                |
+| `\|grad_v\|^2`      | +0.068                |
+| `Re`                | +0.036                |
+| `det grad_B`        | +0.017                |
+| `\|omega_z\|`       | +0.016                |
+
+The dominant information is **magnetic** (`|B|^2, |grad_B|^2, |J_z|`), with the existing `score_classical` confirming its own role but being insufficient alone. `Re` is surprisingly low (+0.036) -- a first argument that the classifier isn't simply memorising scenario identity via Re.
+
+### Leave-One-Scenario-Out validation (phase 11b)
+
+> To be populated from `results/upper_bound_loso_N256_dim4.npz` after running phase 11b on your hardware (see Sec. 2.7). The phase 11 random-split F1 of 0.989 should be treated as an **upper-tight-upper-bound**: the honest cross-scenario ceiling is what the LOSO mean reports. If it stays above ~0.85, the mean-field-Hamiltonian generalisation claim holds; if it drops to ~0.60, it means phase 11's F1 was partially inter-scenario memorisation, and any deployed Hamiltonian must be scenario-aware.
+
+Expected structure of the table:
+
+| held-out fold     | F1 classical | F1 site | F1 stencil |
+|-------------------|--------------|---------|------------|
+| harris_tearing    |              |         |            |
+| kelvin_helmholtz  |              |         |            |
+| mhd_rotor         |              |         |            |
+| orszag_tang       |              |         |            |
+| **mean +/- std**  |              |         |            |
+
+### Learned mean-field Hamiltonian (phase 11c)
+
+> Fill in from `results/learned_h_N256_dim4.npz` after running phase 11c. Expected output:
+>
+> - `F1_val_learned` close to the mean-field ceiling from phase 11 (~0.98),
+> - `F1_val_classical` close to 0.475,
+> - delta learned - classical around +0.50 F1,
+> - weights `w_std` showing `|B|^2, |grad_B|^2, |J_z|` as the dominant contributors -- consistent with the permutation-importance table above.
+
+This phase *materialises* the Hamiltonian that achieves the ceiling. It is the object to be minimised by a quantum algorithm -- except that phase 11's stencil-vs-site delta (+0.002) means any minimiser, quantum or classical, will collapse to the site-wise argmin of `h_i = w . phi_i - b > 0`.
+
+### QAOA vs simulated annealing on the v2 Hamiltonian (phases 5, 7)
+
+> Use phase 13 to aggregate these after running phases 5 and 7. Empirical ordering measured so far (Part 1 figures 4-6 + early N = 128 study/ runs):
+>
+> - QAOA (reps = 2, 80 opt. iters, 10 restarts) F1 ~ F1_classical within +/- 0.02.
+> - SA (2 000 sweeps, 10 restarts) F1 ~ F1_classical within +/- 0.01.
+> - QAOA ~ SA within +/- 0.01 (as expected from phase 11's separability result).
+
+### Quantum classifier (phase 12)
+
+> Fill in from `results/vqc_N256_dim4.npz` after running phase 12. Reports:
+>
+> - classical LR / GBT on 4-dim PCA features (sanity baselines after the dimension reduction),
+> - QKE (quantum kernel + SVC),
+> - VQC (variational quantum classifier, `ZZFeatureMap` + `RealAmplitudes`, 80 COBYLA iters).
+
+The interesting deltas are `F1_VQC - F1_GBT_PCA` and `F1_QKE - F1_GBT_PCA`. A positive delta here would be the *only* route to claiming a quantum advantage on this problem, since the Hamiltonian route is blocked.
+
+## 2.6 Discussion, limitations, roadmap
+
+### What phase 11 really says
+
+Three statements can be written with evidence, not intuition:
+
+1. **The problem admits a Hamiltonian representation.** A learned mean-field Hamiltonian `h_i = w . phi_i - b` reaches F1 ~= 0.99 on the random split, compared to 0.475 for the classical AMR indicator. The hard-patch problem is therefore **Hamiltonian-representable**. This kills the fallback narrative "maybe the issue is that no Hamiltonian fits this problem."
+
+2. **The optimal Hamiltonian is separable.** The stencil ceiling exceeds the mean-field ceiling by only 0.002 F1. Any Ising Hamiltonian of the form `sum h_i s_i + sum C_ij s_i s_j + sum K_p s_p ...` cannot outperform its own site-wise argmin `sign(-h_i)` by more than noise. Consequently, **QAOA, quantum annealing, simulated annealing, greedy argmin, and every other minimiser collapse to the same per-cell decision on the optimal H** -- there is no quantum advantage to be extracted from the optimiser, regardless of circuit depth, warm-start, or ansatz choice.
+
+3. **The v2 Hamiltonian under-fits by construction.** Its bias `h_i = c_bias * M * (score_i - thr)` depends only on `score_classical`, which in the permutation importance table explains +0.32 F1 out of +0.52 total gain. The remaining +0.20 F1 comes from magnetic features (`|B|^2, |grad_B|^2, |J_z|`) that v2 has no channel to access. Phase 11c plugs that gap with a learned linear bias; the couplings remain irrelevant.
+
+### What this means for the overall claim
+
+The study no longer supports "we demonstrate a quantum advantage via QAOA for MHD-AMR". What it does support:
+
+- On the v2 minimal, physics-first Hamiltonian, QAOA and simulated annealing are at parity with each other (phases 5-7) and both lose to the classical multi-indicator baseline.
+- The mean-field / neighbourhood classifier ceilings (phase 11) show the problem *is* Hamiltonian-representable under a random split (F1 ~= 0.99) but the optimal Hamiltonian is separable: couplings add <= 0.002 F1. So QAOA and SA coincide by construction on this task and no ZZ/ZZZZ-based advantage can be extracted regardless of the optimiser.
+- Under LOSO (phase 11b) that random-split ceiling collapses by ~5x, falling below classical.
+
+The QAOA / SA pipeline is no longer evidence for quantum advantage -- it is evidence that on this problem the solver is already near-optimal and the remaining gap is structural.
+
+### Limitations of the current study
+
+- **Single problem instance.** All conclusions are drawn on MHD-AMR. Re-running the phase 11 diagnostic on a qualitatively different Ising-encoded problem would test whether the diagnostic itself generalises.
+- **Ground truth definition.** The "hard patch" label is an L2-based reconstruction error crossed against a per-(scenario, Re) quantile. A different GT (e.g., "refine if any cell in a 3x3 window exceeds threshold", or a connected-component constraint) could force non-trivial couplings to matter, and re-open the QAOA door. See Sec. 2.6.3.
+- **Random split vs LOSO.** Phase 11's F1 = 0.989 is under random snapshot splitting. LOSO (phase 11b) is the stricter cross-scenario test and the authoritative number for cross-scenario claims. Phase 2B confirms this holds across percentiles p in {60, 70, 75, 80, 85, 90}.
+- **QAOA evaluation size.** Exact diagonalisation and QAOA are limited to dim = 2 (8 qubits) or dim = 3 (18 qubits via MPS). The coefficient analysis, phase 10 training, and phase 11 upper bound all run at dim = 4 (32 qubits) because classical methods scale trivially there. This is a scale mismatch -- the upper bound applies at dim = 4, QAOA is reported at dim = 2. Phase 11 still bounds QAOA from above because the upper-bound argument is a property of the Hamiltonian *form*, not the patch size; but a full dim = 4 QAOA on GPU / MPS would tighten the empirical comparison.
+- **Feature set in phase 11.** The 9 features are MHD-physics-motivated but not exhaustive. A sufficiently rich feature set (e.g., adding Helmholtz decomposition components, Elsaesser variables) could raise the mean-field ceiling further; the key relative result (ceiling >> classical, stencil ~= site) is robust to this, but the absolute F1 is not.
+- **V1 scope not re-tested.** The V1 evaluation (Optuna hyperparameter sweep, Pareto front, temporal `psi` encoding, per-scenario F1/IoU/recall/precision at multiple time points) is not re-run under LOSO. Within-scenario V1 signals (e.g., KH p = 0.008) are not contradicted by V2, which answers a different question (cross-scenario ceiling).
+
+### Follow-ups that would extend the study
+
+In decreasing order of what they would add:
+
+1. **V1 Pareto-optimal Hamiltonian under LOSO.** The V1 tuned H (with its Optuna-optimised parameters and temporal `psi` channel) has not been run through LOSO. This is the most obvious open item left to close.
+2. **Second benchmark problem.** One alternative Ising-formulated problem (MaxCut on random graphs with a known "frustration profile", molecular electron density refinement, graph partitioning on traffic networks) would test whether the phase 11 diagnostic generalises. Re-uses phases 11 / 11b / 11c unchanged.
+3. **Full quantum-classifier branch (phase 12 + extensions).** VQC on the 9 features at `d_q = 6` qubits (full feature set modulo PCA), multiple ansatz depths, compared to GBT. If `F1_VQC >= F1_GBT` within error bars, the VQC-on-features paradigm is not ruled out by this study.
+4. **Constraint-aware GT reformulation.** Re-define the label to enforce spatial connectivity (e.g., via a morphological opening on the L2-hard mask). This is a legitimate AMR requirement anyway (isolated refined cells are wasteful). Then re-run phase 11: the stencil ceiling should *exceed* the mean-field ceiling, and the coupling terms could re-enter play.
+5. **Formal separability statement.** Replace the empirical "delta_stencil_vs_site < 0.02" observation with a proven bound: if the best stencil classifier and the best site classifier coincide up to epsilon, then any Ising Hamiltonian's ground-state F1 is within epsilon of its site-wise-argmin F1. Not deep but worth writing out once cleanly.
+
+### Where a quantum advantage could still appear
+
+- **In the classifier paradigm** (VQC / QKE) -- phase 12 tests this directly.
+- **In a different problem formulation** with non-trivial coupling requirements (above).
+- **In a different physics regime** (high-Mach compressible, kinetic plasma) where the hard-patch label is shaped by long-range correlations (shock fronts, plasma waves) that no 1-hop stencil can capture.
+- **In temporal prediction**, where the question is "will this cell become hard at t + dt given history" -- a time-series classifier whose quantum kernel has structural advantages.
+
+None of these are disproven by the current study; they are simply outside its scope.
+
+---
+
+## 2.7 How to reproduce Part 2
+
+### Environment
+
+```bash
+# from repo root
+conda env create -f environment.yaml       # first time only
+conda activate qiskit-project
+```
+
+New dependencies added for Part 2 over Part 1:
+
+- `cma` (CMA-ES optimiser for phase 10),
+- `qiskit-machine-learning` (already present in Part 1, used in phase 12).
+
+All other imports are either stdlib, `numpy/scipy/scikit-learn`, or `qiskit` -- already in `environment.yaml`.
+
+### Quick tier (N = 128, ~25 min on a laptop)
+
+```bash
+./study/run_study_v2.sh
+```
+
+Runs phases 1 -> 8, 10 (+ 10a), 11, 11b, 11c, 13 by default. Phase 12 (VQC) is opt-in because it is the slowest phase. To include it:
+
+```bash
+./study/run_study_v2.sh 1 2 3 4 5 6 7 8 10 11 11b 11c 12 13
+```
+
+### Higher resolution result (N = 256, ~1-2 h)
+
+```bash
+./study/run_study_v2.sh --full
+```
+
+Same phases, full DNS resolution. Writes `study/results/*_N256_*.npz`.
+
+### Targeted runs
+
+| intent                              | command                                        |
+|-------------------------------------|------------------------------------------------|
+| just the falsification chapter      | `./study/run_study_v2.sh 11 11b 11c 13`        |
+| just the aggregation                | `./study/run_study_v2.sh 13`                   |
+| only the quantum classifier         | `./study/run_study_v2.sh 12`                   |
+| QAOA + SA comparison at dim = 3 MPS | `./study/run_study_v2.sh --mps 4 5 7`          |
+| re-train Hamiltonian from MF init   | `./study/run_study_v2.sh 10`                   |
+
+### Reading the results
+
+Open `study/results/SUMMARY_N{N}_dim{D}.txt` -- the headline table. Per-phase `.npz` files can be inspected in Python:
+
+```python
+import numpy as np
+z = np.load("study/results/upper_bound_N256_dim4.npz", allow_pickle=True)
+print(list(z.files))          # available keys
+print(z["f1_site_best"])      # mean-field ceiling
+print(z["f1_stencil_gbt"])    # neighbourhood ceiling
+print(z["delta_stencil_vs_site"])  # couplings value-added (expect ~0)
+```
+

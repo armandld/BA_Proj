@@ -27,6 +27,8 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             backend = FakeFez()
         elif backend_name == "state_vector":
             backend = AerSimulator(method='statevector')
+        elif backend_name == "matrix_product_state":
+            backend = AerSimulator(method='matrix_product_state')
         else:
             raise ValueError(f"Unsupported backend: {backend_name}")
 
@@ -168,6 +170,25 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             print("\n--- Final Statevector (exact) ---")
         sv = Statevector.from_instruction(optimized_circuit)
         final_distribution = sv.probabilities_dict()
+    elif backend_name == "matrix_product_state":
+        # MPS: use sampler for the final distribution (statevector extraction
+        # would defeat the purpose). Use a large shot count so marginals
+        # approximate the exact distribution well.
+        if verbose:
+            print("\n--- Final MPS Sampling ---")
+        optimized_circuit.measure_all()
+        mps_shots = max(shots, 8192)
+        # Re-configure the sampler's shot count for the final readout
+        try:
+            sampler.options.default_shots = mps_shots
+        except Exception:
+            pass
+        pub = (optimized_circuit,)
+        job = sampler.run([pub])
+        pub_result = job.result()[0]
+        counts_bin = pub_result.data.meas.get_counts()
+        total_shots = sum(counts_bin.values())
+        final_distribution = {key: val / total_shots for key, val in counts_bin.items()}
     else:
         if verbose:
             print("\n--- Final Sampling ---")

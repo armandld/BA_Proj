@@ -1,0 +1,73 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11e
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11e  -  phase11e_v1h_loso
+============================================================
+========================================================================================
+  Phase 11E: V1 tuned H + psi under leave-one-scenario-out
+  dim=4  N=256  max-snaps/cfg=80  V1 beta=0.5495
+========================================================================================
+
+  orszag_tang         snaps= 120  cells=  1920  pos_rate=0.250  built in 11.8s
+  harris_tearing      snaps=  80  cells=  1280  pos_rate=0.250  built in 19.9s
+  kelvin_helmholtz    snaps= 120  cells=  1920  pos_rate=0.250  built in 32.0s
+  mhd_rotor           snaps= 120  cells=  1920  pos_rate=0.250  built in 44.7s
+
+  held-out           F1_v2_class F1_v1_class  F1_v1_psi   delta         CI95_delta   p(H0)
+  ----------------------------------------------------------------------------------------
+  orszag_tang              0.264       0.395      0.306  +0.042 [+0.014,+0.070]    1.000
+  harris_tearing           0.400       0.400      0.385  -0.015 [-0.040,+0.006]    0.098
+  kelvin_helmholtz         0.400       0.400      0.411  +0.011 [+0.003,+0.023]    1.000
+  mhd_rotor                0.672       0.936      0.928  +0.256 [+0.209,+0.302]    1.000
+
+  INTERPRETATION:
+  * mean(F1_v1_psi - F1_v2_classical) = +0.074 over 4 folds
+  * folds with CI strictly > 0 (V1+psi > V2 classical): 3/4
+  * folds with CI strictly < 0 (V1+psi < V2 classical): 0/4
+
+  * decomposition of the +0.074 mean:
+      V1_class - V2_class  = +0.099  (Lohner + 4-indicator RMS effect)
+      V1+psi   - V1_class  = -0.025  (psi temporal-channel effect)
+
+  saved: v1h_loso_N256_dim4.npz
+
+Phase 11E complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 00:00 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 16 avr 23:23 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 16 avr 23:24 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

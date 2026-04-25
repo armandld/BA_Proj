@@ -1,0 +1,97 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11b 11c 12 13
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11b  -  phase11b_loso
+============================================================
+========================================================================================
+  Phase 11B: Leave-One-Scenario-Out validation
+  dim=4  N=256  max-snaps/cfg=30
+  Folds: orszag_tang, harris_tearing, kelvin_helmholtz, mhd_rotor
+========================================================================================
+
+  building per-scenario feature matrices...
+    orszag_tang        cells=  1920  pos_rate=0.250
+    harris_tearing     cells=  1280  pos_rate=0.250
+    kelvin_helmholtz   cells=  1920  pos_rate=0.250
+    mhd_rotor          cells=  1920  pos_rate=0.250
+  done in 5.2s
+
+  held-out             n_val  F1_class   F1_site   F1_sten   d_site   d_sten
+  --------------------------------------------------------------------------
+  orszag_tang           1920     0.264     0.327     0.226   +0.063   -0.101
+  harris_tearing        1280     0.400     0.000     0.000   -0.400   +0.000
+  kelvin_helmholtz      1920     0.400     0.353     0.400   -0.047   +0.047
+  mhd_rotor             1920     0.672     0.084     0.233   -0.588   +0.149
+  --------------------------------------------------------------------------
+  MEAN +/- STD               0.434+/-0.148  0.191+/-0.152  0.215+/-0.142
+
+  INTERPRETATION:
+  * site-LOSO ~= classical (delta = -0.243)  ==> the phase 11 ceiling was largely INTER-SCENARIO memorisation. For unseen scenarios, a local H barely beats the classical indicator.
+  * stencil > site by +0.024 under LOSO  ==> neighbourhood couplings help for transfer.
+
+  saved: upper_bound_loso_N256_dim4.npz
+
+Phase 11B complete.
+
+============================================================
+  PHASE 11c  -  phase11c_learned_h
+============================================================
+========================================================================================
+  Phase 11C: learned mean-field Hamiltonian h_i = w.phi_i - b
+  dim=4  N=256  max-snaps/cfg=30
+========================================================================================
+
+  built: 440 snaps in 5.0s
+
+  [random split] learned-H F1_train=0.621  F1_val=0.598  classical F1_val=0.475   [0.4s]
+
+  learned weights (in standardised feature space):
+    feature                 w_std        w_raw
+    score_classical        +1.467   +4.891e+00
+    |J_z|                  +1.462   +3.935e+00
+    |grad_B|^2             -1.034   -7.842e-01
+    |grad_v|^2             -0.533   -5.254e-01
+    |omega_z|              +0.506   +2.523e+00
+    |v|^2                  -0.275   -4.909e-01
+    det_grad_B             +0.117   +2.761e-01
+    Re                     -0.038   -8.572e-05
+    |B|^2                  -0.012   -2.529e-02
+    (bias b)               -0.532   -2.969e+00
+
+  per-scenario (val):
+  scenario                n    class    learn    delta
+  harris_tearing        416    0.375    0.612   +0.237
+  kelvin_helmholtz      608    0.443    0.473   +0.030
+  mhd_rotor             512    0.805    0.933   +0.128
+  orszag_tang           576    0.435    0.500   +0.065
+
+  [leave-one-scenario-out]
+  held                 n_val    class    learn    delta
+  orszag_tang           1920    0.264    0.300   +0.036
+  harris_tearing        1280    0.400    0.653   +0.253
+  kelvin_helmholtz      1920    0.400    0.357   -0.043
+  mhd_rotor             1920    0.672    0.253   -0.418
+  MEAN                          0.434    0.391   -0.043
+
+  saved: learned_h_N256_dim4.npz
+
+Phase 11C complete.
+
+============================================================
+  PHASE 12  -  phase12_vqc
+============================================================
+/Users/Sayu/Desktop/BA_Proj/study/phase12_vqc.py:145: DeprecationWarning: The class ``qiskit.circuit.library.data_preparation._zz_feature_map.ZZFeatureMap`` is deprecated as of Qiskit 2.1. It will be removed in Qiskit 3.0. Use the zz_feature_map function as a replacement. Note that this will no longer return a BlueprintCircuit, but just a plain QuantumCircuit.
+  fm = ZZFeatureMap(feature_dimension=d_q, reps=reps_fm,

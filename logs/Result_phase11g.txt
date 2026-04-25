@@ -1,0 +1,76 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11g
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11g  -  phase11g_scenario_ablation
+============================================================
+========================================================================================
+  Phase 11G: scenario-identity ablation (one-hot augmentation)
+  dim=4  N=256  max-snaps/cfg=30
+========================================================================================
+
+  scenarios: ['harris_tearing', 'kelvin_helmholtz', 'mhd_rotor', 'orszag_tang']  (K=4)
+  snapshots: 440
+
+  (A) RANDOM SPLIT
+      F1 classical                 = 0.471
+      F1 mean-field GBT (9 feats)  = 0.981
+      F1 mean-field GBT (9+id)     = 0.980   (should match -- no novel info per scenario)
+
+  (B) LOSO
+  held                F1_class  F1_9feat   F1_9+id  F1_9+fuzz  delta(9+id - 9)
+  harris_tearing         0.400     0.000     0.000      0.000           +0.000
+  kelvin_helmholtz       0.400     0.344     0.353      0.379           +0.008
+  mhd_rotor              0.672     0.084     0.084      0.084           +0.000
+  orszag_tang            0.264     0.327     0.317      0.320           -0.011
+
+  LOSO mean: classical 0.434, 9-feat 0.189, 9+id 0.188, 9+fuzz 0.196
+
+  INTERPRETATION:
+  * delta(9+id - 9) = -0.001  ~  0.
+    Scenario identity does NOT help. The bottleneck is NOT
+    feature locality but something more fundamental (e.g. the
+    L2-hard label is not a per-snapshot function of the 9
+    features at all). Re-investigate the labelling protocol.
+
+  saved: scenario_ablation_N256_dim4.npz
+
+Phase 11G complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 23:53 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 22:35 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

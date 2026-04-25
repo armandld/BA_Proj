@@ -1,0 +1,71 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11b2
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11b2  -  phase11b2_bootstrap
+============================================================
+========================================================================================
+  Phase 11B-2: LOSO with snapshot-level bootstrap CIs
+  dim=4  N=256  max-snaps/cfg=80  n_boot=500
+========================================================================================
+
+  built dataset in 11.1s
+    orszag_tang        snaps= 120  cells=  1920  pos_rate=0.250
+    harris_tearing     snaps=  80  cells=  1280  pos_rate=0.250
+    kelvin_helmholtz   snaps= 120  cells=  1920  pos_rate=0.250
+    mhd_rotor          snaps= 120  cells=  1920  pos_rate=0.250
+
+  held                F1_class         CI95_class   F1_site          CI95_site   delta         CI95_delta   p(H0)
+  ---------------------------------------------------------------------------------------------------------------
+  orszag_tang            0.264 [0.232, 0.296]       0.327 [0.293, 0.360]    +0.063 [+0.043,+0.084]    1.000
+  harris_tearing         0.400 [0.333, 0.463]       0.000 [0.000, 0.000]    -0.400 [-0.463,-0.338]    0.000
+  kelvin_helmholtz       0.400 [0.370, 0.434]       0.344 [0.313, 0.371]    -0.056 [-0.067,-0.046]    0.000
+  mhd_rotor              0.672 [0.643, 0.703]       0.084 [0.057, 0.114]    -0.588 [-0.633,-0.544]    0.000
+  ---------------------------------------------------------------------------------------------------------------
+  mean delta across folds = -0.245
+  folds where bootstrap p(F1_site >= F1_class) < 0.05: 3 / 4  (i.e. site significantly WORSE than classical)
+
+  INTERPRETATION:
+  * The mean delta is -0.245 and 3/4 folds reject site >= classical at p < 0.05. The falsification is robust in aggregate.
+
+  saved: loso_bootstrap_N256_dim4.npz
+
+Phase 11B-2 complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 00:00 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz

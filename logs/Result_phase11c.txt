@@ -1,0 +1,84 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11c
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11c  -  phase11c_learned_h
+============================================================
+========================================================================================
+  Phase 11C: learned mean-field Hamiltonian h_i = w.phi_i - b
+  dim=4  N=256  max-snaps/cfg=30
+========================================================================================
+
+  built: 440 snaps in 5.2s
+
+  [random split] learned-H F1_train=0.621  F1_val=0.598  classical F1_val=0.475   [0.4s]
+
+  learned weights (in standardised feature space):
+    feature                 w_std        w_raw
+    score_classical        +1.467   +4.891e+00
+    |J_z|                  +1.462   +3.935e+00
+    |grad_B|^2             -1.034   -7.842e-01
+    |grad_v|^2             -0.533   -5.254e-01
+    |omega_z|              +0.506   +2.523e+00
+    |v|^2                  -0.275   -4.909e-01
+    det_grad_B             +0.117   +2.761e-01
+    Re                     -0.038   -8.572e-05
+    |B|^2                  -0.012   -2.529e-02
+    (bias b)               -0.532   -2.969e+00
+
+  per-scenario (val):
+  scenario                n    class    learn    delta
+  harris_tearing        416    0.375    0.612   +0.237
+  kelvin_helmholtz      608    0.443    0.473   +0.030
+  mhd_rotor             512    0.805    0.933   +0.128
+  orszag_tang           576    0.435    0.500   +0.065
+
+  [leave-one-scenario-out]
+  held                 n_val    class    learn    delta
+  orszag_tang           1920    0.264    0.300   +0.036
+  harris_tearing        1280    0.400    0.653   +0.253
+  kelvin_helmholtz      1920    0.400    0.357   -0.043
+  mhd_rotor             1920    0.672    0.253   -0.418
+  MEAN                          0.434    0.391   -0.043
+
+  saved: learned_h_N256_dim4.npz
+
+Phase 11C complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:58 study/results/sa_baseline_mhd_rotor_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:59 study/results/sa_baseline_mhd_rotor_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 16 avr 23:23 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 16 avr 23:24 study/results/upper_bound_loso_N256_dim4.npz

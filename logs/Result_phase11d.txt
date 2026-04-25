@@ -1,0 +1,82 @@
+============================================================
+  Q-HAS v2 Hamiltonian Quantum-Advantage Study
+------------------------------------------------------------
+  Tier:      full  (N=256)
+  Phases:     11d
+  Scenarios: orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+  Re values: 400 800 1200 1600
+  v1 compare: no
+  QAOA backend: state_vector  (dim list: 2)
+  Warm-start:   no
+  Prune eps:    none
+============================================================
+
+>>> Activating conda env: qiskit-project
+
+============================================================
+  PHASE 11d  -  phase11d_specialisation
+============================================================
+========================================================================================
+  Phase 11D: per-scenario local-specialisation ceiling
+  dim=4  N=256  max-snaps/cfg=30  model=gbt
+========================================================================================
+
+  built dataset in 7.2s
+    orszag_tang        snaps= 120  pos_rate=0.250
+    harris_tearing     snaps=  80  pos_rate=0.250
+    kelvin_helmholtz   snaps= 120  pos_rate=0.250
+    mhd_rotor          snaps= 120  pos_rate=0.250
+
+  [1] within-scenario specialisation ceiling:
+  scenario             n_tr   n_va  F1_class   F1_spec     delta
+  orszag_tang          1344    576     0.441     0.948    +0.507
+  harris_tearing        896    384     0.626     0.899    +0.273
+  kelvin_helmholtz     1344    576     0.418     0.984    +0.566
+  mhd_rotor            1344    576     0.925     0.946    +0.021
+
+  [2] transfer matrix (row = model trained on, col = eval on):
+                         orszag_tang harris_tearing kelvin_helmhol      mhd_rotor
+  train=orszag_tang    *        0.948         0.359         0.350         0.215
+  train=harris_tearing          0.501*        0.899         0.418         0.080
+  train=kelvin_helmhol          0.441         0.359*        0.984         0.400
+  train=mhd_rotor               0.256         0.359         0.418*        0.946
+
+  [3] misrouting cost (avg off-diagonal F1 -- what a random scenario detector yields):
+  model                diag F1   avg off-diag  classical  delta_off_cls
+  orszag_tang            0.948          0.308      0.441         -0.133
+  harris_tearing         0.899          0.333      0.626         -0.293
+  kelvin_helmholtz       0.984          0.400      0.418         -0.018
+  mhd_rotor              0.946          0.344      0.925         -0.581
+
+  INTERPRETATION:
+  * avg(off-diagonal - classical) = -0.256 < 0  ==>  a misrouted learned H is WORSE than classical baseline. The 'train-per-scenario and switch' strategy requires a near-perfect scenario detector to beat classical on average.
+
+  saved: specialisation_N256_dim4.npz
+
+Phase 11D complete.
+
+============================================================
+  ALL PHASES COMPLETE
+============================================================
+
+Results in: study/results/
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 18:00 study/results/sa_baseline_mhd_rotor_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re1200_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:45 study/results/sa_baseline_orszag_tang_Re1200_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:46 study/results/sa_baseline_orszag_tang_Re1600_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:47 study/results/sa_baseline_orszag_tang_Re1600_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:41 study/results/sa_baseline_orszag_tang_Re400_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:42 study/results/sa_baseline_orszag_tang_Re400_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,6K 12 avr 17:43 study/results/sa_baseline_orszag_tang_Re800_N256_dim2_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 12 avr 17:44 study/results/sa_baseline_orszag_tang_Re800_N256_dim4_v2.npz
+-rw-r--r--@ 1 Sayu  staff   2,0K 17 avr 00:03 study/results/scenario_ablation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,7K 17 avr 22:35 study/results/specialisation_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   1,6K 13 avr 04:32 study/results/train_COMPARE_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   6,5K 13 avr 04:32 study/results/train_joint_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:02 study/results/train_scenario-harris_tearing_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,7K 13 avr 04:12 study/results/train_scenario-kelvin_helmholtz_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 04:22 study/results/train_scenario-mhd_rotor_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,6K 13 avr 03:52 study/results/train_scenario-orszag_tang_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   5,0K 17 avr 20:46 study/results/upper_bound_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,7K 17 avr 21:30 study/results/upper_bound_loso_N256_dim4.npz
+-rw-r--r--@ 1 Sayu  staff   2,4K 17 avr 01:30 study/results/v1h_loso_N256_dim4.npz
