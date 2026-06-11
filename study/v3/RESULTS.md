@@ -114,3 +114,79 @@ F1 = 2p/(1+p) = 0.400, refine-none floor = 0):**
   normalisation is not specified as a task in §8.3; it must be specced
   (and logged in `docs/protocol_deviations.md` if added) before any
   conclusion is drawn from this table.
+- **Follow-up spec (user-approved, no deviation entry needed):** folded
+  into Task 4 — `t4_blocked_split.py` will evaluate B5 with both (a) a
+  globally-fitted threshold and (b) a per-fold threshold fitted on train
+  splits; if (b) closes the gap to B1/B2, record as "scale transfer
+  failure confirmed; ranking transfers, calibration does not."
+
+---
+
+## Task 1b — Information-cone curve (k-hop GBT)
+
+**Command** (local workstation, conda env `qiskit-project`):
+
+```
+python -m pytest tests/v3/ -v          # 16 passed
+python study/v3/t1b_cone_curve.py --N 256 --dim 4
+```
+
+**Git state:** code commit `6629157` (`v3-task-1b`); `.npz` output
+(`results/t1b_cone_curve_N256_dim4.npz`) records git hash + CLI args.
+Defaults: max-snaps=30, seed=0, train-frac=0.6. Feature counts per k:
+9 / 45 / 225 / 441 (k=1 = exact phase-11 stencil construction).
+
+**Blocked split** (Task-4 rule: first 60% of each (scenario, Re)
+trajectory → train; 4224 train / 2816 val cells. Val prevalence = 0.319
+— hardness concentrates in late snapshots, so the late-40% val set has
+more positives than the global 0.25 — refine-all floor F1 = 0.484):
+
+| k | n_feats | n_tr/F | F1 | Δ/hop | capped (√F/F) |
+|---|---|---|---|---|---|
+| classical | – | – | 0.517 | – | – |
+| 0 | 9 | 469.3 | 0.581 | – | – |
+| 1 | 45 | 93.9 | 0.733 | +0.153 | – |
+| 2 | 225 | 18.8 | 0.816 | +0.083 | 0.858 [FLAG n_tr/F<20] |
+| 3 | 441 | 9.6 | 0.816 | +0.000 | 0.866 [FLAG n_tr/F<20] |
+
+**LOSO** (phase-11b folds; per-fold prevalence 0.250, refine-all floor
+F1 = 0.400):
+
+| k | n_feats | n_tr/F | orszag_tang | harris_tearing | kelvin_helmholtz | mhd_rotor | mean | Δ/hop |
+|---|---|---|---|---|---|---|---|---|
+| classical | – | – | 0.264 | 0.400 | 0.400 | 0.672 | 0.434 | – |
+| 0 | 9 | 568.9 | 0.327 | 0.000 | 0.344 | 0.084 | 0.189 | – |
+| 1 | 45 | 113.8 | 0.226 | 0.000 | 0.400 | 0.233 | **0.215** | +0.026 |
+| 2 | 225 | 22.8 | 0.437 | 0.000 | 0.123 | 0.000 | 0.140 | −0.075 |
+| 3 | 441 | 11.6 | 0.437 | 0.000 | 0.123 | 0.000 | 0.140 | +0.000 |
+
+(k=3 capped fit under LOSO: mean 0.000 — full collapse to the
+refine-none floor on every fold. [FLAG n_tr/F<20])
+
+**Acceptance: PASS.** k=1 LOSO mean = 0.215, per-fold
+0.226 / 0.000 / 0.400 / 0.233 — identical to the published phase-11b
+stencil row; k=0 likewise reproduces B4 (0.189).
+
+**Degeneracy flags (§1.3 B3):** harris_tearing = 0.000 (refine-none
+floor) at every k; kelvin_helmholtz k=1 = 0.400 (refine-all floor);
+mhd_rotor = 0.000 at k ≥ 2; classical sits at the 0.400 floor on
+harris/kelvin folds (as in Task 1). The blocked classical baseline
+(0.517) is only +0.033 above its floor (0.484) — flagged as
+floor-adjacent.
+
+**§2 decision rule — the cone is RETIRED as a scaling axis.**
+- LOSO per-hop deltas: +0.026, −0.075, +0.000. The curve is **not
+  rising** (no slope to quote): it peaks at k=1 and collapses *below
+  the k=0 level* for k ≥ 2 (0.140 < 0.189). Strictly, the curve is not
+  "flat" by the pre-registered |Δ| ≤ 0.01 criterion either — it
+  *declines*, which retires the cone a fortiori: enlarging the
+  neighbourhood actively hurts transfer (the extra features feed the
+  ERM-selection failure documented in Task 1).
+- Within-distribution (blocked split), the picture inverts: F1 rises
+  through k=1 (+0.153) and k=2 (+0.083), saturating at k=3 (+0.000;
+  capped fits reach 0.858–0.866). The neighbourhood information exists,
+  but it is scenario-specific — consistent with §7's demotion of phase
+  11h ("valid within-distribution only; never under LOSO").
+- Manuscript consequence: the "larger VQA grid → larger useful cone"
+  hypothesis has no classical support for *transfer*; any cone claim
+  must be scoped to within-distribution fits.
