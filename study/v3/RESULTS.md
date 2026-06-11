@@ -218,3 +218,39 @@ floor verified analytically against sklearn's F1 for p ∈ {0.25, 0.319}
 (2p/(1+p) = 0.400, 0.4837…) and refine-none = 0; Spearman ±1 on
 monotone/antitone inputs; uniform-error edge case CE(b) = ⌈bn⌉/n;
 zero-total-error returns NaN. Pytest: 15 passed (31 total under tests/v3/).
+
+---
+
+## Task 3 — Trajectory block bootstrap
+
+**Command:**
+
+```
+python -m pytest tests/v3/test_stats.py -v
+```
+
+**Code:** `study/v3/stats.py` — `bootstrap_by_trajectory(values,
+traj_ids, B=1000, statistic=np.mean, seed=0, ci=95.0)` (resample
+trajectory IDs with replacement, recompute the statistic on the pooled
+values of each resample, percentile CI) and `paired_delta_bootstrap`
+(§1.5 paired variant: per-trajectory deltas Δ_t = stat(a_t) − stat(b_t),
+bootstrap over trajectory IDs; reports mean Δ, percentile 95% CI, and
+the fraction of trajectories with Δ > 0). Deterministic given `seed`;
+numpy-only.
+
+**Acceptance: PASS.** 10 tests on synthetic data with known sampling
+distribution:
+- maximal within-trajectory autocorrelation (constant value per
+  trajectory, T=50, m=10): bootstrap std 0.1401 vs analytic standard
+  error std(effects)/√T = 0.1407;
+- on the same input, the trajectory-level 95% CI is **3.06× wider**
+  than the (forbidden, §1.5) snapshot-level CI (0.540 vs 0.177;
+  theoretical ratio √m = 3.16) — the required demonstration that
+  snapshot resampling underestimates uncertainty on autocorrelated
+  data;
+- paired variant: constant shift → mean Δ = 1, frac_positive = 1, CI
+  excluding 0; antisymmetric shift → mean Δ = 0, frac_positive = 0.5,
+  CI containing 0; unequal trajectory sizes handled (per-trajectory
+  statistic first, unweighted mean of deltas);
+- determinism given seed; input validation.
+Pytest: 10 passed (41 total under tests/v3/).
