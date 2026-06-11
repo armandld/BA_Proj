@@ -190,3 +190,31 @@ floor-adjacent.
 - Manuscript consequence: the "larger VQA grid → larger useful cone"
   hypothesis has no classical support for *transfer*; any cone claim
   must be scoped to within-distribution fits.
+
+---
+
+## Task 2 — Metrics module
+
+**Command:**
+
+```
+python -m pytest tests/v3/test_metrics.py -v
+```
+
+**Code:** `study/v3/metrics.py` — `captured_error_at_budget(scores, e,
+budgets=(0.10, 0.25, 0.50))` (rank by score, top-⌈bn⌉, Σe_top/Σe; also
+returns the full CE curve AUC, trapezoid on [0,1] with CE(0)=0),
+`ce_curve`, `spearman`, `degeneracy_floors(p)` (refine-all
+F1 = 2p/(1+p), refine-none = 0) and `degeneracy_flag(pred, prevalence,
+tol=0.005, gt=None)` implementing §1.3-B3 (with gt: realised F1 within
+tol of a floor; without gt: (quasi-)constant prediction, whose F1 is at
+a floor by construction). API note: the optional `gt` argument extends
+the §8.3 signature so the flag can test metric distance, not only
+constant predictions — no metric definition was changed.
+
+**Acceptance: PASS.** Hand-computed 6-patch example verified
+(CE(0.10)=0.5, CE(0.25)=0.6, CE(0.50)=0.6, AUC=0.6166̄); refine-all
+floor verified analytically against sklearn's F1 for p ∈ {0.25, 0.319}
+(2p/(1+p) = 0.400, 0.4837…) and refine-none = 0; Spearman ±1 on
+monotone/antitone inputs; uniform-error edge case CE(b) = ⌈bn⌉/n;
+zero-total-error returns NaN. Pytest: 15 passed (31 total under tests/v3/).
