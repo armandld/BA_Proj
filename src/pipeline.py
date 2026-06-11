@@ -79,7 +79,7 @@ def main():
         Rm= Rm           # Magnetic Reynolds number
     )
 
-    N_TRAINING         = 256
+    N_TRAINING         = N
     MAX_DEPTH_TRAINING = 4
 
     PHASE={
