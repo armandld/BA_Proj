@@ -328,6 +328,17 @@ def _print_table(rows, label):
               f"{r['enhl_recall']:>8.3f} {r['enhl_ce25']:>7.3f} {caps}")
 
 
+def common_traj_values(ra, rb, cfgs):
+    """Trajectoires presentes et finies dans les DEUX bras (un config
+    court peut n'avoir aucune paire val a grand h, p.ex. harris a
+    h=8 bloque) ; le bootstrap apparie s'applique a l'intersection."""
+    common = [c for c in cfgs
+              if c in ra and c in rb
+              and np.isfinite(ra[c]) and np.isfinite(rb[c])]
+    return (np.array([ra[c] for c in common]),
+            np.array([rb[c] for c in common]), common)
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V3 Task 7: predictive dataset, Level 2")
@@ -454,25 +465,28 @@ def main():
     pairs_delta = [("base9+psi4", "base9"),
                    ("base9+psiv2", "base9"),
                    ("full (base9+D9+psi4+psiv2)", "base9+D9")]
-    traj_ids = np.arange(len(cfgs))
     print(f"\n  [psi deltas: CE@0.25 per trajectory, paired bootstrap "
           f"B={args.n_boot}]")
-    print(f"  {'pair':<46} {'split':<8} {'h':>2} {'mean_d':>8} "
-          f"{'CI95':>18} {'frac>0':>7}")
+    print(f"  {'pair':<46} {'split':<8} {'h':>2} {'n_tr':>4} "
+          f"{'mean_d':>8} {'CI95':>18} {'frac>0':>7}")
     boot_rows = []
     for split in ("blocked", "loso"):
         for h in HORIZONS:
             for a, b in pairs_delta:
                 ra = results[(split, h, a)]["ce25_per_traj"]
                 rb = results[(split, h, b)]["ce25_per_traj"]
-                va = np.array([ra[c] for c in cfgs])
-                vb = np.array([rb[c] for c in cfgs])
-                r = paired_delta_bootstrap(va, vb, traj_ids,
+                va, vb, common = common_traj_values(ra, rb, cfgs)
+                if len(common) < 2:
+                    print(f"  {a + ' - ' + b:<46} {split:<8} {h:>2} "
+                          f"{len(common):>4} (skipped: <2 trajectories)")
+                    continue
+                r = paired_delta_bootstrap(va, vb,
+                                           np.arange(len(common)),
                                            B=args.n_boot,
                                            seed=args.seed)
-                boot_rows.append((split, h, a, b, r))
+                boot_rows.append((split, h, a, b, len(common), r))
                 print(f"  {a + ' - ' + b:<46} {split:<8} {h:>2} "
-                      f"{r['mean_delta']:>+8.3f} "
+                      f"{len(common):>4} {r['mean_delta']:>+8.3f} "
                       f"[{r['ci_low']:>+7.3f},{r['ci_high']:>+7.3f}] "
                       f"{r['frac_positive']:>7.2f}")
 
@@ -567,11 +581,11 @@ def main():
             [[[cone[(s, h, f"khop{k}")]["f1"]
                for h in HORIZONS] for k in K_CONE]
              for s in ("blocked", "loso")]),
-        boot=json.dumps([dict(split=s, h=h, a=a, b=b,
+        boot=json.dumps([dict(split=s, h=h, a=a, b=b, n_traj=n,
                               mean=r["mean_delta"], lo=r["ci_low"],
                               hi=r["ci_high"],
                               frac=r["frac_positive"])
-                         for s, h, a, b, r in boot_rows]),
+                         for s, h, a, b, n, r in boot_rows]),
         seed=args.seed,
         git_hash=git_commit_hash(),
         cli_args=json.dumps(vars(args)),

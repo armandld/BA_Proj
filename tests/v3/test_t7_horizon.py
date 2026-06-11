@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(_HERE, "..", "..", "study", "v3"))
 from t7_horizon import (
     blocked_pair_split,
     capture_at_budget,
+    common_traj_values,
     enhl_mask,
     finite_diff_features,
     horizon_pairs,
@@ -126,3 +127,17 @@ def test_method_features_shapes_and_content():
 def test_method_features_unknown_name_raises():
     with pytest.raises(ValueError):
         method_features(_toy_seq(), 0, "nope")
+
+
+# ----------------- trajectoires communes (bootstrap) -------------------
+
+def test_common_traj_values_intersection_and_nan_filter():
+    # une trajectoire courte peut manquer dans un bras (p.ex. harris a
+    # h=8 bloque : aucune paire val) ou valoir NaN -> intersection
+    cfgs = [("a", 1), ("a", 2), ("b", 1), ("b", 2)]
+    ra = {("a", 1): 0.5, ("a", 2): 0.6, ("b", 1): np.nan}
+    rb = {("a", 1): 0.4, ("a", 2): 0.7, ("b", 1): 0.3, ("b", 2): 0.2}
+    va, vb, common = common_traj_values(ra, rb, cfgs)
+    assert common == [("a", 1), ("a", 2)]
+    np.testing.assert_allclose(va, [0.5, 0.6])
+    np.testing.assert_allclose(vb, [0.4, 0.7])
