@@ -512,3 +512,128 @@ evolutions of δt=0.1). Scaling ×(256/N)³ = ×8 (cells ×4, CFL steps ×2)
 local workstation. Decision on launching the full N=256 run (as-is /
 reduced snapshot count / HPC) rests with the user; not launched in
 this session.
+
+---
+
+## Task 7 — Predictive dataset, Level 2 (horizons, ψ, causal cone)
+
+**Command** (local workstation, conda env `qiskit-project`; sequence
+build 18.3 s):
+
+```
+python -m pytest tests/v3/ -v          # 78 passed
+python study/v3/t7_horizon.py --N 256 --dim 4
+```
+
+**Git state:** code commits `37aaec5` + `c062ce4` (`v3-task-7`); output
+`results/t7_horizon_N256_dim4.npz` (git hash + CLI args inside).
+Fix recorded: harris_tearing trajectories have 20 snapshots (others
+30), so they have **no blocked val pairs at h=8**; the paired ψ-delta
+bootstrap runs on the intersection of trajectories present in both
+arms (n_tr column; 12 instead of 16 on blocked h=8 rows).
+Targets: e_i(t+h) only — no `d_patches_*` files at N=256/dim=4 yet
+(Task-6 full campaign pending); per §8.4 the e-variant needs no new
+simulation.
+
+**Headline numbers (CE@0.25 against continuous e(t+h); LOSO = mean
+over folds):**
+
+| method | split | h=1 | h=2 | h=4 | h=8 |
+|---|---|---|---|---|---|
+| B1 classical score (avg) | blocked | 0.384 | 0.381 | 0.378 | 0.384 |
+| base9 GBT | blocked | 0.365 | 0.374 | 0.370 | 0.370 |
+| base9+ψ4 | blocked | 0.374 | 0.374 | 0.372 | 0.361 |
+| B1 classical score (avg) | LOSO | 0.412 | 0.412 | 0.410 | 0.404 |
+| base9 GBT | LOSO | 0.215 | 0.243 | 0.227 | 0.207 |
+| base9+ψ4 | LOSO | 0.241 | 0.235 | 0.216 | 0.227 |
+| base9+ψv2 | LOSO | 0.271 | 0.244 | 0.216 | 0.198 |
+
+Every learned predictor collapses under LOSO to CE@0.25 ≈ 0.20–0.30 vs
+the raw classical score's 0.40–0.41, at **every** horizon — the L1
+transfer failure (Tasks 1/1b/4) propagates unchanged to L2. Most LOSO
+F1 cells are DEG-flagged (transferred thresholds sit at degeneracy
+floors), so the high LOSO ENHL-recall values of the baselines
+(0.89–0.95) are an artifact of near-refine-all operating points; the
+ranking columns are the meaningful ones.
+
+**Lead-time tables (capture@0.25 of future-hard patches vs h):**
+
+| method | split | h=1 | h=2 | h=4 | h=8 |
+|---|---|---|---|---|---|
+| B1 classical (avg) | blocked | 0.693 | 0.687 | 0.672 | 0.615 |
+| B1 classical (avg) | LOSO | 0.694 | 0.697 | 0.686 | 0.665 |
+| B2 classical (max) | LOSO | 0.499 | 0.498 | 0.517 | 0.532 |
+| base9 GBT | LOSO | 0.283 | 0.350 | 0.317 | 0.098 |
+| base9+ψ4 | LOSO | 0.333 | 0.285 | 0.285 | 0.199 |
+| base9+ψv2 | LOSO | 0.323 | 0.314 | 0.303 | 0.267 |
+
+**ψ deltas (CE@0.25 per trajectory, paired bootstrap B=1000):**
+
+| pair | split | h | n_tr | mean Δ | 95% CI | frac>0 |
+|---|---|---|---|---|---|---|
+| +ψ4 − base9 | blocked | 1 | 16 | +0.008 | [+0.002, +0.016] | 0.62 |
+| +ψv2 − base9 | blocked | 1 | 16 | +0.006 | [+0.001, +0.011] | 0.75 |
+| full − base9+D9 | blocked | 1 | 16 | +0.001 | [+0.000, +0.001] | 0.44 |
+| +ψ4 − base9 | blocked | 2 | 16 | +0.000 | [−0.001, +0.001] | 0.44 |
+| +ψv2 − base9 | blocked | 2 | 16 | +0.001 | [+0.000, +0.002] | 0.50 |
+| +ψ4 − base9 | blocked | 4 | 16 | +0.002 | [+0.001, +0.003] | 0.50 |
+| +ψv2 − base9 | blocked | 4 | 16 | +0.003 | [+0.001, +0.005] | 0.62 |
+| +ψ4 − base9 | blocked | 8 | 12 | −0.008 | [−0.026, +0.005] | 0.75 |
+| +ψv2 − base9 | blocked | 8 | 12 | +0.007 | [+0.003, +0.011] | 0.83 |
+| full − base9+D9 | blocked | 8 | 12 | −0.018 | [−0.038, −0.000] | 0.67 |
+| +ψ4 − base9 | LOSO | 1 | 16 | +0.026 | [+0.004, +0.050] | 0.38 |
+| +ψv2 − base9 | LOSO | 1 | 16 | +0.056 | [+0.012, +0.101] | 0.50 |
+| full − base9+D9 | LOSO | 1 | 16 | −0.013 | [−0.024, −0.004] | 0.44 |
+| +ψ4 − base9 | LOSO | 2 | 16 | −0.008 | [−0.015, −0.002] | 0.06 |
+| +ψv2 − base9 | LOSO | 2 | 16 | +0.001 | [−0.006, +0.009] | 0.19 |
+| +ψ4 − base9 | LOSO | 4 | 16 | −0.011 | [−0.020, −0.003] | 0.12 |
+| +ψv2 − base9 | LOSO | 4 | 16 | −0.011 | [−0.023, −0.000] | 0.50 |
+| +ψ4 − base9 | LOSO | 8 | 16 | +0.020 | [+0.006, +0.034] | 0.62 |
+| +ψv2 − base9 | LOSO | 8 | 16 | −0.008 | [−0.024, +0.005] | 0.44 |
+
+**Causal-cone k×h matrices:**
+
+blocked F1: k=0: 0.645/0.628/0.499/0.415; k=1: 0.734/0.706/0.648/0.610;
+k=2: 0.791/0.722/0.643/0.442 (h = 1/2/4/8).
+blocked CE@0.25: flat (0.365–0.386 everywhere).
+LOSO CE@0.25: k=0: 0.215/0.243/0.227/0.207; k=1: 0.285/0.302/0.269/
+0.239; k=2: 0.201/0.237/0.304/0.226. LOSO F1: all collapsed (0.10–0.30).
+
+**Acceptance: PASS** (lead-time tables + k×h matrix delivered; pytest
+78/78).
+
+**§3 decision rule — Branch 1 selected: "ψ adds nothing at any h, any
+split → the anticipation claim of V1 is retired, with a fair test on
+record."**
+- LOSO ψ deltas are sign-inconsistent across adjacent horizons
+  (positive h=1, negative h=2/h=4, mixed h=8) and the positive cells
+  are minority-driven (frac>0 ≤ 0.62; ψv2 h=1: mean +0.056 with only
+  half the trajectories positive). No horizon has both ψ variants
+  agreeing positively.
+- Blocked deltas are formally positive at h=1 (CIs exclude 0) but of
+  magnitude ≤ +0.008 CE@0.25 — recorded verbatim; ≈ 2% relative, an
+  order of magnitude below the B1−GBT gap.
+- Branch 3 (ENHL subset under LOSO) not triggered: ψ-augmented GBTs do
+  beat the ψ-less GBT on subset-CE at some horizons (e.g. h=8: 0.318
+  vs 0.120), but all remain below the raw classical baseline's subset
+  capture at every h (B1: 0.32–0.46) — value added inside a collapsed
+  regime, not value. No L3 escalation from L2.
+
+**Secondary findings:**
+- **Persistence headline:** the classical score at time t captures
+  0.665–0.697 of future-hard patches at budget 0.25 under LOSO,
+  essentially flat from h=1 to h=8. Hardness is persistent at these
+  horizons: anticipation is unnecessary, which is *why* a fair ψ test
+  finds nothing to anticipate. The learned predictors' capture decays
+  to 0.10–0.28 by h=8.
+- **Causal-cone (physically grounded form) retired:** the k-gain
+  *shrinks* with h instead of growing (blocked F1 gain k1→k2: +0.057
+  at h=1 → −0.005 at h=4), opposite to the advection prediction.
+  Consistently with the physics: k* ≈ v·h·Δt_snap/Δx_patch ≈ 0.5 hop
+  at h=8 (v ~ O(1), Δt_snap = 0.1, Δx_patch = 2π/4) — the tested
+  horizons never advect hardness beyond one patch, so no growing cone
+  is expected or observed. Confirms Task 1b's retirement.
+- Level-2 verdict joins Level 1: under §6, the running narrative is
+  "levels 1 and 2 negative", with the persistence result and the
+  inductive-bias inversion (raw physics score transfers, learned
+  models collapse) as the mechanism.
