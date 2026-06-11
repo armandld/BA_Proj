@@ -466,3 +466,49 @@ refine-all floor 0.400 (both aggregations, as in Tasks 1/1b); signed-ψ
 mhd_rotor block_avg cells at/adjacent to the refine-none floor (0.000
 flagged; 0.025 floor-adjacent); ψ-variant harris cells 0.385 and
 kelvin cells 0.411–0.438 are floor-adjacent but outside the 0.005 tol.
+
+---
+
+## Task 6 — Dynamic ground truth d_i (pilot)
+
+**Command** (local workstation, conda env `qiskit-project`):
+
+```
+python -m pytest tests/v3/ -v          # 68 passed
+python study/v3/t6_dynamic_gt.py       # bare command = the mandated pilot
+```
+
+**Git state:** code commit `ce7763c` (`v3-task-6`); output
+`results/d_patches_orszag_tang_Re400_N128_dim4.npz` (phase-2 key
+layout, full-DNS-length `l2_errors` with NaN at uncomputed snapshots,
+`computed_mask`/`snap_indices` for alignment; git hash + CLI args
+inside). Pilot data provenance: no N=128 DNS exists, so the pilot
+fields are the N=256 DNS block-averaged 2× (`--source-N 256`, logged
+in the run output).
+
+**Pilot (N=128, orszag_tang Re=400, 2 snapshots, all 16 patches,
+δt=0.1, CFL 0.4):**
+
+| snap | t | solver steps | evolutions | d_i range | wall-clock |
+|---|---|---|---|---|---|
+| 14 | 1.40 | 18 | 17 | [8.75e-02, 2.11e-01] | 17.4 s |
+| 29 | 2.90 | 21 | 17 | [1.26e-01, 1.90e-01] | 23.2 s |
+
+**Acceptance: PASS.**
+- Pilot completes; pytest 68/68 (incl. a real miniature-solver
+  integration test: bit-exact d=0 on constant patches via dt-sequence
+  replay, argmax(d) = argmax(e)).
+- Sanity check: **Spearman(d_i, e_i) = 0.989** (n = 32 patches) > 0.
+
+**Pilot-scope observation (one config, n=32 — not a claim):** the
+static coarsening error e_i is a near-perfect *ranking* proxy for the
+dynamic evolution error d_i at δt = 0.1 on this config. If this holds
+across scenarios/Re in the full campaign, the d_i-target variant of
+Level 2 (Task 7) is expected to closely mirror the e_i-target variant.
+
+**Cost projection (§8.4 gate):** 20.3 s/snapshot at N=128 (17
+evolutions of δt=0.1). Scaling ×(256/N)³ = ×8 (cells ×4, CFL steps ×2)
+→ full campaign (N=256, 16 configs × 10 snapshots) ≈ **7.2 h** on the
+local workstation. Decision on launching the full N=256 run (as-is /
+reduced snapshot count / HPC) rests with the user; not launched in
+this session.
