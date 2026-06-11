@@ -357,3 +357,112 @@ conditional NOT met — outcome mixed.**
 data); B6 linear-H (max) flagged on the blocked split (0.489 vs floor
 0.484); B3 rows flagged by construction and excluded from win/loss
 counts.
+
+---
+
+## Task 5 — Phase 11E rerun, fixed (signed ψ, trial-4 params, dual aggregation)
+
+**Command** (local workstation, conda env `qiskit-project`; score-variant
+build 23.2 s):
+
+```
+python -m pytest tests/v3/ -v          # 59 passed
+python study/v3/t5_v1_psi_loso.py --N 256 --dim 4
+```
+
+**Git state:** code commit `f08afdf` (`v3-task-5`); `.npz` output
+(`results/t5_v1_psi_loso_N256_dim4.npz`) records git hash + CLI args.
+Param discrepancy logged: trial #4 (`config.TRAINED_*`) β=9.94,
+thr=0.1496 vs trial #85 (phase-11e hardcoded) β=0.5495, thr=0.3044.
+Signed ψ: per-edge V1 machinery (shared ⟨|ΔΦ|⟩ normalisation as in
+phase 11e), sign-preserving larger-magnitude combination,
+`score_aug = clip(score + 0.5·sin(ψ), 0, 1)`; ψ_v2 = `compute_psi_v2`
+per edge component, same combination; legacy |ψ| kept only as the 11e
+comparison arm.
+
+**LOSO F1, block_avg** (per-fold prevalence 0.250, refine-all floor 0.400):
+
+| variant | orszag_tang | harris_tearing | kelvin_helmholtz | mhd_rotor | mean |
+|---|---|---|---|---|---|
+| v2-classical | 0.396 | 0.400 | 0.400 | 0.927 | 0.531 |
+| v1-classical (no ψ) | 0.395 | 0.400 | 0.400 | 0.936 | 0.533 |
+| v1+ψ signed β=9.94 (trial4) | 0.384 | 0.385 | 0.438 | 0.025 | 0.308 |
+| v1+ψ signed β=0.5495 (trial85) | 0.368 | 0.400 | 0.418 | 0.000 | 0.296 |
+| v1+ψ legacy-abs β=9.94 (trial4) | 0.412 | 0.385 | 0.411 | 0.790 | 0.500 |
+| v1+ψ legacy-abs β=0.5495 (11e repro) | 0.306 | 0.385 | 0.411 | 0.928 | 0.507 |
+| v1+ψ_v2 signed (param-free) | 0.396 | 0.400 | 0.417 | 0.000 | 0.303 |
+
+**LOSO F1, block_max:**
+
+| variant | orszag_tang | harris_tearing | kelvin_helmholtz | mhd_rotor | mean |
+|---|---|---|---|---|---|
+| v2-classical | 0.264 | 0.400 | 0.400 | 0.672 | 0.434 |
+| v1-classical (no ψ) | 0.275 | 0.400 | 0.400 | 0.796 | 0.468 |
+| v1+ψ signed β=9.94 (trial4) | 0.227 | 0.385 | 0.411 | 0.786 | 0.453 |
+| v1+ψ signed β=0.5495 (trial85) | 0.239 | 0.385 | 0.412 | 0.770 | 0.452 |
+| v1+ψ legacy-abs β=9.94 (trial4) | 0.276 | 0.385 | 0.411 | 0.777 | 0.462 |
+| v1+ψ legacy-abs β=0.5495 (11e repro) | 0.282 | 0.385 | 0.411 | 0.748 | 0.457 |
+| v1+ψ_v2 signed (param-free) | 0.320 | 0.385 | 0.411 | 0.756 | 0.468 |
+
+**2×2×2 summary (mean LOSO F1; params × ψ-handling × aggregation):**
+
+| ψ-handling | params | block_avg | block_max |
+|---|---|---|---|
+| signed | trial4 | 0.308 | 0.453 |
+| signed | trial85 | 0.296 | 0.452 |
+| legacy-abs | trial4 | 0.500 | 0.462 |
+| legacy-abs | trial85 | 0.507 | 0.457 |
+| signed ψ_v2 | param-free | 0.303 | 0.468 |
+
+**Trajectory bootstrap (Task 3; n_traj=16, B=1000; Δ = F1(variant) −
+F1(v1-classical), paired per trajectory):**
+
+| variant | agg | mean Δ | 95% CI | frac>0 |
+|---|---|---|---|---|
+| v1+ψ signed trial4 | avg | −0.225 | [−0.414, −0.049] | 0.38 |
+| v1+ψ signed trial4 | max | −0.015 | [−0.027, −0.004] | 0.31 |
+| v1+ψ signed trial85 | avg | −0.236 | [−0.423, −0.058] | 0.25 |
+| v1+ψ signed trial85 | max | −0.016 | [−0.027, −0.006] | 0.31 |
+| v1+ψ legacy-abs trial4 | avg | −0.033 | [−0.071, +0.001] | 0.50 |
+| v1+ψ legacy-abs trial4 | max | −0.005 | [−0.013, +0.002] | 0.44 |
+| v1+ψ legacy-abs trial85 (11e) | avg | −0.026 | [−0.051, −0.005] | 0.44 |
+| v1+ψ legacy-abs trial85 (11e) | max | −0.011 | [−0.024, +0.001] | 0.44 |
+| v1+ψ_v2 signed (param-free) | avg | −0.229 | [−0.412, −0.052] | 0.38 |
+| v1+ψ_v2 signed (param-free) | max | +0.000 | [−0.015, +0.018] | 0.56 |
+| (ref) v1-class − v2-class | avg | +0.002 | [−0.000, +0.005] | 0.31 |
+| (ref) v1-class − v2-class | max | +0.033 | [+0.009, +0.062] | 0.50 |
+
+**Acceptance: PASS** (2×2×2 table delivered; pytest 59/59; legacy
+trial-85 block_avg arm retained as the phase-11e reproduction).
+
+**Statement: "ψ does not transfer" SURVIVES the fair test — and is
+strengthened.** Under the pre-registered signed handling, ψ is
+significantly *harmful* under LOSO, not merely useless:
+- block_avg: Δ ≈ −0.23 with 95% CIs excluding 0 for all three signed
+  variants (trial-4, trial-85, parameter-free ψ_v2). The damage is
+  concentrated on mhd_rotor (0.936 → 0.025/0.000, the refine-none
+  floor — DEGEN-flagged cells): the ±0.5·sin(ψ) term, with ψ saturated
+  by the rotor's coherent flux changes, dominates the [0,1] score and
+  destroys the ranking that the classical indicator had.
+- block_max: small but still significantly negative for the V1-β signed
+  variants (CIs exclude 0); the parameter-free ψ_v2 is exactly null
+  (+0.000 [−0.015, +0.018]).
+- The β/params axis is immaterial: trial-4 vs trial-85 differ by
+  ≤ 0.012 mean F1 in every cell — the tanh saturates similarly at both
+  β values, so the V1/V2 calibration discrepancy explains nothing.
+- The legacy |ψ| arm reproduces the published phase-11e conclusion
+  (small negative-to-null deltas; Lohner carries V1's modest edge:
+  v1-class − v2-class = +0.033 [+0.009, +0.062] under block_max).
+
+Scope per §3: this is the h=0 (instantaneous-label) prerequisite. The
+anticipation claim proper (e_i(t+h) targets, easy-now-hard-later
+subset, CE(b) metrics) is decided at Level 2 (Task 7); given the h=0
+outcome, §3's first decision branch ("ψ adds nothing at any h → the
+anticipation claim of V1 is retired, with a fair test on record") is
+the live hypothesis Task 7 must confirm or refute.
+
+**Degeneracy flags:** all harris/kelvin baseline cells sit at the
+refine-all floor 0.400 (both aggregations, as in Tasks 1/1b); signed-ψ
+mhd_rotor block_avg cells at/adjacent to the refine-none floor (0.000
+flagged; 0.025 floor-adjacent); ψ-variant harris cells 0.385 and
+kelvin cells 0.411–0.438 are floor-adjacent but outside the 0.005 tol.
