@@ -393,11 +393,11 @@ conda activate qiskit-project
 ```bash
 # Quick test (low resolution)
 bash run_pipeline.sh --backend aer --grid-size 2 --dns-resolution 64 \
-    --shots 1 --t-max 0.1 --dt 1e-3 --hybrid-dt 0.05 --verbose
+    --shots 1 --t-max 1.0 --dt 1e-3 --hybrid-dt 0.05 --verbose
 
 # Standard run
 bash run_pipeline.sh --backend aer --grid-size 2 --dns-resolution 128 \
-    --shots 256 --t-max 0.5 --dt 1e-4 --hybrid-dt 0.1 --verbose
+    --shots 256 --t-max 1.0 --dt 1e-4 --hybrid-dt 0.1 --verbose
 
 # Full resolution (slow)
 bash run_pipeline.sh --backend aer --grid-size 2 --dns-resolution 256 \
