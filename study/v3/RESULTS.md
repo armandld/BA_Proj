@@ -254,3 +254,106 @@ distribution:
   statistic first, unweighted mean of deltas);
 - determinism given seed; input validation.
 Pytest: 10 passed (41 total under tests/v3/).
+
+---
+
+## Task 4 — Temporally blocked split (B1–B7, dual aggregation, leakage)
+
+**Command** (local workstation, conda env `qiskit-project`; dataset build
+14.4 s, 440 snapshots):
+
+```
+python -m pytest tests/v3/ -v          # 48 passed
+python study/v3/t4_blocked_split.py --N 256 --dim 4
+```
+
+**Git state:** code commit `36e149d` (`v3-task-4`); `.npz` output
+(`results/t4_blocked_split_N256_dim4.npz`) records git hash + CLI args.
+Defaults: seed=0, blocked 60/40 per (scenario, Re), random 70/30
+(phase-11A permutation). B1/B2 aggregate the SAME fine-grid indicator
+(`full_score`) with mean/max; runtime consistency check passed. CE/ρ
+computed per snapshot (ranking the 16 patches of one timestep, V1
+per-step budget semantics) then averaged; ρ against continuous e_i.
+
+**Blocked split** (264/176 snaps; val prevalence 0.319, refine-all floor
+0.484):
+
+| method | F1 | flag | CE@0.10 | CE@0.25 | CE@0.50 | CE-AUC | ρ |
+|---|---|---|---|---|---|---|---|
+| B1 classical (block_avg) | 0.579 | | 0.209 | 0.386 | 0.646 | 0.595 | 0.767 |
+| B2 classical (block_max) | 0.517 | | 0.195 | 0.375 | 0.631 | 0.582 | 0.365 |
+| B3 refine-all | 0.484 | DEGEN | – | – | – | – | – |
+| B3 refine-none | 0.000 | DEGEN | – | – | – | – | – |
+| B4 gbt-9 (max) | 0.581 | | 0.182 | 0.345 | 0.636 | 0.580 | 0.640 |
+| B4 gbt-9 (avg) | 0.738 | | 0.187 | 0.382 | 0.640 | 0.587 | 0.694 |
+| B5 gbt-score (max, thr global) | 0.415 | | 0.183 | 0.351 | 0.622 | 0.572 | 0.276 |
+| B5 gbt-score (max, thr per-cfg) | 0.380 | | 0.183 | 0.351 | 0.622 | 0.572 | 0.276 |
+| B5 gbt-score (avg, thr global) | 0.518 | | 0.179 | 0.359 | 0.626 | 0.576 | 0.330 |
+| B5 gbt-score (avg, thr per-cfg) | 0.548 | | 0.179 | 0.359 | 0.626 | 0.576 | 0.330 |
+| B6 linear-H (max) | 0.489 | DEGEN | 0.196 | 0.377 | 0.639 | 0.589 | 0.524 |
+| B6 linear-H (avg) | 0.463 | | 0.195 | 0.361 | 0.601 | 0.573 | 0.569 |
+| B7 random ranking | 0.480 | DEGEN | 0.121 | 0.246 | 0.507 | 0.499 | 0.019 |
+
+**Random split, phase-11A reproduction** (308/132 snaps; val prevalence
+0.265, floor 0.419):
+
+| method | F1 | flag | CE@0.10 | CE@0.25 | CE@0.50 | CE-AUC | ρ |
+|---|---|---|---|---|---|---|---|
+| B1 classical (block_avg) | 0.492 | | 0.215 | 0.405 | 0.632 | 0.592 | 0.654 |
+| B2 classical (block_max) | 0.475 | | 0.206 | 0.396 | 0.623 | 0.585 | 0.395 |
+| B3 refine-all | 0.419 | DEGEN | – | – | – | – | – |
+| B3 refine-none | 0.000 | DEGEN | – | – | – | – | – |
+| B4 gbt-9 (max) | 0.980 | | 0.214 | 0.415 | 0.645 | 0.599 | 0.792 |
+| B4 gbt-9 (avg) | 0.975 | | 0.214 | 0.415 | 0.641 | 0.597 | 0.750 |
+| B5 gbt-score (max, thr global) | 0.538 | | 0.193 | 0.372 | 0.622 | 0.578 | 0.390 |
+| B5 gbt-score (max, thr per-cfg) | 0.554 | | 0.193 | 0.372 | 0.622 | 0.578 | 0.390 |
+| B5 gbt-score (avg, thr global) | 0.584 | | 0.198 | 0.396 | 0.620 | 0.581 | 0.354 |
+| B5 gbt-score (avg, thr per-cfg) | 0.593 | | 0.198 | 0.396 | 0.620 | 0.581 | 0.354 |
+| B6 linear-H (max) | 0.598 | | 0.205 | 0.395 | 0.630 | 0.589 | 0.595 |
+| B6 linear-H (avg) | 0.568 | | 0.199 | 0.364 | 0.605 | 0.573 | 0.619 |
+| B7 random ranking | 0.415 | DEGEN | 0.130 | 0.255 | 0.505 | 0.502 | −0.005 |
+
+**Acceptance: PASS.** Random-split B2 = 0.475 and B4 gbt-9 (max) = 0.980
+match Task 0 exactly. Pytest 48/48.
+
+**Leakage quantification (§7, reported once; F1 random − blocked):**
+B4 (max) **+0.399** (0.980 → 0.581), B4 (avg) +0.237, B5 +0.045…+0.174,
+B6 ≈ +0.11; classical baselines have *negative* gaps (−0.04…−0.09).
+Caveat for reading F1 gaps: the two val sets have different prevalence
+(0.319 blocked vs 0.265 random), so floors shift (+0.065); the
+threshold-free columns are the clean comparison. There, B4 (max)
+CE-AUC drops only 0.599 → 0.580: **the phase-11 0.98 "ceiling" was a
+binary-view artifact of near-duplicate leakage — the model's actual
+ranking of patches by coarsening error was never much better than the
+classical baseline, even on the leaky split** (design principle §0.2
+vindicated: continuous quantities first).
+
+**Aggregation finding (dual-aggregation rule §5.3 paying off):**
+B1 (block_avg) dominates B2 (block_max) on every metric of both splits;
+most strikingly ρ = 0.767 vs 0.365 on the blocked split. The V1
+aggregation convention is substantially better aligned with the
+continuous error than the V2 convention that phases 11/11b used. B4
+(avg) > B4 (max) by +0.157 F1 blocked. Under the blocked split, the
+best F1 is B4 (avg) 0.738, but the best ranking metrics belong to the
+plain B1 classical baseline (CE@0.10 = 0.209, ρ = 0.767) — the learned
+models mainly relocate the decision boundary; they do not rank better.
+
+**B5 dual-threshold check (user-approved Branch-2 follow-up):
+conditional NOT met — outcome mixed.**
+- (avg): per-cfg threshold helps, 0.518 → 0.548 (+0.030), closing about
+  half the gap to B1 (residual −0.031).
+- (max): per-cfg threshold *hurts*, 0.415 → 0.380 (−0.035), widening the
+  gap to B2.
+- Therefore "scale transfer failure confirmed; ranking transfers,
+  calibration does not" is **not recorded** from this test: per-config
+  calibration does not consistently close the gap within distribution.
+  Note the scope limit: this blocked-split test calibrates per
+  (scenario, Re) trajectory seen in training; it does not test the
+  cross-scenario calibration that failed in Task 1's LOSO. The
+  Branch-2 question stays open pending Task 5/L2 evidence.
+
+**Degeneracy flags:** B7 flagged on both splits (0.480 vs floor 0.484;
+0.415 vs 0.419 — within tol 0.005, flag mechanism validated on real
+data); B6 linear-H (max) flagged on the blocked split (0.489 vs floor
+0.484); B3 rows flagged by construction and excluded from win/loss
+counts.
