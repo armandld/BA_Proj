@@ -41,7 +41,7 @@ def main():
     parser.add_argument("--opt-level", type=int, default=1, choices=[0,1,2,3], help="Optimization level for transpilation.")
     parser.add_argument("--K-opt", type=int, default=80, help="Maximum number of iterations for the optimizer.")
     parser.add_argument("--eps", type=float, default=1e-2, help="Convergence tolerance for the optimizer.")
-    parser.add_argument("--scenario", default="orszag_tang",
+    parser.add_argument("--scenario", default="lamb_oseen_vortex",
                         choices=["orszag_tang", "kelvin_helmholtz",
                                  "magnetic_twist", "noisy_uniform",
                                  "harris_tearing", "double_tearing",
