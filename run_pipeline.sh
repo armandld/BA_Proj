@@ -28,7 +28,7 @@ DT=1e-4
 HYBRID_DT=0.1
 K_OPT=30
 EPSILON=1e-2
-SCENARIO="orszag_tang"
+SCENARIO="lamb_oseen_vortex"
 ADVANCED_ANOMALIES_ENABLE=false
 
 # -----------------------------
