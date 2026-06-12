@@ -40,15 +40,25 @@ explicit alternatives, including keeping 0.1 with documented failures).
 **Scope:** data generation only; no metric, label, split or subset
 changed.
 
-**Addendum (same day):** the initial mechanism stated above
+**Addendum 1 (same day):** the initial mechanism stated above
 ("injected noise masks the check observable") was incomplete: the
 0.02 rerun still read growth ≈ 1.00, which exposed the check bug
 logged as D2 below. With the CORRECTED observable (D2), the amplitude
 effect is confirmed independently at N=64/Re=400: seed-0 growth =
 1.42×, seed-1 at amplitude 0.02 = 1.13× (passes), seed-1 at amplitude
 0.1 = 0.82× (fails — injected fluctuation energy ≈ 20× the structured
-KH perturbation, growth diluted below threshold). D1 therefore stands,
-now with the correct mechanism: KH keeps amplitude 0.02.
+KH perturbation, growth diluted below threshold).
+
+**Addendum 2 (same day, final):** at N=256 the corrected observable
+reads seed-0 = 1.41–1.43× and seed-1 at amplitude 0.02 = 1.05–1.08× —
+marginally below the 1.1 threshold (dilution model calibrated on the
+data: injected energy a², structured ≈ 2.5e-4, noise decay ≈ 0.84).
+**Final D1 value: KH amplitude = 0.005** (predicted growth ≈ 1.37×,
+comfortable margin for the future ≥5-seed extension of §1.1; same
+level as V1's `init_lamb_oseen_vortex` noise_amplitude=0.005, so the
+value has V1 provenance). User-selected from explicit alternatives
+(0.005 / 0.01 / keep 0.02 with documented failures). The 0.02 KH
+seed-1 trajectories were discarded and re-generated at 0.005.
 
 ---
 
