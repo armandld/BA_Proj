@@ -637,3 +637,59 @@ record."**
   "levels 1 and 2 negative", with the persistence result and the
   inductive-bias inversion (raw physics score transfers, learned
   models collapse) as the mechanism.
+
+---
+
+## Task 8 — Data extension (8 scenarios × physics seeds)
+
+**Commands** (local workstation, conda env `qiskit-project`; ~hours of
+DNS for the overnight campaign):
+
+```
+python -m pytest tests/v3/ -v                      # 100 passed
+python study/v3/t8_dns_extension.py --dry-run      # plan: 48 runs
+python study/v3/t8_dns_extension.py                # overnight campaign
+python study/v3/t8_dns_extension.py --scenario kelvin_helmholtz \
+    --phys-seed 1 --noise-amplitude 0.005 --no-skip-existing   # D1 final
+python study/v3/t8_dns_extension.py --validate-only            # 64/64 OK
+```
+
+**Git state:** code commits `a67da73` (wrapper), `4347129` (D2 corrected
+KH observable + `--validate-only`), `deaf33d` (D1 final amplitude).
+Every `.npz` records git hash, CLI args, `phys_seed` and noise
+amplitude. Phase-2 labels regenerated for every trajectory
+(seed-aware naming `_seed{k}`; seed 0 keeps V2 names).
+
+**Non-pre-registered parameters (logged, user-approved):** new-scenario
+run lengths — lamb_oseen t_max=3.0, island_coalescence / double_tearing
+/ magnetic_twist t_max=2.0, all snapshot_dt=0.10; physics-seed noise =
+band-limited (|k| ≤ 8) Gaussian on (vx, vy) + div-free projection,
+amplitude 0.1 (V1 KH level) for 7 scenarios, **0.005 for KH**
+(deviation **D1**, `docs/protocol_deviations.md`).
+
+**Presence matrix:** 8 scenarios × 2 seeds × 4 Re — complete
+(64 trajectories, 4 per cell).
+
+**Validation (corrected KH observable, deviation D2): 64/64 OK.**
+- div B ≤ 1.5e-4 and monotone energy decay on every trajectory.
+- OT decay 9.4–15.2% (within the 1–45% window) at both seeds.
+- KH growth, corrected observable: seed-0 **1.41–1.43×**, seed-1
+  (amplitude 0.005) **1.36–1.37×** — vs the 1.37× predicted by the
+  calibrated dilution model. **D2:** the published phase-1b
+  `fluctuating_KE` subtracts the Y-mean and leaves the base shear
+  profile (variance ≈ 0.341 vs perturbation ≈ 2.5e-4) inside Ep, so
+  the original check read ≈ 1.00× for every trajectory including
+  seed 0 — it could never detect KH growth. The v3 copy subtracts the
+  X-average (same windows, same > 1.1× criterion); phase 1b is
+  untouched.
+- Tearing-like ⟨J²⟩ checks: seed-0 amplifications 2.65–23.8× with
+  late peaks; seed-1 trajectories show **early reconnection onsets**
+  (harris 6.2–6.6e4× at t ≈ 0.40; island_coalescence ≈ 2.5–2.7e3× at
+  t ≈ 0.40; double_tearing ≈ 4.1–4.5e3× at t ≈ 0.30) — the physics
+  seeds produce genuinely distinct dynamical histories, exactly what
+  trajectory-level statistics (§1.5) need.
+
+**Acceptance: PASS** — 8 scenarios × ≥ 2 seeds present, validation log
+clean. The §1.1 dataset now supports ≥ 8 LOSO folds; remaining §1.1
+gap: ≥ 5 physics seeds per (scenario, Re) (this run delivers 2; the
+wrapper takes `--phys-seed 0 1 2 3 4` unchanged).
