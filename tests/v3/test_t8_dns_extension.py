@@ -159,3 +159,57 @@ def test_seeded_init_differs_and_velocity_stays_div_free():
 def test_unknown_scenario_raises():
     with pytest.raises(ValueError):
         _extended_init(_fresh_sim(), "nope", seed=0, amplitude=0.1)
+
+
+# ------------------ observable KH corrigee (D2) ------------------------
+
+def _kh_like_fields(N=32, amp=0.0):
+    """Flot de base v_flow(Y) (variant sur l'axe 1) + perturbation
+    sin(X) d'amplitude amp (variant sur l'axe 0)."""
+    x = np.linspace(0, 2 * np.pi, N, endpoint=False)
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    vx = np.tanh((Y - np.pi) / 0.5)
+    vy = amp * np.sin(X)
+    return vx, vy
+
+
+def test_fixed_observable_removes_base_flow_exactly():
+    from t8_dns_extension import fluctuating_ke_fixed
+    vx, vy = _kh_like_fields(amp=0.0)
+    # flot de base retire (a l'epsilon machine de la moyenne pres)
+    assert fluctuating_ke_fixed(vx, vy) < 1e-30
+    vx2, vy2 = _kh_like_fields(amp=0.1)
+    # seule la perturbation reste : 0.5 * <(0.1 sin X)^2> = 0.0025
+    assert fluctuating_ke_fixed(vx2, vy2) == pytest.approx(0.0025)
+
+
+def test_phase1b_observable_is_contaminated_by_base_flow():
+    # documente le bug D2 : la version 1b (moyenne sur l'axe 1) laisse
+    # le profil de base dans Ep — c'est la justification de la copie
+    # corrigee cote v3 (phase 1b reste intouchee)
+    from phase1b_dns_validation import fluctuating_KE
+    vx, vy = _kh_like_fields(amp=0.0)
+    assert fluctuating_KE(vx, vy) > 0.1          # ~variance du profil
+
+
+def test_check_kh_fixed_detects_growth(tmp_path):
+    from t8_dns_extension import check_kh_fixed
+    N, n_snaps = 32, 13
+    t = np.linspace(0.0, 1.2, n_snaps)
+    vx = np.zeros((n_snaps, N, N), dtype=np.float32)
+    vy = np.zeros_like(vx)
+    for i, amp in enumerate(0.01 * np.exp(t)):   # croissance exp
+        fx, fy = _kh_like_fields(N, amp)
+        vx[i], vy[i] = fx, fy
+    path = str(tmp_path / "dns_kh.npz")
+    np.savez(path, t=t, vx=vx, vy=vy)
+    chk = check_kh_fixed(path)
+    assert chk["ok"] and chk["growth"] > 1.1
+    # perturbation constante -> pas de croissance
+    for i in range(n_snaps):
+        fx, fy = _kh_like_fields(N, 0.01)
+        vx[i], vy[i] = fx, fy
+    np.savez(path, t=t, vx=vx, vy=vy)
+    chk = check_kh_fixed(path)
+    assert not chk["ok"]
+    assert chk["growth"] == pytest.approx(1.0, abs=1e-6)

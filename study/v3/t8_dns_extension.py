@@ -76,6 +76,37 @@ V1_NOISE_AMPLITUDE = 0.1   # init_kelvin_helmholtz(noise_amplitude=0.1)
 TEARING_LIKE = {"harris_tearing", "double_tearing", "island_coalescence"}
 
 
+def fluctuating_ke_fixed(vx, vy):
+    """Energie cinetique de perturbation, observable CORRIGEE :
+    soustraction de la moyenne sur X (axe 0), direction d'invariance du
+    flot de base KH v_flow(Y). La version de phase 1b moyenne sur
+    l'axe 1 (Y) et laisse le profil de base (variance ~0.34) dans Ep,
+    masquant toute croissance — y compris a seed 0 (deviation D2 ;
+    phase 1b reste intouchee, reparation cote v3 par copie)."""
+    return 0.5 * ((vx - vx.mean(axis=0, keepdims=True)) ** 2
+                  + (vy - vy.mean(axis=0, keepdims=True)) ** 2).mean()
+
+
+def check_kh_fixed(dns_path):
+    """check_kh de phase 1b (memes fenetres t in [0,0.2] vs [0.8,1.2],
+    meme critere croissance > 1.1x) avec l'observable corrigee."""
+    d = np.load(dns_path)
+    t = d["t"].astype(np.float64)
+    vx = d["vx"].astype(np.float64)
+    vy = d["vy"].astype(np.float64)
+    Ep = np.array([fluctuating_ke_fixed(vx[i], vy[i])
+                   for i in range(len(t))])
+    m0 = (t >= 0.0) & (t <= 0.2)
+    m1 = (t >= 0.8) & (t <= 1.2)
+    if not m0.any() or not m1.any():
+        return dict(ok=False, reason="insufficient time coverage")
+    e0 = float(Ep[m0].mean())
+    e1 = float(Ep[m1].mean())
+    return dict(Ep_early=e0, Ep_mid=e1,
+                growth=float(e1 / max(e0, 1e-30)),
+                ok=bool(e1 > 1.1 * e0))
+
+
 # -------------------------------------------------------------------
 # Helpers purs
 # -------------------------------------------------------------------
@@ -230,7 +261,7 @@ def validate_one(dns_path, scenario, div_tol=1e-3):
     """Checks phase 1b sur UNE trajectoire (fonctions 1b reutilisees).
     Retourne (liste d'echecs, lignes de log)."""
     from phase1b_dns_validation import (
-        analyse_one, check_ot, check_tearing, check_kh)
+        analyse_one, check_ot, check_tearing)
     res = analyse_one(dns_path)
     name = os.path.basename(dns_path)
     fails, log = [], []
@@ -260,17 +291,50 @@ def validate_one(dns_path, scenario, div_tol=1e-3):
             fails.append(f"{name}: tearing amp "
                          f"{chk['amplification']:.2f}x")
     elif scenario == "kelvin_helmholtz":
-        chk = check_kh(res)
+        chk = check_kh_fixed(dns_path)
         if "growth" in chk:
-            log.append(f"KH growth={chk['growth']:.2f}x")
+            log.append(f"KH growth(fixed obs)={chk['growth']:.2f}x")
         if not chk["ok"]:
-            fails.append(f"{name}: KH check")
+            fails.append(f"{name}: KH check (fixed obs, growth="
+                         f"{chk.get('growth', float('nan')):.2f}x)")
     return fails, log
 
 
 # -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
+
+def _summary(args, results_dir, all_scenarios, all_fails):
+    """Matrice de presence + bilan de validation + verdict acceptation."""
+    print("\n" + "=" * 88)
+    print("  presence matrix (files per scenario x seed, "
+          f"over {len(args.re)} Re values):")
+    pm = presence_matrix(results_dir, all_scenarios, args.re, args.N,
+                         args.phys_seed)
+    print(f"  {'scenario':<20} "
+          + " ".join(f"{'seed' + str(s):>7}" for s in args.phys_seed))
+    complete = True
+    for sc in all_scenarios:
+        cells = []
+        for s in args.phys_seed:
+            n = pm[(sc, s)]
+            cells.append(f"{n:>7d}")
+            if n < len(args.re):
+                complete = False
+        print(f"  {sc:<20} " + " ".join(cells))
+
+    print()
+    if all_fails:
+        print(f"  VALIDATION: {len(all_fails)} FAILURE(S)")
+        for f in all_fails:
+            print(f"    - {f}")
+    else:
+        print("  VALIDATION: clean on all validated trajectories")
+    print(f"  ACCEPTANCE ({len(all_scenarios)} scenarios x "
+          f">= 2 seeds, clean log): "
+          f"{'PASS' if complete and not all_fails else 'NOT YET'}")
+    print("\nV3 Task 8 complete.")
+
 
 def main():
     p = argparse.ArgumentParser(
@@ -294,6 +358,10 @@ def main():
                    help="re-genere meme si le fichier dns existe")
     p.add_argument("--dry-run", action="store_true",
                    help="affiche le plan et sort sans calculer")
+    p.add_argument("--validate-only", action="store_true",
+                   help="aucune generation : re-valide les fichiers "
+                        "presents de la grille demandee (checks 1b + "
+                        "observable KH corrigee)")
     p.add_argument("--seed", type=int, default=0,
                    help="enregistre (le pipeline DNS est deterministe ; "
                         "la graine physique est --phys-seed)")
@@ -331,8 +399,28 @@ def main():
         print("\n  dry-run: nothing computed.")
         return
 
-    # ---- runs + labels + validation ----
+    # ---- mode re-validation seule ----
     all_fails = []
+    if args.validate_only:
+        print("  [validate-only] re-validating existing files "
+              "(corrected KH observable)")
+        for sc in args.scenario:
+            for re in args.re:
+                for seed in args.phys_seed:
+                    path = seeded_dns_path(RESULTS_DIR, sc, re,
+                                           args.N, seed)
+                    if not os.path.exists(path):
+                        print(f"  MISSING {os.path.basename(path)}")
+                        continue
+                    fails, log = validate_one(path, sc)
+                    tag = "OK" if not fails else "FAIL"
+                    print(f"  [{tag:>4}] {os.path.basename(path):<46} "
+                          + "  ".join(log))
+                    all_fails += fails
+        _summary(args, RESULTS_DIR, all_scenarios, all_fails)
+        return
+
+    # ---- runs + labels + validation ----
     new_paths = []
     cli = vars(args)
     for i, (sc, re, seed) in enumerate(todo, 1):
@@ -349,35 +437,7 @@ def main():
         all_fails += fails
         print(f"  total {time.time() - t0:.0f}s")
 
-    # ---- acceptation : 8 scenarios x >=2 seeds + log propre ----
-    print("\n" + "=" * 88)
-    print("  presence matrix (files per scenario x seed, "
-          f"over {len(args.re)} Re values):")
-    pm = presence_matrix(RESULTS_DIR, all_scenarios, args.re, args.N,
-                         args.phys_seed)
-    print(f"  {'scenario':<20} "
-          + " ".join(f"{'seed' + str(s):>7}" for s in args.phys_seed))
-    complete = True
-    for sc in all_scenarios:
-        cells = []
-        for s in args.phys_seed:
-            n = pm[(sc, s)]
-            cells.append(f"{n:>7d}")
-            if n < len(args.re):
-                complete = False
-        print(f"  {sc:<20} " + " ".join(cells))
-
-    print()
-    if all_fails:
-        print(f"  VALIDATION: {len(all_fails)} FAILURE(S)")
-        for f in all_fails:
-            print(f"    - {f}")
-    else:
-        print("  VALIDATION: clean on all newly generated trajectories")
-    print(f"  ACCEPTANCE ({len(all_scenarios)} scenarios x "
-          f">= 2 seeds, clean log): "
-          f"{'PASS' if complete and not all_fails else 'NOT YET'}")
-    print("\nV3 Task 8 complete.")
+    _summary(args, RESULTS_DIR, all_scenarios, all_fails)
 
 
 if __name__ == "__main__":

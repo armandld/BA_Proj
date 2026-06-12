@@ -39,3 +39,46 @@ generated at 0.1 were discarded and re-generated at 0.02.
 explicit alternatives, including keeping 0.1 with documented failures).
 **Scope:** data generation only; no metric, label, split or subset
 changed.
+
+**Addendum (same day):** the initial mechanism stated above
+("injected noise masks the check observable") was incomplete: the
+0.02 rerun still read growth ≈ 1.00, which exposed the check bug
+logged as D2 below. With the CORRECTED observable (D2), the amplitude
+effect is confirmed independently at N=64/Re=400: seed-0 growth =
+1.42×, seed-1 at amplitude 0.02 = 1.13× (passes), seed-1 at amplitude
+0.1 = 0.82× (fails — injected fluctuation energy ≈ 20× the structured
+KH perturbation, growth diluted below threshold). D1 therefore stands,
+now with the correct mechanism: KH keeps amplitude 0.02.
+
+---
+
+## D2 — Phase-1b KH validation check: corrected observable (v3 copy)
+
+**Pre-registered text (§1.1):** trajectories "validated by phase 1b
+checks (div B, OT energy-decay window, KH growth)".
+
+**Bug found (V2 code, `phase1b_dns_validation.fluctuating_KE`):** the
+fluctuating kinetic energy subtracts the mean over **axis 1 (Y)** —
+but the KH base flow `v_flow(Y)` varies along Y and is invariant along
+X (axis 0), so the subtraction removes nothing of the base profile.
+Ep is then dominated by the base-flow variance (≈ 0.341 vs a true
+perturbation energy ≈ 2.5e-4 at t=0), and the growth ratio reads
+≈ 1.00 for ANY trajectory — including unperturbed seed-0 runs
+(verified: fresh N=64 seed-0 run reads 0.994× with the 1b observable
+and 1.42× with the corrected one). The check as published could never
+detect KH growth; its past "pass/fail" status is uninformative.
+
+**Repair (per §8.2, V2 read-only):** `study/v3/t8_dns_extension.py`
+implements `fluctuating_ke_fixed` (subtract the X-average, axis 0) and
+`check_kh_fixed` (identical windows t ∈ [0,0.2] vs [0.8,1.2] and
+identical criterion growth > 1.1×; only the observable is fixed).
+`phase1b_dns_validation.py` is untouched and still runnable for
+regression. All Task-8 KH validations use the corrected check; a
+`--validate-only` mode re-validates existing files.
+
+**Scope:** validation observable implementation only; the check's
+pre-registered intent (KH growth), windows and threshold are
+unchanged. No metric, label, split or subset of the evaluation layer
+is affected.
+
+**Date:** 2026-06-12.
