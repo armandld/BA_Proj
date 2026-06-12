@@ -693,3 +693,80 @@ amplitude 0.1 (V1 KH level) for 7 scenarios, **0.005 for KH**
 clean. The §1.1 dataset now supports ≥ 8 LOSO folds; remaining §1.1
 gap: ≥ 5 physics seeds per (scenario, Re) (this run delivers 2; the
 wrapper takes `--phys-seed 0 1 2 3 4` unchanged).
+
+---
+
+## Task 9 — Proposition-2 strict mean-field condition
+
+**Command** (local workstation, conda env `qiskit-project`; 34.6 s for
+128 (config, dim, mapper) entries):
+
+```
+python -m pytest tests/v3/ -v          # 109 passed
+python study/v3/t9_prop2_check.py --N 256 --dim 2 4
+```
+
+**Git state:** code commit `5077a0a` (`v3-task-9`); output
+`results/t9_prop2_N256.npz` (git hash + CLI args inside). Condition as
+pre-registered (§2): per site i, Σ_{j∋i} 2|C_ij| + Σ_{p∋i} 4|K_p| <
+|h_i| over the 2·dim² edge-qubits, topology mirroring
+`create_period_hamiltonian` exactly (bookkeeping verified in pytest
+against an exhaustive 256-state Ising minimizer: condition everywhere
+⇒ exact ground state = −sign(h); strong-coupling counterexample
+included). Mappers: v1 = `TRAINED_*` (trial #4); v2 = parameter-free
+(c_bias=1.0, thr=0.15). 8 scenarios × 4 Re × seed 0, 30 snaps/config.
+
+**Fraction of sites satisfying the strict condition (mean over
+snapshots):**
+
+dim=2 (8 qubits):
+
+| scenario | v1 (Re 400/800/1200/1600) | v2 (Re 400/800/1200/1600) |
+|---|---|---|
+| orszag_tang | 0.000 / 0.008 / 0.000 / 0.000 | 0 / 0 / 0 / 0 |
+| harris_tearing | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| kelvin_helmholtz | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| mhd_rotor | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| lamb_oseen | 0.179 / 0.058 / 0.008 / 0.000 | 0 / 0 / 0 / 0 |
+| island_coalescence | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| double_tearing | 0 / 0 / 0 / 0 | 0.400 / 0.175 / 0.225 / 0.200 |
+| magnetic_twist | 0 / 0 / 0 / 0 | 0.025 / 0.025 / 0.025 / 0.025 |
+| **MEAN** | **0.008** | **0.034** |
+
+dim=4 (32 qubits):
+
+| scenario | v1 (Re 400/800/1200/1600) | v2 (Re 400/800/1200/1600) |
+|---|---|---|
+| orszag_tang | 0.068 / 0.074 / 0.073 / 0.072 | 0 / 0 / 0 / 0 |
+| harris_tearing | 0.700 / 0.466 / 0.456 / 0.472 | 0 / 0 / 0 / 0 |
+| kelvin_helmholtz | 0.257 / 0.173 / 0.135 / 0.110 | 0 / 0 / 0 / 0 |
+| mhd_rotor | 0.022 / 0.015 / 0.010 / 0.010 | 0 / 0 / 0 / 0 |
+| lamb_oseen | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| island_coalescence | 0.453 / 0.517 / 0.512 / 0.506 | 0 / 0 / 0 / 0 |
+| double_tearing | 0.000 / 0.000 / 0.031 / 0.000 | 0 / 0 / 0 / 0 |
+| magnetic_twist | 0.600 / 0.525 / 0.425 / 0.375 | 0 / 0 / 0 / 0 |
+| **MEAN** | **0.221** | **0.000** |
+
+**Acceptance: PASS** (table delivered; pytest 109/109).
+
+**Reading for the conditional Proposition 2 (manuscript):**
+- **The premise is essentially never satisfied for the V2 Hamiltonian**
+  (exactly 0.000 at dim=4 on all 32 configs; 0.034 at dim=2, carried
+  only by double_tearing/magnetic_twist). The strict sufficient
+  condition therefore CANNOT certify the per-site decision for V2: the
+  couplings are not provably decorative. Since phase 11A showed
+  empirically that couplings add ≤ +0.002 F1 (stencil ≈ mean-field)
+  and Task 1b retired the cone, the correct manuscript framing is:
+  the per-site sufficiency of the V2 H is an *empirical* finding, not
+  a theorem-backed one — Prop 2 is stated conditionally and its
+  premise reported false in practice.
+- **V1 at dim=4 is partially certified** (mean 22% of sites; strongly
+  scenario-dependent: harris 0.47–0.70, magnetic_twist 0.38–0.60,
+  island_coalescence 0.45–0.52, but ≈ 0 for lamb_oseen/rotor/
+  double_tearing). At dim=2 the premise fails almost everywhere for
+  both mappers — each qubit touches a larger share of the couplings on
+  the small graph, so the incident-coupling sum is relatively larger.
+- The fractions are a statement about the *sufficient* condition only:
+  a 0 fraction does not imply the couplings matter, it implies the
+  cheap proof route is unavailable (consistent with §2's replacement
+  of "ceiling" language by "selection" language).
