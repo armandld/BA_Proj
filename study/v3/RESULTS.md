@@ -813,3 +813,41 @@ projection), the §1.1 ≥ 5-seed extension (`t8_dns_extension.py
 --phys-seed 0 1 2 3 4`), and Level 3 (§4), which per §8.4 receives a
 separate brief now that Tasks 0–7 have fixed the decision engines
 worth the closed-loop cost.
+
+---
+
+## Verification pass (zero-value triple-check)
+
+Full record: `docs/v3_preprint_description.md` §8. Re-verification of the
+study's load-bearing and zero-valued results in a clean second
+environment (Linux container, distinct from the macOS workstation), using
+freshly generated DNS snapshots (not the saved `.npz`).
+
+**Task-9 V2 = 0.000 (dim=4) — confirmed real, four independent ways:**
+1. Analytic: V2 sets `|h_i| ≤ 0.85·median_scale` (bias scaled to one
+   typical coupling) while the per-site LHS sums ~4 incident couplings
+   ≈ 12–16·median_scale ⇒ condition structurally unsatisfiable.
+2. Numerical (real Hamiltonians, dim=4): LHS/|h| ratio **14–85, never
+   < 1** → 0/32 sites, large margin (not borderline).
+3. `|h|` construction exact: at N=256 predicted
+   `median_scale·|score−0.15|max` = actual `|h|max` to 4 dp
+   (0.8002 / 0.6696).
+4. Independent LHS/h recomputation (no shared code) matches
+   `per_site_condition` in all 12 probe cases; the checker returns
+   *nonzero* for V2 dim=2 (double_tearing 0.4) and reproduces V1's
+   scenario-dependence (harris 32/32, OT 1/32, double_tearing 0/32 at
+   dim=4) → not stuck-at-zero. Exhaustive 256-state ground-state test
+   confirms the Proposition's logic.
+
+**Other zeros accounted for:** V1 dim=2 harris/double_tearing |h|=0 ∧
+LHS=0 is a benign trivial-Hamiltonian edge case (`0<0` False ⇒ correctly
+not-satisfied). Task-1b harris and Task-5 rotor F1=0.000 are flagged
+refine-none-floor threshold-transfer degeneracies with healthy rankings
+(same collapse shows CE@0.25 ≈ 0.2 in Tasks 4/7).
+
+**Reproducibility:** master table 51/51 OK from one command; 118/118
+pytests pass independently here; V2=0.000 reproduced from freshly
+generated snapshots at N=128 and N=256.
+
+**Verdict:** no zero in the study is a code error or a bad simulation
+assumption.
