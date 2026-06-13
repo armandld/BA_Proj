@@ -593,3 +593,62 @@ is a code error or a bad simulation assumption.
 
 — End of description. Implications, discussion, and the manuscript
 narrative are deferred (separate thinking task).
+
+---
+
+## 10. Verification: analysis tools × V1 simulation provenance (end-to-end)
+
+Second verification pass (2026-06-13), addressing two questions: do the
+V3 analysis tools bug, and was everything fed to them genuinely simulated
+by V1, used correctly?
+
+### 10.1 Provenance audit — no re-implemented numerics
+
+Static audit of `study/v3/`: every physics-dependent path imports the
+real V1 stack — `extract_features_2d` / `build_patch_hamiltonian`
+(which internally instantiate `MHDSolver` and call `get_fluxes()` for
+gradient operators, plus the V1/V2 mappers), `compute_psi_v2` and
+`AngleMapper` from `src/Simulation/`, and `t6_dynamic_gt` / the Task-8
+wrapper call `MHDSolver.step_full` / `adapt_dt` / `run_dns` directly.
+Grep for re-implemented time-evolution (RK4/RK2/RHS/`project_divergence`)
+in `study/v3/`: **none**. The only `np.fft` is Task-8 IC perturbation
+band-limiting (noise generation, followed by the solver's own div-free
+projection), not evolution. The guardrail "import the solver, never
+re-implement numerics" holds.
+
+### 10.2 End-to-end on freshly V1-simulated data
+
+A dataset was generated *live with the real V1 solver*
+(`phase1_dns_sweep.run_dns`): 3 scenarios (orszag_tang, harris_tearing,
+kelvin_helmholtz) at N=64, Re=400, with phase-2 labels. V1 physics
+invariants on this data (phase 1b): div B / rms B = 0.9–1.8e-5
+(machine-precision projection); OT E(0)=1.000 exact, monotone decay 19 %
+(literature window); harris ⟨J²⟩ reconnection amplification 1.53×; KH
+growth 1.39× with the D2-corrected observable (the 0.99× from the
+published observable is the known D2 bug, not a simulation fault — no
+divergence, energy monotone). No run diverged; labels at the exact 25 %
+prevalence by construction.
+
+Every analysis tool was then run on this V1-simulated data and completed
+without error, with coherent outputs:
+
+| tool | run | sanity |
+|---|---|---|
+| t1 | LOSO 3 folds | F1∈[0,1]; B5 (0.148) < classical (0.274) — same Branch-2 direction |
+| t1b | k=0..3 | completes; cone declines under LOSO |
+| t4 | blocked + random | CE∈[0,1], CE-AUC≈0.53, no NaN; B7 random ρ≈−0.05; leakage gap +0.20 (same sign as production +0.399) |
+| t5 | signed ψ + bootstrap | F1 coherent; floors where expected |
+| t6 | dynamic GT (runs V1 solver forward per patch) | Spearman(d,e)=0.993 (production pilot 0.989) |
+| t7 | horizons 1–8 | **zero NaN/inf lines** across all output; CE/ρ/capture coherent; DEG flags correct |
+| t9 | Prop-2 v1/v2 | V2=0.000 holds at N=64 (structural); V1=0.324 (dim=4) — checker discriminates |
+
+### 10.3 Scope statement
+
+This pass verifies (i) the analysis code is correct and robust on real
+V1-simulated input, and (ii) the V3 simulation paths use V1 correctly and
+produce V1-valid physics. The production N=256 / 64-trajectory dataset
+was simulated on the workstation; its generation code path is the same
+one verified here, it was validated 64/64 by Task-8 (D2-corrected), and
+the DNS solver is deterministic — so the production data inherits the
+same guarantees. A literal re-run of all 64 N=256 trajectories (hours)
+was not repeated. Final test gate: 118/118 pytests pass independently.
