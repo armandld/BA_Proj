@@ -264,6 +264,13 @@ def main():
     p.add_argument("--list", action="store_true",
                    help="liste les folds disponibles et sort")
     p.add_argument("--out-prefix", default="t15_level3")
+    p.add_argument("--smoke", action="store_true",
+                   help="valide le CHEMIN DE CODE de bout en bout a cout "
+                        "reduit (N et T_MAX rabaisses). Resultats non "
+                        "scientifiques : sert uniquement a de-risquer un "
+                        "run long.")
+    p.add_argument("--smoke-N", type=int, default=64)
+    p.add_argument("--smoke-tmax", type=float, default=0.4)
     args = p.parse_args()
 
     T = _load_v1_training_module()
@@ -275,6 +282,15 @@ def main():
                   f"T_MAX={c['T_MAX']} Re={c['Re']}")
         return
 
+    if args.smoke:
+        print(f"  [SMOKE] scaling every scenario to N={args.smoke_N}, "
+              f"T_MAX={args.smoke_tmax}; results are NOT scientific.")
+        for _, c in all_scen:
+            c["N"] = args.smoke_N
+            c["T_MAX"] = args.smoke_tmax
+            c["T_START"] = min(c.get("T_START", 0.0), args.smoke_tmax / 2)
+            c["K_opt"] = min(c.get("K_opt", 30), 8)
+            c["max_depth_override"] = 2
     todo = fold_scenarios(T, args.folds)
     n_cls = args.n_trials_classical
     if n_cls is None:

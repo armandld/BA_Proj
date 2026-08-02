@@ -309,3 +309,77 @@ Re = 200 / 3200 (outside the training grid) both pass.
 identical at N=64 and N=256, and the diagnostic isolates the cause at
 production resolution: the Lie splitting between the RK4 step and the
 divergence-free projection in `solver.py::step_full`.
+
+---
+
+## T15 — Level 3, closed-loop LOSO (audit P0, decisive experiment)
+
+`study/v4/t15_level3_closed_loop.py`
+
+### Status: driver built, code path validated, campaign not yet run
+
+The driver performs a true pipeline-level LOSO fold: for each held-out
+instability class it (1) tunes the QAOA hyperparameters with Optuna on the
+composite loss of the **other** classes only, reusing V1's own
+`make_composite_objective`; (2) tunes the **classical** arm's AMR threshold
+on the same training classes via `make_classical_composite_objective`, so
+both arms suffer the identical exclusion; (3) runs both arms on the held-out
+class with the same DNS trace, hot start, hybrid budget and depth. Endpoints
+come from `pipeline(..., return_details=True)`: `phys_score` (relative L2 vs
+DNS), `patch_ratio` (compute) and `combined`. Per-fold results are written
+incrementally to JSON, so an interrupted campaign resumes.
+
+**End-to-end validation** (`--smoke`, N=64, T_MAX=0.4): the complete path
+runs to completion and writes both outputs. Smoke numbers are degenerate by
+construction (both arms refine everything, delta = 0) and are not
+scientific; the mode exists only to de-risk a day-long run.
+
+### Defect found in the V1 training module (blocking for LOSO)
+
+`TrainHyperParam_v2.SCENARIOS_ALL = SCENARIOS_ISOLATED + SCENARIOS_COMPLEX`
+where `SCENARIOS_ISOLATED` already contains `ot` and `rotor` and
+`SCENARIOS_COMPLEX` re-adds **the same config objects**. The list therefore
+has 6 entries for **4 distinct classes**, and since the composite loss is
+`mean(Loss_i)` over the list, OT and rotor are weighted 2/6 each against
+1/6 for KH and tearing — an undocumented 2:1 tilt in every Phase-3 training
+run. For a LOSO fold the consequence is worse: excluding `ot` would leave
+its duplicate in the training list, i.e. **manufacture leakage**.
+`fold_scenarios` de-duplicates by key and prints a warning. Related: the
+module defines `SCENARIO_VORTEX` and `SCENARIO_COALESCENCE` (lamb_oseen,
+island_coalescence) but never uses them, while its own docstring claims
+Phase 1 trains on "KH, VORTEX, TEARING, COALESCENCE".
+
+### Measured cost model (N=256, this container)
+
+| stage | measured |
+|---|---|
+| DNS traces per fold (3 train + 1 held) | 225 s |
+| one full `pipeline()` run at N=256 | **≥ 5 min** |
+| one Optuna trial = 3 training scenarios | ≈ 15 min |
+
+Per fold ≈ 4 min (DNS) + 15·`n_trials` min (QAOA tuning) + ≈ 6·`n_cls` min
+(classical tuning) + 7 min (both final arms).
+
+| `--n-trials` | per fold | 4 folds |
+|---|---|---|
+| 8 | ≈ 2.6 h | ≈ 10 h |
+| 10 | ≈ 3.2 h | ≈ 13 h |
+| 12 | ≈ 3.8 h | ≈ 15 h |
+| 170 (protocol) | ≈ 43 h | ≈ 7 days |
+
+**Deviation to log when the campaign runs:** the protocol freezes the V1
+Optuna budget at 170 trials; a one-day campaign affords 8–12. The script
+prints the deviation itself when `--n-trials < 170`. Other standing
+deviations: 4 folds (the V1 module exposes 4 distinct classes, not the 8 of
+protocol §1.1) and a single physics seed per fold.
+
+### Recommended command for a one-day run
+
+```
+nohup python study/v4/t15_level3_closed_loop.py \
+      --n-trials 10 --n-trials-classical 5 \
+      > logs/v4/level3.log 2>&1 &
+```
+
+Resumable: each completed fold is skipped on restart. Monitor with
+`grep -E "FOLD|tuning|Q-HAS|classical\]" logs/v4/level3.log`.
