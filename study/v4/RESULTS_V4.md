@@ -383,3 +383,27 @@ nohup python study/v4/t15_level3_closed_loop.py \
 
 Resumable: each completed fold is skipped on restart. Monitor with
 `grep -E "FOLD|tuning|Q-HAS|classical\]" logs/v4/level3.log`.
+
+### T13 with the **deployed V1 mapper** (N=256, dim=2)
+
+The ablation above used the parameter-free V2 mapper. Re-run with the V1
+mapper (`--mapper v1`, the `TRAINED_*` coefficients the pipeline actually
+deploys):
+
+| ablation | decisions changed | uniform GS | refined | F1 | n_optima |
+|---|---|---|---|---|---|
+| full (control) | **0.000000** | 1.000 | 0.750 | 0.333 | 64.8 |
+| no_Z | 0.7500 | 1.000 | 0.000 | 0.000 | 88.0 |
+| no_ZZ | **0.0000** | 1.000 | 0.750 | 0.333 | 64.8 |
+| no_ZZZZ | **0.0000** | 1.000 | 0.750 | 0.333 | 64.8 |
+| Z only (both couplings removed) | **0.0000** | 1.000 | 0.750 | 0.333 | 64.8 |
+
+Same conclusion as for V2: the ZZ and ZZZZ families are **causally inert**
+for the deployed Hamiltonian. Two V1-specific observations: the ground state
+is uniform on 100% of snapshots but is *refine-all* on only 75% of them, and
+the V1 cost function is **massively degenerate** — 64.8 of the 256
+configurations are optimal on average (88 once the bias is removed).
+Inspection of the coefficients explains both: at dim=2 the V1 mapper yields
+median |C| = 0 with |h| ≈ 200–240, and on harris_tearing every coefficient
+is zero, i.e. an identically null Hamiltonian on which the QAOA has nothing
+to optimise.
