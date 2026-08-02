@@ -168,6 +168,9 @@ def main():
     p.add_argument("--re-out", nargs="+", type=int, default=[200, 3200])
     p.add_argument("--cfl", type=float, default=0.4)
     p.add_argument("--skip-splitting", action="store_true")
+    p.add_argument("--split-N", type=int, default=None,
+                   help="resolution du diagnostic de splitting "
+                        "(defaut : la grille la plus fine)")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
 
@@ -251,8 +254,10 @@ def main():
         print("\n  [D] temporal order with and without the divergence-free "
               "projection\n      (step_full applies RK4 then projection: a "
               "first-order Lie splitting)")
+        split_N = args.split_N or grids[-1]
+        print(f"      resolution N={split_N}")
         split = splitting_order_diagnostic(scenario=args.scenario[0],
-                                           N=min(64, grids[-1]), re=args.re)
+                                           N=split_N, re=args.re)
         for key in ("with_projection", "without"):
             print(f"    {key}:")
             for n, err, o in split[key]:

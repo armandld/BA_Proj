@@ -14,9 +14,11 @@ imported — `MHDSolver`, `build_patch_hamiltonian`, `build_ising_terms`,
 
 Test gate: **147 pytests pass** (118 v3 + 29 v4).
 
-All runs below use a freshly generated V1 DNS dataset (N=64, Re=400,
-4 scenarios) produced by `phase1_dns_sweep.run_dns`; the production N=256
-data lives on the author's workstation.
+**All studies were re-run at production resolution N=256** (4 scenarios,
+Re=400, DNS regenerated here with `phase1_dns_sweep.run_dns`). Both the
+N=64 exploratory pass and the N=256 confirmation are reported; every
+qualitative conclusion is identical at the two resolutions. Section
+"N=256 confirmation" at the end gives the side-by-side table.
 
 ---
 
@@ -227,3 +229,83 @@ mask asymmetry, without invoking any quantum effect.
 dim ≥ 4 is not reproducible across seeds (14–37% of patches, T12 control).
 Any statement about ground-state decisions above 8 qubits requires that
 floor to be reported alongside.
+
+
+---
+
+## N=256 confirmation (production resolution)
+
+Command set: `logs/v4/v4_N256.log`. 4 scenarios, Re=400, 12 snapshots for
+T11/T13, 8 for T11b, dim=2 (deployed size) and dim=8 (structured masks).
+
+### Every conclusion holds; the numbers sharpen
+
+| quantity | N=64 | **N=256** | verdict |
+|---|---|---|---|
+| exact ground state uniform | 100% | **100%** | unchanged |
+| cost Hamiltonian diagonal | True | **True** (12/12 snapshots) | unchanged |
+| solvers reaching certified optimum | all | **all except cold SA** | see below |
+| QAOA mask = exact ground state | 1.000 | **1.000** (p=1,2,3 + shots) | unchanged |
+| variational progress toward own optimum | 0.0068 | **0.0854** | still ≈ 0 |
+| progress change, reps 1 → 4 | −0.117 | **−0.172** | still *decreasing* |
+| ablation: remove all ZZ | 0.0000 changed | **0.0000 changed** | unchanged |
+| ablation: remove all ZZZZ | 0.0000 changed | **0.0000 changed** | unchanged |
+| ablation: remove Z bias | 1.0000 changed | **1.0000 changed** | unchanged |
+| classical-route orbit error (dim=8) | 0.0439 | **0.0146** | improves with resolution |
+| self-convergence order | 1.00 | **1.00** | unchanged |
+| temporal order, projection ON / OFF | 1.12 / 4.00 | **1.12 / 4.00** | unchanged |
+
+### T11 at N=256 — one new observation
+
+| solver | hit optimum | E gap | mask match | F1 | wall (s) |
+|---|---|---|---|---|---|
+| exhaustive (certified) | 1.000 | −1.4e-17 | 1.000 | 0.389 | 0.000 |
+| simulated annealing (cold) | **0.583** | 1.41e-02 | 0.583 | 0.367 | 0.139 |
+| SA warm-started | 1.000 | −1.4e-17 | 1.000 | 0.389 | 0.133 |
+| greedy local search | 1.000 | −1.4e-17 | 1.000 | 0.389 | 0.000 |
+| classical decision alone | 1.000 | −1.4e-17 | 1.000 | 0.389 | 0.000 |
+| QAOA p=1 / p=2 / p=3 | 1.000 | −1.4e-17 | 1.000 | 0.389 | 0.75 / 1.12 / 1.42 |
+| QAOA p=3, 4096 shots | 1.000 | −1.4e-17 | 1.000 | 0.389 | 1.603 |
+
+New at N=256: **cold-start simulated annealing misses the certified optimum
+on 42% of snapshots** (E gap 1.4e-2) while the warm-started variant, greedy
+descent and every QAOA depth reach it exactly. The optimum is trivially
+reachable *from the classical decision* but not from a random start — the
+landscape is flat with a narrow basin. This strengthens rather than weakens
+the attribution conclusion: the only solver that struggles is the one that
+does not start from the classical answer.
+
+### T11b at N=256
+
+| reps | progress | ‖disp‖ | ‖required‖ | ‖remaining‖ | mean marginal |
+|---|---|---|---|---|---|
+| 1 | +0.1588 | 0.1685 | 0.7487 | 0.6504 | 0.7739 |
+| 2 | +0.1192 | 0.1569 | 0.7487 | 0.6759 | 0.7653 |
+| 3 | +0.0766 | 0.1392 | 0.7487 | 0.7055 | 0.7555 |
+| 4 | −0.0132 | 0.1706 | 0.7487 | 0.7662 | 0.7376 |
+
+Mean progress 0.0854, monotonically decreasing with depth and negative by
+reps = 4. The ground state is uniform on 100% of snapshots.
+
+### T12 at N=256
+
+dim=8 orbit error: classical route **0.0146** (flip0 0.0078, flip1 0.0156,
+rot180 0.0195, rot90 0.0156) — three times smaller than at N=64, consistent
+with the one-sided-finite-difference explanation (the defect scales with
+grid spacing). Ground-state route 0.4219 against a reproducibility floor of
+**0.3613** → the script correctly refuses the interpretation. At dim=2 with
+exact enumeration everything is 0 (uniform mask, vacuous).
+
+### T14 at N=256 — the solver order question, settled
+
+Self-convergence on grids 64 → 128 → 256 at t = 0.25: errors 3.344e-02 and
+1.673e-02, **observed order 1.00**. Splitting diagnostic run *at N=256*
+(`--split-N 256`): with projection order **1.12** (err 3.35e-03 → 3.27e-04),
+without projection order **4.00** (err 3.76e-07 → 9.21e-11). Conservation:
+energy monotone at every resolution, `max|div B|/rms|B|` ≤ 8.0e-14, and
+Re = 200 / 3200 (outside the training grid) both pass.
+
+**The first-order behaviour is not a low-resolution artefact.** It is
+identical at N=64 and N=256, and the diagnostic isolates the cause at
+production resolution: the Lie splitting between the RK4 step and the
+divergence-free projection in `solver.py::step_full`.

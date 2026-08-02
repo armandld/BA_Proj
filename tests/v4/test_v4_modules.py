@@ -343,3 +343,51 @@ def test_tost_unpaired_path_runs():
     a = rng.normal(0, 0.01, size=30); b = rng.normal(0, 0.01, size=25)
     r = tost_equivalence(a, b, margin=0.05, paired=False)
     assert r["equivalent"] and r["df"] > 1
+
+
+# ------------------- Level-3 driver (pure helpers) --------------------
+
+def test_fold_scenarios_deduplicates_the_v1_scenario_list():
+    """Defaut V1 : SCENARIOS_ALL liste ot et rotor deux fois. Sans
+    deduplication, un fold LOSO garderait la classe tenue dans
+    l'entrainement (fuite)."""
+    from types import SimpleNamespace
+    from t15_level3_closed_loop import fold_scenarios
+    cfg = lambda name: {"scenario": name, "N": 256, "T_MAX": 1.0, "Re": 800}
+    T = SimpleNamespace(SCENARIOS_ALL=[
+        ("kh", cfg("kelvin_helmholtz")), ("ot", cfg("orszag_tang")),
+        ("tearing", cfg("harris_tearing")), ("rotor", cfg("mhd_rotor")),
+        ("ot", cfg("orszag_tang")), ("rotor", cfg("mhd_rotor")),
+    ])
+    scen = fold_scenarios(T, warn=False)
+    keys = [k for k, _ in scen]
+    assert keys == ["kh", "ot", "tearing", "rotor"]
+    assert len(keys) == len(set(keys))
+
+
+def test_fold_scenarios_filter_by_key_or_scenario_name():
+    from types import SimpleNamespace
+    from t15_level3_closed_loop import fold_scenarios
+    T = SimpleNamespace(SCENARIOS_ALL=[
+        ("kh", {"scenario": "kelvin_helmholtz"}),
+        ("ot", {"scenario": "orszag_tang"})])
+    assert [k for k, _ in fold_scenarios(T, ["ot"], warn=False)] == ["ot"]
+    assert [k for k, _ in
+            fold_scenarios(T, ["kelvin_helmholtz"], warn=False)] == ["kh"]
+
+
+def test_summarise_pairs_arms_and_counts_wins():
+    from t15_level3_closed_loop import summarise
+    recs = [
+        dict(qhas={"combined": 0.20, "phys_score": 0.10, "patch_ratio": 0.6},
+             classical={"combined": 0.25, "phys_score": 0.12,
+                        "patch_ratio": 0.5}),
+        dict(qhas={"combined": 0.30, "phys_score": 0.15, "patch_ratio": 0.7},
+             classical={"combined": 0.28, "phys_score": 0.14,
+                        "patch_ratio": 0.6}),
+    ]
+    s = summarise(recs)
+    assert s["combined"]["mean_delta"] == pytest.approx((-0.05 + 0.02) / 2)
+    assert s["combined"]["n_qhas_better"] == 1 and s["combined"]["n"] == 2
+    # le cout est plus eleve pour Q-HAS sur les deux folds
+    assert s["patch_ratio"]["n_qhas_better"] == 0
