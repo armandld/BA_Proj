@@ -1,4 +1,4 @@
-########## LAUNCH FOLD kh  (19:21:51) ##########
+########## LAUNCH FOLD kh  (21:31:57) ##########
 Environnement Local detecte. Ecriture directe sur le disque.
   [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
   [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
@@ -14,3 +14,4 @@ Environnement Local detecte. Ecriture directe sur le disque.
 ====================================================================================
 
 --- Pre-computing DNS traces for train/kh ---
+Hot-Start captured at t=2.0016

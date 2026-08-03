@@ -391,3 +391,59 @@ def test_summarise_pairs_arms_and_counts_wins():
     assert s["combined"]["n_qhas_better"] == 1 and s["combined"]["n"] == 2
     # le cout est plus eleve pour Q-HAS sur les deux folds
     assert s["patch_ratio"]["n_qhas_better"] == 0
+
+
+# ------------------ agregation V4 et figure Pareto --------------------
+
+def test_t16_extractors_flag_missing_and_diff():
+    from t16_aggregate_v4 import rows_t11b, rows_t14
+    missing = rows_t11b(None)
+    assert missing and all(r["status"] == "MISSING" for r in missing)
+    ok = rows_t11b(dict(frac_uniform=1.0, mean_progress=0.0854,
+                        reps=np.array([1, 4]),
+                        progress=np.array([0.1588, -0.0132])))
+    assert all(r["status"] == "OK" for r in ok)
+    drifted = rows_t11b(dict(frac_uniform=1.0, mean_progress=0.20,
+                             reps=np.array([1, 4]),
+                             progress=np.array([0.1588, -0.0132])))
+    assert any(r["status"] == "DIFF" for r in drifted)
+
+
+def test_t16_convergence_order_is_derived_from_the_error_pair():
+    from t16_aggregate_v4 import rows_t14
+    d = dict(conv_err=np.array([4.0e-2, 2.0e-2]),
+             split_with=np.array([[32, 1e-3, 1.12]]),
+             split_without=np.array([[32, 1e-8, 4.00]]),
+             cons_divB=np.array([1e-14]), all_checks_pass=True)
+    by = {r["metric"]: r for r in rows_t14(d)}
+    assert by["self-convergence order"]["value"] == pytest.approx(1.0)
+    assert by["self-convergence order"]["status"] == "OK"
+    assert by["temporal order without projection"]["value"] == \
+        pytest.approx(4.0)
+
+
+def test_t16_level3_rows_are_missing_until_the_fold_runs(tmp_path):
+    from t16_aggregate_v4 import rows_level3
+    rows = rows_level3(str(tmp_path), ["ot"])
+    assert rows and all(r["status"] == "MISSING" for r in rows)
+    import json as _json
+    _json.dump(dict(qhas={"phys_score": 0.1940, "patch_ratio": 0.6797},
+                    classical={"phys_score": 0.4845}),
+               open(os.path.join(str(tmp_path),
+                                 "t15_level3_fold_ot.json"), "w"))
+    rows = rows_level3(str(tmp_path), ["ot"])
+    by = {(r["task"], r["metric"]): r for r in rows}
+    assert by[("t15/ot", "Q-HAS phys")]["status"] == "OK"
+    assert by[("t15b/ot", "budget-matched patch")]["status"] == "MISSING"
+
+
+def test_pareto_frontier_interpolation_and_dominance():
+    from make_pareto_figure import interp_frontier
+    front = [{"patch": 0.20, "phys": 0.40}, {"patch": 0.60, "phys": 0.10},
+             {"patch": 0.90, "phys": 0.02}]
+    # au milieu du premier segment
+    assert interp_frontier(front, 0.40) == pytest.approx(0.25)
+    # aux noeuds
+    assert interp_frontier(front, 0.60) == pytest.approx(0.10)
+    # au-dela des bornes : plateau (np.interp)
+    assert interp_frontier(front, 1.50) == pytest.approx(0.02)
