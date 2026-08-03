@@ -96,13 +96,38 @@ def fold_scenarios(T, only=None, warn=True):
     return scen
 
 
+def _persistent_study(storage_path, study_name, seed):
+    """Etude Optuna adossee a un fichier SQLite, reprise si elle existe.
+
+    Sans cela, un essai coute ~15 min et le tuning complet ~90 min : plus
+    long que la duree de vie du conteneur entre deux recyclages, donc le
+    reglage ne convergeait jamais. Avec un stockage persistant, chaque essai
+    TERMINE est conserve et une reprise repart du compte courant.
+    """
+    import optuna
+    return optuna.create_study(
+        study_name=study_name,
+        storage=f"sqlite:///{storage_path}",
+        load_if_exists=True,
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=seed))
+
+
+def _n_completed(study):
+    import optuna
+    return sum(t.state == optuna.trial.TrialState.COMPLETE
+               for t in study.trials)
+
+
 def train_params_excluding(T, dns_traces, train_list, n_trials, seed=0,
-                           lambda_cost=None, verbose=False):
+                           lambda_cost=None, verbose=False,
+                           storage_path=None, study_name="qaoa"):
     """Regle les hyperparametres QAOA sur `train_list` SEULEMENT.
 
     Reutilise `make_composite_objective` de V1 : la fonction de perte, le
     pipeline et les bornes de recherche sont exactement ceux de
-    l'entrainement V1, seule la LISTE DES SCENARIOS change.
+    l'entrainement V1, seule la LISTE DES SCENARIOS change. Le reglage est
+    repris essai par essai lorsqu'un `storage_path` est fourni.
     """
     import optuna
     optuna.logging.set_verbosity(
@@ -110,32 +135,51 @@ def train_params_excluding(T, dns_traces, train_list, n_trials, seed=0,
     lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
     obj = T.make_composite_objective(
         dns_traces, train_list, split_michelson=True, lambda_cost=lam)
-    study = optuna.create_study(
-        direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=seed))
-    study.optimize(obj, n_trials=n_trials, catch=(Exception,))
+    if storage_path:
+        study = _persistent_study(storage_path, study_name, seed)
+        done = _n_completed(study)
+        if done:
+            print(f"  [resume] {study_name}: {done}/{n_trials} trials "
+                  f"already stored", flush=True)
+        todo = max(0, n_trials - done)
+    else:
+        study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=seed))
+        todo = n_trials
+    if todo:
+        study.optimize(obj, n_trials=todo, catch=(Exception,))
     best = dict(FROZEN_DEFAULTS)
     best.update(study.best_params)
     best.setdefault("threshold_amr", 0.14959824837662078)
-    return best, float(study.best_value), len(study.trials)
+    return best, float(study.best_value), _n_completed(study)
 
 
 def train_classical_threshold_excluding(T, dns_traces, train_list, n_trials,
-                                        seed=0, lambda_cost=None):
+                                        seed=0, lambda_cost=None,
+                                        storage_path=None,
+                                        study_name="classical"):
     """Regle le seuil AMR du bras classique sur les memes classes.
 
     Sans cela, le bras classique beneficierait d'un seuil choisi en voyant
-    la classe tenue : la comparaison ne serait plus appariee.
+    la classe tenue : la comparaison ne serait plus appariee. Meme reprise
+    par essai que le bras QAOA.
     """
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
     obj = T.make_classical_composite_objective(
         dns_traces, train_list, lambda_cost=lam)
-    study = optuna.create_study(
-        direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=seed))
-    study.optimize(obj, n_trials=n_trials, catch=(Exception,))
+    if storage_path:
+        study = _persistent_study(storage_path, study_name, seed)
+        todo = max(0, n_trials - _n_completed(study))
+    else:
+        study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=seed))
+        todo = n_trials
+    if todo:
+        study.optimize(obj, n_trials=todo, catch=(Exception,))
     return dict(study.best_params), float(study.best_value)
 
 
@@ -198,7 +242,10 @@ def load_or_tune(T, results_dir, prefix, held_key, dns_train, train_list,
         t0 = time.time()
         cls_params, cls_loss = train_classical_threshold_excluding(
             T, dns_train, train_list, n_cls, seed=seed,
-            lambda_cost=lambda_cost)
+            lambda_cost=lambda_cost,
+            storage_path=_tune_ckpt_path(results_dir, prefix, held_key)
+            .replace("_tuning_", "_optuna_").replace(".json", ".db"),
+            study_name=f"classical_{held_key}")
         t_tune_c = time.time() - t0
         ck.update(classical_params=cls_params, classical_train_loss=cls_loss,
                   t_tune_classical=t_tune_c)
@@ -208,17 +255,20 @@ def load_or_tune(T, results_dir, prefix, held_key, dns_train, train_list,
         return (ck["hyperparams"], ck["best_train_loss"], ck["n_trials"],
                 cls_params, cls_loss, ck.get("t_tune", 0.0), t_tune_c)
 
+    db = os.path.join(results_dir, f"{prefix}_optuna_{held_key}.db")
     t0 = time.time()
     hp, best_loss, n_done = train_params_excluding(
         T, dns_train, train_list, n_trials, seed=seed,
-        lambda_cost=lambda_cost, verbose=verbose)
+        lambda_cost=lambda_cost, verbose=verbose,
+        storage_path=db, study_name=f"qaoa_{held_key}")
     t_tune = time.time() - t0
     print(f"  QAOA tuning: {n_done} trials, best composite loss "
           f"{best_loss:.4f}, {t_tune:.0f}s", flush=True)
 
     t0 = time.time()
     cls_params, cls_loss = train_classical_threshold_excluding(
-        T, dns_train, train_list, n_cls, seed=seed, lambda_cost=lambda_cost)
+        T, dns_train, train_list, n_cls, seed=seed, lambda_cost=lambda_cost,
+        storage_path=db, study_name=f"classical_{held_key}")
     t_tune_c = time.time() - t0
     print(f"  classical tuning: best loss {cls_loss:.4f}, params "
           f"{cls_params}, {t_tune_c:.0f}s", flush=True)
