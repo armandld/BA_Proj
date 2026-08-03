@@ -407,3 +407,85 @@ Inspection of the coefficients explains both: at dim=2 the V1 mapper yields
 median |C| = 0 with |h| ≈ 200–240, and on harris_tearing every coefficient
 is zero, i.e. an identically null Hamiltonian on which the QAOA has nothing
 to optimise.
+
+---
+
+## T15 / T15b — Level 3 closed loop: first fold, and the budget-matched reversal
+
+### T15, fold `ot` (Orszag–Tang excluded from all tuning)
+
+`study/v4/t15_level3_closed_loop.py --folds ot --n-trials 4 --n-trials-classical 2`
+
+| endpoint | Q-HAS | tuned classical | Δ (Q−C) |
+|---|---|---|---|
+| combined (primary) | 0.3328 | 0.4386 | **−0.1058** |
+| phys_score (L2 vs DNS) | 0.1940 | 0.4845 | −0.2905 |
+| patch_ratio (compute) | 0.6797 | 0.3238 | **+0.3558** |
+
+Taken at face value this favours Q-HAS on the pre-registered primary
+endpoint. **It must not be read that way**, because the two arms are not at
+the same point of the error–cost frontier, and the asymmetry is inherited
+from the V1 training module:
+
+- `make_composite_objective` (QAOA arm) **hard-codes**
+  `HyperParams["threshold_amr"] = 0.14959824837662078` — never suggested to
+  Optuna, with the source comment "le meilleur classique";
+- `make_classical_composite_objective` (classical arm) optimises
+  `trial.suggest_float("threshold_amr", 0.05, 0.8)` freely and selected
+  **0.4616** for this fold.
+
+A 3× threshold difference explains the 2.1× compute gap and hence the
+fidelity gap. This is exactly the "budget-matched comparison" the audit
+demanded, and it is a **third defect** in the comparison design: it applies
+to V1's own closed-loop numbers, not only to this fold.
+
+### T15b, budget-matched classical arm (same fold)
+
+`study/v4/t15b_budget_matched.py --fold ot --max-iter 4` — bisection on the
+classical threshold to reproduce the Q-HAS compute budget, everything else
+(DNS trace, hot start, hybrid budget, depth) held fixed.
+
+Classical error–cost frontier on the held-out class:
+
+| threshold | patch_ratio | phys_score |
+|---|---|---|
+| 0.0500 | 0.9480 | 0.0111 |
+| 0.1438 | 0.7369 | 0.0649 |
+| **0.1906** | **0.6412** | **0.0827** |
+| 0.2375 | 0.5866 | 0.1027 |
+| 0.4250 | 0.3554 | 0.2899 |
+| 0.8000 | 0.0156 | 0.5894 |
+| *Q-HAS* | *0.6797* | *0.1940* |
+
+**Budget-matched result: Δ phys = +0.1113 in favour of the classical arm.**
+At *slightly less* compute (0.6412 vs 0.6797) the classical rule achieves
+**2.3× lower** L2 error against DNS (0.0827 vs 0.1940). Q-HAS lies well
+above the classical frontier — it is **strictly Pareto-dominated** on this
+fold.
+
+Two readings sharpen this further:
+- At a *matched threshold* the conclusion is the same: classical at
+  thr = 0.1438 gives phys = 0.0649 at patch = 0.7369, while Q-HAS at
+  thr = 0.1496 gives phys = 0.1940 at patch = 0.6797 — 3× worse fidelity
+  at comparable settings. The gap is therefore not a threshold artefact:
+  the QAOA perturbation of the θ encoding actively degrades the decision
+  relative to plain thresholding of the same score.
+- This is coherent with T11b and T13: the circuit does not optimise its own
+  cost (progress ≈ 0, decreasing with depth) and the coupling terms are
+  causally inert, so the perturbation it applies carries no useful
+  information.
+
+**Pre-registered decision rules (`docs/level3_preregistration.md`).**
+P1 (equivalence) is **not** supported on this fold: the arms differ, and
+under budget matching the difference is large and favours the classical
+rule. P3 (any fidelity gain is paid in compute) is **confirmed and then
+some** — the gain does not survive paying for the compute. The
+`combined`-endpoint verdict of T15 is superseded by the budget-matched
+comparison, which is the interpretable one.
+
+**Scope.** One fold (`ot`), one physics seed, 4 Optuna trials. The campaign
+was interrupted twice by container reclamation while running folds `kh`,
+`rotor`, `tearing`; those folds remain to be run. No claim of general
+closed-loop falsification is made from n = 1. What *is* established is that
+the apparent closed-loop advantage of the primary endpoint does not survive
+the audit's budget-matched control on the fold measured.

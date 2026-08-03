@@ -74,3 +74,13 @@ DNS pre-computed: 1136 steps, 14 flux snapshots stored.
 Hot-Start captured at t=0.3041
 DNS pre-computed: 123 steps, 11 flux snapshots stored.
 Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (train/kh) ---
+
+
+--- Pre-computing DNS traces for held/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (held/kh) ---
+
+  DNS traces ready in 352s
