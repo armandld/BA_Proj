@@ -1,0 +1,76 @@
+########## LAUNCH FOLD ot  (23:43:40) ##########
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['ot']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = ot (orszag_tang)  |  tuned on ['kh', 'tearing', 'rotor']
+====================================================================================
+
+--- Pre-computing DNS traces for train/ot ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (train/ot) ---
+
+
+--- Pre-computing DNS traces for held/ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (held/ot) ---
+
+  DNS traces ready in 319s
+  [resume] tuning checkpoint found -> t15_level3_tuning_ot.json
+  [resume] classical arm not tuned yet; completing it
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+  classical tuning: best loss 0.2979, params {'threshold_amr': 0.46161012794549355}, 1042s
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 5.7137, 'w_z_frac': 72.5701, 'sigma': 0.1888, 'beta_curl': 2.7244, 'beta_xpoint': 2.1183, 'threshold_amr': 0.1496}
+  [Q-HAS]     combined=0.3328 phys=0.1940 patch=0.6797 (1069s)
+  [classical] combined=0.4386 phys=0.4845 patch=0.3238 (371s)
+  saved fold -> t15_level3_fold_ot.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  ot                0.1940    0.4845   -0.2905    0.6797    0.3238   -0.1058
+  ------------------------------------------------------------------------------------
+  combined       mean delta = -0.1058   Q-HAS better on 1/1 folds
+  phys_score     mean delta = -0.2905   Q-HAS better on 1/1 folds
+  patch_ratio    mean delta = +0.3558   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+########## LAUNCH FOLD kh  (00:31:10) ##########
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['kh']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = kh (kelvin_helmholtz)  |  tuned on ['ot', 'tearing', 'rotor']
+====================================================================================
+
+--- Pre-computing DNS traces for train/kh ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+Hot-Start captured at t=0.2009
