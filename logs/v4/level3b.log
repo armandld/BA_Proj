@@ -1,4 +1,4 @@
-########## LAUNCH FOLD kh  (21:31:57) ##########
+########## LAUNCH FOLD kh  (23:05:41) ##########
 Environnement Local detecte. Ecriture directe sur le disque.
   [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
   [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
@@ -28,4 +28,4 @@ Hot-Start captured at t=0.9046
 DNS pre-computed: 408 steps, 18 flux snapshots stored.
 --- DNS pre-computation complete (held/kh) ---
 
-  DNS traces ready in 223s
+  DNS traces ready in 229s
