@@ -170,8 +170,72 @@ def run_arm(T, key, config, dns_traces, hyperparams, classical_only,
     return res
 
 
+def _tune_ckpt_path(results_dir, prefix, held_key):
+    return os.path.join(results_dir, f"{prefix}_tuning_{held_key}.json")
+
+
+def load_or_tune(T, results_dir, prefix, held_key, dns_train, train_list,
+                 n_trials, n_cls, seed, lambda_cost, verbose):
+    """Regle les hyperparametres, ou relit un checkpoint existant.
+
+    Le tuning est de loin l'etape la plus couteuse (mesure : ~87 min pour
+    4 essais a N=256). Sans checkpoint, toute interruption la fait
+    recommencer a zero. Le checkpoint est ecrit DES que le tuning est
+    termine, avant l'execution des bras.
+    """
+    path = _tune_ckpt_path(results_dir, prefix, held_key)
+    if os.path.exists(path):
+        ck = json.load(open(path))
+        print(f"  [resume] tuning checkpoint found -> "
+              f"{os.path.basename(path)}", flush=True)
+        if ck.get("classical_params") is not None:
+            return (ck["hyperparams"], ck["best_train_loss"], ck["n_trials"],
+                    ck["classical_params"], ck["classical_train_loss"],
+                    ck.get("t_tune", 0.0), ck.get("t_tune_classical", 0.0))
+        # checkpoint partiel : le tuning QAOA est acquis, le classique reste
+        print("  [resume] classical arm not tuned yet; completing it",
+              flush=True)
+        t0 = time.time()
+        cls_params, cls_loss = train_classical_threshold_excluding(
+            T, dns_train, train_list, n_cls, seed=seed,
+            lambda_cost=lambda_cost)
+        t_tune_c = time.time() - t0
+        ck.update(classical_params=cls_params, classical_train_loss=cls_loss,
+                  t_tune_classical=t_tune_c)
+        json.dump(ck, open(path, "w"), indent=1, default=float)
+        print(f"  classical tuning: best loss {cls_loss:.4f}, params "
+              f"{cls_params}, {t_tune_c:.0f}s", flush=True)
+        return (ck["hyperparams"], ck["best_train_loss"], ck["n_trials"],
+                cls_params, cls_loss, ck.get("t_tune", 0.0), t_tune_c)
+
+    t0 = time.time()
+    hp, best_loss, n_done = train_params_excluding(
+        T, dns_train, train_list, n_trials, seed=seed,
+        lambda_cost=lambda_cost, verbose=verbose)
+    t_tune = time.time() - t0
+    print(f"  QAOA tuning: {n_done} trials, best composite loss "
+          f"{best_loss:.4f}, {t_tune:.0f}s", flush=True)
+
+    t0 = time.time()
+    cls_params, cls_loss = train_classical_threshold_excluding(
+        T, dns_train, train_list, n_cls, seed=seed, lambda_cost=lambda_cost)
+    t_tune_c = time.time() - t0
+    print(f"  classical tuning: best loss {cls_loss:.4f}, params "
+          f"{cls_params}, {t_tune_c:.0f}s", flush=True)
+
+    json.dump(dict(hyperparams=hp, best_train_loss=best_loss,
+                   n_trials=n_done, classical_params=cls_params,
+                   classical_train_loss=cls_loss, t_tune=t_tune,
+                   t_tune_classical=t_tune_c),
+              open(path, "w"), indent=1, default=float)
+    print(f"  tuning checkpoint saved -> {os.path.basename(path)}",
+          flush=True)
+    return (hp, best_loss, n_done, cls_params, cls_loss, t_tune, t_tune_c)
+
+
 def run_fold(T, held_key, held_cfg, all_scen, n_trials, n_trials_classical,
-             seed=0, lambda_cost=None, verbose=False):
+             seed=0, lambda_cost=None, verbose=False,
+             results_dir=None, prefix="t15_level3"):
     """Un fold LOSO complet : reglage hors classe, puis les deux bras."""
     train_list = [(k, c) for k, c in all_scen if k != held_key]
     print(f"\n{'='*84}\n  FOLD held-out = {held_key} "
@@ -185,23 +249,13 @@ def run_fold(T, held_key, held_cfg, all_scen, n_trials, n_trials_classical,
     t_dns = time.time() - t0
     print(f"  DNS traces ready in {t_dns:.0f}s", flush=True)
 
-    t0 = time.time()
-    hp, best_loss, n_done = train_params_excluding(
-        T, dns_train, train_list, n_trials, seed=seed,
-        lambda_cost=lambda_cost, verbose=verbose)
-    t_tune = time.time() - t0
-    print(f"  QAOA tuning: {n_done} trials, best composite loss "
-          f"{best_loss:.4f}, {t_tune:.0f}s\n  params: "
+    (hp, best_loss, n_done, cls_params, cls_loss,
+     t_tune, t_tune_c) = load_or_tune(
+        T, results_dir, prefix, held_key, dns_train, train_list,
+        n_trials, n_trials_classical, seed, lambda_cost, verbose)
+    print(f"  params: "
           f"{ {k: round(v, 4) for k, v in hp.items() if isinstance(v, float)} }",
           flush=True)
-
-    t0 = time.time()
-    cls_params, cls_loss = train_classical_threshold_excluding(
-        T, dns_train, train_list, n_trials_classical, seed=seed,
-        lambda_cost=lambda_cost)
-    t_tune_c = time.time() - t0
-    print(f"  classical tuning: best loss {cls_loss:.4f}, params "
-          f"{cls_params}, {t_tune_c:.0f}s", flush=True)
 
     hp_classical = dict(hp)
     hp_classical.update(cls_params)
@@ -317,7 +371,8 @@ def main():
         try:
             rec = run_fold(T, key, cfg, all_scen, args.n_trials, n_cls,
                            seed=args.seed, lambda_cost=args.lambda_cost,
-                           verbose=args.verbose)
+                           verbose=args.verbose, results_dir=RESULTS_DIR,
+                           prefix=args.out_prefix)
         except Exception as exc:
             import traceback
             traceback.print_exc()
