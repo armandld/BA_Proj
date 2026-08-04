@@ -91,3 +91,6 @@ Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for audit/ot ---
 Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (audit/ot) ---
+

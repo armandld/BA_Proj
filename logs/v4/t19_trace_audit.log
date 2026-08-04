@@ -9,6 +9,3 @@ Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for trace/rotor ---
 Hot-Start captured at t=0.2009
-DNS pre-computed: 975 steps, 15 flux snapshots stored.
---- DNS pre-computation complete (trace/rotor) ---
-
