@@ -36,3 +36,19 @@ Hot-Start captured at t=0.2009
 DNS pre-computed: 975 steps, 15 flux snapshots stored.
 --- DNS pre-computation complete (audit/rotor) ---
 
+
+  fold rotor (mhd_rotor)
+    qhas       COMPLETED   combined=0.1908  phys=0.1103
+      WARNING: replay 0.190776 != stored 0.227296 — audit unreliable for this arm
+    classical  **ABORTED** at step 208 (t=0.2739)  partial phys=1.1731
+    -> fold NOT USABLE for the paired statistics
+
+  --------------------------------------------------------------------------------
+  usable folds : ot, kh
+  failed folds : rotor
+  Pre-registration §5: failed folds are reported as failures and
+  EXCLUDED from the paired statistics, with the count stated.
+
+  saved: t19_arm_divergence_audit.json (2554s)
+
+V4 Task 19 complete.
