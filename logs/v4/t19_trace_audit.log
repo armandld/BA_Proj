@@ -1,0 +1,14 @@
+====================================================================================
+  V4 T19 - Level-3 arm divergence audit
+  V1 aborts on CFL>1 or non-finite fields and returns a PARTIAL
+  score with identical keys. This replays each arm to detect it.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+  fold rotor: auditing t15b bisection points
+
+--- Pre-computing DNS traces for trace/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (trace/rotor) ---
+
