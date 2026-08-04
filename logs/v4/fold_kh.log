@@ -76,3 +76,43 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
     thr=0.8000 -> patch=0.1068 phys=0.0914 (target patch 0.8376)
     thr=0.4250 -> patch=0.6250 phys=0.0020 (target patch 0.8376)
     thr=0.2375 -> patch=0.7009 phys=0.0019 (target patch 0.8376)
+    thr=0.1438 -> patch=0.9505 phys=0.0014 (target patch 0.8376)
+=== [kh] start 19:46:22 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['kh']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+  [resume] fold kh already done -> /home/user/BA_Proj/study/results/t15_level3_fold_kh.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  kh                0.0070    0.0020   +0.0050    0.8376    0.6250   +0.0643
+  ------------------------------------------------------------------------------------
+  combined       mean delta = +0.0643   Q-HAS better on 0/1 folds
+  phys_score     mean delta = +0.0050   Q-HAS better on 0/1 folds
+  patch_ratio    mean delta = +0.2126   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+=== [kh] t15 done 19:46:30 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold kh
+  Q-HAS realised patch_ratio = 0.8376  (phys 0.0070)
+  tuned classical            = 0.6250  (phys 0.0020, thr 0.4616)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (held/kh) ---
+
