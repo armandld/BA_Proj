@@ -735,3 +735,35 @@ resolving. Found by re-deriving the v2 numbers instead of citing them.
 (`--n-snaps 3`) reproduces the stored artifact **bit-exactly** across all
 72 rows (`scenario`, `snap`, `ablation`, `changed`, `uniform`, `n_optima`,
 `f1`, `refined`, `dE`).
+
+### D6 follow-up — how far does the signature drift reach?
+
+D6 reports 8 failures in the V1 suite on a clean checkout, 6 of them
+`TypeError: PhysicalMapper.__init__() got an unexpected keyword argument
+'beta'`. The question that matters for the paper is whether that drift
+touches the code which produced the results. It does not.
+
+Every call site, checked exhaustively:
+
+| call site | kind | uses removed `beta=` |
+|---|---|---|
+| `src/pipeline.py:325` | **production pipeline** | no — current signature |
+| `study/phase0_sanity_check.py:95` | study | no |
+| `study/phase3_coefficients.py:68` | study | no |
+| `study/phase4_exact_diag.py:68` | study | no |
+| `study/phase5_qaoa_eval.py:136` | study (feeds T11/T13/T18) | no |
+| `src/compare_rotor_budget.py:110` | orphaned analysis script | **yes → dead** |
+| 6 × `tests/…` | stale tests | **yes → the D6 failures** |
+
+**Verdict.** The simulations behind every V3 and V4 number were produced by
+code that constructs the mapper correctly. The drift is confined to stale
+tests and to one script that nothing imports.
+
+**Defect D10.** `src/compare_rotor_budget.py` raises `TypeError` at line 108
+and cannot execute. It and `HamiltParams.py` were both last modified in
+`cf93ba3` and are unchanged since; the repository has full (non-shallow)
+history of 57 commits. **As committed, this script has never been runnable
+in this repository.** It is referenced only by a file listing in
+`README.md`. If any rotor budget-comparison figure or number in the
+manuscript is attributed to it, that attribution needs checking — the script
+in its committed form could not have produced it.

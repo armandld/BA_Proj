@@ -325,6 +325,16 @@ asymmetry speculation.
 | **D7** | the Gaussian uncertainty window annihilates the ZZ family it is meant to focus | `HamiltParams.compute_coefficients` | 88.6 %–99.99 % of the physics-derived ZZ coupling mass is discarded, preferentially where the coupling is largest (Spearman −0.37 to −0.50); at the deployed N=256 the family is **identically 0.000e+00** on KH and tearing. This is the **mechanism** behind Claim D (D-bis). Repairing it does **not** restore causal relevance (D-ter), so it weakens the implementation, not the conclusion |
 | **D8** | the ZZ coupling reaches the decision only through a normalisation side-channel | `HamiltParams.compute_coefficients` | `|C|` feeds `C_scale` = median(non-zero \|C\|,\|K\|), which sets the Z-bias amplitude `alpha_z`. Suppressing the coupling therefore rescales the **Z bias** and flips 25.0 % of decisions — while the coupling never acts as a coupling. Any claim that "ZZ terms influence the outcome" is true only in this degenerate sense |
 | **D9** *(V4's own code, fixed)* | `t13_term_ablation.py` wrote the same filename regardless of `--mapper`, so the v2 run silently overwrote the v1 result | `study/v4/t13_term_ablation.py` | the v1/v2 comparison is the point of the task, and the artifact could not hold both. Filename now carries the mapper; the historical name is still written for v1. Found by re-deriving the v2 numbers rather than citing them from the earlier session |
+| **D10** | `src/compare_rotor_budget.py` cannot run: it constructs `PhysicalMapper(..., beta=0.5, ...)`, a keyword removed from the signature | `src/compare_rotor_budget.py:110` | raises `TypeError` at construction. Both this file and `HamiltParams.py` were last touched in `cf93ba3` and are unchanged since, and the repository has full history (57 commits) — so **as committed, this script has never been runnable here**. If any rotor budget-comparison number in the manuscript is attributed to it, that attribution must be checked |
+
+**Scope of the signature drift — the reassuring half.** The drift does *not*
+touch the production path. `src/pipeline.py` and every study entry point
+(`phase0`, `phase3`, `phase4`, `phase5`) construct `PhysicalMapper` with the
+current signature (`sigma`, `beta_curl`, `beta_xpoint`, `w_z_frac`). Only
+the 6 stale tests (D6) and the orphaned `compare_rotor_budget.py` (D10) use
+the removed `beta=`. **The simulations behind every V3/V4 number were
+produced by code that runs as intended**; what is broken is one unused
+analysis script and a set of tests that were never updated after a refactor.
 
 D6 and D7 were found by running the V1 suite rather than assuming it green;
 D7's substance came from taking its two failing physics assertions
