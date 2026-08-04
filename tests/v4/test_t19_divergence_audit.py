@@ -87,3 +87,38 @@ def test_audit_maps_folds_to_usability(tmp_path):
         str(tmp_path), "t19_arm_divergence_audit.json"), "w"))
     got = load_divergence_audit(str(tmp_path))
     assert got == {"ot": True, "rotor": False}
+
+
+def test_audit_file_merges_rather_than_overwrites(tmp_path):
+    """Relancer l'audit sur un sous-ensemble ne doit pas effacer les folds
+    deja audites.
+
+    C'est le defaut D9 (nom de fichier fixe, ecrasement silencieux) qui
+    s'est reproduit dans T19 lui-meme : un audit `--folds tearing` avait
+    efface le resultat de ot/kh/rotor, rendant `rotor` a nouveau « non
+    audite » donc valide par defaut — precisement le fold dont un bras
+    avait diverge. Un audit qui perd ses resultats est pire qu'absent.
+    """
+    path = os.path.join(str(tmp_path), "t19_arm_divergence_audit.json")
+    json.dump({"results": [
+        {"fold": "ot", "fold_usable": True, "arms": {}},
+        {"fold": "rotor", "fold_usable": False, "arms": {}},
+    ]}, open(path, "w"))
+
+    # simule un second passage n'auditant que `tearing`
+    prev = {r["fold"]: r for r in json.load(open(path))["results"]}
+    new = [{"fold": "tearing", "fold_usable": True, "arms": {}}]
+    for r in new:
+        prev[r["fold"]] = r
+    merged = [prev[f] for f in sorted(prev)]
+    json.dump({"results": merged,
+               "usable_folds": [r["fold"] for r in merged
+                                if r["fold_usable"]],
+               "failed_folds": [r["fold"] for r in merged
+                                if not r["fold_usable"]]},
+              open(path, "w"))
+
+    got = load_divergence_audit(str(tmp_path))
+    assert got == {"ot": True, "rotor": False, "tearing": True}
+    # le fold en echec doit SURVIVRE au second passage
+    assert got["rotor"] is False

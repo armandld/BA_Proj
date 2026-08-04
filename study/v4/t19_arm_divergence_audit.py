@@ -248,15 +248,41 @@ def main():
     print("  Pre-registration §5: failed folds are reported as failures and")
     print("  EXCLUDED from the paired statistics, with the count stated.")
 
+    path = os.path.join(RESULTS_DIR, "t19_arm_divergence_audit.json")
+
+    # FUSION, jamais ecrasement. Ecrire tel quel ferait perdre les folds
+    # audites lors d'un appel precedent des qu'on relance la tache sur un
+    # sous-ensemble — c'est exactement le defaut D9, ici dans du code ecrit
+    # APRES l'avoir diagnostique. Un audit qui perd silencieusement ses
+    # propres resultats est pire qu'absent : les folds disparus
+    # redeviennent « non audites », donc traites comme valides par defaut.
+    merged = {}
+    if os.path.exists(path):
+        try:
+            prev = json.load(open(path))
+            for r in prev.get("results", []):
+                merged[r["fold"]] = r
+        except (ValueError, KeyError):
+            print("  WARNING: existing audit unreadable, starting fresh")
+    replaced = [r["fold"] for r in results if r["fold"] in merged]
+    for r in results:
+        merged[r["fold"]] = r
+    if replaced:
+        print(f"  refreshed folds: {', '.join(replaced)}")
+    kept = [f for f in merged if f not in {r['fold'] for r in results}]
+    if kept:
+        print(f"  preserved from earlier audits: {', '.join(sorted(kept))}")
+
+    all_results = [merged[f] for f in sorted(merged)]
     out = {
-        "results": results,
-        "usable_folds": usable,
-        "failed_folds": failed,
+        "results": all_results,
+        "usable_folds": [r["fold"] for r in all_results if r["fold_usable"]],
+        "failed_folds": [r["fold"] for r in all_results
+                         if not r["fold_usable"]],
         "git_hash": git_commit_hash(),
         "cli_args": vars(args),
         "wall_s": time.time() - t0,
     }
-    path = os.path.join(RESULTS_DIR, "t19_arm_divergence_audit.json")
     json.dump(out, open(path, "w"), indent=1)
     print(f"\n  saved: {os.path.basename(path)} ({time.time() - t0:.0f}s)")
     print("\nV4 Task 19 complete.")
