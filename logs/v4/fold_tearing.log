@@ -49,3 +49,17 @@ Environnement Local detecte. Ecriture directe sur le disque.
 --- Pre-computing DNS traces for train/tearing ---
 Hot-Start captured at t=0.9046
 DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (train/tearing) ---
+
+
+--- Pre-computing DNS traces for held/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (held/tearing) ---
+
+  DNS traces ready in 203s
+  [resume] qaoa_tearing: 3/4 trials already stored

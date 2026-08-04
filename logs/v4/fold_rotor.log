@@ -53,3 +53,18 @@ Environnement Local detecte. Ecriture directe sur le disque.
 --- Pre-computing DNS traces for train/rotor ---
 Hot-Start captured at t=0.9046
 DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (train/rotor) ---
+
+
+--- Pre-computing DNS traces for held/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (held/rotor) ---
+
+  DNS traces ready in 200s
+  [resume] tuning checkpoint found -> t15_level3_tuning_rotor.json
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 8.0214, 'w_z_frac': 13.0491, 'sigma': 0.1791, 'beta_curl': 4.628, 'beta_xpoint': 0.3552, 'threshold_amr': 0.1496}
