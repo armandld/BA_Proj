@@ -64,3 +64,30 @@ Hot-Start captured at t=0.3041
 DNS pre-computed: 123 steps, 11 flux snapshots stored.
 --- DNS pre-computation complete (audit/tearing) ---
 
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+
+  fold tearing (harris_tearing)
+    qhas       COMPLETED   combined=0.2541  phys=0.0139
+      WARNING: replay 0.254125 != stored 0.233014 — audit unreliable for this arm
+    classical  COMPLETED   combined=0.1817  phys=0.0044
+    -> fold USABLE for the paired statistics
+
+  --------------------------------------------------------------------------------
+  usable folds : tearing
+  failed folds : none
+  Pre-registration §5: failed folds are reported as failures and
+  EXCLUDED from the paired statistics, with the count stated.
+
+  saved: t19_arm_divergence_audit.json (380s)
+
+V4 Task 19 complete.
+====================================================================================
+  V4 T19 - Level-3 arm divergence audit
+  V1 aborts on CFL>1 or non-finite fields and returns a PARTIAL
+  score with identical keys. This replays each arm to detect it.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for audit/ot ---
+Hot-Start captured at t=2.0016
