@@ -110,6 +110,62 @@ survive as observations; their causal reading does not.
 
 *Source:* T13, both mappers, N=256.
 
+#### D-bis — *why* they are inert: the uncertainty window discards the coupling
+
+T13 establishes the decision-level fact. T17 establishes the mechanism, and
+it was found in **V1's own test suite**: two pre-existing tests
+(`test_v9_metrics.py::test_coefficients_survive_orszag_tang`,
+`test_module_validation.py`) fail on a clean checkout while asserting the
+opposite — *"Orszag-Tang should produce significant C_edges"* — with
+max|C_edges| ≈ 1.8e-48.
+
+In `HamiltParams.compute_coefficients`, the whole ZZ family is multiplied by
+a Gaussian centred on the AMR decision threshold:
+
+```
+w(score) = exp(-((score - threshold_amr) / sigma)^2)
+C_horiz *= w ;  C_vert *= w
+```
+
+The documented intent is to concentrate coupling where the classical
+decision is *uncertain*. But the physics-derived coupling is largest where
+field gradients are strongest — exactly the cells whose score is
+*confident*. The two supports are therefore anti-correlated **by
+construction**, and the window discards most of the coupling the physical
+model computes.
+
+With the window neutralised (σ → ∞, V1 untouched), max|C_edges| is
+O(40–140) on **all four** classes — the coupling is healthy before the
+window. Fraction of ZZ coupling mass retained, Σ|C|·w / Σ|C|, at the
+**deployed/trained** parameters (σ = 0.1888, threshold = 0.1496):
+
+| class | max\|C\| (no window) | max\|C\| (with window) | ZZ mass kept | Spearman(\|C\|, w) |
+|---|---|---|---|---|
+| Kelvin–Helmholtz | 53.9 | 36.7 | **11.4 %** | −0.372 |
+| Harris tearing | 42.3 | 0.0935 | **0.199 %** | −0.502 |
+| MHD rotor | 136.0 | 1.331 | **0.040 %** | −0.460 |
+| Orszag–Tang | 63.6 | 0.6955 | **0.0097 %** | −0.008 † |
+
+† degenerate: on OT the window is numerically constant, so the rank
+correlation carries no information; the mass ratio is the meaningful figure.
+
+So the window discards **88.6 % (best class) to 99.99 % (worst class)** of
+the physics-derived ZZ coupling, and it removes it preferentially from the
+cells where it is largest. The ZZ family that actually reaches the QAOA is a
+small, systematically mis-sited remnant — which is precisely why ablating it
+changes no decisions.
+
+At the parameters used by the failing V1 tests (σ = 0.05, threshold = 0),
+the same window **underflows to zero**: w_max = 4.2e-50 on OT and 1.0e-19 on
+rotor, i.e. the ZZ family is not merely suppressed but numerically absent.
+
+The irony is documented in V1 itself: the threshold-contrast filter replaced
+Michelson normalisation because Michelson *"kills the signal when the domain
+is uniformly active"*. The uncertainty window reintroduces that exact
+failure mode one level up — at the score rather than the field.
+
+*Source:* T17, N=64, 30 steps, four classes × two parameter sets.
+
 ### Claim E — closed loop: the apparent advantage reverses at equal budget
 
 Fold `ot`, Orszag–Tang excluded from **all** tuning of both arms:
@@ -199,6 +255,12 @@ asymmetry speculation.
 | **D3** | `SCENARIOS_ALL` = ISOLATED + COMPLEX lists `ot` and `rotor` twice → 6 entries for 4 distinct classes | `TrainHyperParam_v2` | OT and rotor weighted 2:1 in every Phase-3 composite loss; for LOSO it would **manufacture leakage** (de-duplicated in the V4 driver). Also `SCENARIO_VORTEX` / `SCENARIO_COALESCENCE` defined but never used, contradicting the module's own docstring |
 | **D4** | QAOA arm's `threshold_amr` hard-coded at 0.1496 while the classical arm's is tuned freely | `make_composite_objective` vs `make_classical_composite_objective` | the two arms are compared at different operating points — affects the V1 closed-loop numbers, not only Level 3 (see Claim E) |
 | **D5** | RK4 then projection = first-order Lie splitting | `solver.py::step_full` | scheme converges at order 1 despite 4th-order components (Claim F) |
+| **D6** | the V1 regression suite does **not** pass on a clean checkout: 8 tests fail at `cf93ba3`, the last commit touching `src/`/`tests/` — before any V3/V4 work | `tests/test_module_validation.py`, `tests/test_v9_metrics.py` | 6 are signature drift (`PhysicalMapper(beta=…)` no longer exists); **2 are substantive** and assert that ZZ coupling survives on Orszag–Tang. `CLAUDE.md`'s premise that `run_tests.sh` "must pass unchanged" was already false. Verified by re-running the suite in a detached worktree at `cf93ba3`: identical 8 failures |
+| **D7** | the Gaussian uncertainty window annihilates the ZZ family it is meant to focus | `HamiltParams.compute_coefficients` | 88.6 %–99.99 % of the physics-derived ZZ coupling mass is discarded, preferentially where the coupling is largest (Spearman −0.37 to −0.50); underflows to 4e-50 at the tests' parameters. This is the **mechanism** behind Claim D and it undercuts the Ising formulation's rationale (see D-bis) |
+
+D6 and D7 were found by running the V1 suite rather than assuming it green;
+D7's substance came from taking its two failing physics assertions
+seriously instead of dismissing them as stale tests.
 
 ---
 

@@ -203,6 +203,43 @@ def rows_level3(results_dir, folds, prefix="t15_level3"):
     return out
 
 
+def rows_t15c(results_dir, folds):
+    """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
+    les conclusions, recalcules ici a partir des JSON de fold plutot que
+    recopies. `n_folds` figure explicitement : un comptage de victoires
+    n'est lisible que rapporte au nombre de folds acheves.
+
+    Ces lignes ne dupliquent pas celles de `rows_level3` : celles-ci
+    portent sur les fold pris un a un, celles-la sur la regle de decision.
+    """
+    from t15c_fold_synthesis import (load_fold, primary_analysis,
+                                     secondary_analysis)
+
+    recs = [r for r in (load_fold(results_dir, f) for f in folds)
+            if r is not None]
+    if not recs:
+        return [make_row("t15c", m, None, None) for m in
+                ("folds completed", "folds where Q-HAS better (combined)",
+                 "folds where Q-HAS Pareto-dominated at equal budget")]
+
+    pri = primary_analysis(recs)
+    sec = secondary_analysis(recs)
+    out = [
+        make_row("t15c", "folds completed", float(pri["n_folds"]), None),
+        make_row("t15c", "folds where Q-HAS better (combined)",
+                 float(pri["n_qhas_better"]), None),
+        make_row("t15c", "budget-matched folds",
+                 float(sec["n_folds"]), None),
+        make_row("t15c", "folds where Q-HAS Pareto-dominated "
+                 "at equal budget", float(sec["n_qhas_dominated"]), None),
+    ]
+    if sec["n_folds"]:
+        out.append(make_row("t15c", "mean delta phys at equal budget "
+                            "(>0 = Q-HAS worse)",
+                            sec["mean_delta_phys_matched"], None))
+    return out
+
+
 # -------------------------------------------------------------------
 # Collecte et sorties
 # -------------------------------------------------------------------
@@ -227,6 +264,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
     rows += rows_t14(load_npz(os.path.join(
         results_dir, "t14_numerical_validation.npz")))
     rows += rows_level3(results_dir, folds)
+    rows += rows_t15c(results_dir, folds)
     return rows
 
 

@@ -489,3 +489,89 @@ was interrupted twice by container reclamation while running folds `kh`,
 closed-loop falsification is made from n = 1. What *is* established is that
 the apparent closed-loop advantage of the primary endpoint does not survive
 the audit's budget-matched control on the fold measured.
+
+---
+
+## T17 — ZZ uncertainty window: the mechanism behind causal inertness
+
+```
+python study/v4/t17_uncertainty_window.py --N 64 --steps 30
+```
+git hash: see `results/t17_uncertainty_window.npz`  ·  runtime ≈ 1 s
+(the four DNS spin-ups dominate; N=64, 30 steps each)
+
+**Why this task exists.** T13 established a *fact*: zeroing the ZZ family
+changes 0.0000 decisions. T17 establishes the *mechanism*. The lead came
+from V1's own test suite — see defect **D6** below — which contains two
+failing tests asserting the opposite.
+
+**Mechanism.** `HamiltParams.compute_coefficients` multiplies the entire ZZ
+family by a Gaussian centred on the AMR decision threshold,
+`w = exp(-((score - threshold_amr)/sigma)^2)`. The intent is to concentrate
+coupling where the classical decision is uncertain. The effect is that the
+coupling is removed from exactly the cells where it is largest: strong
+gradients produce large `|C|` *and* confident (far-from-threshold) scores.
+
+**Measurements** (four classes × two parameter sets). `no window` is
+obtained by setting σ → 1e9 so that `w ≡ 1`; V1 is never modified. Mass
+kept = Σ|C|·w / Σ|C|, each edge family paired with its own window.
+
+Deployed/trained parameters (σ = 0.1888, threshold = 0.1496):
+
+| class | max\|C\| no window | max\|C\| with window | mass kept | Spearman(\|C\|,w) |
+|---|---|---|---|---|
+| kelvin_helmholtz | 53.92 | 36.71 | 1.142e-01 | −0.372 |
+| harris_tearing | 42.32 | 0.0935 | 1.990e-03 | −0.502 |
+| mhd_rotor | 136.0 | 1.331 | 3.951e-04 | −0.460 |
+| orszag_tang | 63.59 | 0.6955 | 9.679e-05 | −0.008 (degenerate) |
+
+Parameters of the failing V1 tests (σ = 0.05, threshold = 0):
+
+| class | w_max | max\|C\| with window | mass kept |
+|---|---|---|---|
+| kelvin_helmholtz | 9.964e-01 | 19.60 | 7.449e-03 |
+| harris_tearing | 2.626e-01 | 2.626e-58 | 2.537e-60 |
+| mhd_rotor | 1.010e-19 | 9.943e-18 | 9.547e-23 |
+| orszag_tang | 4.228e-50 | 1.773e-48 | 1.314e-53 |
+
+**Reading.** Before the window the coupling is healthy on *every* class
+(40–136). After it, three of four classes retain under 0.2 % of the
+coupling mass, and the best case retains 11.4 %. The rank correlation
+between coupling magnitude and window weight is negative wherever it is
+defined, i.e. the suppression is not uniform noise — it is targeted at the
+strongest couplings. At the tests' parameters the window underflows
+outright (4e-50 on OT, 1e-19 on rotor).
+
+Note `harris_tearing` under the test parameters: `w_max` = 0.26 looks
+healthy, yet mass kept = 2.5e-60. `max(|C|·w) ≠ max|C|·max(w)` — the window
+is large only where the coupling is not. This is the anti-correlation in its
+starkest form and is why the window's effect cannot be judged from `w_max`.
+
+**Consequence.** The Ising formulation's rationale is the multi-body
+coupling. The deployed pipeline discards ~99 % of it before the QAOA ever
+sees it, which is a sufficient explanation for T13's null ablations and for
+T11b's near-zero variational progress.
+
+**Defect D6.** `bash run_tests.sh` does **not** pass on a clean checkout.
+Re-running the V1 suite in a detached worktree at `cf93ba3` (the last commit
+touching `src/` or `tests/`, well before any V3/V4 work) reproduces an
+identical set of 8 failures:
+
+- 6 × `TypeError: PhysicalMapper.__init__() got an unexpected keyword
+  argument 'beta'` — the tests call a signature that no longer exists.
+- 2 × substantive assertions:
+  `test_coefficients_survive_orszag_tang` ("Orszag-Tang should produce
+  significant C_edges", actual 1.77e-48) and
+  `test_hamiltonian_carries_spatial_info_beyond_score` ("C_edges should be
+  nonzero at velocity boundary", actual 1.79e-42).
+
+The two substantive failures are the V1 author's own guard against exactly
+the failure mode T17 characterises. They have been failing, not passing.
+
+**Defect D7.** The uncertainty window annihilates the family it is meant to
+focus (numbers above). Documented irony: V1 replaced Michelson
+normalisation because it *"kills the signal when the domain is uniformly
+active"*; the uncertainty window reintroduces that failure mode at the score
+level.
+
+Tests: `tests/v4/test_t17_uncertainty_window.py` (9).
