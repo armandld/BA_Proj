@@ -24,3 +24,9 @@ DNS pre-computed: 975 steps, 15 flux snapshots stored.
 
 
 --- Pre-computing DNS traces for held/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (held/kh) ---
+
+  DNS traces ready in 182s
+  [resume] qaoa_kh: 1/4 trials already stored
