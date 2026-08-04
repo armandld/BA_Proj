@@ -8,7 +8,7 @@ traces to `study/v4/RESULTS_V4.md`, `study/v3/RESULTS.md`,
 
 **Reproducibility.** V3: `bash study/v3/run_study_v3.sh --all` → 51/51 OK at
 commit `ca7f815`. V4: `python study/v4/t16_aggregate_v4.py` → self-checking
-master table. Test gate: **154 pytests** (118 v3 + 36 v4).
+master table. Test gate: **188 pytests** (118 v3 + 70 v4).
 
 ---
 
@@ -21,11 +21,11 @@ master table. Test gate: **154 pytests** (118 v3 + 36 v4).
 | V3 L2 open loop (prediction, h ∈ {1,2,4,8}) | same | complete |
 | **V4 T11 quantum attribution** | 4 classes, N=256, 12 snapshots | **complete** |
 | **V4 T11b variational displacement** | 4 classes, N=256 | **complete** |
-| **V4 T13 causal ablation** | 4 classes, N=256, mappers v1 **and** v2 | **complete** |
+| **V4 T13 causal ablation** | 4 classes, N=256, mappers v1 **and** v2 (both artifacts stored) | **complete** |
 | **V4 T12 equivariance** | 4 classes, N=256, dim 2 and 8 | **complete** (one honest negative) |
 | **V4 T14 numerical validation** | grids 64/128/256, Re in and out of grid | **complete** |
 | **V4 T15/T15b Level 3 closed loop** | fold `ot` done; `kh`/`rotor`/`tearing` running | **partial (1/4 folds)** |
-| **V4 T17 uncertainty-window mechanism** | 4 classes × 2 parameter sets, N=64 | **complete** |
+| **V4 T17 uncertainty-window mechanism** | 4 classes × 3 parameter sets, N=64 | **complete** |
 | **V4 T18 window counterfactual** | 4 classes, N=256, both arms controlled | **complete** |
 | Hardware / noise / shots | — | not attempted (audit: premature without positive L3) |
 | ≥ 5 physics seeds | — | not attempted |
@@ -138,28 +138,43 @@ model computes.
 
 With the window neutralised (σ → ∞, V1 untouched), max|C_edges| is
 O(40–140) on **all four** classes — the coupling is healthy before the
-window. Fraction of ZZ coupling mass retained, Σ|C|·w / Σ|C|, at the
-**deployed/trained** parameters (σ = 0.1888, threshold = 0.1496):
+window.
 
-| class | max\|C\| (no window) | max\|C\| (with window) | ZZ mass kept | Spearman(\|C\|, w) |
-|---|---|---|---|---|
-| Kelvin–Helmholtz | 53.9 | 36.7 | **11.4 %** | −0.372 |
-| Harris tearing | 42.3 | 0.0935 | **0.199 %** | −0.502 |
-| MHD rotor | 136.0 | 1.331 | **0.040 %** | −0.460 |
-| Orszag–Tang | 63.6 | 0.6955 | **0.0097 %** | −0.008 † |
+**Two distinct "trained" σ exist and must not be conflated** — they differ
+by 100+ orders of magnitude in effect. `TRAINED_SIGMA` = **0.023** is the
+open-loop pipeline constant used by T11/T13/T18; σ = **0.1888** is Optuna's
+value for the Level-3 fold `ot`, closed loop only.
 
-† degenerate: on OT the window is numerically constant, so the rank
+Fraction of ZZ coupling mass retained, Σ|C|·w / Σ|C|, at the **deployed
+open-loop** setting (σ = 0.023) — the configuration behind the open-loop
+claims:
+
+| class | max\|C\| (no window) | ZZ mass kept | Spearman(\|C\|, w) |
+|---|---|---|---|
+| Kelvin–Helmholtz | 53.9 | **1.3 %** | −0.372 |
+| MHD rotor | 136.0 | **7.7e-28** | −0.400 |
+| Orszag–Tang | 63.6 | **4.2e-125** | −0.012 † |
+| Harris tearing | 42.3 | **3.9e-154** | −0.502 |
+
+At the deployed setting the ZZ family is **numerically dead on three of the
+four classes**, and retains 1.3 % on the fourth.
+
+At the more permissive Level-3 closed-loop setting (σ = 0.1888) the same
+quantity is 11.4 % (KH), 0.199 % (tearing), 0.040 % (rotor), 0.0097 % (OT).
+
+† degenerate: the window is numerically constant there, so the rank
 correlation carries no information; the mass ratio is the meaningful figure.
 
-So the window discards **88.6 % (best class) to 99.99 % (worst class)** of
-the physics-derived ZZ coupling, and it removes it preferentially from the
-cells where it is largest. The ZZ family that actually reaches the QAOA is a
-small, systematically mis-sited remnant — which is precisely why ablating it
-changes no decisions.
+So the window discards between **88.6 %** (best class, most permissive
+setting) and **essentially all** of the physics-derived ZZ coupling, and it
+removes it preferentially from the cells where it is largest. The ZZ family
+that actually reaches the QAOA is a small, systematically mis-sited remnant
+— which is precisely why ablating it changes no decisions.
 
 At the parameters used by the failing V1 tests (σ = 0.05, threshold = 0),
-the same window **underflows to zero**: w_max = 4.2e-50 on OT and 1.0e-19 on
-rotor, i.e. the ZZ family is not merely suppressed but numerically absent.
+the window likewise **underflows to zero**: w_max = 4.2e-50 on OT and
+1.0e-19 on rotor. The failing tests are therefore not testing an exotic
+corner — they sit between the two trained settings.
 
 The irony is documented in V1 itself: the threshold-contrast filter replaced
 Michelson normalisation because Michelson *"kills the signal when the domain

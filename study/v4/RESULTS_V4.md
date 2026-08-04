@@ -516,7 +516,28 @@ gradients produce large `|C|` *and* confident (far-from-threshold) scores.
 obtained by setting σ → 1e9 so that `w ≡ 1`; V1 is never modified. Mass
 kept = Σ|C|·w / Σ|C|, each edge family paired with its own window.
 
-Deployed/trained parameters (σ = 0.1888, threshold = 0.1496):
+**Three parameter sets, not two.** There are two distinct "trained" σ, and
+conflating them changes the numbers by 100+ orders of magnitude:
+`TRAINED_SIGMA` = **0.023** is the open-loop pipeline constant used by
+phase5 and therefore by T11/T13/T18; σ = **0.1888** is what Optuna found for
+the Level-3 fold `ot`, i.e. closed loop only. The deployed set is read from
+the module rather than hard-coded, so it cannot drift from what runs.
+
+Deployed **open-loop** parameters — the configuration behind T11/T13/T18
+(σ = 0.023, threshold = 0.1496). This is the harshest case:
+
+| class | max\|C\| no window | mass kept | Spearman(\|C\|,w) |
+|---|---|---|---|
+| kelvin_helmholtz | 53.92 | 1.319e-02 | −0.372 |
+| mhd_rotor | 136.0 | 7.652e-28 | −0.400 |
+| orszag_tang | 63.59 | 4.187e-125 | −0.012 (degenerate) |
+| harris_tearing | 42.32 | 3.855e-154 | −0.502 |
+
+ZZ is **numerically dead on three of four classes** at the deployed
+open-loop setting, and retains 1.3 % on the fourth.
+
+Level-3 **closed-loop** parameters (σ = 0.1888, threshold = 0.1496) — the
+most permissive setting, and the one governing the T15 folds:
 
 | class | max\|C\| no window | max\|C\| with window | mass kept | Spearman(\|C\|,w) |
 |---|---|---|---|---|

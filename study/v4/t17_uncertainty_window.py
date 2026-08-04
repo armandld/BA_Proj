@@ -59,10 +59,23 @@ from t1_feature_selection import git_commit_hash
 SCENARIOS = ("init_kelvin_helmholtz", "init_orszag_tang",
              "init_mhd_rotor", "init_harris_tearing")
 
-# Jeu 1 : celui des tests V1 qui echouent (sigma par defaut, seuil 0).
-# Jeu 2 : celui reellement entraine et deploye (fold Level-3 `ot`).
+# ATTENTION : il existe DEUX sigma « entraines » distincts, et les
+# confondre fausse la lecture.
+#   - `TRAINED_SIGMA` (= 0.023) est la constante du pipeline ouvert,
+#     utilisee par phase5 et donc par les taches 11, 13 et 18 ;
+#   - sigma = 0.1888 est la valeur trouvee par Optuna pour le fold
+#     Level-3 `ot`, donc propre a la boucle fermee.
+# Les deux sont rapportees separement. La premiere est lue du module pour
+# qu'elle ne puisse pas diverger de ce qui tourne reellement.
+def _deployed_params():
+    import phase5_qaoa_eval as p5
+    return dict(sigma=float(p5.TRAINED_SIGMA),
+                threshold_amr=float(p5.TRAINED_THRESHOLD))
+
+
 PARAM_SETS = {
     "v1_test_default": dict(sigma=0.05, threshold_amr=0.0),
+    "deployed_openloop": _deployed_params(),
     "level3_trained": dict(sigma=0.1888, threshold_amr=0.1496),
 }
 

@@ -207,22 +207,34 @@ def rows_t17(d):
     """Fenetre d'incertitude : fraction de masse ZZ conservee, au jeu de
     parametres REELLEMENT deploye. Les references sont celles publiees
     dans RESULTS_V4.md."""
-    ref = {"kelvin_helmholtz": 1.142e-01, "harris_tearing": 1.990e-03,
-           "mhd_rotor": 3.951e-04, "orszag_tang": 9.679e-05}
+    # Le jeu de parametres est NOMME dans chaque ligne : il existe deux
+    # sigma « entraines » distincts (0.023 en boucle ouverte, 0.1888 pour
+    # le fold Level-3) et les valeurs different de 20 ordres de grandeur.
+    ref = {
+        "level3_trained": {"kelvin_helmholtz": 1.142e-01,
+                           "harris_tearing": 1.990e-03,
+                           "mhd_rotor": 3.951e-04,
+                           "orszag_tang": 9.679e-05},
+        "deployed_openloop": {"kelvin_helmholtz": 1.319e-02,
+                              "harris_tearing": 3.855e-154,
+                              "mhd_rotor": 7.652e-28,
+                              "orszag_tang": 4.187e-125},
+    }
     if d is None:
-        return [make_row("t17", f"ZZ mass kept ({s})", None, None)
-                for s in ref]
+        return [make_row("t17", f"ZZ mass kept ({s}, {p})", None, None)
+                for p, r in ref.items() for s in r]
     scen = np.array([str(x) for x in d["scenario"]])
     par = np.array([str(x) for x in d["params"]])
     out = []
-    for s, r in ref.items():
-        m = (scen == f"init_{s}") & (par == "level3_trained")
-        v = float(np.mean(np.asarray(d["zz_mass_kept"])[m])) if m.any() \
-            else None
-        # tolerance relative : ces valeurs couvrent 4 ordres de grandeur,
-        # une tolerance absolue les declarerait toutes OK
-        out.append(make_row("t17", f"ZZ mass kept ({s})", v, r,
-                            tol=max(1e-6, 0.05 * r)))
+    for pset, refs in ref.items():
+        for s, r in refs.items():
+            m = (scen == f"init_{s}") & (par == pset)
+            v = (float(np.mean(np.asarray(d["zz_mass_kept"])[m]))
+                 if m.any() else None)
+            # tolerance relative : ces valeurs couvrent plus de 150 ordres
+            # de grandeur, une tolerance absolue les declarerait toutes OK
+            out.append(make_row("t17", f"ZZ mass kept ({s}, {pset})", v, r,
+                                tol=abs(0.05 * r)))
     return out
 
 

@@ -87,9 +87,22 @@ def test_sigma_is_floored_rather_than_dividing_by_zero():
 
 
 def test_declared_param_sets_and_scenarios_are_coherent():
-    assert set(PARAM_SETS) == {"v1_test_default", "level3_trained"}
+    assert set(PARAM_SETS) == {"v1_test_default", "deployed_openloop",
+                               "level3_trained"}
     for ps in PARAM_SETS.values():
         assert ps["sigma"] > 0 and ps["threshold_amr"] >= 0
+
+
+def test_deployed_params_are_read_from_the_pipeline_not_hardcoded():
+    """Les deux sigma « entraines » sont distincts (0.023 en boucle
+    ouverte, 0.1888 pour le fold Level-3). Le jeu deploye doit etre LU du
+    module qui tourne, sinon il derive silencieusement."""
+    import phase5_qaoa_eval as p5
+    dep = PARAM_SETS["deployed_openloop"]
+    assert dep["sigma"] == pytest.approx(float(p5.TRAINED_SIGMA))
+    assert dep["threshold_amr"] == pytest.approx(float(p5.TRAINED_THRESHOLD))
+    # et il ne doit pas etre confondu avec celui de la boucle fermee
+    assert dep["sigma"] != PARAM_SETS["level3_trained"]["sigma"]
     # les quatre classes des folds Level-3, sous leurs noms V1 exacts
     assert len(SCENARIOS) == 4
     assert all(s.startswith("init_") for s in SCENARIOS)
