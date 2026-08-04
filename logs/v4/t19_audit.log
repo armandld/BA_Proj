@@ -94,3 +94,17 @@ Hot-Start captured at t=2.0016
 DNS pre-computed: 1136 steps, 14 flux snapshots stored.
 --- DNS pre-computation complete (audit/ot) ---
 
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+
+  fold ot (orszag_tang)
+    qhas       COMPLETED   combined=0.2687  phys=0.1096
+      WARNING: replay 0.268655 != stored 0.332784 — audit unreliable for this arm
+    classical  COMPLETED   combined=0.4386  phys=0.4845
+    -> fold USABLE for the paired statistics
+
+--- Pre-computing DNS traces for audit/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (audit/kh) ---
+
