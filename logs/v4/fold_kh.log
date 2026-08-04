@@ -33,3 +33,7 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
 [WARNING] Violation CFL détéctée : 1.03 > 1.0.
 [WARNING] Violation CFL détéctée : 1.03 > 1.0.
   QAOA tuning: 4 trials, best composite loss 0.2590, 4267s
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
