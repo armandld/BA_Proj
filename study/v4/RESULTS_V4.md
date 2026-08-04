@@ -661,3 +661,56 @@ chain is validated separately for each.
 Tests: `tests/v4/test_t18_window_counterfactual.py` (7), including a
 positive control — the instrument is shown to detect a change when one
 exists, without which "changed = 0" everywhere would prove nothing.
+
+### T18 addendum — an *independent* counterfactual: the V2 mapper
+
+The σ → ∞ neutralisation in T18 is a manipulation of the v1 mapper, so a
+referee may reasonably ask whether the conclusion is an artefact of the
+manipulation. It is not, and the repository already contained the control:
+
+**`PhysicalMapperV2` has no uncertainty window at all.** Its own docstring
+lists what was removed relative to v1: *"Removed: sigma (Gaussian
+uncertainty width) … Removed: f-gate, g-gate, threshold-contrast, Gaussian
+weighting"*. It is parameter-free, using plain domain-normalised ratios.
+
+Its ZZ coupling is consequently healthy — measured at the deployed
+configuration (N=256, dim=2), max|C_edges|:
+
+| class | snap | v2 (no window) | v1 (windowed) |
+|---|---|---|---|
+| orszag_tang | 14 / 29 | 2.455 / 2.613 | 1.33e-189 / 5.65e-145 |
+| kelvin_helmholtz | 14 / 29 | 2.774 / 2.522 | **0.000e+00** / **0.000e+00** |
+| mhd_rotor | 14 / 29 | 2.017 / 2.101 | 1.25e-189 / 2.70e-200 |
+| harris_tearing | 14 | 3.989 | **0.000e+00** |
+
+And the ablations on that mapper (N=256, dim=2, `--n-snaps 3`, 72 rows):
+
+| ablation | changed | uniform GS | refined | F1 | n_optima |
+|---|---|---|---|---|---|
+| full (control) | **0.0000** | 1.000 | 1.000 | 0.389 | 1.0 |
+| no_Z | 1.0000 | 1.000 | 0.000 | 0.000 | 8.0 |
+| **no_ZZ** | **0.0000** | 1.000 | 1.000 | 0.389 | 1.0 |
+| **no_ZZZZ** | **0.0000** | 1.000 | 1.000 | 0.389 | 1.0 |
+
+So the conclusion now rests on **two independent routes**:
+
+1. **v1 with the window neutralised** (T18): coupling restored to O(25–155)
+   → ZZ ablation 0.0000.
+2. **v2, independently designed without a window** (T13, mapper v2):
+   coupling natively O(2–4) → ZZ ablation 0.0000.
+
+The second route involves no manipulation of any kind. The causal inertness
+of the multi-body terms is a property of the formulation at the deployed
+size, not of the v1 implementation and not of the σ → ∞ device.
+
+**Defect D9 (in V4's own code, now fixed).** `t13_term_ablation.py` wrote
+`t13_term_ablation_N{N}_dim{D}.npz` *regardless of `--mapper`*, so running
+the v2 comparison silently overwrote the v1 result — precisely the
+comparison the task exists to make. The filename now carries the mapper;
+the historical name is still written for v1 so published references keep
+resolving. Found by re-deriving the v2 numbers instead of citing them.
+
+**Reproducibility check.** Re-running the published v1 configuration
+(`--n-snaps 3`) reproduces the stored artifact **bit-exactly** across all
+72 rows (`scenario`, `snap`, `ablation`, `changed`, `uniform`, `n_optima`,
+`f1`, `refined`, `dE`).

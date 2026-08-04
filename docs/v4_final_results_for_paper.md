@@ -200,8 +200,22 @@ of non-zero |C|,|K| that sets the Z-bias amplitude
 `alpha_z = w_z_frac × C_scale`; suppressing C rescales the **Z bias**. The
 coupling reaches the decision only as an input to a scale factor.
 
-*Source:* T18, deployed v1 mapper, N=256, dim=2, 8 snapshots, both arms
-controlled (`full` = 0.0000 in each).
+**An independent confirmation, with no manipulation at all.** σ → ∞ is a
+device applied to v1, so the result could be questioned as an artefact of
+the device. It cannot: **`PhysicalMapperV2` has no uncertainty window** — its
+docstring lists *"Removed: sigma (Gaussian uncertainty width) … Removed:
+f-gate, g-gate, threshold-contrast, Gaussian weighting"* — and its ZZ
+coupling is natively healthy, max|C| = **2.0–4.0** at N=256 where v1's is
+0.000e+00. On that mapper the ablations give `no_ZZ` = **0.0000**,
+`no_ZZZZ` = **0.0000**, `no_Z` = 1.0000, control = 0.0000.
+
+Two independent routes, one manipulated and one not, reach the same place.
+The manuscript should cite the v2 route as primary, since it requires no
+intervention.
+
+*Source:* T18 (v1, σ → ∞) and T13 mapper v2, both N=256, dim=2, both arms
+controlled (`full` = 0.0000 in each). The published v1 run reproduces
+**bit-exactly** on re-execution (72/72 rows).
 
 ### Claim E — closed loop: the apparent advantage reverses at equal budget
 
@@ -295,6 +309,7 @@ asymmetry speculation.
 | **D6** | the V1 regression suite does **not** pass on a clean checkout: 8 tests fail at `cf93ba3`, the last commit touching `src/`/`tests/` — before any V3/V4 work | `tests/test_module_validation.py`, `tests/test_v9_metrics.py` | 6 are signature drift (`PhysicalMapper(beta=…)` no longer exists); **2 are substantive** and assert that ZZ coupling survives on Orszag–Tang. `CLAUDE.md`'s premise that `run_tests.sh` "must pass unchanged" was already false. Verified by re-running the suite in a detached worktree at `cf93ba3`: identical 8 failures |
 | **D7** | the Gaussian uncertainty window annihilates the ZZ family it is meant to focus | `HamiltParams.compute_coefficients` | 88.6 %–99.99 % of the physics-derived ZZ coupling mass is discarded, preferentially where the coupling is largest (Spearman −0.37 to −0.50); at the deployed N=256 the family is **identically 0.000e+00** on KH and tearing. This is the **mechanism** behind Claim D (D-bis). Repairing it does **not** restore causal relevance (D-ter), so it weakens the implementation, not the conclusion |
 | **D8** | the ZZ coupling reaches the decision only through a normalisation side-channel | `HamiltParams.compute_coefficients` | `|C|` feeds `C_scale` = median(non-zero \|C\|,\|K\|), which sets the Z-bias amplitude `alpha_z`. Suppressing the coupling therefore rescales the **Z bias** and flips 25.0 % of decisions — while the coupling never acts as a coupling. Any claim that "ZZ terms influence the outcome" is true only in this degenerate sense |
+| **D9** *(V4's own code, fixed)* | `t13_term_ablation.py` wrote the same filename regardless of `--mapper`, so the v2 run silently overwrote the v1 result | `study/v4/t13_term_ablation.py` | the v1/v2 comparison is the point of the task, and the artifact could not hold both. Filename now carries the mapper; the historical name is still written for v1. Found by re-deriving the v2 numbers rather than citing them from the earlier session |
 
 D6 and D7 were found by running the V1 suite rather than assuming it green;
 D7's substance came from taking its two failing physics assertions

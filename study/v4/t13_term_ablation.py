@@ -166,8 +166,14 @@ def main():
           "the deployed\n  decision at this grid size, whatever its "
           "magnitude in the cost function.")
 
-    out = os.path.join(RESULTS_DIR,
-                       f"t13_term_ablation_N{args.N}_dim{args.dim}.npz")
+    # Le nom porte le mappeur : sans lui, relancer la tache avec l'autre
+    # mappeur ECRASAIT silencieusement le resultat precedent, alors que la
+    # comparaison v1/v2 est justement l'un des points de la tache. Le nom
+    # historique (sans suffixe) reste ecrit pour v1 afin de ne pas casser
+    # les references deja publiees.
+    out = os.path.join(
+        RESULTS_DIR,
+        f"t13_term_ablation_N{args.N}_dim{args.dim}_{args.mapper}.npz")
     np.savez_compressed(
         out,
         scenario=np.array([r["scenario"] for r in rows]),
@@ -184,6 +190,13 @@ def main():
         cli_args=json.dumps(vars(args)),
     )
     print(f"\n  saved: {os.path.basename(out)}")
+    if args.mapper == "v1":
+        # compatibilite : le nom historique designe le mappeur deploye
+        legacy = os.path.join(
+            RESULTS_DIR, f"t13_term_ablation_N{args.N}_dim{args.dim}.npz")
+        import shutil
+        shutil.copyfile(out, legacy)
+        print(f"  also written as: {os.path.basename(legacy)} (legacy name)")
     print("\nV4 Task 13 complete.")
 
 
