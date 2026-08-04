@@ -20,9 +20,10 @@ python study/v4/t16_aggregate_v4.py                                # 71 rows, 0 
 
 All four held: `src/` 0 files changed, V2 phases 0 files changed,
 **196 pytests passed**, master table **71/71 OK, 0 DIFF, 0 MISSING**
-(all four Level-3 folds are now present, so nothing is outstanding in it). Nothing outside `study/v3/`, `study/v4/`,
-`tests/v3/`, `tests/v4/`, `docs/`, `figures_v4/`, `logs/v4/`, `CLAUDE.md`
-was modified.
+(all four Level-3 folds are now present, so nothing is outstanding in it).
+
+Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
+`figures_v4/`, `logs/v4/`, `CLAUDE.md` was modified.
 
 **`bash run_tests.sh` fails 8 tests — do not treat this as a regression.**
 It is defect D6, pre-existing, reproduced at `cf93ba3` (the last commit
