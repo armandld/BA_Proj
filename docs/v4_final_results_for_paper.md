@@ -25,6 +25,8 @@ master table. Test gate: **154 pytests** (118 v3 + 36 v4).
 | **V4 T12 equivariance** | 4 classes, N=256, dim 2 and 8 | **complete** (one honest negative) |
 | **V4 T14 numerical validation** | grids 64/128/256, Re in and out of grid | **complete** |
 | **V4 T15/T15b Level 3 closed loop** | fold `ot` done; `kh`/`rotor`/`tearing` running | **partial (1/4 folds)** |
+| **V4 T17 uncertainty-window mechanism** | 4 classes × 2 parameter sets, N=64 | **complete** |
+| **V4 T18 window counterfactual** | 4 classes, N=256, both arms controlled | **complete** |
 | Hardware / noise / shots | — | not attempted (audit: premature without positive L3) |
 | ≥ 5 physics seeds | — | not attempted |
 

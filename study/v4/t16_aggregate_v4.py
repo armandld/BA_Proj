@@ -203,6 +203,63 @@ def rows_level3(results_dir, folds, prefix="t15_level3"):
     return out
 
 
+def rows_t17(d):
+    """Fenetre d'incertitude : fraction de masse ZZ conservee, au jeu de
+    parametres REELLEMENT deploye. Les references sont celles publiees
+    dans RESULTS_V4.md."""
+    ref = {"kelvin_helmholtz": 1.142e-01, "harris_tearing": 1.990e-03,
+           "mhd_rotor": 3.951e-04, "orszag_tang": 9.679e-05}
+    if d is None:
+        return [make_row("t17", f"ZZ mass kept ({s})", None, None)
+                for s in ref]
+    scen = np.array([str(x) for x in d["scenario"]])
+    par = np.array([str(x) for x in d["params"]])
+    out = []
+    for s, r in ref.items():
+        m = (scen == f"init_{s}") & (par == "level3_trained")
+        v = float(np.mean(np.asarray(d["zz_mass_kept"])[m])) if m.any() \
+            else None
+        # tolerance relative : ces valeurs couvrent 4 ordres de grandeur,
+        # une tolerance absolue les declarerait toutes OK
+        out.append(make_row("t17", f"ZZ mass kept ({s})", v, r,
+                            tol=max(1e-6, 0.05 * r)))
+    return out
+
+
+def rows_t18(d):
+    """Contrefactuel : l'ablation ZZ doit rester nulle DANS LES DEUX BRAS,
+    et le controle `full` doit etre nul dans chacun."""
+    metrics = ["no_ZZ changed (windowed)", "no_ZZ changed (no window)",
+               "no_ZZZZ changed (no window)", "control full (windowed)",
+               "control full (no window)", "window's own effect"]
+    if d is None:
+        return [make_row("t18", m, None, None) for m in metrics]
+    arm = np.array([str(x) for x in d["arm"]])
+    abl = np.array([str(x) for x in d["ablation"]])
+    ch = np.asarray(d["changed"], dtype=float)
+
+    def mean_of(a, b):
+        m = (arm == a) & (abl == b)
+        return float(np.mean(ch[m])) if m.any() else None
+
+    out = [
+        make_row("t18", "no_ZZ changed (windowed)",
+                 mean_of("windowed", "no_ZZ"), 0.0),
+        make_row("t18", "no_ZZ changed (no window)",
+                 mean_of("no_window", "no_ZZ"), 0.0),
+        make_row("t18", "no_ZZZZ changed (no window)",
+                 mean_of("no_window", "no_ZZZZ"), 0.0),
+        make_row("t18", "control full (windowed)",
+                 mean_of("windowed", "full"), 0.0),
+        make_row("t18", "control full (no window)",
+                 mean_of("no_window", "full"), 0.0),
+    ]
+    if "cross_changed" in d:
+        out.append(make_row("t18", "window's own effect",
+                            float(np.mean(d["cross_changed"])), 0.25))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -265,6 +322,10 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
         results_dir, "t14_numerical_validation.npz")))
     rows += rows_level3(results_dir, folds)
     rows += rows_t15c(results_dir, folds)
+    rows += rows_t17(load_npz(os.path.join(
+        results_dir, "t17_uncertainty_window.npz")))
+    rows += rows_t18(load_npz(os.path.join(
+        results_dir, f"t18_window_counterfactual_N{N}_dim{dim}.npz")))
     return rows
 
 
