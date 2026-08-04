@@ -575,3 +575,89 @@ active"*; the uncertainty window reintroduces that failure mode at the score
 level.
 
 Tests: `tests/v4/test_t17_uncertainty_window.py` (9).
+
+---
+
+## T18 — counterfactual: are the ZZ terms inert *without* the window?
+
+```
+python study/v4/t18_window_counterfactual.py --N 256 --dim 2 --n-snaps 2
+```
+runtime ≈ 2 s (reuses the stored DNS/patch inputs) · deployed v1 mapper
+
+**Why this task exists.** T17 shows the uncertainty window discards most of
+the ZZ coupling. That immediately raises the question a referee will ask,
+and the answer decides how far the paper's conclusion reaches:
+
+> is the causal inertness of ZZ a property of the **Ising formulation**, or
+> an artefact of **this implementation**?
+
+If the window were solely responsible, the defect would be a repairable
+engineering bug and the critique would not touch the approach.
+
+**Protocol.** Two Hamiltonians per snapshot, same physics, same deployed v1
+mapper: `windowed` (the pipeline as it runs) and `no_window` (σ → 1e9, so
+w ≡ 1). Neutralisation is done by substituting the module constant used to
+*construct* the mapper and restoring it in a `finally`; V1 is never
+modified, and the substitution is asserted, not assumed (|C| without the
+window must dominate |C| with it). The T13 ablations are then replayed on
+each arm — `zero_hamiltonian_terms` and `ground_state_mask` are imported,
+never redefined.
+
+**Coupling amplitude at the deployed configuration** (N=256, dim=2). Note
+these are *more* extreme than the N=64 figures in T17: at VQA resolution the
+patch-averaged fields are smoother, so the score sits even further from the
+threshold.
+
+| class | snap | max\|C\| windowed | max\|C\| no window |
+|---|---|---|---|---|
+| orszag_tang | 14 | 1.33e-189 | 137.5 |
+| orszag_tang | 29 | 5.65e-145 | 154.5 |
+| harris_tearing | 10, 19 | **0.000e+00** | 24.89 |
+| kelvin_helmholtz | 14 | **0.000e+00** | 124.2 |
+| kelvin_helmholtz | 29 | **0.000e+00** | 77.32 |
+| mhd_rotor | 14 | 1.25e-189 | 117.2 |
+| mhd_rotor | 29 | 2.70e-200 | 143.9 |
+
+At the deployed size the ZZ family is **identically zero in double
+precision** on Kelvin–Helmholtz and Harris tearing, and at 1e-145 or below
+on the others.
+
+**Ablations, both arms:**
+
+| arm | ablation | changed | uniform GS | refined | F1 | n_optima |
+|---|---|---|---|---|---|---|
+| windowed | full (control) | **0.0000** | 1.000 | 0.750 | 0.250 | 64.8 |
+| windowed | no_Z | 0.7500 | 1.000 | 0.000 | 0.000 | 88.0 |
+| windowed | no_ZZ | **0.0000** | 1.000 | 0.750 | 0.250 | 64.8 |
+| windowed | no_ZZZZ | **0.0000** | 1.000 | 0.750 | 0.250 | 64.8 |
+| no_window | full (control) | **0.0000** | 1.000 | 1.000 | 0.250 | 1.0 |
+| no_window | no_Z | 1.0000 | 1.000 | 0.000 | 0.000 | 22.0 |
+| no_window | **no_ZZ** | **0.0000** | 1.000 | 1.000 | 0.250 | 1.0 |
+| no_window | **no_ZZZZ** | **0.0000** | 1.000 | 1.000 | 0.250 | 1.0 |
+
+**Result.** With the coupling restored from numerically zero to O(25–155),
+ablating ZZ *still* changes **0.0000** decisions; likewise ZZZZ. The
+inertness is therefore **not** an artefact of the uncertainty window. It is
+a property of the formulation at the deployed size: the Z bias alone fixes
+the ground state, and the multi-body terms cannot move it.
+
+This is the stronger result for the paper — it forecloses the "your
+implementation was simply buggy" rebuttal. The window is a real defect
+(D7), but repairing it would not make the coupling terms matter.
+
+**A separate, subtler finding.** The window does change decisions —
+**25.0 %** of them (full Hamiltonian, windowed vs neutralised) — but *not*
+by acting as coupling. |C| feeds `C_scale`, the median of non-zero |C| and
+|K| that sets the Z-bias amplitude `alpha_z = w_z_frac × C_scale`.
+Suppressing C therefore rescales the **Z bias**, and the decision moves
+through that normalisation side-channel. The coupling influences the outcome
+only as an input to a scale factor — never as a coupling. Between the arms
+the ground state also goes from 64.8-fold degenerate to unique.
+
+Note the control (`full` = 0.0000) holds in both arms, so the measurement
+chain is validated separately for each.
+
+Tests: `tests/v4/test_t18_window_counterfactual.py` (7), including a
+positive control — the instrument is shown to detect a change when one
+exists, without which "changed = 0" everywhere would prove nothing.

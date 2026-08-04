@@ -166,6 +166,41 @@ failure mode one level up — at the score rather than the field.
 
 *Source:* T17, N=64, 30 steps, four classes × two parameter sets.
 
+#### D-ter — the counterfactual: repairing the window would **not** rescue ZZ
+
+D-bis invites an obvious rebuttal: *"your ZZ terms are inert because your
+pipeline destroys them — fix the window and the Ising formulation works."*
+T18 tests exactly that, and the rebuttal fails.
+
+Two Hamiltonians per snapshot, same physics and same deployed v1 mapper:
+`windowed` (as it runs) and `no_window` (σ → 1e9, w ≡ 1; V1 untouched, the
+substitution asserted rather than assumed). At the deployed configuration
+(N=256, dim=2) the windowed coupling is **identically 0.000e+00** on
+Kelvin–Helmholtz and Harris tearing and ≤ 1e-145 elsewhere; neutralising the
+window restores it to **O(25–155)**.
+
+| arm | no_ZZ | no_ZZZZ | full (control) |
+|---|---|---|---|
+| windowed | 0.0000 | 0.0000 | 0.0000 |
+| **no_window** | **0.0000** | **0.0000** | 0.0000 |
+
+With the coupling restored from numerically zero to O(100), ablating ZZ
+still changes **no decision**. The inertness is therefore **a property of
+the formulation at the deployed size, not an artefact of the window**: the Z
+bias alone fixes the ground state and the multi-body terms cannot move it.
+
+This is the stronger claim, and it is the one to make in the manuscript: the
+critique survives a full repair of the implementation defect.
+
+One subtlety worth a sentence in the paper: the window *does* flip **25.0 %**
+of decisions, but not by acting as coupling. |C| feeds `C_scale`, the median
+of non-zero |C|,|K| that sets the Z-bias amplitude
+`alpha_z = w_z_frac × C_scale`; suppressing C rescales the **Z bias**. The
+coupling reaches the decision only as an input to a scale factor.
+
+*Source:* T18, deployed v1 mapper, N=256, dim=2, 8 snapshots, both arms
+controlled (`full` = 0.0000 in each).
+
 ### Claim E — closed loop: the apparent advantage reverses at equal budget
 
 Fold `ot`, Orszag–Tang excluded from **all** tuning of both arms:
@@ -256,7 +291,8 @@ asymmetry speculation.
 | **D4** | QAOA arm's `threshold_amr` hard-coded at 0.1496 while the classical arm's is tuned freely | `make_composite_objective` vs `make_classical_composite_objective` | the two arms are compared at different operating points — affects the V1 closed-loop numbers, not only Level 3 (see Claim E) |
 | **D5** | RK4 then projection = first-order Lie splitting | `solver.py::step_full` | scheme converges at order 1 despite 4th-order components (Claim F) |
 | **D6** | the V1 regression suite does **not** pass on a clean checkout: 8 tests fail at `cf93ba3`, the last commit touching `src/`/`tests/` — before any V3/V4 work | `tests/test_module_validation.py`, `tests/test_v9_metrics.py` | 6 are signature drift (`PhysicalMapper(beta=…)` no longer exists); **2 are substantive** and assert that ZZ coupling survives on Orszag–Tang. `CLAUDE.md`'s premise that `run_tests.sh` "must pass unchanged" was already false. Verified by re-running the suite in a detached worktree at `cf93ba3`: identical 8 failures |
-| **D7** | the Gaussian uncertainty window annihilates the ZZ family it is meant to focus | `HamiltParams.compute_coefficients` | 88.6 %–99.99 % of the physics-derived ZZ coupling mass is discarded, preferentially where the coupling is largest (Spearman −0.37 to −0.50); underflows to 4e-50 at the tests' parameters. This is the **mechanism** behind Claim D and it undercuts the Ising formulation's rationale (see D-bis) |
+| **D7** | the Gaussian uncertainty window annihilates the ZZ family it is meant to focus | `HamiltParams.compute_coefficients` | 88.6 %–99.99 % of the physics-derived ZZ coupling mass is discarded, preferentially where the coupling is largest (Spearman −0.37 to −0.50); at the deployed N=256 the family is **identically 0.000e+00** on KH and tearing. This is the **mechanism** behind Claim D (D-bis). Repairing it does **not** restore causal relevance (D-ter), so it weakens the implementation, not the conclusion |
+| **D8** | the ZZ coupling reaches the decision only through a normalisation side-channel | `HamiltParams.compute_coefficients` | `|C|` feeds `C_scale` = median(non-zero \|C\|,\|K\|), which sets the Z-bias amplitude `alpha_z`. Suppressing the coupling therefore rescales the **Z bias** and flips 25.0 % of decisions — while the coupling never acts as a coupling. Any claim that "ZZ terms influence the outcome" is true only in this degenerate sense |
 
 D6 and D7 were found by running the V1 suite rather than assuming it green;
 D7's substance came from taking its two failing physics assertions
