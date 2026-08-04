@@ -100,3 +100,10 @@ Hot-Start captured at t=0.2009
 DNS pre-computed: 975 steps, 15 flux snapshots stored.
 --- DNS pre-computation complete (held/rotor) ---
 
+    thr=0.0500 -> patch=0.4096 phys=0.0339 (target patch 0.3761)
+[WARNING] Violation CFL détéctée : 1.12 > 1.0.
+[WARNING] Violation CFL détéctée : 1.12 > 1.0.
+    thr=0.8000 -> patch=0.1523 phys=0.7690 (target patch 0.3761)
+[WARNING] Violation CFL détéctée : 1.23 > 1.0.
+[WARNING] Violation CFL détéctée : 1.23 > 1.0.
+    thr=0.4250 -> patch=0.2544 phys=0.6666 (target patch 0.3761)

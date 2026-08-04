@@ -89,28 +89,34 @@ def draw_panel(ax, front, q, fold):
             markeredgecolor=SURFACE, markeredgewidth=1.6, zorder=5,
             label="Q-HAS (closed loop, held-out class)")
 
-    # etiquette directe : l'identite du point n'est jamais portee par la
-    # seule couleur, meme quand la legende existe
-    ax.annotate("Q-HAS", xy=(q["patch"], q["phys"]),
-                xytext=(0, 11), textcoords="offset points", ha="center",
-                color=INK_PRIMARY, fontsize=8.5, weight="bold")
+    # Les deux etiquettes sont EMPILEES AU-DESSUS du marqueur, en unites de
+    # points. Ancrer le rapport au milieu de l'ecart semblait naturel, mais
+    # cet ecart peut etre minuscule en unites d'axe : sur Kelvin-Helmholtz
+    # la frontiere est plate vers 0.002 et le texte tombait dessus. Q-HAS
+    # etant toujours AU-DESSUS de la frontiere (c'est la lecture meme de la
+    # figure), le demi-plan superieur est le seul degage a coup sur.
+    # L'etiquette directe reste obligatoire : l'identite d'un point n'est
+    # jamais portee par la seule couleur.
     if np.isfinite(ratio):
-        # l'etiquette reste a DROITE tant qu'elle tient (elle y evite la
-        # frontiere, encore pentue aux budgets moyens) et ne bascule a
-        # gauche que lorsqu'elle deborderait du panneau : a 8 pt elle
-        # occupe ~0.27 unite d'axe, et l'axe s'arrete a 1.03
-        right = q["patch"] <= 0.70
         ax.annotate(f"{ratio:.1f}× worse\nat equal budget",
-                    xy=(q["patch"], 0.5 * (q_ref + q["phys"])),
-                    xytext=(8 if right else -8, 0),
-                    textcoords="offset points",
-                    ha="left" if right else "right",
-                    color=INK_SECONDARY, fontsize=8, va="center")
+                    xy=(q["patch"], q["phys"]),
+                    xytext=(0, 8), textcoords="offset points",
+                    ha="center", va="bottom",
+                    color=INK_SECONDARY, fontsize=8)
+        y_lab = 34          # au-dessus des deux lignes du rapport
+    else:
+        y_lab = 11
+    ax.annotate("Q-HAS", xy=(q["patch"], q["phys"]),
+                xytext=(0, y_lab), textcoords="offset points", ha="center",
+                color=INK_PRIMARY, fontsize=8.5, weight="bold")
 
     ax.set_title(FOLD_TITLES.get(fold, fold), color=INK_PRIMARY,
                  fontsize=10, weight="bold", loc="left", pad=6)
     ax.set_xlim(-0.03, 1.03)
-    y_top = max(max(ys), q["phys"]) * 1.20
+    # marge haute : les deux etiquettes empilees occupent ~40 pt
+    # au-dessus du marqueur, il faut donc de la place meme quand
+    # Q-HAS est le point le plus haut du panneau
+    y_top = max(max(ys), q["phys"] * 1.55) * 1.12
     ax.set_ylim(0.0, y_top)   # une erreur relative negative n'existe pas
     return q_ref, ratio
 
@@ -141,8 +147,13 @@ def build_panel(records, out_dir, ncols=2):
     bot_in, left_in, right_in = 0.92, 0.72, 0.18
     W = max(3.5 * ncols + left_in + right_in, 6.9)
 
-    title = ("Q-HAS lies above the classical error–cost frontier on every "
-             "held-out class")
+    # Le titre porte la PORTEE reelle : tant que les quatre folds ne sont
+    # pas tous mesures, « every held-out class » affirmerait plus que ce
+    # que la planche montre.
+    n_total = len(FOLD_TITLES)
+    scope = ("on every held-out class" if n == n_total
+             else f"on each held-out class measured ({n} of {n_total})")
+    title = f"Q-HAS lies above the classical error\u2013cost frontier {scope}"
     note = ("Per-panel error axes are independent: instability classes "
             "differ in dynamic range, and a shared axis would imply a "
             "cross-class comparability that does not hold. The annotated "

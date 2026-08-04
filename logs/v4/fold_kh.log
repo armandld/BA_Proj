@@ -121,3 +121,17 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
     thr=0.4250 -> patch=0.6250 phys=0.0020 (target patch 0.8376)
     thr=0.2375 -> patch=0.7009 phys=0.0019 (target patch 0.8376)
     thr=0.1438 -> patch=0.9505 phys=0.0014 (target patch 0.8376)
+    thr=0.1906 -> patch=0.7943 phys=0.0017 (target patch 0.8376)
+
+  ====================================================================================
+  budget-matched classical: thr=0.1906  patch=0.7943  phys=0.0017
+  Q-HAS                   : patch=0.8376  phys=0.0070
+  delta phys at matched budget = +0.0053 (negative favours Q-HAS)
+  budget mismatch remaining    = -0.0434
+
+  READING: at equal compute the classical arm recovers the fidelity; the Level-3 gap was a move along the error-cost frontier, not a better decision rule.
+
+  saved: t15b_budget_matched_kh.json
+
+V4 Task 15b complete.
+=== [kh] COMPLETE 20:08:44 ===
