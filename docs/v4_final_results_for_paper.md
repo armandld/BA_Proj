@@ -357,9 +357,27 @@ seriously instead of dismissing them as stale tests.
    audit said was missing, and it **predicts** every V1 observation
    (0.66 %, 109 flips with 45 right / 64 wrong, mask asymmetry, classical
    winning on L2) without invoking any quantum effect.
-5. **NEW — closed loop, budget-matched** (Claim E, n = 1 fold) — the
+5. **NEW — and it is not a bug we could fix** (D-bis, D-ter). The pipeline
+   does discard almost all of its own coupling, via a Gaussian window whose
+   support is anti-correlated with the coupling's (D-bis) — but restoring
+   the coupling to full strength changes **no decision**, and the
+   window-free V2 mapper, whose coupling is natively healthy, is **equally
+   inert** (D-ter). The inertness is a property of the formulation at the
+   deployed size, not of the implementation.
+6. **NEW — closed loop, budget-matched** (Claim E, n = 1 fold) — the
    apparent advantage reverses; Q-HAS is Pareto-dominated.
-6. **NEW — methods corrections** (Claims F–G, defect register).
+7. **NEW — methods corrections** (Claims F–G, defect register D1–D10).
+
+**Rebuttals this forecloses.** Worth stating explicitly, because each is the
+natural first objection and each already has its control:
+
+| objection | answer |
+|---|---|
+| "your couplings are inert because your window destroys them" | D-ter: with the window neutralised (coupling O(25–155)) ablation still changes 0.0000 decisions |
+| "the σ → ∞ trick is an artefact of your manipulation" | the V2 mapper has **no window by construction**, coupling natively O(2–4), and is equally inert — no manipulation involved |
+| "you only tested the broken v1 mapper" | both mappers, both with stored artifacts (D9 fixed the collision that previously prevented this) |
+| "the null could be a measurement-chain failure" | the `full` control returns exactly 0.0000 in every arm, and T18's tests include a positive control showing the instrument detects real changes |
+| "the solver's low order explains the result" | Claim F is reported independently; the ablations are decisions on identical fields, unaffected by time-integration order |
 
 **Recommended framing.** Not "the bottleneck is the transfer of learned
 coefficient selection" (the current text) but: *at the deployed size there
@@ -371,9 +389,17 @@ is the rigorous account of why this construction does not do what it
 appears to do.
 
 **Sections to rewrite:** the topological attribution (causal reading falls,
-Claim D); the solver description (order 1, Claim F); the asymmetry
-discussion (degeneracy, not equivariance, Claim G); the conclusion
-(mechanism instead of "bottleneck = transfer").
+Claim D); **the stated rationale for the Ising formulation** — the
+multi-body coupling is the reason to reach for an Ising model at all, and
+at the deployed size it does no work (D-bis, D-ter), so the motivation
+paragraph cannot stand as written; the solver description (order 1,
+Claim F); the asymmetry discussion (degeneracy, not equivariance, Claim G);
+the conclusion (mechanism instead of "bottleneck = transfer").
+
+**One attribution to verify on the `.tex` side:** if any rotor
+budget-comparison number is credited to `src/compare_rotor_budget.py`, that
+credit is wrong — the script raises `TypeError` at construction and, as
+committed, has never been runnable in this repository (D10).
 
 ---
 
@@ -386,20 +412,31 @@ discussion (degeneracy, not equivariance, Claim G); the conclusion
 | Full Task-6 dynamic ground-truth campaign | ≈ 4.6 h | would let Level 2 use `d_i` targets |
 | Hardware / noise / shots | — | audit: premature without a positive L3 |
 
-Commands (resumable; the tuning checkpoint survives interruption):
+Commands (resumable per Optuna **trial**, not just per fold — the campaign
+survived five container reclamations this way):
 
 ```
+# one fold per core, BLAS pinned to one thread each
 for f in kh rotor tearing; do
-  python study/v4/t15_level3_closed_loop.py --folds $f --n-trials 4 --n-trials-classical 2
-  python study/v4/t15b_budget_matched.py --fold $f --max-iter 4
+  nohup bash study/v4/run_fold.sh "$f" > logs/v4/fold_$f.log 2>&1 &
 done
+
+python study/v4/level3_status.py             # read-only progress probe
 python study/v4/t16_aggregate_v4.py          # master table, self-checking
-python study/v4/make_pareto_figure.py --fold kh   # one figure per fold
+python study/v4/t15c_fold_synthesis.py       # cross-fold, pre-registered rules
+python study/v4/make_pareto_panel.py         # all folds, one figure
+python study/v4/make_pareto_figure.py --fold kh   # or one figure per fold
 ```
 
-**Verdict on sufficiency.** Claims A–D and F–G are finished science: they are
-deterministic, exactly reproducible, cover all four scenarios at production
-resolution, and are covered by the test gate. They alone support the
+Re-running a killed fold resumes from the last persisted trial with no
+recomputation; `level3_status.py` opens the Optuna store read-only, so it is
+safe to call while the folds run.
+
+**Verdict on sufficiency.** Claims A–D (with D-bis/D-ter) and F–G are
+finished science: they are deterministic, exactly reproducible, cover all
+four scenarios at production resolution, and are covered by the test gate.
+D-ter in particular closes the last escape route — the result is not
+contingent on the implementation defect it uncovered. They alone support the
 mechanistic falsification narrative. Claim E is the only one at n = 1; it is
 strengthened by comparing against a frontier rather than a point, and by the
 mechanism in A–D which predicts it. The paper can be written now, with
