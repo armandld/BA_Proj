@@ -326,6 +326,8 @@ asymmetry speculation.
 | **D8** | the ZZ coupling reaches the decision only through a normalisation side-channel | `HamiltParams.compute_coefficients` | `|C|` feeds `C_scale` = median(non-zero \|C\|,\|K\|), which sets the Z-bias amplitude `alpha_z`. Suppressing the coupling therefore rescales the **Z bias** and flips 25.0 % of decisions — while the coupling never acts as a coupling. Any claim that "ZZ terms influence the outcome" is true only in this degenerate sense |
 | **D9** *(V4's own code, fixed)* | `t13_term_ablation.py` wrote the same filename regardless of `--mapper`, so the v2 run silently overwrote the v1 result | `study/v4/t13_term_ablation.py` | the v1/v2 comparison is the point of the task, and the artifact could not hold both. Filename now carries the mapper; the historical name is still written for v1. Found by re-deriving the v2 numbers rather than citing them from the earlier session |
 | **D10** | `src/compare_rotor_budget.py` cannot run: it constructs `PhysicalMapper(..., beta=0.5, ...)`, a keyword removed from the signature | `src/compare_rotor_budget.py:110` | raises `TypeError` at construction. Both this file and `HamiltParams.py` were last touched in `cf93ba3` and are unchanged since, and the repository has full history (57 commits) — so **as committed, this script has never been runnable here**. If any rotor budget-comparison number in the manuscript is attributed to it, that attribution must be checked |
+| **D11** | the Q-HAS arm is **not deterministic**: no RNG seed anywhere in V1's VQA chain (`AerSimulator` without `seed_simulator`; `Estimator`/`Sampler` at 256 shots) | `src/VQA/execute.py`, `runtime.py` | replaying fold `ot` with identical inputs gives phys **0.1345 vs 0.1940** stored (44 % swing), while the classical arm reproduces bit-exactly. Every Level-3 Q-HAS number — and **V1's own published closed-loop numbers** — is a single unreplicated draw. `--seed` cannot fix it: the randomness is inside V1 |
+| **D12** | `pipeline` aborts on divergence and returns a **partial score with identical keys** to a completed run | `src/pipeline.py:499` | a crashed arm is indistinguishable from a finished one in the stored output, so a diverged *classical* arm reads as a Q-HAS victory. Fold `rotor` hit exactly this (classical aborted at step 208, t=0.2739, reported phys 1.1731). Detection added in T19; pre-registration §5 required the exclusion but nothing implemented it |
 
 **Scope of the signature drift — the reassuring half.** The drift does *not*
 touch the production path. `src/pipeline.py` and every study entry point
@@ -364,8 +366,11 @@ seriously instead of dismissing them as stale tests.
    window-free V2 mapper, whose coupling is natively healthy, is **equally
    inert** (D-ter). The inertness is a property of the formulation at the
    deployed size, not of the implementation.
-6. **NEW — closed loop, budget-matched** (Claim E, n = 1 fold) — the
-   apparent advantage reverses; Q-HAS is Pareto-dominated.
+6. **NEW — closed loop, budget-matched** (Claim E) — the apparent
+   advantage reverses; Q-HAS is Pareto-dominated. **State this with its
+   two controls attached** (D11, D12): the Q-HAS arm is unseeded and
+   varies run to run, and a diverged arm is invisible in the stored
+   output. The direction survives both; the magnitudes carry the spread.
 7. **NEW — methods corrections** (Claims F–G, defect register D1–D10).
 
 **Rebuttals this forecloses.** Worth stating explicitly, because each is the

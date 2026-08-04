@@ -820,3 +820,58 @@ The honest summary at this point: on the two folds measured, Q-HAS is
 Pareto-dominated on both — on `ot` only after correcting the operating-point
 asymmetry, on `kh` outright. The *primary* pre-registered endpoint remains
 undecided by its own counting rule until 3 or 4 folds are in.
+
+---
+
+## T19/T20 — the Q-HAS arm is not deterministic (defect D11)
+
+The T19 audit replays each Level-3 arm with **identical** inputs (same DNS
+trace, same hot start, same hyperparameters) and checks it reproduces the
+stored value. Fold `ot`:
+
+| arm | stored `combined` | replayed `combined` | stored phys | replayed phys |
+|---|---|---|---|---|
+| classical | 0.4386 | **0.4386** (exact) | 0.4845 | 0.4845 |
+| **Q-HAS** | 0.3328 | **0.3108** | 0.1940 | **0.1345** |
+
+The classical arm reproducing bit-exactly proves the trace, hot start and
+configuration are identical — so the variance is specific to the QAOA path.
+A 44 % swing in `phys_score` between two runs of the same configuration.
+
+**Cause.** No RNG seed is fixed anywhere in V1's VQA chain: `AerSimulator`
+is built without `seed_simulator`, and both `Estimator` and `Sampler` run at
+`default_shots = 256` (`create_argus`: `shots=256`, `backend="state_vector"`,
+`method="COBYLA"`). The Q-HAS arm is therefore doubly stochastic:
+
+1. the objective COBYLA minimises is a 256-shot estimate, so the optimiser
+   follows a different trajectory each run;
+2. the final marginal read-out is itself a 256-shot draw.
+
+The classical arm samples nothing, hence its exact reproducibility — which
+is what makes it a valid control rather than a coincidence.
+
+**Consequence.** Every published Level-3 Q-HAS number is **one draw** from a
+distribution whose spread has never been measured. `--seed` cannot fix this:
+the randomness is inside V1's unseeded Aer backend, and seeding it would
+require modifying V1.
+
+**Scope of the damage — what still holds.** On fold `ot` the two observed
+Q-HAS draws are phys ∈ {0.1345, 0.1940}; the budget-matched classical arm
+achieves **0.0827**. Both draws are worse, so the *direction* (Q-HAS
+Pareto-dominated) survives, while the *magnitude* (quoted as 2.3×) is
+uncertain over roughly 1.6×–2.3×. The same caution applies to `kh`
+(Q-HAS 0.0070 vs matched classical 0.0017).
+
+**T20** quantifies the spread directly: K repeats of the Q-HAS arm on one
+fold with identical inputs, plus classical repeats as a determinism control,
+and reports the between-arm gap divided by the Q-HAS run-to-run standard
+deviation. A gap smaller than ~2 standard deviations means a single run per
+arm cannot support a directional claim on that fold.
+
+```
+python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
+```
+
+**This is the strongest methodological caveat in the V4 set, and it applies
+to V1's own published closed-loop numbers too** — those were also single
+runs of the same unseeded pipeline.
