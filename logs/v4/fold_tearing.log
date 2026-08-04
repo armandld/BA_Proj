@@ -29,3 +29,5 @@ DNS pre-computed: 123 steps, 11 flux snapshots stored.
 --- DNS pre-computation complete (held/tearing) ---
 
   DNS traces ready in 187s
+[WARNING] Violation CFL détéctée : 1.15 > 1.0.
+[WARNING] Violation CFL détéctée : 1.15 > 1.0.
