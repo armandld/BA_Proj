@@ -29,3 +29,4 @@ DNS pre-computed: 975 steps, 15 flux snapshots stored.
 --- DNS pre-computation complete (held/rotor) ---
 
   DNS traces ready in 189s
+  QAOA tuning: 4 trials, best composite loss 0.2341, 5957s
