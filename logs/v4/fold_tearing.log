@@ -70,3 +70,8 @@ DNS pre-computed: 123 steps, 11 flux snapshots stored.
 [WARNING] Violation CFL détéctée : 1.01 > 1.0.
 [WARNING] Violation CFL détéctée : 1.03 > 1.0.
 [WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+  classical tuning: best loss 0.3835, params {'threshold_amr': 0.46161012794549355}, 871s
+  tuning checkpoint saved -> t15_level3_tuning_tearing.json
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 6.636, 'w_z_frac': 5.6279, 'sigma': 0.2697, 'beta_curl': 4.8183, 'beta_xpoint': 1.9172, 'threshold_amr': 0.1496}
