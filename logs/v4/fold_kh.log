@@ -42,3 +42,33 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
   classical tuning: best loss 0.3841, params {'threshold_amr': 0.46161012794549355}, 615s
   tuning checkpoint saved -> t15_level3_tuning_kh.json
   params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 5.7137, 'w_z_frac': 72.5701, 'sigma': 0.1888, 'beta_curl': 2.7244, 'beta_xpoint': 2.1183, 'threshold_amr': 0.1496}
+  [Q-HAS]     combined=0.2443 phys=0.0070 patch=0.8376 (579s)
+  [classical] combined=0.1800 phys=0.0020 patch=0.6250 (213s)
+  saved fold -> t15_level3_fold_kh.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  kh                0.0070    0.0020   +0.0050    0.8376    0.6250   +0.0643
+  ------------------------------------------------------------------------------------
+  combined       mean delta = +0.0643   Q-HAS better on 0/1 folds
+  phys_score     mean delta = +0.0050   Q-HAS better on 0/1 folds
+  patch_ratio    mean delta = +0.2126   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+=== [kh] t15 done 02:54:15 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold kh
+  Q-HAS realised patch_ratio = 0.8376  (phys 0.0070)
+  tuned classical            = 0.6250  (phys 0.0020, thr 0.4616)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (held/kh) ---
+

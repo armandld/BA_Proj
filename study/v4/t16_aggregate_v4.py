@@ -164,6 +164,8 @@ def rows_level3(results_dir, folds, prefix="t15_level3"):
         "ot": dict(qhas_phys=0.1940, classical_phys=0.4845,
                    qhas_patch=0.6797, matched_phys=0.0827,
                    matched_patch=0.6412, delta_matched=0.1113),
+        "kh": dict(qhas_phys=0.0070, classical_phys=0.0020,
+                   qhas_patch=0.8376),
     }
     out = []
     for f in folds:

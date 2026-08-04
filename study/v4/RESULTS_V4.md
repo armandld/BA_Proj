@@ -767,3 +767,56 @@ in this repository.** It is referenced only by a file listing in
 `README.md`. If any rotor budget-comparison figure or number in the
 manuscript is attributed to it, that attribution needs checking — the script
 in its committed form could not have produced it.
+
+---
+
+## T15 — Level-3 fold `kh` (Kelvin–Helmholtz held out)
+
+```
+bash study/v4/run_fold.sh kh
+```
+tuning: QAOA 4 trials (best train loss 0.2590), classical 2 trials (0.3841)
+
+| arm | combined | phys (rel. L2 vs DNS) | patch ratio | wall (s) |
+|---|---|---|---|---|
+| Q-HAS | 0.2443 | 0.0070 | 0.8376 | 579 |
+| **classical** | **0.1800** | **0.0020** | **0.6250** | 213 |
+
+**The classical arm wins on every endpoint simultaneously**: better fidelity
+(3.5× lower L2), cheaper (25 % fewer refined pixels), and better composite.
+Unlike fold `ot`, this needs **no budget-matched control** — Q-HAS is
+**strictly Pareto-dominated at the tuned operating point itself**. The
+budget-matched run is still executed, but only to map the frontier; it
+cannot change the direction of the conclusion.
+
+Note the training losses reproduce fold `ot`'s pattern — QAOA better than
+classical on the *training* composite (0.2590 vs 0.3841 here, 0.1984 vs
+0.2979 on `ot`) while losing on the *held-out* class. That is defect **D4**
+in action: the QAOA arm's `threshold_amr` is pinned at 0.1496 while the
+classical arm tunes its own freely, so a training-loss advantage reflects a
+different operating point rather than a better decision rule.
+
+### Cross-fold state after 2 of 4 folds
+
+| fold | Q-HAS combined | classical combined | Δ (Q-HAS − cl) | better |
+|---|---|---|---|---|
+| ot | 0.3328 | 0.4386 | −0.1058 | Q-HAS |
+| kh | 0.2443 | 0.1800 | **+0.0643** | **classical** |
+
+Pre-registered readings, stated at their true scope:
+
+- **Counting rule** (`docs/level3_preregistration.md` §4): 1–1 at n = 2.
+  Neither arm meets the ≥ 3/4 threshold. **Nothing is established yet.**
+- **TOST**: margin 0.0155 (5 % of mean classical `combined`, per the frozen
+  formula), diff −0.0208, p_TOST = 0.520 → **equivalence not established**.
+- **Difference test**: paired t p = 0.848, Holm-adjusted 1.000 → no
+  significant difference. Exact sign test p = 1.000, and note the minimum
+  attainable at n = 2 is 0.500 — the design cannot produce significance here
+  regardless of the data.
+- **Budget-matched (secondary, post-hoc):** Q-HAS dominated on 1/1 folds so
+  far; `kh` is dominated already without the control.
+
+The honest summary at this point: on the two folds measured, Q-HAS is
+Pareto-dominated on both — on `ot` only after correcting the operating-point
+asymmetry, on `kh` outright. The *primary* pre-registered endpoint remains
+undecided by its own counting rule until 3 or 4 folds are in.
