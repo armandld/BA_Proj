@@ -53,6 +53,20 @@ TOST_MARGIN_FRAC = 0.05
 WIN_RULE_MIN = 3
 
 
+def load_divergence_audit(results_dir):
+    """Lit l'audit T19 s'il existe : {fold: fold_usable}.
+
+    Sans audit on ne PEUT PAS savoir si un bras a fini sa trajectoire (V1
+    renvoie les memes cles dans les deux cas). L'absence d'audit est donc
+    signalee, jamais interpretee comme « tout va bien ».
+    """
+    p = os.path.join(results_dir, "t19_arm_divergence_audit.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p))
+    return {r["fold"]: bool(r["fold_usable"]) for r in d.get("results", [])}
+
+
 def load_fold(results_dir, fold, prefix="t15_level3"):
     """Charge un fold. Retourne None si le fold n'a pas (encore) tourne.
 
@@ -211,7 +225,15 @@ def format_table(records, primary, secondary):
         L.append(f"| {r['fold']} | {r['scenario']} | {q:.4f} | {c:.4f} | "
                  f"{q - c:+.4f} | {'Q-HAS' if q < c else 'classical'} |")
     L.append("")
-    L.append(f"- folds completed: {primary['n_folds']}/4 — "
+    if primary.get("excluded_failed_folds"):
+        L.append(f"- **excluded as failed** (pre-registration §5, an arm did "
+                 f"not complete its trajectory): "
+                 f"{', '.join(primary['excluded_failed_folds'])}")
+    if not primary.get("audit_present", False):
+        L.append("- **validity unaudited**: run `t19_arm_divergence_audit.py`"
+                 " — an aborted arm is indistinguishable from a completed one"
+                 " in the stored output")
+    L.append(f"- folds usable: {primary['n_folds']}/4 — "
              f"Q-HAS better on {primary['n_qhas_better']}, "
              f"classical better on {primary['n_classical_better']} "
              f"(pre-registered rule: >= {WIN_RULE_MIN}/4)")
@@ -276,7 +298,38 @@ def main():
     if not records:
         raise SystemExit("no Level-3 fold available; run t15 first.")
 
+    # Pre-registration §5 : un fold dont un bras n'a pas fini sa
+    # trajectoire est un ECHEC, pas un resultat. Sans lui, un bras
+    # classique qui diverge se lit comme une victoire de Q-HAS.
+    audit = load_divergence_audit(results_dir)
+    excluded = []
+    if audit is None:
+        print("  WARNING: no T19 divergence audit found. V1 returns the same")
+        print("  keys for an aborted and a completed run, so fold validity")
+        print("  CANNOT be assumed. Run t19_arm_divergence_audit.py.")
+    else:
+        keep = []
+        for r in records:
+            if audit.get(r["fold"], True):
+                keep.append(r)
+            else:
+                excluded.append(r["fold"])
+        if excluded:
+            print(f"  EXCLUDED as failed (pre-registration §5, an arm did "
+                  f"not complete): {', '.join(excluded)}")
+        unaudited = [r["fold"] for r in keep if r["fold"] not in audit]
+        if unaudited:
+            print(f"  WARNING: not audited, validity unknown: "
+                  f"{', '.join(unaudited)}")
+        records = keep
+        if not records:
+            raise SystemExit(
+                "every available fold failed its divergence audit; "
+                "no paired statistic is defined.")
+
     primary = primary_analysis(records)
+    primary["excluded_failed_folds"] = excluded
+    primary["audit_present"] = audit is not None
     secondary = secondary_analysis(records)
     table = format_table(records, primary, secondary)
     print()

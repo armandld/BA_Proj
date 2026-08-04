@@ -116,3 +116,8 @@ Hot-Start captured at t=0.9046
 DNS pre-computed: 408 steps, 18 flux snapshots stored.
 --- DNS pre-computation complete (held/kh) ---
 
+    thr=0.0500 -> patch=1.0000 phys=0.0013 (target patch 0.8376)
+    thr=0.8000 -> patch=0.1068 phys=0.0914 (target patch 0.8376)
+    thr=0.4250 -> patch=0.6250 phys=0.0020 (target patch 0.8376)
+    thr=0.2375 -> patch=0.7009 phys=0.0019 (target patch 0.8376)
+    thr=0.1438 -> patch=0.9505 phys=0.0014 (target patch 0.8376)

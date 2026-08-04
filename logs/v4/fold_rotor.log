@@ -68,3 +68,35 @@ DNS pre-computed: 975 steps, 15 flux snapshots stored.
   DNS traces ready in 200s
   [resume] tuning checkpoint found -> t15_level3_tuning_rotor.json
   params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 8.0214, 'w_z_frac': 13.0491, 'sigma': 0.1791, 'beta_curl': 4.628, 'beta_xpoint': 0.3552, 'threshold_amr': 0.1496}
+  [Q-HAS]     combined=0.2273 phys=0.1678 patch=0.3761 (584s)
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+  [classical] combined=0.9294 phys=1.1731 patch=0.3203 (29s)
+  saved fold -> t15_level3_fold_rotor.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  rotor             0.1678    1.1731   -1.0053    0.3761    0.3203   -0.7021
+  ------------------------------------------------------------------------------------
+  combined       mean delta = -0.7021   Q-HAS better on 1/1 folds
+  phys_score     mean delta = -1.0053   Q-HAS better on 1/1 folds
+  patch_ratio    mean delta = +0.0558   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+=== [rotor] t15 done 20:00:04 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold rotor
+  Q-HAS realised patch_ratio = 0.3761  (phys 0.1678)
+  tuned classical            = 0.3203  (phys 1.1731, thr 0.5864)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (held/rotor) ---
+

@@ -1,0 +1,12 @@
+====================================================================================
+  V4 T19 - Level-3 arm divergence audit
+  V1 aborts on CFL>1 or non-finite fields and returns a PARTIAL
+  score with identical keys. This replays each arm to detect it.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for audit/ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (audit/ot) ---
+
