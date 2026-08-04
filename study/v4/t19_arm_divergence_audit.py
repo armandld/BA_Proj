@@ -131,6 +131,46 @@ def audit_fold(T, all_scen, results_dir, fold, arms=("qhas", "classical"),
     return out
 
 
+def audit_budget_trace(T, all_scen, results_dir, fold):
+    """Audite les points de la trace de bissection t15b.
+
+    Enjeu : la courbe tracee par les figures est presentee comme la
+    frontiere ATTEIGNABLE du cout classique. Un point issu d'une
+    trajectoire avortee n'est pas un point de fonctionnement — l'inclure
+    fait passer un plantage pour une option disponible, et deforme
+    l'echelle. Les executions divergentes s'arretant tot, cet audit est
+    bon marche.
+    """
+    p = os.path.join(results_dir, f"t15b_budget_matched_{fold}.json")
+    if not os.path.exists(p):
+        return None
+    b = json.load(open(p))
+    rec = json.load(open(os.path.join(
+        results_dir, f"t15_level3_fold_{fold}.json")))
+    cfg = dict(all_scen)[fold]
+    dns_held = T._precompute_dns_for([(fold, cfg)], label=f"trace/{fold}")
+
+    pts = []
+    for r in b["trace"]:
+        hp = dict(rec["hyperparams"])
+        hp["threshold_amr"] = r["threshold"]
+        a = audit_arm(T, fold, cfg, dns_held, hp, True)
+        pts.append({
+            "threshold": r["threshold"],
+            "patch_ratio": r["patch_ratio"],
+            "phys_score": r["phys_score"],
+            "stored_wall_s": r.get("wall_s"),
+            "completed": a["completed"],
+            "abort": a["abort"],
+            "replay_phys": a["phys_score"],
+        })
+        tag = "ok" if a["completed"] else "ABORTED"
+        print(f"    thr={r['threshold']:.4f}  patch={r['patch_ratio']:.4f}  "
+              f"phys={r['phys_score']:.4f}  -> {tag}", flush=True)
+    return {"fold": fold, "points": pts,
+            "n_aborted": int(sum(not x["completed"] for x in pts))}
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 T19: did each Level-3 arm finish its trajectory?")
@@ -141,6 +181,8 @@ def main():
     p.add_argument("--arms", nargs="+", default=["qhas", "classical"])
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--trace-only", action="store_true",
+                   help="n'auditer que les points de bissection t15b")
     args = p.parse_args()
 
     print("=" * 84)
@@ -153,6 +195,23 @@ def main():
     all_scen = fold_scenarios(T, warn=False)
 
     results, t0 = [], time.time()
+    if args.trace_only:
+        traces = []
+        for f in args.folds:
+            print(f"\n  fold {f}: auditing t15b bisection points")
+            tr = audit_budget_trace(T, all_scen, RESULTS_DIR, f)
+            if tr is None:
+                print("    no t15b output, skipped")
+                continue
+            traces.append(tr)
+            print(f"    -> {tr['n_aborted']}/{len(tr['points'])} points "
+                  f"came from an aborted run")
+        tp = os.path.join(RESULTS_DIR, "t19_budget_trace_audit.json")
+        json.dump({"traces": traces, "git_hash": git_commit_hash(),
+                   "cli_args": vars(args), "wall_s": time.time() - t0},
+                  open(tp, "w"), indent=1)
+        print(f"\n  saved: {os.path.basename(tp)}")
+        return
     for f in args.folds:
         r = audit_fold(T, all_scen, RESULTS_DIR, f, tuple(args.arms),
                        args.prefix)
