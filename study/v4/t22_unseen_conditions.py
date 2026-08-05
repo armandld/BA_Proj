@@ -249,6 +249,16 @@ def main():
             with contextlib.redirect_stdout(buf):
                 r = run_arm(T, args.fold, cfg_, dns_, hp, only, verbose=True)
             ab = parse_abort(buf.getvalue())
+            # V1 en mode verbeux ouvre des figures matplotlib et ne les
+            # ferme jamais (src/visual.py). Sur des dizaines d'executions
+            # cela epuise la memoire et le processus est tue. Le mode
+            # verbeux est pourtant obligatoire ici : c'est lui qui emet le
+            # marqueur d'avortement qu'on capture.
+            try:
+                import matplotlib.pyplot as _plt
+                _plt.close("all")
+            except Exception:
+                pass
             ri = {k: float(r.get(k, np.nan)) for k in KEYS}
             ri["completed"] = ab is None
             ri["abort"] = ab

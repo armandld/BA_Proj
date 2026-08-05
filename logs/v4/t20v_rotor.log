@@ -1,0 +1,9 @@
+====================================================================================
+  V4 T20 - Q-HAS run-to-run variance, fold rotor
+  5 Q-HAS runs + 2 classical (determinism control), identical inputs
+  V1 fixes no RNG seed: Estimator/Sampler run at 256 shots.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for variance/rotor ---
+Hot-Start captured at t=0.2009

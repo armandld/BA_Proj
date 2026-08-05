@@ -9,18 +9,3 @@ Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for canonical/tearing ---
 Hot-Start captured at t=0.3041
-DNS pre-computed: 123 steps, 11 flux snapshots stored.
---- DNS pre-computation complete (canonical/tearing) ---
-
-
---- Pre-computing DNS traces for unseen/tearing ---
-Hot-Start captured at t=0.3059
-DNS pre-computed: 99 steps, 11 flux snapshots stored.
---- DNS pre-computation complete (unseen/tearing) ---
-
-
-  DNS signature canonical=5.690435e+04  unseen=4.742551e+04
-  trajectory actually changed: True
-    [qhas] canonical run 1/5: phys=0.01803 patch=0.8074
-/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
-  fig, ax = plt.subplots(figsize=(10, 9))
