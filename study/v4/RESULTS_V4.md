@@ -1025,3 +1025,65 @@ draw and more faithful on four of five"*, not *"Q-HAS is 4.4× worse"*.
 `ot`). Their published ratios rest on the same single-draw basis and should
 be read as **point estimates of a quantity with ≈50 % CV**, not as measured
 magnitudes. Repeating T20 per fold is the fix; it costs ~1 h per fold.
+
+---
+
+## T20 complete — Claim E restated as a dominance count over repeated draws
+
+5 Q-HAS repeats per fold, identical inputs, plus 2 classical repeats per
+fold as a determinism control. **The classical control's range is exactly
+0.00e+00 on every metric of every fold** — 8 independent replays. The spread
+below is therefore attributable to the unseeded QAOA path (D11) alone.
+
+### Per-fold distribution, against the **budget-matched** classical arm
+
+| fold | Q-HAS mean | sd | CV | matched ref | gap/sd | ratio published → **mean-based** |
+|---|---|---|---|---|---|---|
+| `ot` | 0.1291 | 0.0222 | 17.2 % | 0.0827 | **2.09** | 2.35× → **1.56×** |
+| `kh` | 0.0032 | 0.0016 | 48.9 % | 0.00168 | **0.98** | 4.16× → **1.93×** |
+| `rotor` | 0.1537 | 0.0642 | 41.8 % | 0.0536 | **1.56** | 3.13× → **2.86×** |
+| `tearing` | 0.0091 | 0.0034 | 37.4 % | 0.00443 | **1.37** | 4.19× → **2.05×** |
+
+**On three folds of four the gap/sd is below 2**: a single run per arm
+cannot support a claim about *magnitude*. Every published ratio was inflated
+by a factor 1.1–2.2, because each rested on one draw.
+
+### Why the reference must be the budget-matched arm, always
+
+T20 first compared against the *tuned* classical arm, which is wrong twice
+over and produced two spectacular non-results:
+
+- **`rotor`**: the tuned classical arm had **aborted**, so its stored value
+  is a partial score. gap/sd came out **15.88** — against a crashed run.
+- **`ot`**: the tuned classical arm *completes* but runs at a different
+  budget (patch 0.324 against Q-HAS's 0.680, defect D4). gap/sd came out
+  **16.01**, measuring the operating point, not the decision rule.
+
+Both are now excluded by construction: the reference is the budget-matched
+point, whose completion the T19 trace audit verified.
+
+### The robust statement
+
+| fold | less faithful | costlier | strictly dominated |
+|---|---|---|---|
+| `ot` | 5/5 | 5/5 | **5/5** |
+| `kh` | 4/5 | 5/5 | **4/5** |
+| `rotor` | 5/5 | 3/5 | **3/5** |
+| `tearing` | 5/5 | 5/5 | **5/5** |
+| **total** | **19/20** | **18/20** | **17/20** |
+
+> Across four held-out classes and 20 independent closed-loop runs, Q-HAS is
+> less faithful than the budget-matched classical rule on **19 of 20 runs**,
+> more expensive on **18 of 20**, and strictly Pareto-dominated on **17 of
+> 20**. No run reverses the ordering on both coordinates at once.
+
+This is the form Claim E should take in the manuscript. It is weaker-sounding
+than "2.6–4.4× worse" and far harder to attack: it depends on no single draw,
+no choice of λ, and no scalarisation.
+
+### Correction to an earlier claim of mine
+
+I wrote that the published value was the maximum draw "on all four folds".
+That was true for `kh`, `ot` and `tearing` but **not** `rotor`, whose stored
+value sits at the 67th percentile. Three of four, generalised too early from
+three observations.

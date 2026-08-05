@@ -69,46 +69,35 @@ at the deployed size (`VQA_N = 2` → 8 qubits):
 the inertness survives a full repair of the defect it uncovered, and is
 confirmed independently by a mapper that never had the defect.
 
-### Claim E in detail
+### Claim E in detail — 20 runs, 4 held-out classes
 
-| fold | Q-HAS (patch, phys) | budget-matched classical | ratio | dominated |
+Q-HAS repeated **5×** per fold (identical inputs); classical arm verified
+deterministic across 8 replays (range exactly 0.00e+00). Comparison is
+against the **budget-matched** classical point, whose completion the T19
+trace audit verified.
+
+| fold | Q-HAS mean ± sd | matched classical | ratio (mean) | gap/sd |
 |---|---|---|---|---|
-| `ot` | 0.6797, 0.1940 | 0.6412, **0.0827** | 2.57× | yes |
-| `kh` | 0.8376, 0.0070 | 0.7943, **0.0017** | 4.41× | yes |
-| `rotor` † | 0.3761, 0.1678 | 0.3562, **0.0536** | 3.62× | yes |
-| `tearing` | 0.7692, 0.0185 | 0.6250, **0.0044** | 4.38× | yes |
+| `ot` | 0.1291 ± 0.0222 | **0.0827** | 1.56× | 2.09 |
+| `kh` | 0.0032 ± 0.0016 | **0.00168** | 1.93× | 0.98 |
+| `rotor` † | 0.1537 ± 0.0642 | **0.0536** | 2.86× | 1.56 |
+| `tearing` | 0.0091 ± 0.0034 | **0.00443** | 2.05× | 1.37 |
 
-In every case the classical arm is **both more faithful and cheaper**.
-**The ratios are single draws** — see §5; on `kh`, where 5 draws exist, the
-mean-based ratio is 1.93× rather than 4.41×.
+**The headline is a count, not a ratio:**
+
+> Over 20 independent closed-loop runs, Q-HAS is less faithful than the
+> budget-matched classical rule on **19/20**, more expensive on **18/20**,
+> and strictly Pareto-dominated on **17/20**. No run reverses the ordering
+> on both coordinates at once.
+
+Quote it this way. The per-fold ratios (1.56–2.86×) are means of a quantity
+with 17–49 % CV, and **gap/sd is below 2 on three folds of four** — a single
+run per arm cannot support a magnitude claim. The ratios first published
+(2.57–4.41×) each rested on one draw and were inflated 1.1–2.2×.
 
 † `rotor`'s *tuned* classical arm diverged, so its primary comparison is
 void; its budget-matched point was separately verified complete and
-reproduced exactly, so this row stands.
-
-**The primary endpoint, corrected.** An earlier reading reported a 2–2
-split establishing nothing. That count **included `rotor`**, whose classical
-arm had diverged (T19) and was therefore scored as a Q-HAS win. Excluding it
-as pre-registration §5 requires:
-
-| λ | Q-HAS wins | classical wins |
-|---|---|---|
-| 0.4 (pre-registered) | 1 | **2** |
-| ≥ 1.0 | **0** | **3** |
-
-And **2/3 folds are decided with no λ at all** (Pareto dominance, both
-classical). The remaining fold `ot` flips at λ\* = 0.8164.
-
-So what was previously an *argument* ("the endpoint is D4-contaminated") is
-now a **measurement** (T21): the verdict is partly a property of the chosen
-λ, not of the arms. At λ ≥ 1 the classical arm meets the pre-registered
-refutation threshold on 3/3 valid folds.
-
-The residual judgement is narrower than before: whether λ = 0.4 rather than
-λ = 1 is the defensible weighting. Nothing in the pre-registration justifies
-either. **Removing D4 entirely would need the QAOA arm re-tuned with
-`threshold_amr` in its search space — hours of compute, and the definitive
-experiment.**
+reproduces exactly, so this row stands.
 
 ---
 
@@ -148,39 +137,41 @@ D7/D8 and the D-bis/D-ter mechanism.
 
 ## 5. Robustness of Claim E against D11 and D12
 
-**T20 measured the spread on `kh`** (5 runs, identical inputs): Q-HAS
-`phys` mean **0.00324**, sd **0.00158**, **CV 48.9 %**. The classical arm's
-range was exactly **0.00e+00** — the control passes, so the spread is
-attributable to the unseeded QAOA path and nothing else.
+**D11 quantified.** T20 ran the Q-HAS arm 5× per fold on identical inputs.
+The classical control's range is exactly **0.00e+00** across 8 replays, so
+the spread is attributable to the unseeded QAOA path and nothing else.
 
-**This corrects the published `kh` magnitude.** The fold's stored Q-HAS
-value (0.00700) is the **largest of all six known draws** (100th
-percentile), so everything derived from it is inflated:
+Coefficients of variation on `phys`: `ot` 17.2 %, `tearing` 37.4 %,
+`rotor` 41.8 %, `kh` 48.9 %.
 
-| quantity | from the stored draw | **from the mean** |
-|---|---|---|
-| gap / sd | 3.15 | **0.77** |
-| ratio vs matched classical | 4.16× (published 4.41×) | **1.93×** |
+**Every ratio first published was inflated**, because each rested on one
+draw and the stored draw was the maximum on three folds of four (`rotor` is
+the exception, 67th percentile):
 
-**What survives is the dominance count, not the ratio.** Against the
-budget-matched classical arm, Q-HAS costs more on **5/5** draws and is less
-faithful on **4/5**; the fifth makes the arms incomparable (more faithful,
-more expensive), never reversed.
+| fold | published | **mean-based** | gap/sd |
+|---|---|---|---|
+| `ot` | 2.57× | **1.56×** | 2.09 |
+| `kh` | 4.41× | **1.93×** | 0.98 |
+| `rotor` | 3.62× | **2.86×** | 1.56 |
+| `tearing` | 4.38× | **2.05×** | 1.37 |
 
-The other three folds have **one draw each**. Their ratios (2.57×, 3.62×,
-4.38×) are point estimates of a quantity with ≈50 % CV and **must not be
-quoted as measured magnitudes**. Repeating T20 per fold costs ~1 h each and
-is the fix.
+**gap/sd is below 2 on three folds of four**, so a single run per arm cannot
+support a magnitude claim. What survives is the count in §3: 19/20 less
+faithful, 18/20 costlier, 17/20 strictly dominated.
 
-Divergence audit (T19), replaying every arm and checking it reproduces the
-stored value:
+**D12 handled.** Divergence audit (T19), replaying every arm and checking it
+reproduces its stored value:
 
-- `ot` — both arms completed → **usable**
-- `kh` — both arms completed → **usable**
-- `rotor` — classical aborted at step 208 → **not usable for the primary
-  endpoint**; its budget-matched point was separately verified clean and
-  reproduced exactly, so its Pareto comparison stands
-- `tearing` — audit running at time of writing
+- `ot`, `kh`, `tearing` — both arms completed → **usable**
+- `rotor` — classical arm aborted at step 208, **deterministically** (its
+  control reproduces 1.1731 exactly) → **not usable for the primary
+  endpoint**; its budget-matched point was separately verified complete and
+  reproduces exactly, so its Pareto row stands
+
+Bisection traces audited too: `rotor` 2/6 points came from aborted runs
+(excluded from the plotted frontier), `tearing` 0/6 — its phys = 4.13 point
+**completed** and is a genuine operating point, so a "phys > 1 ⇒ diverged"
+heuristic would have deleted valid data.
 
 ---
 
@@ -188,7 +179,7 @@ stored value:
 
 | item | state | consequence |
 |---|---|---|
-| **T20 on `ot`, `rotor`, `tearing`** | done for `kh` only | those three folds' ratios rest on a single draw of a quantity with ≈50 % CV. ~1 h per fold |
+| **T20 physics seeds** | 5 QAOA repeats per fold done; still **1 physics seed** | the 20 runs vary the QAOA sampling only, not the initial condition. Protocol wanted ≥3 seeds |
 | **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |

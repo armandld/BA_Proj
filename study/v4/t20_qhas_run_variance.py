@@ -161,6 +161,15 @@ def main():
     # trompeur — sur `rotor`, gap/sd = 15.9 contre une execution plantee.
     # Dans ce cas on prend le point classique BUDGET-APPARIE, dont l'audit
     # a verifie qu'il termine.
+    # La reference est TOUJOURS le point classique BUDGET-APPARIE, jamais
+    # le bras classique regle. Deux raisons distinctes :
+    #   - si le bras regle a avorte (audit T19), sa valeur est un score
+    #     partiel : sur `rotor` la comparer donnait gap/sd = 15.9 contre une
+    #     execution plantee ;
+    #   - meme quand il termine, il tourne a un AUTRE budget (defaut D4) :
+    #     sur `ot` il refine 0.324 contre 0.680 pour Q-HAS, et l'ecart
+    #     mesure alors le point de fonctionnement, pas la regle de decision.
+    # Seul le point apparie compare les deux bras a cout egal.
     stored_q = rec["qhas"]["phys_score"]
     stored_c = rec["classical"]["phys_score"]
     ref_source = "tuned classical arm"
@@ -175,16 +184,17 @@ def main():
                         r["arms"]["classical"]["completed"])
         except (ValueError, KeyError):
             pass
-    if classical_completed is False:
-        bpath = os.path.join(
-            RESULTS_DIR, f"t15b_budget_matched_{args.fold}.json")
-        if os.path.exists(bpath):
-            stored_c = float(json.load(open(bpath))
-                             ["matched_classical"]["phys_score"])
-            ref_source = "budget-matched classical (tuned arm ABORTED)"
-        else:
-            stored_c = float("nan")
-            ref_source = "UNAVAILABLE (tuned arm aborted, no t15b)"
+    bpath = os.path.join(
+        RESULTS_DIR, f"t15b_budget_matched_{args.fold}.json")
+    if os.path.exists(bpath):
+        stored_c = float(json.load(open(bpath))
+                         ["matched_classical"]["phys_score"])
+        ref_source = ("budget-matched classical"
+                      + ("" if classical_completed is not False
+                         else " (tuned arm ABORTED)"))
+    elif classical_completed is False:
+        stored_c = float("nan")
+        ref_source = "UNAVAILABLE (tuned arm aborted, no t15b)"
     print(f"\n  classical reference: {ref_source}"
           f"{'' if classical_completed is not None else '  [T19 audit absent]'}")
 
