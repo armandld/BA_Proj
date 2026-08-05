@@ -1,0 +1,53 @@
+{
+ "fold": "kh",
+ "scenario": "kelvin_helmholtz",
+ "mode": "unseen-ic",
+ "unseen_condition": {
+  "ic": {
+   "shear_width": 0.35,
+   "noise_amplitude": 0.05,
+   "drift_velocity": 0.7
+  },
+  "note": "narrower shear layer, weaker seed, faster drift"
+ },
+ "qaoa_threshold_leaked": true,
+ "arms": {
+  "qhas": {
+   "canonical": {
+    "combined": 0.2595736860821085,
+    "phys_score": 0.005087786951733427,
+    "patch_ratio": 0.895788433908046
+   },
+   "unseen": {
+    "combined": 0.23256643263926685,
+    "phys_score": 0.0041591196405517655,
+    "patch_ratio": 0.8035847151360545
+   },
+   "degradation_ratio": 0.8174712659960612
+  },
+  "classical": {
+   "canonical": {
+    "combined": 0.1800140864155247,
+    "phys_score": 0.002019720981734553,
+    "patch_ratio": 0.625
+   },
+   "unseen": {
+    "combined": 0.18020971923933218,
+    "phys_score": 0.0022936069350650555,
+    "patch_ratio": 0.625
+   },
+   "degradation_ratio": 1.1356058365523771
+  }
+ },
+ "dns_signature_canonical": 61756.79037528209,
+ "dns_signature_unseen": 66395.9251107193,
+ "qhas_degrades_more": false,
+ "git_hash": "801b4e533589120f24e11385ba0012f87dd20aa7",
+ "cli_args": {
+  "fold": "kh",
+  "mode": "unseen-ic",
+  "prefix": "t15_level3",
+  "seed": 0
+ },
+ "wall_s": 1821.8023915290833
+}
