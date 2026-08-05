@@ -101,7 +101,7 @@ reproduces exactly, so this row stands.
 
 ---
 
-## 4. Defect register (D1–D12)
+## 4. Defect register (D1–D13)
 
 Twelve claims that existing code is wrong. Full detail and per-defect
 verification commands in `docs/v4_final_results_for_paper.md` §3 and
@@ -121,6 +121,14 @@ verification commands in `docs/v4_final_results_for_paper.md` §3 and
 | D10 | `compare_rotor_budget.py` raises `TypeError`; **as committed it has never been runnable** | `src/compare_rotor_budget.py:110` |
 | **D11** | **the Q-HAS arm is not deterministic** — no RNG seed anywhere in V1's VQA chain | `src/VQA/execute.py`, `runtime.py` |
 | **D12** | aborted runs return a **partial score with keys identical** to a completed run | `src/pipeline.py:499` |
+| **D13** | **train/test leak**: the QAOA arm's threshold `0.1496` was fitted on *all four* classes, including the held-out one, while the classical arm re-tunes per fold | `TrainHyperParam_v2:632`, `t15:154` |
+
+**D13 is the one to disclose first.** The pre-registration claims the
+held-out class is excluded from **all** tuning of both arms; that is false
+for the QAOA arm, whose decision threshold comes from
+`_run_classical_phase1` fitted on "KH + OT + Tearing + Rotor". The leak is
+**asymmetric and favours Q-HAS**, which still loses 19/20 — so the
+conclusion is conservative, but the protocol statement must be corrected.
 
 **D11 and D12 most affect the conclusions.** D11: replaying fold `ot` with
 identical inputs gave phys **0.1345 vs 0.1940** stored (44 % swing) while
@@ -179,7 +187,9 @@ heuristic would have deleted valid data.
 
 | item | state | consequence |
 |---|---|---|
-| **T20 physics seeds** | 5 QAOA repeats per fold done; still **1 physics seed** | the 20 runs vary the QAOA sampling only, not the initial condition. Protocol wanted ≥3 seeds |
+| **T22 unseen initial conditions** | single-run pass done (inconclusive); **repeated pass running** | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
+| **D13 removal** | not attempted | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode no-leak` is the entry point |
+| physics seeds | still **1 per class** | T20's 20 runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
 | **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |
