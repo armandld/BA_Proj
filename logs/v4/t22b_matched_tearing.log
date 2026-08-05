@@ -33,3 +33,15 @@ DNS pre-computed: 99 steps, 11 flux snapshots stored.
     [qhas] unseen run 5/5: phys=0.00219 patch=0.9234
   [qhas] canonical phys=0.01447+-0.00544  unseen phys=0.00240+-0.00026  degradation x0.17
     [classical] canonical run 1/2: phys=0.00443 patch=0.6250
+    [classical] canonical run 2/2: phys=0.00443 patch=0.6250
+    [classical] unseen run 1/2: phys=0.00172 patch=0.6250
+    [classical] unseen run 2/2: phys=0.00172 patch=0.6250
+  [classical] canonical phys=0.00443+-0.00000  unseen phys=0.00172+-0.00000  degradation x0.39
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.17  classical x0.39
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_tearing.json (4057s)
+
+V4 Task 22 complete.

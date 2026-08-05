@@ -17,98 +17,132 @@
  "arms": {
   "qhas": {
    "n_runs": 5,
+   "n_completed_canonical": 5,
+   "n_completed_unseen": 5,
+   "n_aborted": 0,
    "canonical_runs": [
     {
-     "combined": 0.2725714263510319,
-     "phys_score": 0.006973638195792385,
-     "patch_ratio": 0.9365658967391305
+     "combined": 0.24036115664936386,
+     "phys_score": 0.009977086700413675,
+     "patch_ratio": 0.8163213315217391,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.23476818659274548,
-     "phys_score": 0.013407118838539279,
-     "patch_ratio": 0.7881708559782609
+     "combined": 0.21523645925690865,
+     "phys_score": 0.013474385350976472,
+     "patch_ratio": 0.7196416440217391,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.2784295976621285,
-     "phys_score": 0.00656434433567548,
-     "patch_ratio": 0.9580927309782609
+     "combined": 0.2430944085260078,
+     "phys_score": 0.021140595849454318,
+     "patch_ratio": 0.7979789402173914,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.25690738561843146,
-     "phys_score": 0.008124823561456227,
-     "patch_ratio": 0.8788637907608695
+     "combined": 0.2788884248042625,
+     "phys_score": 0.008786186030315276,
+     "patch_ratio": 0.9541440217391305,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.2693286315310228,
-     "phys_score": 0.007223127621692774,
-     "patch_ratio": 0.9245923913043478
+     "combined": 0.23246304757626102,
+     "phys_score": 0.01899446225893931,
+     "patch_ratio": 0.7661345108695652,
+     "completed": true,
+     "abort": null
     }
    ],
    "unseen_runs": [
     {
-     "combined": 0.26444801855795114,
-     "phys_score": 0.0016461449000504448,
-     "patch_ratio": 0.9214527027027027
+     "combined": 0.25798416762153514,
+     "phys_score": 0.0023518211566357057,
+     "patch_ratio": 0.8970650337837838,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.19610423749661077,
-     "phys_score": 0.001995256819579404,
-     "patch_ratio": 0.6813766891891891
+     "combined": 0.24731295771871895,
+     "phys_score": 0.002678174589990258,
+     "patch_ratio": 0.8588999155405406,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.20881958962611466,
-     "phys_score": 0.002693709260344287,
-     "patch_ratio": 0.7241342905405406
+     "combined": 0.1980833136813886,
+     "phys_score": 0.002105490505295346,
+     "patch_ratio": 0.6880278716216216,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.24948673039287997,
-     "phys_score": 0.001984125252734613,
-     "patch_ratio": 0.8682432432432432
+     "combined": 0.21992458689449665,
+     "phys_score": 0.002657935165808792,
+     "patch_ratio": 0.7630912162162162,
+     "completed": true,
+     "abort": null
     },
     {
-     "combined": 0.6528226677486559,
-     "phys_score": 0.6007338294427128,
-     "patch_ratio": 0.7830447635135135
+     "combined": 0.26537591650017933,
+     "phys_score": 0.0021850668840348204,
+     "patch_ratio": 0.9233530405405406,
+     "completed": true,
+     "abort": null
     }
    ],
    "canonical": {
-    "combined": 0.262401045551072,
-    "phys_score": 0.008458610510631228,
-    "patch_ratio": 0.897257133152174
+    "combined": 0.24200869936256075,
+    "phys_score": 0.01447454323801981,
+    "patch_ratio": 0.8108440896739131
    },
    "unseen": {
-    "combined": 0.3143362487644425,
-    "phys_score": 0.12181061313508432,
-    "patch_ratio": 0.7956503378378378
+    "combined": 0.23773618848326375,
+    "phys_score": 0.002395697660352984,
+    "patch_ratio": 0.8260874155405405
    },
-   "canonical_phys_sd": 0.002824843070202923,
-   "unseen_phys_sd": 0.2677264882956981,
-   "degradation_ratio": 14.400782845124066
+   "canonical_phys_sd": 0.005441754409269082,
+   "unseen_phys_sd": 0.00026413651271760914,
+   "degradation_ratio": 0.1655111060126777
   },
   "classical": {
    "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
    "canonical_runs": [
     {
      "combined": 0.18173490078520044,
      "phys_score": 0.004428861099280601,
-     "patch_ratio": 0.625
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
     },
     {
      "combined": 0.18173490078520044,
      "phys_score": 0.004428861099280601,
-     "patch_ratio": 0.625
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
     }
    ],
    "unseen_runs": [
     {
      "combined": 0.17980313050809932,
      "phys_score": 0.0017243827113390183,
-     "patch_ratio": 0.625
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
     },
     {
      "combined": 0.17980313050809932,
      "phys_score": 0.0017243827113390183,
-     "patch_ratio": 0.625
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
     }
    ],
    "canonical": {
@@ -128,8 +162,8 @@
  },
  "dns_signature_canonical": 56904.34618755703,
  "dns_signature_unseen": 47425.50837041255,
- "qhas_degrades_more": true,
- "git_hash": "529bf555ff6d104332bc84ef91c23c417a1a7510",
+ "qhas_degrades_more": false,
+ "git_hash": "a1da0b12f3057d5c67d165a4fb71af9a6d4c9f48",
  "cli_args": {
   "fold": "tearing",
   "mode": "unseen-ic",
@@ -138,5 +172,5 @@
   "repeats": 5,
   "matched_reference": true
  },
- "wall_s": 2921.7793366909027
+ "wall_s": 4057.238319158554
 }
