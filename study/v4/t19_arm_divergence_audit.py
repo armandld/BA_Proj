@@ -292,7 +292,8 @@ if __name__ == "__main__":
     main()
 
 
-def safe_classical_hyperparams(rec, results_dir, fold):
+def safe_classical_hyperparams(rec, results_dir, fold,
+                               always_matched=False):
     """Hyperparametres du bras classique SANS point de fonctionnement divergent.
 
     Le seuil classique regle d'un fold peut tomber dans une bande instable :
@@ -311,6 +312,16 @@ def safe_classical_hyperparams(rec, results_dir, fold):
     hp = dict(rec["hyperparams"])
     hp.update(rec.get("classical_params", {}))
     completed = None
+    if always_matched:
+        # Comparaison a COUT EGAL demandee : le bras regle tourne a un autre
+        # budget (defaut D4), donc l'ecart de fidelite mesurerait le point de
+        # fonctionnement et non la regle de decision.
+        bp = os.path.join(results_dir, f"t15b_budget_matched_{fold}.json")
+        if os.path.exists(bp):
+            thr = float(json.load(open(bp))
+                        ["matched_classical"]["threshold"])
+            hp["threshold_amr"] = thr
+            return hp, f"budget-matched threshold {thr:.4f} (forced)", None
     apath = os.path.join(results_dir, "t19_arm_divergence_audit.json")
     if os.path.exists(apath):
         try:

@@ -168,6 +168,12 @@ def main():
                    default="unseen-ic")
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--repeats", type=int, default=1,
+                   help="tirages Q-HAS par condition (D11 : CV 17-49%%, "
+                        "un seul tirage ne separe rien du bruit)")
+    p.add_argument("--matched-reference", action="store_true",
+                   help="comparer au seuil classique BUDGET-APPARIE partout, "
+                        "pas seulement quand le bras regle diverge (D4)")
     args = p.parse_args()
 
     path = os.path.join(RESULTS_DIR, f"{args.prefix}_fold_{args.fold}.json")
@@ -190,7 +196,7 @@ def main():
     # tronquee ne mesure rien (le piege a deja fausse T15, T20 et un premier
     # passage de T22).
     hp_c, cls_src, cls_done = safe_classical_hyperparams(
-        rec, RESULTS_DIR, args.fold)
+        rec, RESULTS_DIR, args.fold, always_matched=args.matched_reference)
     print(f"  classical reference: {cls_src}")
     leaked = abs(hp_q.get("threshold_amr", 0) - LEAKED_THRESHOLD) < 1e-9
     print(f"  QAOA arm threshold = {hp_q.get('threshold_amr')}"
@@ -223,23 +229,44 @@ def main():
     out["dns_signature_unseen"] = sig_uns
 
     cfg_uns = unseen_config(cfg, scenario)
+    KEYS = ("combined", "phys_score", "patch_ratio")
+
+    def repeat(hp, only, cfg_, dns_, n, tag):
+        """n executions ; le bras classique est deterministe, 1 suffit."""
+        runs = []
+        for i in range(n):
+            r = run_arm(T, args.fold, cfg_, dns_, hp, only)
+            runs.append({k: float(r.get(k, np.nan)) for k in KEYS})
+            print(f"    {tag} run {i + 1}/{n}: "
+                  f"phys={runs[-1]['phys_score']:.5f} "
+                  f"patch={runs[-1]['patch_ratio']:.4f}", flush=True)
+        return runs
+
     for arm, hp, only in (("qhas", hp_q, False), ("classical", hp_c, True)):
-        r_can = run_arm(T, args.fold, cfg, dns_can, hp, only)
-        r_uns = run_arm(T, args.fold, cfg_uns, dns_uns, hp, only)
-        deg = (r_uns["phys_score"] / r_can["phys_score"]
-               if r_can.get("phys_score") else float("nan"))
+        # le bras classique ne comporte aucun echantillonnage (T20 : etendue
+        # exactement nulle sur 8 rejeux), 2 executions suffisent en controle
+        n = args.repeats if arm == "qhas" else min(2, args.repeats)
+        can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical")
+        uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen")
+        mc = float(np.mean([r["phys_score"] for r in can]))
+        mu = float(np.mean([r["phys_score"] for r in uns]))
+        sc = float(np.std([r["phys_score"] for r in can], ddof=1)) if n > 1 \
+            else 0.0
+        su = float(np.std([r["phys_score"] for r in uns], ddof=1)) if n > 1 \
+            else 0.0
         out["arms"][arm] = {
-            "canonical": {k: float(r_can.get(k, np.nan))
-                          for k in ("combined", "phys_score", "patch_ratio")},
-            "unseen": {k: float(r_uns.get(k, np.nan))
-                       for k in ("combined", "phys_score", "patch_ratio")},
-            "degradation_ratio": float(deg),
+            "n_runs": n,
+            "canonical_runs": can, "unseen_runs": uns,
+            "canonical": {k: float(np.mean([r[k] for r in can]))
+                          for k in KEYS},
+            "unseen": {k: float(np.mean([r[k] for r in uns])) for k in KEYS},
+            "canonical_phys_sd": sc, "unseen_phys_sd": su,
+            "degradation_ratio": float(mu / mc) if mc else float("nan"),
         }
-        print(f"\n  [{arm}] canonical phys={r_can['phys_score']:.4f} "
-              f"patch={r_can['patch_ratio']:.4f}")
-        print(f"  [{arm}] unseen    phys={r_uns['phys_score']:.4f} "
-              f"patch={r_uns['patch_ratio']:.4f}   "
-              f"degradation x{deg:.2f}", flush=True)
+        print(f"  [{arm}] canonical phys={mc:.5f}+-{sc:.5f}  "
+              f"unseen phys={mu:.5f}+-{su:.5f}  "
+              f"degradation x{mu / mc if mc else float('nan'):.2f}",
+              flush=True)
 
     dq = out["arms"]["qhas"]["degradation_ratio"]
     dc = out["arms"]["classical"]["degradation_ratio"]
