@@ -1,0 +1,57 @@
+{
+ "fold": "tearing",
+ "scenario": "harris_tearing",
+ "train_on": [
+  "kh",
+  "ot",
+  "rotor"
+ ],
+ "n_trials": 4,
+ "best_train_loss": 0.25512030409188696,
+ "classical_params": {
+  "threshold_amr": 0.46161012794549355
+ },
+ "classical_train_loss": 0.3835050725284849,
+ "hyperparams": {
+  "gamma_hydro": 2.0,
+  "gamma_mag": 0.5,
+  "kappa": 10.0,
+  "beta": 6.635994074133233,
+  "w_z_frac": 5.627932047415165,
+  "sigma": 0.2696964402189823,
+  "beta_curl": 4.818313802505147,
+  "beta_xpoint": 1.9172075941288886,
+  "threshold_amr": 0.14959824837662078
+ },
+ "qhas": {
+  "combined": 0.23301354925847778,
+  "phys_score": 0.018542338527086213,
+  "patch_ratio": 0.7691915760869565,
+  "wall_s": 240.1191532611847
+ },
+ "classical": {
+  "combined": 0.18173490078520044,
+  "phys_score": 0.004428861099280601,
+  "patch_ratio": 0.625,
+  "wall_s": 72.74688696861267
+ },
+ "t_dns": 203.35310006141663,
+ "t_tune": 1549.4685208797455,
+ "t_tune_classical": 871.4586725234985,
+ "git_hash": "4f3b2c382c76c317b2e53d49404e82f269d6972c",
+ "cli_args": {
+  "folds": [
+   "tearing"
+  ],
+  "n_trials": 4,
+  "n_trials_classical": 2,
+  "lambda_cost": null,
+  "seed": 0,
+  "verbose": false,
+  "list": false,
+  "out_prefix": "t15_level3",
+  "smoke": false,
+  "smoke_N": 64,
+  "smoke_tmax": 0.4
+ }
+}

@@ -1,0 +1,111 @@
+{
+ "lambda_prereg": 0.4,
+ "folds": [
+  {
+   "fold": "ot",
+   "scenario": "orszag_tang",
+   "qhas_phys": 0.19403454741107523,
+   "qhas_patch": 0.6796560613682092,
+   "classical_phys": 0.48450639869727985,
+   "classical_patch": 0.32384934607645877,
+   "dominance": null,
+   "lambda_star": 0.8163754049667857,
+   "lambda_star_in_range": true,
+   "winner_at_prereg_lambda": "qhas",
+   "winner_above_lambda_star": "classical",
+   "verdict_is_lambda_free": false
+  },
+  {
+   "fold": "kh",
+   "scenario": "kelvin_helmholtz",
+   "qhas_phys": 0.007002138906696718,
+   "qhas_patch": 0.8376436781609196,
+   "classical_phys": 0.002019720981734553,
+   "classical_patch": 0.625,
+   "dominance": "classical",
+   "lambda_star": -0.023430830241713965,
+   "lambda_star_in_range": false,
+   "winner_at_prereg_lambda": "classical",
+   "winner_above_lambda_star": null,
+   "verdict_is_lambda_free": true
+  },
+  {
+   "fold": "tearing",
+   "scenario": "harris_tearing",
+   "qhas_phys": 0.018542338527086213,
+   "qhas_patch": 0.7691915760869565,
+   "classical_phys": 0.004428861099280601,
+   "classical_patch": 0.625,
+   "dominance": "classical",
+   "lambda_star": -0.09788004133677201,
+   "lambda_star_in_range": false,
+   "winner_at_prereg_lambda": "classical",
+   "winner_above_lambda_star": null,
+   "verdict_is_lambda_free": true
+  }
+ ],
+ "excluded_failed_audit": [
+  "rotor"
+ ],
+ "counting_vs_lambda": [
+  {
+   "lambda": 0.0,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
+   "lambda": 0.2,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
+   "lambda": 0.4,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
+   "lambda": 0.6,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
+   "lambda": 0.8,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
+   "lambda": 1.0,
+   "n_qhas": 0,
+   "n_classical": 3
+  },
+  {
+   "lambda": 1.5,
+   "n_qhas": 0,
+   "n_classical": 3
+  },
+  {
+   "lambda": 2.0,
+   "n_qhas": 0,
+   "n_classical": 3
+  },
+  {
+   "lambda": 5.0,
+   "n_qhas": 0,
+   "n_classical": 3
+  }
+ ],
+ "count_changes_with_lambda": true,
+ "n_decided_without_lambda": 2,
+ "n_dominated_by_classical": 2,
+ "n_dominated_by_qhas": 0,
+ "git_hash": "d480259adad13ccbf7b5975beb275e0487274ba5",
+ "cli_args": {
+  "folds": [
+   "ot",
+   "kh",
+   "rotor",
+   "tearing"
+  ],
+  "results_dir": null
+ }
+}

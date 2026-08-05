@@ -1,0 +1,22 @@
+{
+ "hyperparams": {
+  "gamma_hydro": 2.0,
+  "gamma_mag": 0.5,
+  "kappa": 10.0,
+  "beta": 5.7137,
+  "w_z_frac": 72.5701,
+  "sigma": 0.1888,
+  "beta_curl": 2.7244,
+  "beta_xpoint": 2.1183,
+  "threshold_amr": 0.14959824837662078
+ },
+ "best_train_loss": 0.1984,
+ "n_trials": 4,
+ "classical_params": {
+  "threshold_amr": 0.46161012794549355
+ },
+ "classical_train_loss": 0.2978819115692985,
+ "t_tune": 5236.0,
+ "provenance": "recovered from logs/v4/level3.log after the container was reclaimed mid-run; QAOA params printed at 4-decimal precision, threshold_amr restored to full precision",
+ "t_tune_classical": 1041.9748237133026
+}

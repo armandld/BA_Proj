@@ -1,0 +1,151 @@
+{
+ "traces": [
+  {
+   "fold": "rotor",
+   "points": [
+    {
+     "threshold": 0.05,
+     "patch_ratio": 0.4096347845873786,
+     "phys_score": 0.03394822050876686,
+     "stored_wall_s": 474.07408142089844,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.03394822050876686
+    },
+    {
+     "threshold": 0.8,
+     "patch_ratio": 0.15234375,
+     "phys_score": 0.768983085476158,
+     "stored_wall_s": 15.041639566421509,
+     "completed": false,
+     "abort": {
+      "abort_step": 198,
+      "abort_time": 0.2612,
+      "partial_combined": 0.5928,
+      "diverged_fields": 0,
+      "n_fields": 5
+     },
+     "replay_phys": 0.768983085476158
+    },
+    {
+     "threshold": 0.42500000000000004,
+     "patch_ratio": 0.25441883484162897,
+     "phys_score": 0.6666418048722251,
+     "stored_wall_s": 89.60858941078186,
+     "completed": false,
+     "abort": {
+      "abort_step": 371,
+      "abort_time": 0.495,
+      "partial_combined": 0.5489,
+      "diverged_fields": 0,
+      "n_fields": 5
+     },
+     "replay_phys": 0.6666418048722251
+    },
+    {
+     "threshold": 0.23750000000000002,
+     "patch_ratio": 0.31806071753640774,
+     "phys_score": 0.38586769025263584,
+     "stored_wall_s": 393.1820993423462,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.38586769025263584
+    },
+    {
+     "threshold": 0.14375000000000002,
+     "patch_ratio": 0.3352880385315534,
+     "phys_score": 0.11424196507092785,
+     "stored_wall_s": 391.9960472583771,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.11424196507092785
+    },
+    {
+     "threshold": 0.09687500000000002,
+     "patch_ratio": 0.3561988015776699,
+     "phys_score": 0.0536450871441004,
+     "stored_wall_s": 418.2315535545349,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.0536450871441004
+    }
+   ],
+   "n_aborted": 2
+  },
+  {
+   "fold": "tearing",
+   "points": [
+    {
+     "threshold": 0.05,
+     "patch_ratio": 0.9597486413043478,
+     "phys_score": 0.003967683747140063,
+     "stored_wall_s": 94.98010158538818,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.003967683747140063
+    },
+    {
+     "threshold": 0.8,
+     "patch_ratio": 0.07269021739130435,
+     "phys_score": 4.1258313756677625,
+     "stored_wall_s": 20.207184076309204,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 4.1258313756677625
+    },
+    {
+     "threshold": 0.42500000000000004,
+     "patch_ratio": 0.625,
+     "phys_score": 0.004428861099280601,
+     "stored_wall_s": 70.92863965034485,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.004428861099280601
+    },
+    {
+     "threshold": 0.23750000000000002,
+     "patch_ratio": 0.625,
+     "phys_score": 0.004428861099280601,
+     "stored_wall_s": 71.44876050949097,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.004428861099280601
+    },
+    {
+     "threshold": 0.14375000000000002,
+     "patch_ratio": 0.625,
+     "phys_score": 0.004428861099280601,
+     "stored_wall_s": 70.1979193687439,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.004428861099280601
+    },
+    {
+     "threshold": 0.09687500000000002,
+     "patch_ratio": 0.625,
+     "phys_score": 0.004428861099280601,
+     "stored_wall_s": 69.9515540599823,
+     "completed": true,
+     "abort": null,
+     "replay_phys": 0.004428861099280601
+    }
+   ],
+   "n_aborted": 0
+  }
+ ],
+ "git_hash": "d480259adad13ccbf7b5975beb275e0487274ba5",
+ "cli_args": {
+  "folds": [
+   "rotor",
+   "tearing"
+  ],
+  "arms": [
+   "qhas",
+   "classical"
+  ],
+  "prefix": "t15_level3",
+  "seed": 0,
+  "trace_only": true
+ },
+ "wall_s": 2126.675113916397
+}
