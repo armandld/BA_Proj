@@ -17,3 +17,4 @@ DNS pre-computed: 975 steps, 15 flux snapshots stored.
     thr=0.0500  patch=0.4096  phys=0.0339  -> ok
     thr=0.8000  patch=0.1523  phys=0.7690  -> ABORTED
     thr=0.4250  patch=0.2544  phys=0.6666  -> ABORTED
+    thr=0.2375  patch=0.3181  phys=0.3859  -> ok
