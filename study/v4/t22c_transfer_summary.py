@@ -87,6 +87,34 @@ def analyse(rec):
     z = (abs(deg_q - deg_c) / sd_deg_q
          if sd_deg_q and np.isfinite(sd_deg_q) else float("nan"))
 
+    # DEPLACEMENT DU RAPPORT ENTRE BRAS :
+    #     R(cond) = phys_qhas(cond) / phys_classical(cond)
+    #     shift   = R_unseen / R_canonical
+    #
+    # ATTENTION — je l'avais d'abord presente comme une mesure « non
+    # confondue », par opposition au rapport des degradations. C'EST FAUX :
+    #     R_uns/R_can = (qu/cu)/(qc/cc) = (qu/qc)/(cu/cc) = deg_q/deg_c
+    # les deux quantites sont ALGEBRIQUEMENT IDENTIQUES, d'ou le meme |z|.
+    # Ce n'est donc qu'une reformulation, pas un controle supplementaire.
+    #
+    # Le confondant demeure et n'est PAS traite ici : si la condition
+    # inedite est plus facile et que les deux bras butent sur un plancher
+    # commun (discretisation, budget), ils convergent quelle que soit la
+    # qualite de leur regle de decision, et le rapport se resserre
+    # mecaniquement. Distinguer « plancher commun » de « meilleur
+    # transfert » demanderait de mesurer ce plancher — non fait.
+    # On rapporte donc le nombre, et le seul enonce qui n'en depende pas
+    # reste le comptage de dominance.
+    r_can = qc / cc if cc else float("nan")
+    r_uns = qu / cu if cu else float("nan")
+    shift = r_uns / r_can if r_can else float("nan")
+    sd_r_can = ratio_sd(qc, sqc, cc, 0.0)     # bras classique deterministe
+    sd_r_uns = ratio_sd(qu, squ, cu, 0.0)
+    sd_shift = ratio_sd(r_uns, sd_r_uns, r_can, sd_r_can)
+    # le rapport se deplace-t-il significativement par rapport a 1 ?
+    z_shift = (abs(shift - 1.0) / sd_shift
+               if sd_shift and np.isfinite(sd_shift) else float("nan"))
+
     # dominance sur la condition inedite, tirage par tirage (sans budget).
     # Les tirages AVORTES sont exclus : un plantage n'est pas une decision.
     qu_runs = [r for r in d["arms"]["qhas"].get("unseen_runs", [])
@@ -114,6 +142,11 @@ def analyse(rec):
         "deg_classical": float(deg_c),
         "separation_z": float(z),
         "separable": bool(np.isfinite(z) and z >= 2.0),
+        "arm_ratio_shift": float(shift),
+        "arm_ratio_shift_sd": float(sd_shift),
+        "arm_ratio_shift_z": float(z_shift),
+        "arm_ratio_shift_significant": bool(
+            np.isfinite(z_shift) and z_shift >= 2.0),
         "n_worse_on_unseen": int(worse),
         "n_costlier_on_unseen": int(costlier),
         "n_dominated_on_unseen": int(dominated),
@@ -157,6 +190,13 @@ def main():
         print(f"  {r['fold']:<9}{r['deg_qhas']:>10.3f}+-{r['deg_qhas_sd']:<6.3f}"
               f"{r['deg_classical']:>15.3f}{r['separation_z']:>7.2f}"
               f"{str(r['separable']):>11}")
+
+    print(f"\n  {'fold':<9}{'arm-ratio shift R_uns/R_can':>30}{'|z| vs 1':>10}"
+          f"{'significant':>13}   (= deg_Q/deg_C, same number)")
+    for r in recs:
+        print(f"  {r['fold']:<9}{r['arm_ratio_shift']:>19.3f}"
+              f"+-{r['arm_ratio_shift_sd']:<8.3f}{r['arm_ratio_shift_z']:>10.2f}"
+              f"{str(r['arm_ratio_shift_significant']):>13}")
 
     print(f"\n  {'fold':<9}{'phys ratio Q/C':>26}{'dominated on unseen':>22}")
     for r in recs:

@@ -21,6 +21,10 @@
    "deg_classical": 0.3893512739921144,
    "separation_z": 3.4519210914651044,
    "separable": true,
+   "arm_ratio_shift": 0.42509455360361764,
+   "arm_ratio_shift_sd": 0.1665465203761,
+   "arm_ratio_shift_z": 3.4519210914651044,
+   "arm_ratio_shift_significant": true,
    "n_worse_on_unseen": 5,
    "n_costlier_on_unseen": 5,
    "n_dominated_on_unseen": 5,
@@ -34,7 +38,7 @@
  "n_runs_total": 5,
  "n_worse_total": 5,
  "n_dominated_total": 5,
- "git_hash": "a1da0b12f3057d5c67d165a4fb71af9a6d4c9f48",
+ "git_hash": "8456056f026df66a8595fccc352a2485ebdf2643",
  "cli_args": {
   "folds": [
    "tearing"
