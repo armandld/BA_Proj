@@ -108,3 +108,15 @@ Hot-Start captured at t=0.9046
 DNS pre-computed: 408 steps, 18 flux snapshots stored.
 --- DNS pre-computation complete (audit/kh) ---
 
+
+  fold kh (kelvin_helmholtz)
+    qhas       COMPLETED   combined=0.2510  phys=0.0056
+      WARNING: replay 0.251035 != stored 0.244328 — audit unreliable for this arm
+    classical  COMPLETED   combined=0.1800  phys=0.0020
+    -> fold USABLE for the paired statistics
+
+--- Pre-computing DNS traces for audit/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (audit/rotor) ---
+
