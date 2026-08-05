@@ -1,0 +1,40 @@
+{
+ "folds": [
+  {
+   "fold": "tearing",
+   "n_runs": 5,
+   "classical_reference": "budget-matched threshold 0.4250 (forced)",
+   "qhas_canonical": 0.008458610510631228,
+   "qhas_canonical_sd": 0.002824843070202923,
+   "qhas_unseen": 0.12181061313508432,
+   "qhas_unseen_sd": 0.2677264882956981,
+   "classical_canonical": 0.004428861099280601,
+   "classical_unseen": 0.0017243827113390183,
+   "qhas_patch_unseen": 0.7956503378378378,
+   "classical_patch_unseen": 0.625,
+   "deg_qhas": 14.400782845124066,
+   "deg_qhas_sd": 32.014646983234954,
+   "deg_classical": 0.3893512739921144,
+   "separation_z": 0.43765691305199433,
+   "separable": false,
+   "n_worse_on_unseen": 4,
+   "n_costlier_on_unseen": 5,
+   "n_dominated_on_unseen": 4,
+   "ratio_canonical": 1.9098839004016623,
+   "ratio_unseen": 70.64012665755382
+  }
+ ],
+ "missing": [],
+ "single_run_only": [],
+ "n_separable": 0,
+ "n_runs_total": 5,
+ "n_worse_total": 4,
+ "n_dominated_total": 4,
+ "git_hash": "529bf555ff6d104332bc84ef91c23c417a1a7510",
+ "cli_args": {
+  "folds": [
+   "tearing"
+  ],
+  "mode": "unseen-ic"
+ }
+}

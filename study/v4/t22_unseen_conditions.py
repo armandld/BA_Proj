@@ -49,7 +49,7 @@ Sortie : results/t22_unseen_{mode}_{fold}.json
 Usage :
   python study/v4/t22_unseen_conditions.py --fold kh --mode unseen-ic
 """
-import argparse, json, os, sys, time
+import argparse, contextlib, io, json, os, sys, time
 
 import numpy as np
 
@@ -62,7 +62,8 @@ sys.path.insert(0, _HERE)
 from t1_feature_selection import git_commit_hash
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
-from t19_arm_divergence_audit import safe_classical_hyperparams
+from t19_arm_divergence_audit import (parse_abort,
+                                      safe_classical_hyperparams)
 
 # La valeur fuitee : ajustee sur les quatre classes, puis figee comme seuil
 # du bras QAOA quelle que soit la classe tenue.
@@ -232,14 +233,31 @@ def main():
     KEYS = ("combined", "phys_score", "patch_ratio")
 
     def repeat(hp, only, cfg_, dns_, n, tag):
-        """n executions ; le bras classique est deterministe, 1 suffit."""
+        """n executions, chacune verifiee CONTRE LA DIVERGENCE.
+
+        Sans ce controle une trajectoire avortee se melange aux autres :
+        sur `tearing` un tirage Q-HAS a rendu phys = 0.601 quand ses quatre
+        voisins donnaient 0.0017-0.0027, soit un facteur 300, et moyenne
+        comme ecart-type en devenaient absurdes (deg 14.4 +- 32.0). Le
+        statut ne peut PAS etre retrouve apres coup : le bras Q-HAS n'est
+        pas deterministe (D11), donc un rejeu ne reproduit pas le tirage
+        fautif. Il faut le capturer AU MOMENT de l'execution.
+        """
         runs = []
         for i in range(n):
-            r = run_arm(T, args.fold, cfg_, dns_, hp, only)
-            runs.append({k: float(r.get(k, np.nan)) for k in KEYS})
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                r = run_arm(T, args.fold, cfg_, dns_, hp, only, verbose=True)
+            ab = parse_abort(buf.getvalue())
+            ri = {k: float(r.get(k, np.nan)) for k in KEYS}
+            ri["completed"] = ab is None
+            ri["abort"] = ab
+            runs.append(ri)
+            tail = ("" if ab is None
+                    else "   **ABORTED step %d**" % ab["abort_step"])
             print(f"    {tag} run {i + 1}/{n}: "
-                  f"phys={runs[-1]['phys_score']:.5f} "
-                  f"patch={runs[-1]['patch_ratio']:.4f}", flush=True)
+                  f"phys={ri['phys_score']:.5f} "
+                  f"patch={ri['patch_ratio']:.4f}{tail}", flush=True)
         return runs
 
     for arm, hp, only in (("qhas", hp_q, False), ("classical", hp_c, True)):
@@ -248,18 +266,32 @@ def main():
         n = args.repeats if arm == "qhas" else min(2, args.repeats)
         can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical")
         uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen")
-        mc = float(np.mean([r["phys_score"] for r in can]))
-        mu = float(np.mean([r["phys_score"] for r in uns]))
-        sc = float(np.std([r["phys_score"] for r in can], ddof=1)) if n > 1 \
-            else 0.0
-        su = float(np.std([r["phys_score"] for r in uns], ddof=1)) if n > 1 \
-            else 0.0
+        # une trajectoire avortee n'est pas un point de mesure : on la
+        # compte et on l'exclut, jamais on ne la moyenne avec les autres
+        can_ok = [r for r in can if r["completed"]]
+        uns_ok = [r for r in uns if r["completed"]]
+        n_ab = (len(can) - len(can_ok)) + (len(uns) - len(uns_ok))
+        if n_ab:
+            print(f"    [{arm}] {n_ab} run(s) ABORTED, excluded from stats",
+                  flush=True)
+        if not can_ok or not uns_ok:
+            raise SystemExit(f"[{arm}] every run aborted on one condition")
+        mc = float(np.mean([r["phys_score"] for r in can_ok]))
+        mu = float(np.mean([r["phys_score"] for r in uns_ok]))
+        sc = (float(np.std([r["phys_score"] for r in can_ok], ddof=1))
+              if len(can_ok) > 1 else 0.0)
+        su = (float(np.std([r["phys_score"] for r in uns_ok], ddof=1))
+              if len(uns_ok) > 1 else 0.0)
         out["arms"][arm] = {
             "n_runs": n,
+            "n_completed_canonical": len(can_ok),
+            "n_completed_unseen": len(uns_ok),
+            "n_aborted": int(n_ab),
             "canonical_runs": can, "unseen_runs": uns,
-            "canonical": {k: float(np.mean([r[k] for r in can]))
+            "canonical": {k: float(np.mean([r[k] for r in can_ok]))
                           for k in KEYS},
-            "unseen": {k: float(np.mean([r[k] for r in uns])) for k in KEYS},
+            "unseen": {k: float(np.mean([r[k] for r in uns_ok]))
+                       for k in KEYS},
             "canonical_phys_sd": sc, "unseen_phys_sd": su,
             "degradation_ratio": float(mu / mc) if mc else float("nan"),
         }

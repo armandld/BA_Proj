@@ -15,23 +15,3 @@ DNS pre-computed: 123 steps, 11 flux snapshots stored.
 
 --- Pre-computing DNS traces for unseen/tearing ---
 Hot-Start captured at t=0.3059
-DNS pre-computed: 99 steps, 11 flux snapshots stored.
---- DNS pre-computation complete (unseen/tearing) ---
-
-
-  DNS signature canonical=5.690435e+04  unseen=4.742551e+04
-  trajectory actually changed: True
-    [qhas] canonical run 1/5: phys=0.00697 patch=0.9366
-    [qhas] canonical run 2/5: phys=0.01341 patch=0.7882
-    [qhas] canonical run 3/5: phys=0.00656 patch=0.9581
-    [qhas] canonical run 4/5: phys=0.00812 patch=0.8789
-    [qhas] canonical run 5/5: phys=0.00722 patch=0.9246
-    [qhas] unseen run 1/5: phys=0.00165 patch=0.9215
-    [qhas] unseen run 2/5: phys=0.00200 patch=0.6814
-    [qhas] unseen run 3/5: phys=0.00269 patch=0.7241
-    [qhas] unseen run 4/5: phys=0.00198 patch=0.8682
-    [qhas] unseen run 5/5: phys=0.60073 patch=0.7830
-  [qhas] canonical phys=0.00846+-0.00282  unseen phys=0.12181+-0.26773  degradation x14.40
-    [classical] canonical run 1/2: phys=0.00443 patch=0.6250
-    [classical] canonical run 2/2: phys=0.00443 patch=0.6250
-    [classical] unseen run 1/2: phys=0.00172 patch=0.6250

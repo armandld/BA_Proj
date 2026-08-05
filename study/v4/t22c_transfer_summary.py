@@ -87,8 +87,10 @@ def analyse(rec):
     z = (abs(deg_q - deg_c) / sd_deg_q
          if sd_deg_q and np.isfinite(sd_deg_q) else float("nan"))
 
-    # dominance sur la condition inedite, tirage par tirage (sans budget)
-    qu_runs = d["arms"]["qhas"].get("unseen_runs", [])
+    # dominance sur la condition inedite, tirage par tirage (sans budget).
+    # Les tirages AVORTES sont exclus : un plantage n'est pas une decision.
+    qu_runs = [r for r in d["arms"]["qhas"].get("unseen_runs", [])
+               if r.get("completed", True)]
     worse = sum(1 for r in qu_runs if r["phys_score"] > cu)
     costlier = sum(1 for r in qu_runs
                    if r["patch_ratio"] > c["unseen"]["patch_ratio"])
@@ -98,6 +100,8 @@ def analyse(rec):
     return {
         "fold": rec["fold"],
         "n_runs": q.get("n_runs"),
+        "n_aborted": q.get("n_aborted", 0),
+        "n_usable_unseen": len(qu_runs),
         "classical_reference": d.get("classical_reference_source"),
         "qhas_canonical": qc, "qhas_canonical_sd": sqc,
         "qhas_unseen": qu, "qhas_unseen_sd": squ,
@@ -156,13 +160,14 @@ def main():
     for r in recs:
         print(f"  {r['fold']:<9}{r['ratio_canonical']:>11.2f}x ->"
               f"{r['ratio_unseen']:>10.2f}x"
-              f"{r['n_dominated_on_unseen']:>15}/{r['n_runs']}"
+              f"{r['n_dominated_on_unseen']:>15}/{r['n_usable_unseen']}"
               f"  (worse {r['n_worse_on_unseen']}, "
               f"costlier {r['n_costlier_on_unseen']})")
 
     n_sep = sum(r["separable"] for r in recs)
     tot_dom = sum(r["n_dominated_on_unseen"] for r in recs)
-    tot_run = sum(r["n_runs"] for r in recs)
+    tot_run = sum(r["n_usable_unseen"] for r in recs)
+    tot_ab = sum(r.get("n_aborted", 0) for r in recs)
     tot_worse = sum(r["n_worse_on_unseen"] for r in recs)
 
     print("\n  " + "-" * 78)
@@ -173,6 +178,8 @@ def main():
         print("     unseen conditions is NOT separable from the sampling")
         print("     noise of the unseen QAOA chain (D11). No transfer claim")
         print("     in either direction is supported.")
+    if tot_ab:
+        print(f"  aborted Q-HAS runs excluded across folds: {tot_ab}")
     print(f"  Q-HAS less faithful on the unseen condition: "
           f"{tot_worse}/{tot_run} runs")
     print(f"  Q-HAS strictly dominated on the unseen condition: "
