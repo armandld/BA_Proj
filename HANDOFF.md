@@ -75,16 +75,38 @@ confirmed independently by a mapper that never had the defect.
 |---|---|---|---|---|
 | `ot` | 0.6797, 0.1940 | 0.6412, **0.0827** | 2.57× | yes |
 | `kh` | 0.8376, 0.0070 | 0.7943, **0.0017** | 4.41× | yes |
-| `rotor` | 0.3761, 0.1678 | 0.3562, **0.0536** | 3.62× | yes |
+| `rotor` † | 0.3761, 0.1678 | 0.3562, **0.0536** | 3.62× | yes |
 | `tearing` | 0.7692, 0.0185 | 0.6250, **0.0044** | 4.38× | yes |
 
 In every case the classical arm is **both more faithful and cheaper**.
 
-The pre-registered *primary* endpoint splits **2–2** and establishes
-nothing under its own ≥3/4 rule. I argue it is contaminated by D4 (the two
-arms are tuned at different operating points). **That argument is the main
-interpretive step in the analysis and is a judgement, not a measurement —
-decide it yourself.**
+† `rotor`'s *tuned* classical arm diverged, so its primary comparison is
+void; its budget-matched point was separately verified complete and
+reproduced exactly, so this row stands.
+
+**The primary endpoint, corrected.** An earlier reading reported a 2–2
+split establishing nothing. That count **included `rotor`**, whose classical
+arm had diverged (T19) and was therefore scored as a Q-HAS win. Excluding it
+as pre-registration §5 requires:
+
+| λ | Q-HAS wins | classical wins |
+|---|---|---|
+| 0.4 (pre-registered) | 1 | **2** |
+| ≥ 1.0 | **0** | **3** |
+
+And **2/3 folds are decided with no λ at all** (Pareto dominance, both
+classical). The remaining fold `ot` flips at λ\* = 0.8164.
+
+So what was previously an *argument* ("the endpoint is D4-contaminated") is
+now a **measurement** (T21): the verdict is partly a property of the chosen
+λ, not of the arms. At λ ≥ 1 the classical arm meets the pre-registered
+refutation threshold on 3/3 valid folds.
+
+The residual judgement is narrower than before: whether λ = 0.4 rather than
+λ = 1 is the defensible weighting. Nothing in the pre-registration justifies
+either. **Removing D4 entirely would need the QAOA arm re-tuned with
+`threshold_amr` in its search space — hours of compute, and the definitive
+experiment.**
 
 ---
 

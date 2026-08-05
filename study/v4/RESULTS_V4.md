@@ -875,3 +875,93 @@ python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
 **This is the strongest methodological caveat in the V4 set, and it applies
 to V1's own published closed-loop numbers too** — those were also single
 runs of the same unseeded pipeline.
+
+---
+
+## T19 complete + T21 — the endpoint judgement becomes a measurement
+
+### T19 arm audit, all four folds
+
+| fold | Q-HAS arm | classical arm | verdict |
+|---|---|---|---|
+| `ot` | completed | completed | **usable** |
+| `kh` | completed | completed | **usable** |
+| `rotor` | completed | **ABORTED, step 208 (t=0.2739)** | **failed** |
+| `tearing` | completed | completed | **usable** |
+
+The classical arm reproduced its stored value **bit-exactly on all four
+folds**; the Q-HAS arm reproduced on **none** — the D11 signature.
+
+### T19 bisection-trace audit
+
+| fold | aborted points |
+|---|---|
+| `rotor` | **2/6** — thr 0.4250 (step 371), thr 0.8000 (step 198) |
+| `tearing` | **0/6** |
+
+**A heuristic would have been wrong here.** `tearing`'s point at
+phys = 4.1258 looks like a divergence and is not: it *completed*. It is a
+genuine operating point at thr = 0.8, patch = 0.0727 — refine almost
+nothing and the solution is badly wrong but stable. A rule such as
+"phys > 1 ⇒ diverged" would have deleted a valid frontier point. The
+criterion used is V1's own execution trace, never the value.
+
+`rotor`'s two aborts also explain its fold failure: the tuned classical
+threshold, 0.4616, sits inside the unstable band between 0.4250 and 0.8000.
+The tuner selected an operating point that diverges on the held-out class —
+a second instance of D4 doing damage.
+
+### T21 — is the primary endpoint well posed?
+
+Replaces the *argument* "the primary endpoint is contaminated by D4" with
+three measurements, none requiring new simulation. `rotor` excluded per
+pre-registration §5 (failed audit).
+
+**1. Pareto dominance — no λ involved.**
+
+| fold | dominates | λ-free verdict |
+|---|---|---|
+| `kh` | **classical** | yes |
+| `tearing` | **classical** | yes |
+| `ot` | incomparable | no |
+
+**2/3 folds are decided without any λ, both for the classical arm, none
+for Q-HAS.**
+
+**2. λ crossover**, for the fold dominance cannot decide. The two arms'
+`combined` cross at λ\* = (phys_c − phys_q)/(patch_q − patch_c):
+
+- `ot`: **λ\* = 0.8164**. Q-HAS wins below, classical above. The
+  pre-registered λ = 0.4 sits **below** the crossover.
+
+**3. Count stability across λ:**
+
+| λ | Q-HAS wins | classical wins |
+|---|---|---|
+| 0.0 – 0.8 | 1 | **2** |
+| **≥ 1.0** | **0** | **3** |
+
+**Correction to an earlier reading.** The "2–2 split establishes nothing"
+reported before the audit **included `rotor`**, whose classical arm had
+diverged and was therefore scored as a Q-HAS win. With `rotor` excluded as
+pre-registration §5 requires, the primary endpoint favours the classical arm
+**2–1 at the pre-registered λ**, and **3–0 for λ ≥ 1**.
+
+At λ ≥ 1 the classical arm meets the pre-registered refutation threshold
+(§4: *"If the classical arm wins on ≥ 3/4 folds … the falsification is
+complete and closed-loop"*), on 3/3 valid folds.
+
+**What this measures and what it does not.** It measures that the verdict is
+partly a property of the chosen λ rather than of the arms — ill-posedness,
+quantified, not asserted. It does **not** remove D4. Removing it requires
+re-tuning the QAOA arm with `threshold_amr` in the search space so both arms
+optimise the same free parameters: hours of compute, and the definitive
+experiment.
+
+### Figure updated
+
+`figures_v4/pareto_panel.*` now (a) excludes `rotor`'s two aborted points
+from the plotted frontier, and (b) uses a **logarithmic error axis** — the
+classes span 1–3 decades, and since the compared quantity *is* a ratio, a
+log axis makes a given ratio span the same vertical distance in every panel.
+The full data, including excluded points, remains in the `.csv`.

@@ -31,3 +31,10 @@ DNS pre-computed: 123 steps, 11 flux snapshots stored.
 
     thr=0.0500  patch=0.9597  phys=0.0040  -> ok
     thr=0.8000  patch=0.0727  phys=4.1258  -> ok
+    thr=0.4250  patch=0.6250  phys=0.0044  -> ok
+    thr=0.2375  patch=0.6250  phys=0.0044  -> ok
+    thr=0.1438  patch=0.6250  phys=0.0044  -> ok
+    thr=0.0969  patch=0.6250  phys=0.0044  -> ok
+    -> 0/6 points came from an aborted run
+
+  saved: t19_budget_trace_audit.json

@@ -26,7 +26,7 @@ Usage :
   python study/v4/make_pareto_panel.py
   python study/v4/make_pareto_panel.py --folds ot kh rotor tearing
 """
-import argparse, os, sys
+import argparse, json, os, sys
 
 import numpy as np
 
@@ -56,6 +56,36 @@ def available_folds(results_dir, folds):
         if os.path.exists(p):
             keep.append(f)
     return keep
+
+
+def load_trace_audit(results_dir):
+    """Points de bissection dont la trajectoire a AVORTE, par fold.
+
+    La courbe est presentee comme la frontiere ATTEIGNABLE : un point issu
+    d'une execution avortee n'est pas un point de fonctionnement et n'a
+    rien a y faire. Le critere est l'audit T19 (la trace d'execution de V1
+    elle-meme), PAS une heuristique sur la valeur : sur `tearing`, le point
+    a phys = 4.13 a bel et bien termine — c'est un regime de raffinement
+    quasi nul, mauvais mais atteignable. Une regle du type « phys > 1 donc
+    divergence » l'aurait supprime a tort.
+    """
+    p = os.path.join(results_dir, "t19_budget_trace_audit.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p))
+    return {t["fold"]: [pt["threshold"] for pt in t["points"]
+                        if not pt["completed"]]
+            for t in d.get("traces", [])}
+
+
+def drop_aborted(front, aborted_thresholds, tol=1e-9):
+    """Retire de la frontiere les points marques avorts par l'audit."""
+    if not aborted_thresholds:
+        return front, 0
+    keep = [r for r in front
+            if not any(abs(r.get("thr", float("nan")) - t) < tol
+                       for t in aborted_thresholds)]
+    return keep, len(front) - len(keep)
 
 
 def _style_axes(ax):
@@ -97,27 +127,36 @@ def draw_panel(ax, front, q, fold):
     # figure), le demi-plan superieur est le seul degage a coup sur.
     # L'etiquette directe reste obligatoire : l'identite d'un point n'est
     # jamais portee par la seule couleur.
+    # Le rapport est place A COTE du marqueur, a SA hauteur (jamais au
+    # milieu de l'ecart : sur Kelvin-Helmholtz cet ecart est minuscule en
+    # unites d'axe et le texte tombait sur la frontiere). Il bascule a
+    # gauche au-dela de 0.70 de budget, ou la droite deborderait.
     if np.isfinite(ratio):
+        right = q["patch"] <= 0.70
         ax.annotate(f"{ratio:.1f}× worse\nat equal budget",
                     xy=(q["patch"], q["phys"]),
-                    xytext=(0, 8), textcoords="offset points",
-                    ha="center", va="bottom",
+                    xytext=(10 if right else -10, 0),
+                    textcoords="offset points",
+                    ha="left" if right else "right", va="center",
                     color=INK_SECONDARY, fontsize=8)
-        y_lab = 34          # au-dessus des deux lignes du rapport
-    else:
-        y_lab = 11
     ax.annotate("Q-HAS", xy=(q["patch"], q["phys"]),
-                xytext=(0, y_lab), textcoords="offset points", ha="center",
+                xytext=(0, 11), textcoords="offset points", ha="center",
                 color=INK_PRIMARY, fontsize=8.5, weight="bold")
 
     ax.set_title(FOLD_TITLES.get(fold, fold), color=INK_PRIMARY,
                  fontsize=10, weight="bold", loc="left", pad=6)
     ax.set_xlim(-0.03, 1.03)
-    # marge haute : les deux etiquettes empilees occupent ~40 pt
-    # au-dessus du marqueur, il faut donc de la place meme quand
-    # Q-HAS est le point le plus haut du panneau
-    y_top = max(max(ys), q["phys"] * 1.55) * 1.12
-    ax.set_ylim(0.0, y_top)   # une erreur relative negative n'existe pas
+    # Axe des erreurs LOGARITHMIQUE. Les erreurs couvrent 1 a 3 decades
+    # selon la classe (Harris tearing va de 0.004 a 4.13, ce dernier point
+    # etant atteignable et non divergent : l'audit T19 le confirme). En
+    # lineaire il ecrase tout le reste du panneau. Surtout, la grandeur
+    # comparee EST un rapport : en log, un meme rapport occupe la meme
+    # distance verticale dans tous les panneaux, ce que l'echelle lineaire
+    # ne permet pas.
+    ax.set_yscale("log")
+    lo = min(min(ys), q["phys"])
+    hi = max(max(ys), q["phys"])
+    ax.set_ylim(lo / 2.2, hi * 2.6)
     return q_ref, ratio
 
 
@@ -156,8 +195,10 @@ def build_panel(records, out_dir, ncols=2):
     title = f"Q-HAS lies above the classical error\u2013cost frontier {scope}"
     note = ("Per-panel error axes are independent: instability classes "
             "differ in dynamic range, and a shared axis would imply a "
-            "cross-class comparability that does not hold. The annotated "
-            "ratio is dimensionless and is comparable across panels.")
+            "cross-class comparability that does not hold. The error axis "
+            "is logarithmic, so a given ratio spans the same vertical "
+            "distance in every panel. Frontier points from runs that "
+            "aborted on divergence are excluded (T19 audit).")
     # ~9.6 caracteres par pouce a 12.5 pt gras ; marge droite reservee
     title_lines = textwrap.wrap(title, width=max(24, int((W - 0.25) * 9.6)))
     note_lines = textwrap.wrap(note, width=max(60, int(W * 21)))
@@ -237,9 +278,19 @@ def main():
     if not folds:
         raise SystemExit("no budget-matched fold available; run t15b first.")
 
-    records = []
+    audit = load_trace_audit(RESULTS_DIR)
+    if audit is None:
+        print("  WARNING: no t19 trace audit; frontier may include points "
+              "from aborted runs")
+    records, n_dropped_total = [], 0
     for f in folds:
         front, q, tuned, d = load_points(RESULTS_DIR, f)
+        if audit is not None:
+            front, n_drop = drop_aborted(front, audit.get(f, []))
+            n_dropped_total += n_drop
+            if n_drop:
+                print(f"  {f}: dropped {n_drop} frontier point(s) from "
+                      f"aborted runs (t19 audit)")
         records.append({"fold": f, "front": front, "q": q, "tuned": tuned})
 
     base, rows = build_panel(records, args.out_dir, ncols=args.ncols)
