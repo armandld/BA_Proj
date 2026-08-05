@@ -102,6 +102,8 @@ def analyse(rec):
         "n_runs": q.get("n_runs"),
         "n_aborted": q.get("n_aborted", 0),
         "n_usable_unseen": len(qu_runs),
+        "dns_relative_shift": d.get("dns_relative_shift"),
+        "weak_condition": bool(d.get("unseen_condition_is_weak", False)),
         "classical_reference": d.get("classical_reference_source"),
         "qhas_canonical": qc, "qhas_canonical_sd": sqc,
         "qhas_unseen": qu, "qhas_unseen_sd": squ,
@@ -163,6 +165,13 @@ def main():
               f"{r['n_dominated_on_unseen']:>15}/{r['n_usable_unseen']}"
               f"  (worse {r['n_worse_on_unseen']}, "
               f"costlier {r['n_costlier_on_unseen']})")
+
+    weak = [r["fold"] for r in recs if r.get("weak_condition")]
+    if weak:
+        print(f"\n  NEARLY VACUOUS unseen condition (<1% trajectory shift): "
+              f"{', '.join(weak)}")
+        print("  Those folds cannot support a transfer claim: the 'unseen'")
+        print("  condition is barely distinguishable from the canonical one.")
 
     n_sep = sum(r["separable"] for r in recs)
     tot_dom = sum(r["n_dominated_on_unseen"] for r in recs)

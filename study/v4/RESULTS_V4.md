@@ -1201,3 +1201,36 @@ unrecoverable. Its checkpoint carries an explicit provenance note: *"recovered
 from logs/v4/level3.log after the container was reclaimed mid-run; QAOA
 params printed at 4-decimal precision"*. The other three folds have full
 trial-level records.
+
+### Trap sweep, second pass: is the "unseen" condition actually unseen?
+
+The T22 guard checked only that the trajectory *changed*. Two failure modes
+slipped through it:
+
+**(a) A diverged DNS would pass.** A trajectory that blows up produces a
+huge signature, which reads as "changed". Checked by hand across all four
+folds: signature ratios are 0.83–1.08, modest shifts with no blow-up, so
+this did not fire. A finiteness test and a physical band (0.05–20) are now
+enforced automatically.
+
+**(b) A negligible change also passes.** This one *did* fire:
+
+| fold | trajectory shift at hot start |
+|---|---|
+| `harris_tearing` | −16.7 % |
+| `mhd_rotor` | −15.9 % |
+| `kelvin_helmholtz` | +7.5 % |
+| **`orszag_tang`** | **−0.3 %** |
+
+`orszag_tang` exposes no initial-condition parameters, so its only available
+"unseen condition" is a different Reynolds number — and Re 400 → 600 moves
+the hot-start trajectory by **0.3 %**, some 20–50× less than the three
+classes where the initial condition itself can be varied.
+
+**Fold `ot`'s transfer test is therefore nearly vacuous** and must be
+reported as such rather than counted alongside the other three. T22 now
+warns below a 1 % shift and records `unseen_condition_is_weak`; T22c prints
+the affected folds and refuses to let them carry a transfer claim.
+
+This is a limitation of V1's API, not of the test: `init_orszag_tang()`
+takes no arguments, and `src/` is read-only.

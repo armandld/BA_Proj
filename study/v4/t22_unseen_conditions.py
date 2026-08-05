@@ -219,15 +219,39 @@ def main():
     # --- unseen initial condition -------------------------------------
     dns_uns = build_traces(T, args.fold, cfg, scenario, unseen=True)
     sig_uns = dns_signature(*dns_uns[args.fold])
-    changed = abs(sig_uns - sig_can) > 1e-6 * max(abs(sig_can), 1.0)
+    rel = abs(sig_uns - sig_can) / max(abs(sig_can), 1e-30)
     print(f"\n  DNS signature canonical={sig_can:.6e}  unseen={sig_uns:.6e}")
-    print(f"  trajectory actually changed: {changed}")
-    if not changed:
+    print(f"  relative shift: {rel:.4%}")
+
+    # Trois controles, pas un seul. « A change » ne suffit pas :
+    #  - la trace doit etre FINIE (une DNS partie en vrille passerait le
+    #    test de changement avec une signature enorme) ;
+    #  - le changement doit etre REEL (l'override a bien pris) ;
+    #  - et surtout SIGNIFICATIF : sur `ot` la seule variation possible est
+    #    le Reynolds, et 400->600 ne deplace le hot start que de 0.3 %,
+    #    contre 7-17 % pour les trois classes ou l'on peut varier la
+    #    condition initiale elle-meme. Un ecart de cet ordre ne teste rien.
+    if not np.isfinite(sig_uns) or not np.isfinite(sig_can):
+        raise SystemExit("non-finite DNS signature: the trajectory diverged")
+    if not 0.05 < (sig_uns / sig_can if sig_can else 0) < 20.0:
+        raise SystemExit(
+            f"DNS signature ratio {sig_uns / sig_can:.3g} is out of any "
+            f"physical band: the unseen condition likely diverged")
+    if rel <= 1e-6:
         raise SystemExit(
             "the unseen condition produced an IDENTICAL trajectory; the "
             "override did not take effect and the comparison would be void.")
+    WEAK = 0.01
+    weak = rel < WEAK
+    if weak:
+        print(f"  WARNING: the unseen condition shifts the trajectory by "
+              f"only {rel:.4%} (< {WEAK:.0%}). This fold's transfer test is "
+              f"NEARLY VACUOUS and must be reported as such.")
+    changed = True
     out["dns_signature_canonical"] = sig_can
     out["dns_signature_unseen"] = sig_uns
+    out["dns_relative_shift"] = float(rel)
+    out["unseen_condition_is_weak"] = bool(weak)
 
     cfg_uns = unseen_config(cfg, scenario)
     KEYS = ("combined", "phys_score", "patch_ratio")
