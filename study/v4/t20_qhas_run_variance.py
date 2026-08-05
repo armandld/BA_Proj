@@ -155,8 +155,39 @@ def main():
     # representatif — sur `kh` il s'est trouve etre le maximum des six
     # tirages connus, ce qui gonfle mecaniquement l'ecart. On rapporte donc
     # les DEUX lectures, et c'est celle fondee sur la MOYENNE qui fait foi.
+    # QUELLE reference classique ? Si le bras classique du fold a AVORTE
+    # (audit T19), sa valeur est un score partiel de trajectoire tronquee :
+    # la comparer a Q-HAS n'a aucun sens et produit un ecart enorme et
+    # trompeur — sur `rotor`, gap/sd = 15.9 contre une execution plantee.
+    # Dans ce cas on prend le point classique BUDGET-APPARIE, dont l'audit
+    # a verifie qu'il termine.
     stored_q = rec["qhas"]["phys_score"]
     stored_c = rec["classical"]["phys_score"]
+    ref_source = "tuned classical arm"
+    audit_path = os.path.join(RESULTS_DIR, "t19_arm_divergence_audit.json")
+    classical_completed = None
+    if os.path.exists(audit_path):
+        try:
+            au = json.load(open(audit_path))
+            for r in au.get("results", []):
+                if r["fold"] == args.fold:
+                    classical_completed = bool(
+                        r["arms"]["classical"]["completed"])
+        except (ValueError, KeyError):
+            pass
+    if classical_completed is False:
+        bpath = os.path.join(
+            RESULTS_DIR, f"t15b_budget_matched_{args.fold}.json")
+        if os.path.exists(bpath):
+            stored_c = float(json.load(open(bpath))
+                             ["matched_classical"]["phys_score"])
+            ref_source = "budget-matched classical (tuned arm ABORTED)"
+        else:
+            stored_c = float("nan")
+            ref_source = "UNAVAILABLE (tuned arm aborted, no t15b)"
+    print(f"\n  classical reference: {ref_source}"
+          f"{'' if classical_completed is not None else '  [T19 audit absent]'}")
+
     sd = q_stats["phys_score"]["std"]
     mean_q = q_stats["phys_score"]["mean"]
     gap_stored = abs(stored_q - stored_c)
@@ -202,6 +233,8 @@ def main():
         "gap_over_std_from_mean": float(r_mean),
         "gap_over_std": float(ratio),          # = version moyenne
         "stored_percentile_among_draws": float(pct),
+        "classical_reference_source": ref_source,
+        "classical_arm_completed": classical_completed,
         "shots": cfg.get("shots"),
         "git_hash": git_commit_hash(),
         "cli_args": vars(args),
