@@ -18,6 +18,14 @@ tout le domaine et donne l'erreur residuelle du solveur a cette resolution,
 c'est-a-dire le meilleur resultat qu'une regle de decision, quelle qu'elle
 soit, peut esperer.
 
+ATTENTION — CE « PLANCHER » N'EST PAS UNE BORNE INFERIEURE. C'est l'erreur
+obtenue en raffinant presque tout, donc une ESTIMATION de l'optimum
+atteignable, pas un optimum certifie. La mesure sur `rotor` le prouve : en
+condition inedite le bras classique regle atteint 0.98x cette valeur, il la
+BAT. Raffiner davantage n'ameliore donc pas toujours l'erreur. Les rapports
+ci-dessous se lisent « par rapport au raffinement quasi-complet », et non
+« par rapport au mieux possible ».
+
 LECTURE. Pour chaque condition on rapporte l'ecart de chaque bras AU
 PLANCHER, phys / phys_floor :
   - si les deux bras sont a ~1.0x du plancher sur la condition inedite, le
@@ -128,9 +136,14 @@ def main():
 
     dq = out["arms"]["qhas"]["unseen_over_floor"]
     dc_ = out["arms"]["classical"]["unseen_over_floor"]
+    # un bras SOUS 1.0 signale que la reference n'est pas une borne
+    below = min(dq, dc_) < 1.0
     at_floor = dq < 1.5 and dc_ < 1.5
     out["both_arms_at_floor_on_unseen"] = bool(at_floor)
     print("\n  " + "-" * 74)
+    if below:
+        print("  NOTE: an arm scores BELOW 1.00x, so near-full refinement is")
+        print("  not optimal here and this reference is not a lower bound.")
     if at_floor:
         print("  => BOTH arms sit within 1.5x of the attainable floor on the")
         print("     unseen condition. The narrowing of their ratio is floor")
