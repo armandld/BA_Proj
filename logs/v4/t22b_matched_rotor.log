@@ -9,3 +9,16 @@ Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for canonical/rotor ---
 Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (canonical/rotor) ---
+
+
+--- Pre-computing DNS traces for unseen/rotor ---
+Hot-Start captured at t=0.2003
+DNS pre-computed: 648 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (unseen/rotor) ---
+
+
+  DNS signature canonical=9.274266e+04  unseen=7.803497e+04
+  trajectory actually changed: True
+    [qhas] canonical run 1/5: phys=0.62709 patch=0.2879   **ABORTED step 690**

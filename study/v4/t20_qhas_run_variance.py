@@ -38,7 +38,7 @@ Sortie : results/t20_qhas_run_variance_{fold}.json
 Usage :
   python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
 """
-import argparse, json, os, sys, time
+import argparse, contextlib, io, json, os, sys, time
 
 import numpy as np
 
@@ -51,6 +51,7 @@ sys.path.insert(0, _HERE)
 from t1_feature_selection import git_commit_hash
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
+from t19_arm_divergence_audit import parse_abort
 
 METRICS = ("combined", "phys_score", "patch_ratio")
 
@@ -115,24 +116,50 @@ def main():
     hp_c.update(rec["classical_params"])
 
     t0 = time.time()
+    def guarded(hp, only):
+        """Une execution, avec son statut d'avortement CAPTURE.
+
+        Indispensable ici : le bras Q-HAS n'est pas deterministe (D11), donc
+        un tirage divergent ne peut pas etre identifie apres coup en le
+        rejouant. T22 l'a paye — un tirage a phys=0.601 contre 0.002 chez
+        ses voisins avait ete moyenne avec eux.
+        """
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            r = run_arm(T, args.fold, cfg, dns_held, hp, only, verbose=True)
+        ab = parse_abort(buf.getvalue())
+        d = {m: float(r.get(m, np.nan)) for m in METRICS}
+        d["completed"] = ab is None
+        d["abort"] = ab
+        return d
+
     q_runs = []
     for i in range(args.repeats):
-        r = run_arm(T, args.fold, cfg, dns_held, hp_q, False)
-        q_runs.append({m: float(r.get(m, np.nan)) for m in METRICS})
+        q_runs.append(guarded(hp_q, False))
         print(f"  Q-HAS run {i + 1}/{args.repeats}: "
               f"combined={q_runs[-1]['combined']:.4f} "
               f"phys={q_runs[-1]['phys_score']:.4f} "
-              f"patch={q_runs[-1]['patch_ratio']:.4f}", flush=True)
+              f"patch={q_runs[-1]['patch_ratio']:.4f}"
+              f"{'' if q_runs[-1]['completed'] else '   **ABORTED**'}",
+              flush=True)
 
     c_runs = []
     for i in range(args.classical_repeats):
-        r = run_arm(T, args.fold, cfg, dns_held, hp_c, True)
-        c_runs.append({m: float(r.get(m, np.nan)) for m in METRICS})
+        c_runs.append(guarded(hp_c, True))
         print(f"  classical run {i + 1}/{args.classical_repeats}: "
               f"combined={c_runs[-1]['combined']:.4f} "
               f"phys={c_runs[-1]['phys_score']:.4f}", flush=True)
 
-    q_stats, c_stats = summarise(q_runs), summarise(c_runs)
+    # une trajectoire avortee n'est pas un point de mesure
+    n_ab = sum(1 for r in q_runs + c_runs if not r["completed"])
+    if n_ab:
+        print(f"\n  {n_ab} run(s) ABORTED — excluded from the statistics",
+              flush=True)
+    q_ok = [r for r in q_runs if r["completed"]]
+    c_ok = [r for r in c_runs if r["completed"]]
+    if len(q_ok) < 2 or not c_ok:
+        raise SystemExit("too few completed runs to summarise")
+    q_stats, c_stats = summarise(q_ok), summarise(c_ok)
 
     print("\n  " + "-" * 80)
     print(f"  {'metric':<14}{'Q-HAS mean':>12}{'std':>10}{'range':>10}"
@@ -230,6 +257,8 @@ def main():
         "fold": args.fold,
         "scenario": rec["scenario"],
         "repeats": args.repeats,
+        "n_aborted": int(n_ab),
+        "n_completed_qhas": len(q_ok),
         "qhas_runs": q_runs,
         "classical_runs": c_runs,
         "qhas_stats": q_stats,

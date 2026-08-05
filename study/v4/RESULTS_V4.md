@@ -1148,3 +1148,56 @@ restored identically afterwards.
 The reported quantity is the **degradation ratio** of each arm,
 phys(unseen) / phys(canonical), so the comparison is between how the two
 decision rules *transfer*, not between their absolute errors.
+
+---
+
+## Trap sweep — where else can an invalid run masquerade as a valid one?
+
+The recurring failure mode in this campaign is a computation that fails but
+returns a value **indistinguishable from a valid one**. It has now surfaced
+five times (T15 fold scoring, T20 gap/sd, T22 classical reference, T22
+Q-HAS draws, and the T13/T19 filename overwrites). A systematic sweep of
+every `run_arm` call site in `study/v4/`:
+
+| call site | guarded? | recoverable after the fact? |
+|---|---|---|
+| `t15:313` Q-HAS fold arm | no | **no** — non-deterministic (D11) |
+| `t15:319` classical fold arm | no | yes — deterministic, T19 audits it |
+| `t15b:66` bisection points | no | yes — classical only, T19 `--trace-only` audits it |
+| `t19:88` audit replay | **yes** | — |
+| `t20:120` Q-HAS variance draws | **was no** | **no** |
+| `t20:129` classical control | was no | yes |
+| `t22:250` both arms | **yes** (fixed) | — |
+
+**The one that mattered: T20's Q-HAS draws.** Those 20 runs underpin the
+restated Claim E, and their completion was never verified. Because the arm
+is non-deterministic, it **cannot** be verified now — replaying does not
+reproduce the draw.
+
+Evidence bounding the risk, short of a re-run: a divergence produces a
+partial score wildly out of family with its siblings — the T22 case was
+**300×**. The T20 spreads are max/min = 1.5 (`ot`), 2.9 (`tearing`),
+2.7 (`rotor`), 3.6 (`kh`), and no draw exceeds phys = 1. All are consistent
+with D11's measured CV of 17–49 %, none shows the divergence signature. So
+contamination is **unlikely but unproven**.
+
+`t20` now captures the abort marker per run and excludes aborted runs from
+the statistics. A verified re-run is queued behind T22b; until it lands, the
+Claim E numbers carry this caveat.
+
+### Two smaller findings from the same sweep
+
+**Optuna tuning was clean.** All completed trial values across the three
+persisted studies lie in 0.23–0.51 — none at the divergence penalty (10.0),
+none above 1. So no fold was tuned against diverged evaluations. The
+`catch=(Exception,)` in `study.optimize` is a latent trap (a systematically
+failing objective would be silently skipped) but did not fire: zero `FAIL`
+states in any study.
+
+**Fold `ot` has weaker tuning provenance than the other three.** It was
+tuned before per-trial Optuna persistence existed, so
+`t15_level3_optuna_ot.db` does not exist and its per-trial values are
+unrecoverable. Its checkpoint carries an explicit provenance note: *"recovered
+from logs/v4/level3.log after the container was reclaimed mid-run; QAOA
+params printed at 4-decimal precision"*. The other three folds have full
+trial-level records.
