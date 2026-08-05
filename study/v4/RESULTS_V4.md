@@ -1351,3 +1351,48 @@ undue advantage, and loses again on conditions it has never met.
 
 **Still open:** the common-floor confound on `tearing`, the one separable
 fold. T22d measures it.
+
+---
+
+## T22d — distance to near-full refinement, all four folds
+
+One classical run per condition at threshold 0.05 (refine almost
+everything), the lowest point already swept by t15b's bisections.
+
+| fold | reference can / uns | classical can / uns | Q-HAS can / uns |
+|---|---|---|---|
+| `tearing` | 0.00397 / 0.00155 | **1.12× / 1.11×** | 3.65× / 1.55× |
+| `kh` | 0.00126 / 0.00166 | **1.33× / 1.39×** | 2.90× / 2.28× |
+| `rotor` | 0.03395 / 0.02874 | **1.58× / 0.98×** | 3.91× / 1.44× |
+| `ot` | 0.01111 / 0.00821 | **7.45× / 9.53×** | 11.04× / 14.28× |
+
+### Three corrections to what I first claimed from this table
+
+**(1) The reference is not a lower bound.** `rotor`'s classical arm scores
+**0.98×** on the unseen condition — it *beats* near-full refinement. So
+refining almost everything is not always optimal, and this quantity is an
+estimate of the achievable optimum, not a certified floor. Any arm below
+1.00× is now flagged by the script as proof of exactly that.
+
+**(2) "The classical rule occupies the ceiling" holds on 3 folds, not 4.**
+On `ot` **both** arms sit 7–14× above near-full refinement. There is
+substantial headroom on that class which neither arm exploits, so the claim
+that "there is nothing left for any method to gain" is false there.
+
+**(3) Distance-to-reference is confounded by the operating point.** The
+reference refines ~0.95 of the domain; `ot`'s classical arm runs at ~0.37,
+`tearing`'s at 0.625. A cheaper operating point is mechanically further from
+the full-refinement error, so these distances are **not comparable across
+folds**.
+
+### What survives without reservation
+
+Within every fold and on both conditions, **Q-HAS is further from the
+reference than the classical arm** — 11.04 vs 7.45, 2.90 vs 1.33, 3.91 vs
+1.58, 3.65 vs 1.12. Eight comparisons, eight in the same direction, each one
+between two arms at the same operating point on the same trajectory.
+
+That is the only reading these measurements license, and it is enough: at
+matched budget the quantum decision rule extracts strictly less of the
+available accuracy than plain thresholding, on every class and both under
+canonical and unseen initial conditions.

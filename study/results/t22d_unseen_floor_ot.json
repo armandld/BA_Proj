@@ -1,0 +1,33 @@
+{
+ "fold": "ot",
+ "scenario": "orszag_tang",
+ "threshold": 0.05,
+ "floor_canonical": {
+  "combined": 0.2787994271947552,
+  "phys_score": 0.011106421412697493,
+  "patch_ratio": 0.9480319416498993,
+  "completed": true
+ },
+ "floor_unseen": {
+  "combined": 0.2808195807636942,
+  "phys_score": 0.00820684558450926,
+  "patch_ratio": 0.9623514187116564,
+  "completed": true
+ },
+ "arms": {
+  "qhas": {
+   "canonical_over_floor": 11.043364259174199,
+   "unseen_over_floor": 14.27592528415496
+  },
+  "classical": {
+   "canonical_over_floor": 7.446043705746477,
+   "unseen_over_floor": 9.53227158801105
+  }
+ },
+ "both_arms_at_floor_on_unseen": false,
+ "git_hash": "58632fea11b9a65c2a48e3c128d2b76c584e2c32",
+ "cli_args": {
+  "fold": "ot",
+  "threshold": 0.05
+ }
+}
