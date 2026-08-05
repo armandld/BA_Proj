@@ -1087,3 +1087,64 @@ I wrote that the published value was the maximum draw "on all four folds".
 That was true for `kh`, `ot` and `tearing` but **not** `rotor`, whose stored
 value sits at the 67th percentile. Three of four, generalised too early from
 three observations.
+
+---
+
+## D13 — a train/test leak in the Level-3 protocol, and the unseen-condition test
+
+### The leak
+
+`docs/level3_preregistration.md` states the held-out class is excluded from
+**all** tuning of both arms. That is **false for the QAOA arm**.
+
+`TrainHyperParam_v2.make_composite_objective` hard-codes the decision
+threshold:
+
+```python
+if "threshold_amr" not in frozen:
+    HyperParams["threshold_amr"] = 0.14959824837662078   # le meilleur classique
+```
+
+and that number comes from `_run_classical_phase1`, whose own banner reads
+**"Scenarios: KH + OT + Tearing + Rotor"** — all four classes. So on every
+fold, the QAOA arm decides using a threshold fitted on data that includes
+the held-out class. My driver reproduced it verbatim:
+`best.setdefault("threshold_amr", 0.14959824837662078)`.
+
+The classical arm has no such problem: `train_classical_threshold_excluding`
+re-tunes its threshold per fold on the training classes only.
+
+**The leak is asymmetric and favours Q-HAS.** It is therefore *conservative*
+with respect to the conclusion — Q-HAS is beaten on 19/20 runs despite
+holding an advantage it should not have. But the protocol's claim of a clean
+LOSO is wrong as written and must be corrected in the manuscript.
+
+This is also the precise form of defect D4: not merely "different operating
+points" but a genuine information leak.
+
+### The second, independent problem: the initial condition was never new
+
+Even with the parameter leak removed, V1's `_init_dns_scenario` calls every
+`init_*` **without arguments**, so every evaluation uses the canonical
+initial condition. A model that generalises must face a condition it has
+never met, not the canonical trajectory of a class it merely did not tune on.
+
+**T22** supplies that test. It substitutes `_init_dns_scenario` temporarily
+(V1 unmodified, restored in a context manager, and the substitution is
+*verified*: the run aborts if the trajectory does not actually change) to
+pass physical parameters to the initialisers:
+
+| class | unseen condition |
+|---|---|
+| Kelvin–Helmholtz | narrower shear layer, weaker seed, faster drift |
+| Harris tearing | thinner current sheet, **mode 2** instead of mode 1 |
+| MHD rotor | slower, smaller rotor, wider taper |
+| Orszag–Tang | **no IC parameters exist** — the only available unseen condition is a different Reynolds number, declared as such |
+
+Verified distinct at N=64 before launching: KH 3773.6 → 4118.3,
+tearing 3546.8 → 2951.0, rotor 4739.8 → 4409.3, and V1's function object
+restored identically afterwards.
+
+The reported quantity is the **degradation ratio** of each arm,
+phys(unseen) / phys(canonical), so the comparison is between how the two
+decision rules *transfer*, not between their absolute errors.

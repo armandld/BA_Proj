@@ -1,0 +1,15 @@
+====================================================================================
+  V4 T22 - fold kh (kelvin_helmholtz)  mode=unseen-ic
+  unseen condition: narrower shear layer, weaker seed, faster drift
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
+  classical threshold = 0.46161012794549355   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (canonical/kh) ---
+
+
+--- Pre-computing DNS traces for unseen/kh ---
