@@ -54,6 +54,11 @@
    "n_classical": 2
   },
   {
+   "lambda": 0.1,
+   "n_qhas": 1,
+   "n_classical": 2
+  },
+  {
    "lambda": 0.2,
    "n_qhas": 1,
    "n_classical": 2
@@ -92,13 +97,27 @@
    "lambda": 5.0,
    "n_qhas": 0,
    "n_classical": 3
+  },
+  {
+   "lambda": 20.0,
+   "n_qhas": 0,
+   "n_classical": 3
+  },
+  {
+   "lambda": 100.0,
+   "n_qhas": 0,
+   "n_classical": 3
   }
  ],
  "count_changes_with_lambda": true,
+ "verdict_flips_with_lambda": false,
+ "winners_across_lambda": [
+  "classical"
+ ],
  "n_decided_without_lambda": 2,
  "n_dominated_by_classical": 2,
  "n_dominated_by_qhas": 0,
- "git_hash": "d480259adad13ccbf7b5975beb275e0487274ba5",
+ "git_hash": "43d8178a243d00118cf9b85b36807b0a87e34fee",
  "cli_args": {
   "folds": [
    "ot",

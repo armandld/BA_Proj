@@ -1234,3 +1234,68 @@ the affected folds and refuses to let them carry a transfer claim.
 
 This is a limitation of V1's API, not of the test: `init_orszag_tang()`
 takes no arguments, and `src/` is read-only.
+
+---
+
+## Fresh-eyes review — assumptions re-examined from scratch
+
+Six load-bearing assumptions, re-derived from the source rather than
+from memory. Three held, three did not.
+
+### HELD — the ablation is clean
+
+**Both arms differ only in the decision routine.** `classical_only` swaps
+`run_adaptive_vqa` → `run_adaptive_classical` on the *same* simulator
+object, with the same mapper, `threshold_amr`, `target_dim`, `max_depth`,
+`min_size` and TTL map (`pipeline.py:391`).
+
+**Both arms threshold the same score.** `refinement.py:474` (classical) and
+`:579` (VQA) both call `AngleMapper.classical_score(physics_state)`. The
+QAOA route perturbs exactly the quantity the classical route thresholds, so
+the comparison isolates the decision rule and nothing else.
+
+**Both arms are scored at the same physical instant.** With a DNS trace
+supplied — the Level-3 case — `dt = dns_trace[step]['dt']`
+(`pipeline.py:458`), so both arms march on the DNS time grid and are
+compared against the same `dns_trace[last_step]['fluxes']`. The
+"adaptive dt desynchronises the arms" trap does **not** fire.
+
+### DID NOT HOLD — three corrections
+
+**(1) `phys_score` is not a plain relative L2.** It is an
+*instability-weighted* relative L2: `score()` builds
+`w = 1 + 0.25·(|Jz|/⟨|Jz|⟩ + |ω|/⟨|ω|⟩)` from the reference fields and
+weights every field's error by it. Every table and figure axis in this
+repository has called it "relative L2 vs DNS", which is wrong. Both arms are
+scored identically so no bias follows, but the label must be corrected to
+**"instability-weighted relative L2 vs DNS"** throughout the manuscript.
+
+**(2) The cost axis excludes the cost of the decision.**
+`patch_ratio = total_pixel_used / (steps · N²)` counts refined pixels only.
+The QAOA circuit does not appear in it, yet the Q-HAS arm takes **2.7–3.3×**
+the classical arm's wall time (ot 1069 s vs 371 s, kh 579 vs 213, tearing
+240 vs 73) — on a *simulated* 8-qubit circuit, so hardware would be worse.
+"Equal budget" therefore means "equal AMR budget, with Q-HAS's decision
+compute free". This makes the conclusion **more conservative**, not less,
+but the axis is mis-specified and must be declared.
+
+**(3) T21's ill-posedness claim was overstated — my error.** T21 tested
+whether the *count* changes with λ and concluded the endpoint was
+ill-posed. Count and verdict are different things. Re-checked over
+λ ∈ [0, 100] with `rotor` excluded:
+
+| λ | Q-HAS | classical |
+|---|---|---|
+| 0.0 – 0.8 | 1 | **2** |
+| 1.0 – 100 | 0 | **3** |
+
+**The classical arm holds the majority at every λ tested.** The verdict
+never flips; only the margin moves (2–1 → 3–0). The endpoint is *not*
+ill-posed in its direction, and saying it was overstated the case. T21 now
+separates "margin changes" from "verdict flips" and reports both; the
+λ grid was extended to 100 because stability on [0, 5] proves nothing about
+[0, ∞).
+
+This correction **strengthens and simplifies** the result: the pre-registered
+endpoint, once the failed fold is excluded as its own §5 requires, favours
+the classical arm robustly rather than ambiguously.

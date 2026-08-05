@@ -190,7 +190,8 @@ def main():
               f"crossover")
 
     print("\n  3. COUNT STABILITY ACROSS LAMBDA")
-    grid = [0.0, 0.2, LAMBDA_PREREG, 0.6, 0.8, 1.0, 1.5, 2.0, 5.0]
+    grid = [0.0, 0.1, 0.2, LAMBDA_PREREG, 0.6, 0.8, 1.0, 1.5,
+            2.0, 5.0, 20.0, 100.0]
     counts = counting_vs_lambda(rows, grid)
     print(f"  {'lambda':>8}{'Q-HAS wins':>12}{'classical wins':>16}")
     for c in counts:
@@ -199,20 +200,41 @@ def main():
         print(f"  {c['lambda']:>8.2f}{c['n_qhas']:>12}"
               f"{c['n_classical']:>16}{star}")
 
-    flips = len({(c["n_qhas"], c["n_classical"]) for c in counts}) > 1
-    print(f"\n  the count CHANGES with lambda: {flips}")
-    if flips:
-        print("  => the primary endpoint's verdict is not a property of the")
-        print("     arms; it is partly a property of the chosen lambda. That")
-        print("     is a MEASUREMENT of the endpoint's ill-posedness, not an")
-        print("     opinion about it.")
+    # DISTINGUER deux choses que j'avais d'abord confondues :
+    #   - le COMPTAGE change-t-il avec lambda ? (marge)
+    #   - le VAINQUEUR MAJORITAIRE change-t-il ? (verdict)
+    # Un comptage qui passe de 2-1 a 3-0 ne rend pas le critere mal pose :
+    # le verdict est le meme. Seul un basculement du vainqueur le ferait.
+    counts_change = len({(c["n_qhas"], c["n_classical"]) for c in counts}) > 1
+    winners = {("qhas" if c["n_qhas"] > c["n_classical"]
+                else "classical" if c["n_classical"] > c["n_qhas"]
+                else "tie") for c in counts}
+    verdict_flips = len(winners - {"tie"}) > 1
+
+    print(f"\n  margin changes with lambda : {counts_change}")
+    print(f"  VERDICT flips with lambda  : {verdict_flips}"
+          f"   (winners seen: {', '.join(sorted(winners))})")
+    if verdict_flips:
+        print("  => the endpoint's verdict is partly a property of the")
+        print("     chosen lambda, not of the arms. That is a MEASUREMENT")
+        print("     of ill-posedness.")
+    else:
+        w = (winners - {"tie"}).pop() if winners - {"tie"} else "tie"
+        print(f"  => the verdict is STABLE across the whole lambda range "
+              f"tested:\n     `{w}` holds the majority everywhere. Only the "
+              f"margin moves.\n     The endpoint is therefore NOT ill-posed "
+              f"in its direction; the\n     earlier reading that it was "
+              f"overstated the case.")
+    flips = verdict_flips
 
     out = {
         "lambda_prereg": LAMBDA_PREREG,
         "folds": rows,
         "excluded_failed_audit": excluded,
         "counting_vs_lambda": counts,
-        "count_changes_with_lambda": bool(flips),
+        "count_changes_with_lambda": bool(counts_change),
+        "verdict_flips_with_lambda": bool(verdict_flips),
+        "winners_across_lambda": sorted(winners),
         "n_decided_without_lambda": int(n_free),
         "n_dominated_by_classical": int(n_cl),
         "n_dominated_by_qhas": int(n_q),
