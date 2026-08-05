@@ -27,3 +27,4 @@ DNS pre-computed: 648 steps, 15 flux snapshots stored.
 [WARNING] Violation CFL détéctée : 1.25 > 1.0.
     [qhas] canonical run 3/5: phys=0.88817 patch=0.3320
     [qhas] canonical run 4/5: phys=0.21128 patch=0.3417
+    [qhas] canonical run 5/5: phys=0.20179 patch=0.3471
