@@ -149,22 +149,41 @@ def main():
           f"(control — if False, the measurement chain itself is suspect)")
 
     # La question qui decide de la lisibilite du fold.
+    #
+    # ATTENTION AU BIAIS : mesurer l'ecart a partir de la valeur STOCKEE du
+    # fold revient a utiliser UN tirage, et rien ne garantit qu'il soit
+    # representatif — sur `kh` il s'est trouve etre le maximum des six
+    # tirages connus, ce qui gonfle mecaniquement l'ecart. On rapporte donc
+    # les DEUX lectures, et c'est celle fondee sur la MOYENNE qui fait foi.
     stored_q = rec["qhas"]["phys_score"]
     stored_c = rec["classical"]["phys_score"]
-    gap = abs(stored_q - stored_c)
     sd = q_stats["phys_score"]["std"]
-    ratio = gap / sd if sd > 0 else float("inf")
-    print(f"\n  fold's published Q-HAS vs classical phys gap : {gap:.4f}")
-    print(f"  Q-HAS run-to-run std on phys                 : {sd:.4f}")
-    print(f"  gap / std                                     : {ratio:.2f}")
-    if ratio < 2.0:
-        print("  => the between-arm gap is NOT large against sampling "
-              "noise;\n     a single run per arm cannot support a "
-              "directional claim.")
+    mean_q = q_stats["phys_score"]["mean"]
+    gap_stored = abs(stored_q - stored_c)
+    gap_mean = abs(mean_q - stored_c)
+    r_stored = gap_stored / sd if sd > 0 else float("inf")
+    r_mean = gap_mean / sd if sd > 0 else float("inf")
+
+    draws = np.array(q_stats["phys_score"]["values"], dtype=float)
+    pct = 100.0 * float(np.mean(np.append(draws, stored_q) <= stored_q))
+
+    print(f"\n  Q-HAS run-to-run std on phys : {sd:.5f}  "
+          f"(CV {q_stats['phys_score']['cv']:.3f})")
+    print(f"  stored fold value {stored_q:.5f} sits at the {pct:.0f}th "
+          f"percentile of the draws")
+    print(f"  gap / std, from the STORED draw : {r_stored:.2f}")
+    print(f"  gap / std, from the MEAN draw   : {r_mean:.2f}   <- the one "
+          f"to quote")
+    if r_mean < 2.0:
+        print("  => against sampling noise the between-arm gap is NOT "
+              "large;\n     a single run per arm cannot support a "
+              "directional claim on\n     the magnitude. Report the "
+              "dominance count instead.")
     else:
         print("  => the between-arm gap is large against sampling noise; "
               "the\n     direction survives, though the magnitude carries "
               "this spread.")
+    ratio = r_mean
 
     out = {
         "fold": args.fold,
@@ -177,8 +196,12 @@ def main():
         "classical_deterministic": bool(c_det),
         "stored_qhas_phys": float(stored_q),
         "stored_classical_phys": float(stored_c),
-        "gap_phys": float(gap),
-        "gap_over_std": float(ratio),
+        "gap_phys_from_stored": float(gap_stored),
+        "gap_phys_from_mean": float(gap_mean),
+        "gap_over_std_from_stored": float(r_stored),
+        "gap_over_std_from_mean": float(r_mean),
+        "gap_over_std": float(ratio),          # = version moyenne
+        "stored_percentile_among_draws": float(pct),
         "shots": cfg.get("shots"),
         "git_hash": git_commit_hash(),
         "cli_args": vars(args),

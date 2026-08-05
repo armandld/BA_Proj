@@ -965,3 +965,63 @@ from the plotted frontier, and (b) uses a **logarithmic error axis** — the
 classes span 1–3 decades, and since the compared quantity *is* a ratio, a
 log axis makes a given ratio span the same vertical distance in every panel.
 The full data, including excluded points, remains in the `.csv`.
+
+---
+
+## T20 — Q-HAS run-to-run variance on fold `kh` (D11 quantified)
+
+```
+python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
+```
+5 Q-HAS runs + 2 classical controls, identical inputs, 3216 s.
+
+| metric | Q-HAS mean | std | range | CV | classical range |
+|---|---|---|---|---|---|
+| combined | 0.2500 | 0.0104 | 0.0232 | 0.042 | **0.00e+00** |
+| **phys_score** | **0.00324** | **0.00158** | 0.0039 | **0.489** | **0.00e+00** |
+| patch_ratio | 0.8670 | 0.0376 | 0.0785 | 0.043 | **0.00e+00** |
+
+Q-HAS `phys` draws: **0.0015, 0.0020, 0.0031, 0.0042, 0.0053**.
+
+**The control passes.** The classical arm's range is exactly **0.00e+00** on
+all three metrics across both repeats — a fifth independent confirmation of
+its determinism. Without that, the Q-HAS spread could have been an artefact
+of the measurement chain; with it, the spread is attributable to the
+unseeded QAOA path (D11) and nothing else.
+
+**A 48.9 % coefficient of variation on the fidelity metric.**
+
+### The published `kh` numbers were one draw, and it was the extreme one
+
+The fold's stored Q-HAS value, 0.00700, sits at the **100th percentile** of
+all six known draws — it is the largest. Everything computed from it is
+correspondingly inflated:
+
+| quantity | from the stored draw | **from the mean of 5 draws** |
+|---|---|---|
+| gap / std | 3.15 → "direction survives" | **0.77 → a single run cannot support a directional claim** |
+| ratio vs budget-matched classical | 4.16× (published as 4.41×) | **1.93×** |
+
+**The `kh` ratio is roughly halved.** T20 originally reported only the
+stored-draw figure, which is the optimistic choice; it now computes both and
+quotes the mean-based one.
+
+### What survives, and it is the dominance count, not the ratio
+
+Against the budget-matched classical arm (phys 0.00168 at patch 0.7943):
+
+- Q-HAS costs **more on 5/5 draws** (patch 0.830–0.908 vs 0.794);
+- Q-HAS is less faithful on **4/5 draws**;
+- on the remaining draw the arms are **incomparable** (Q-HAS more faithful,
+  but more expensive) — **never reversed**.
+
+So the direction holds as a **dominance count over draws**, not as a point
+ratio. The honest statement for `kh` is *"classical is cheaper on every
+draw and more faithful on four of five"*, not *"Q-HAS is 4.4× worse"*.
+
+### Consequence for the other folds
+
+`ot`, `rotor` and `tearing` each have **one** Q-HAS draw (plus a replay for
+`ot`). Their published ratios rest on the same single-draw basis and should
+be read as **point estimates of a quantity with ≈50 % CV**, not as measured
+magnitudes. Repeating T20 per fold is the fix; it costs ~1 h per fold.

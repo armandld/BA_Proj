@@ -79,6 +79,8 @@ confirmed independently by a mapper that never had the defect.
 | `tearing` | 0.7692, 0.0185 | 0.6250, **0.0044** | 4.38× | yes |
 
 In every case the classical arm is **both more faithful and cheaper**.
+**The ratios are single draws** — see §5; on `kh`, where 5 draws exist, the
+mean-based ratio is 1.93× rather than 4.41×.
 
 † `rotor`'s *tuned* classical arm diverged, so its primary comparison is
 void; its budget-matched point was separately verified complete and
@@ -146,15 +148,29 @@ D7/D8 and the D-bis/D-ter mechanism.
 
 ## 5. Robustness of Claim E against D11 and D12
 
-| fold | Q-HAS phys, observed draws | matched classical | worst-case ratio |
-|---|---|---|---|
-| `ot` | 0.1345 – 0.1940 | 0.0827 | 1.6× |
-| `kh` | 0.0048 – 0.0070 | 0.0017 | 2.8× |
-| `rotor` | 0.1678 (1 draw) | 0.0536 | 3.1× |
+**T20 measured the spread on `kh`** (5 runs, identical inputs): Q-HAS
+`phys` mean **0.00324**, sd **0.00158**, **CV 48.9 %**. The classical arm's
+range was exactly **0.00e+00** — the control passes, so the spread is
+attributable to the unseeded QAOA path and nothing else.
 
-Even the **worst** Q-HAS draw stays above the classical arm on every fold,
-so the *direction* survives. The *magnitudes* are ranges, not points, and
-are written that way throughout.
+**This corrects the published `kh` magnitude.** The fold's stored Q-HAS
+value (0.00700) is the **largest of all six known draws** (100th
+percentile), so everything derived from it is inflated:
+
+| quantity | from the stored draw | **from the mean** |
+|---|---|---|
+| gap / sd | 3.15 | **0.77** |
+| ratio vs matched classical | 4.16× (published 4.41×) | **1.93×** |
+
+**What survives is the dominance count, not the ratio.** Against the
+budget-matched classical arm, Q-HAS costs more on **5/5** draws and is less
+faithful on **4/5**; the fifth makes the arms incomparable (more faithful,
+more expensive), never reversed.
+
+The other three folds have **one draw each**. Their ratios (2.57×, 3.62×,
+4.38×) are point estimates of a quantity with ≈50 % CV and **must not be
+quoted as measured magnitudes**. Repeating T20 per fold costs ~1 h each and
+is the fix.
 
 Divergence audit (T19), replaying every arm and checking it reproduces the
 stored value:
@@ -172,7 +188,7 @@ stored value:
 
 | item | state | consequence |
 |---|---|---|
-| **T20 Q-HAS run variance** | implemented, **not yet run** | variance characterised from 2 draws on 2 folds, not a distribution. `python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5` |
+| **T20 on `ot`, `rotor`, `tearing`** | done for `kh` only | those three folds' ratios rest on a single draw of a quantity with ≈50 % CV. ~1 h per fold |
 | **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |
