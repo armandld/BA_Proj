@@ -1396,3 +1396,58 @@ That is the only reading these measurements license, and it is enough: at
 matched budget the quantum decision rule extracts strictly less of the
 available accuracy than plain thresholding, on every class and both under
 canonical and unseen initial conditions.
+
+---
+
+## Verified T20 — an aborted run does not always look anomalous
+
+Re-running T20 with the abort marker captured at execution time (the
+original pass had no such guard, and being non-deterministic could not be
+audited afterwards) produced the finding that most changes how the earlier
+numbers must be read.
+
+**Fold `rotor`, Q-HAS draws:**
+
+| draw | phys | status |
+|---|---|---|
+| 1 | 0.2191 | ok |
+| 2 | 0.0978 | ok |
+| **3** | **0.6877** | **ABORTED** |
+| 4 | 0.0536 | ok |
+| **5** | **0.4069** | **ABORTED** |
+
+**Two of five draws diverged — 40 %, not the 1-in-5 I estimated.**
+
+**And draw 5 returned 0.4069, a value that does not stand out.** The valid
+draws span 0.054–0.219; 0.407 is high but not absurd. So an aborted run can
+land inside the plausible range.
+
+### This retracts my earlier bounding argument
+
+I had written, to bound the risk on the unguarded pass: *"a divergence lands
+300× out of family (the T22 case), while T20's spreads are 1.5–3.6× with no
+draw above phys = 1 — consistent with D11's CV, no divergence signature.
+Contamination unlikely but unproven."*
+
+That reasoning is **wrong**. Contamination need not leave a visible
+signature. `rotor`'s original five draws (max 0.2581) could perfectly well
+have contained aborted runs, and no inspection of the values would reveal
+it. The correct statement is not "unlikely but unproven" — it is
+**unknowable without the guard**, which is precisely why the guard had to be
+added and the pass repeated.
+
+### A flaw in T20's own control
+
+On `rotor`, **both classical control runs also aborted** (1.1731 twice).
+T20 runs its determinism control at the *tuned* threshold, which diverges on
+this fold. The control still shows determinism — the divergence reproduces
+exactly — but it no longer validates the measurement chain, which is its
+purpose. It should run at the budget-matched threshold, as the *reference
+value* already does.
+
+### Consequence
+
+Every variance figure published from the unguarded pass — the CVs, the
+mean-based ratios (1.56×, 1.93×, 2.86×, 2.05×), the gap/sd values — rests on
+draws of unknown status. They are superseded by this pass, and on `rotor`
+the mean is now computed from **3 valid draws**, not 5.
