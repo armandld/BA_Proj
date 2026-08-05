@@ -14,3 +14,9 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
 
 --- Pre-computing DNS traces for unseen/kh ---
 Hot-Start captured at t=0.9048
+DNS pre-computed: 460 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (unseen/kh) ---
+
+
+  DNS signature canonical=6.175679e+04  unseen=6.639593e+04
+  trajectory actually changed: True
