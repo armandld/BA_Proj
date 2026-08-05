@@ -16,6 +16,10 @@ Couverture :
   T14   validation numerique (convergence, splitting, conservation)
   T15   niveau 3 closed loop, par fold
   T15b  comparaison a budget apparie, par fold
+  T15c  synthese inter-folds (regles de decision pre-enregistrees)
+  T17   fenetre d'incertitude (mecanisme de l'inertie ZZ)
+  T18   contrefactuel fenetre neutralisee
+  T20   variance d'execution du bras Q-HAS (defaut D11)
 
 Les lignes de niveau 3 sont declarees MISSING tant que le fold n'a pas
 tourne : l'agregat montre donc explicitement l'etat d'avancement de la
@@ -274,6 +278,51 @@ def rows_t18(d):
     return out
 
 
+def rows_t20(results_dir, folds):
+    """Variance d'execution du bras Q-HAS, par fold (defaut D11).
+
+    Les valeurs couvrent deux ordres de grandeur d'un fold a l'autre : la
+    tolerance est donc RELATIVE, sinon toutes les lignes passeraient.
+    Le determinisme du bras classique est le CONTROLE : s'il tombe, la
+    dispersion mesuree n'est plus attribuable au seul chemin QAOA.
+    """
+    ref = {
+        "ot": dict(mean=0.1291, sd=0.0222, ratio=1.56),
+        "kh": dict(mean=0.00324, sd=0.00158, ratio=1.93),
+        "rotor": dict(mean=0.1537, sd=0.0642, ratio=2.86),
+        "tearing": dict(mean=0.00908, sd=0.00340, ratio=2.05),
+    }
+    out, n_det, n_seen = [], 0, 0
+    for f in folds:
+        p = os.path.join(results_dir, f"t20_qhas_run_variance_{f}.json")
+        r = ref.get(f, {})
+        if not os.path.exists(p):
+            for m in ("Q-HAS phys mean", "Q-HAS phys sd",
+                      "ratio vs matched (mean-based)"):
+                out.append(make_row(f"t20/{f}", m, None, None))
+            continue
+        d = json.load(open(p))
+        q = np.array([x["phys_score"] for x in d["qhas_runs"]], dtype=float)
+        mean, sd = float(np.mean(q)), float(np.std(q, ddof=1))
+        out += [
+            make_row(f"t20/{f}", "Q-HAS phys mean", mean, r.get("mean"),
+                     tol=max(1e-6, 0.03 * r.get("mean", 1.0))),
+            make_row(f"t20/{f}", "Q-HAS phys sd", sd, r.get("sd"),
+                     tol=max(1e-6, 0.05 * r.get("sd", 1.0))),
+            make_row(f"t20/{f}", "ratio vs matched (mean-based)",
+                     d.get("ratio_mean_based"), r.get("ratio"),
+                     tol=max(1e-3, 0.03 * r.get("ratio", 1.0))),
+        ]
+        n_seen += 1
+        if d.get("classical_deterministic"):
+            n_det += 1
+    if n_seen:
+        # controle global : le bras classique doit etre deterministe partout
+        out.append(make_row("t20", "folds with deterministic classical arm",
+                            float(n_det), float(n_seen)))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -340,6 +389,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
         results_dir, "t17_uncertainty_window.npz")))
     rows += rows_t18(load_npz(os.path.join(
         results_dir, f"t18_window_counterfactual_N{N}_dim{dim}.npz")))
+    rows += rows_t20(results_dir, folds)
     return rows
 
 
