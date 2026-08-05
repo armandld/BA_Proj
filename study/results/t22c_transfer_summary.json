@@ -30,18 +30,50 @@
    "n_dominated_on_unseen": 5,
    "ratio_canonical": 3.2682314738592666,
    "ratio_unseen": 1.3893073994534983
+  },
+  {
+   "fold": "rotor",
+   "n_runs": 5,
+   "n_aborted": 0,
+   "n_usable_unseen": 5,
+   "dns_relative_shift": null,
+   "weak_condition": false,
+   "classical_reference": "budget-matched threshold 0.0969 (forced)",
+   "qhas_canonical": 0.132852078677886,
+   "qhas_canonical_sd": 0.028255042333348464,
+   "qhas_unseen": 0.04138519942146368,
+   "qhas_unseen_sd": 0.01335695591361395,
+   "classical_canonical": 0.0536450871441004,
+   "classical_unseen": 0.0281994814530657,
+   "qhas_patch_unseen": 0.4095334941651706,
+   "classical_patch_unseen": 0.383457697486535,
+   "deg_qhas": 0.31151337512607913,
+   "deg_qhas_sd": 0.12040655505419469,
+   "deg_classical": 0.5256675485924144,
+   "separation_z": 1.7785923147618083,
+   "separable": false,
+   "arm_ratio_shift": 0.592605299604706,
+   "arm_ratio_shift_sd": 0.22905457142372318,
+   "arm_ratio_shift_z": 1.7785923147618095,
+   "arm_ratio_shift_significant": false,
+   "n_worse_on_unseen": 4,
+   "n_costlier_on_unseen": 5,
+   "n_dominated_on_unseen": 4,
+   "ratio_canonical": 2.476500379634417,
+   "ratio_unseen": 1.4675872494444218
   }
  ],
  "missing": [],
  "single_run_only": [],
  "n_separable": 1,
- "n_runs_total": 5,
- "n_worse_total": 5,
- "n_dominated_total": 5,
- "git_hash": "8456056f026df66a8595fccc352a2485ebdf2643",
+ "n_runs_total": 10,
+ "n_worse_total": 9,
+ "n_dominated_total": 9,
+ "git_hash": "40de02d3ebd2ef818808c685e7dbeeafc1c1a7c2",
  "cli_args": {
   "folds": [
-   "tearing"
+   "tearing",
+   "rotor"
   ],
   "mode": "unseen-ic"
  }
