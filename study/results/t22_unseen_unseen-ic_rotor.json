@@ -1,0 +1,54 @@
+{
+ "fold": "rotor",
+ "scenario": "mhd_rotor",
+ "mode": "unseen-ic",
+ "unseen_condition": {
+  "ic": {
+   "omega": 8.0,
+   "r0": 0.6,
+   "taper_width": 0.2,
+   "perturbation": 0.01
+  },
+  "note": "slower, smaller rotor with a wider taper"
+ },
+ "qaoa_threshold_leaked": true,
+ "arms": {
+  "qhas": {
+   "canonical": {
+    "combined": 0.2652527323395106,
+    "phys_score": 0.2357197233335672,
+    "patch_ratio": 0.3390852548543689
+   },
+   "unseen": {
+    "combined": 0.1369702723819898,
+    "phys_score": 0.03137070180157205,
+    "patch_ratio": 0.4009691988330341
+   },
+   "degradation_ratio": 0.13308475573416206
+  },
+  "classical": {
+   "canonical": {
+    "combined": 0.9294453583596828,
+    "phys_score": 1.1730985017035558,
+    "patch_ratio": 0.3203125
+   },
+   "unseen": {
+    "combined": 0.8015454120692315,
+    "phys_score": 1.0396696872321196,
+    "patch_ratio": 0.20623472416201116
+   },
+   "degradation_ratio": 0.8862594963017403
+  }
+ },
+ "dns_signature_canonical": 92742.66049605537,
+ "dns_signature_unseen": 78034.97383391239,
+ "qhas_degrades_more": false,
+ "git_hash": "5914fb6ea77c87a7a3c6ae1f5cdad6e92cb4e494",
+ "cli_args": {
+  "fold": "rotor",
+  "mode": "unseen-ic",
+  "prefix": "t15_level3",
+  "seed": 0
+ },
+ "wall_s": 1375.51735663414
+}

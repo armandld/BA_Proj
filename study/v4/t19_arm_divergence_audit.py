@@ -290,3 +290,46 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def safe_classical_hyperparams(rec, results_dir, fold):
+    """Hyperparametres du bras classique SANS point de fonctionnement divergent.
+
+    Le seuil classique regle d'un fold peut tomber dans une bande instable :
+    sur `rotor` il vaut 0.4616, entre les deux points de bissection qui
+    avortent (0.4250 et 0.8000), et le bras diverge alors au pas 208. Le
+    comparer a Q-HAS produit des ecarts enormes et vides de sens — le piege
+    a mordu T15 (le fold comptait comme une victoire Q-HAS), T20 (gap/sd
+    15.9) puis T22 (comparaison sur une trajectoire tronquee).
+
+    Cette fonction centralise la regle : si l'audit T19 dit que le bras
+    classique regle a termine, on prend ses parametres ; sinon on prend le
+    seuil BUDGET-APPARIE, dont l'audit de trace a verifie qu'il termine.
+
+    Retourne (hyperparams, source, tuned_arm_completed).
+    """
+    hp = dict(rec["hyperparams"])
+    hp.update(rec.get("classical_params", {}))
+    completed = None
+    apath = os.path.join(results_dir, "t19_arm_divergence_audit.json")
+    if os.path.exists(apath):
+        try:
+            au = json.load(open(apath))
+            for r in au.get("results", []):
+                if r["fold"] == fold:
+                    completed = bool(r["arms"]["classical"]["completed"])
+        except (ValueError, KeyError):
+            pass
+    if completed is False:
+        bpath = os.path.join(results_dir,
+                             f"t15b_budget_matched_{fold}.json")
+        if os.path.exists(bpath):
+            thr = float(json.load(open(bpath))
+                        ["matched_classical"]["threshold"])
+            hp["threshold_amr"] = thr
+            return hp, f"budget-matched threshold {thr:.4f} " \
+                       f"(tuned arm ABORTED)", completed
+        return hp, "tuned arm ABORTED and no t15b available", completed
+    src = ("tuned classical arm" if completed
+           else "tuned classical arm [T19 audit absent]")
+    return hp, src, completed

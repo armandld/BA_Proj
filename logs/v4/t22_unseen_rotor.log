@@ -3,20 +3,9 @@
   unseen condition: slower, smaller rotor with a wider taper
 ====================================================================================
 Environnement Local detecte. Ecriture directe sur le disque.
+  classical reference: budget-matched threshold 0.0969 (tuned arm ABORTED)
   QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
-  classical threshold = 0.5863920247793146   (tuned on training classes only)
+  classical threshold = 0.09687500000000002   (tuned on training classes only)
 
 --- Pre-computing DNS traces for canonical/rotor ---
 Hot-Start captured at t=0.2009
-DNS pre-computed: 975 steps, 15 flux snapshots stored.
---- DNS pre-computation complete (canonical/rotor) ---
-
-
---- Pre-computing DNS traces for unseen/rotor ---
-Hot-Start captured at t=0.2003
-DNS pre-computed: 648 steps, 15 flux snapshots stored.
---- DNS pre-computation complete (unseen/rotor) ---
-
-
-  DNS signature canonical=9.274266e+04  unseen=7.803497e+04
-  trajectory actually changed: True

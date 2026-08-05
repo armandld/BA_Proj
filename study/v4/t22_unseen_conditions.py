@@ -62,6 +62,7 @@ sys.path.insert(0, _HERE)
 from t1_feature_selection import git_commit_hash
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
+from t19_arm_divergence_audit import safe_classical_hyperparams
 
 # La valeur fuitee : ajustee sur les quatre classes, puis figee comme seuil
 # du bras QAOA quelle que soit la classe tenue.
@@ -184,8 +185,13 @@ def main():
     cfg = dict(fold_scenarios(T, warn=False))[args.fold]
 
     hp_q = dict(rec["hyperparams"])
-    hp_c = dict(rec["hyperparams"])
-    hp_c.update(rec["classical_params"])
+    # Le bras classique doit partir d'un point de fonctionnement QUI TERMINE :
+    # sur `rotor` le seuil regle diverge, et comparer Q-HAS a une trajectoire
+    # tronquee ne mesure rien (le piege a deja fausse T15, T20 et un premier
+    # passage de T22).
+    hp_c, cls_src, cls_done = safe_classical_hyperparams(
+        rec, RESULTS_DIR, args.fold)
+    print(f"  classical reference: {cls_src}")
     leaked = abs(hp_q.get("threshold_amr", 0) - LEAKED_THRESHOLD) < 1e-9
     print(f"  QAOA arm threshold = {hp_q.get('threshold_amr')}"
           f"{'   <- LEAKED (fitted on all 4 classes)' if leaked else ''}")
@@ -194,6 +200,8 @@ def main():
 
     t0 = time.time()
     out = {"fold": args.fold, "scenario": scenario, "mode": args.mode,
+           "classical_reference_source": cls_src,
+           "classical_tuned_arm_completed": cls_done,
            "unseen_condition": UNSEEN_CONDITIONS[scenario],
            "qaoa_threshold_leaked": bool(leaked), "arms": {}}
 

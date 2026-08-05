@@ -20,3 +20,6 @@ DNS pre-computed: 460 steps, 18 flux snapshots stored.
 
   DNS signature canonical=6.175679e+04  unseen=6.639593e+04
   trajectory actually changed: True
+
+  [qhas] canonical phys=0.0051 patch=0.8958
+  [qhas] unseen    phys=0.0042 patch=0.8036   degradation x0.82
