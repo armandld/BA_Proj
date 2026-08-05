@@ -23,3 +23,16 @@ DNS pre-computed: 1123 steps, 14 flux snapshots stored.
 
   [qhas] canonical phys=0.1071 patch=0.7506
   [qhas] unseen    phys=0.1009 patch=0.7274   degradation x0.94
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+
+  [classical] canonical phys=0.4845 patch=0.3238
+  [classical] unseen    phys=0.5998 patch=0.3755   degradation x1.24
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.94  classical x1.24
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_ot.json (2099s)
+
+V4 Task 22 complete.

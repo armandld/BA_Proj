@@ -1,0 +1,50 @@
+{
+ "fold": "ot",
+ "scenario": "orszag_tang",
+ "mode": "unseen-ic",
+ "unseen_condition": {
+  "ic": {},
+  "re": 600,
+  "note": "init_orszag_tang takes NO parameters; the only available unseen condition is a different Reynolds number"
+ },
+ "qaoa_threshold_leaked": true,
+ "arms": {
+  "qhas": {
+   "canonical": {
+    "combined": 0.29096865583636405,
+    "phys_score": 0.10711404070612089,
+    "patch_ratio": 0.7506051936619719
+   },
+   "unseen": {
+    "combined": 0.2798699088089499,
+    "phys_score": 0.10085417090103699,
+    "patch_ratio": 0.7274092535787321
+   },
+   "degradation_ratio": 0.9415588305340983
+  },
+  "classical": {
+   "canonical": {
+    "combined": 0.4386043836627596,
+    "phys_score": 0.48450639869727985,
+    "patch_ratio": 0.32384934607645877
+   },
+   "unseen": {
+    "combined": 0.5357325761395323,
+    "phys_score": 0.5998325390666096,
+    "patch_ratio": 0.37548266882183906
+   },
+   "degradation_ratio": 1.2380281058813956
+  }
+ },
+ "dns_signature_canonical": 145888.8460796226,
+ "dns_signature_unseen": 145473.71212274957,
+ "qhas_degrades_more": false,
+ "git_hash": "6ea9699cbea745799304fbc39ce66a718a55c37b",
+ "cli_args": {
+  "fold": "ot",
+  "mode": "unseen-ic",
+  "prefix": "t15_level3",
+  "seed": 0
+ },
+ "wall_s": 2099.0664935112
+}
