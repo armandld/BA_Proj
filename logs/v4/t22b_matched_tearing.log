@@ -23,3 +23,4 @@ DNS pre-computed: 99 steps, 11 flux snapshots stored.
   trajectory actually changed: True
     [qhas] canonical run 1/5: phys=0.00697 patch=0.9366
     [qhas] canonical run 2/5: phys=0.01341 patch=0.7882
+    [qhas] canonical run 3/5: phys=0.00656 patch=0.9581
