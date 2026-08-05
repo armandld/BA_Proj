@@ -10,3 +10,4 @@ Hot-Start captured at t=0.3041
 DNS pre-computed: 123 steps, 11 flux snapshots stored.
 --- DNS pre-computation complete (variance/tearing) ---
 
+  Q-HAS run 1/5: combined=0.2532 phys=0.0103 patch=0.8604

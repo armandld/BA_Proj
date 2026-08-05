@@ -15,3 +15,17 @@ Hot-Start captured at t=0.3059
 DNS pre-computed: 99 steps, 11 flux snapshots stored.
 --- DNS pre-computation complete (unseen/tearing) ---
 
+  floor canonical: phys=0.00397 patch=0.9597
+  floor unseen   : phys=0.00155 patch=0.6769
+
+  distance to the attainable floor (phys / phys_floor)
+  arm                     canonical                unseen
+  qhas                        3.65x                 1.55x
+  classical                   1.12x                 1.11x
+
+  --------------------------------------------------------------------------
+  => at least one arm remains well above the floor, so the
+     arms still have room to differ: their ratio reflects the
+     decision rules, not a shared ceiling on achievable error.
+
+  saved: t22d_unseen_floor_tearing.json
