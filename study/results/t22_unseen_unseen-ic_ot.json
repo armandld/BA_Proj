@@ -2,6 +2,8 @@
  "fold": "ot",
  "scenario": "orszag_tang",
  "mode": "unseen-ic",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "classical_tuned_arm_completed": null,
  "unseen_condition": {
   "ic": {},
   "re": 600,
@@ -10,41 +12,161 @@
  "qaoa_threshold_leaked": true,
  "arms": {
   "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 5,
+   "n_completed_unseen": 5,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.33059093037933984,
+     "phys_score": 0.17202939005622664,
+     "patch_ratio": 0.7269947811871227,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2839814474737914,
+     "phys_score": 0.10941067133252318,
+     "patch_ratio": 0.7204083878269618,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.29416249530079136,
+     "phys_score": 0.12095412822996103,
+     "patch_ratio": 0.7271834129778671,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2872043962110955,
+     "phys_score": 0.11741248769352164,
+     "patch_ratio": 0.7116841675050302,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.27830159989573455,
+     "phys_score": 0.09345460906932006,
+     "patch_ratio": 0.7404190769617707,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.28890556681608814,
+     "phys_score": 0.11659394384927188,
+     "patch_ratio": 0.7196846242331288,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.29250502999364525,
+     "phys_score": 0.0976524918888538,
+     "patch_ratio": 0.7796363752556237,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.32468851395553106,
+     "phys_score": 0.16911849520236513,
+     "patch_ratio": 0.7136135608384458,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.27759138417131357,
+     "phys_score": 0.07286873538585122,
+     "patch_ratio": 0.7893980061349694,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.31015732666225393,
+     "phys_score": 0.12956790558891412,
+     "patch_ratio": 0.7616308793456033,
+     "completed": true,
+     "abort": null
+    }
+   ],
    "canonical": {
-    "combined": 0.29096865583636405,
-    "phys_score": 0.10711404070612089,
-    "patch_ratio": 0.7506051936619719
+    "combined": 0.29484817385215056,
+    "phys_score": 0.1226522572763105,
+    "patch_ratio": 0.7253379652917505
    },
    "unseen": {
-    "combined": 0.2798699088089499,
-    "phys_score": 0.10085417090103699,
-    "patch_ratio": 0.7274092535787321
+    "combined": 0.2987695643197664,
+    "phys_score": 0.11716031438305123,
+    "patch_ratio": 0.7527926891615542
    },
-   "degradation_ratio": 0.9415588305340983
+   "canonical_phys_sd": 0.029564684710944075,
+   "unseen_phys_sd": 0.03604240820788819,
+   "degradation_ratio": 0.9552234666102635
   },
   "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.24226130415195732,
+     "phys_score": 0.08269889925338406,
+     "patch_ratio": 0.6411673163983903,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.24226130415195732,
+     "phys_score": 0.08269889925338406,
+     "patch_ratio": 0.6411673163983903,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.24727446582718265,
+     "phys_score": 0.07822988099241154,
+     "patch_ratio": 0.6698859279141104,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.24727446582718265,
+     "phys_score": 0.07822988099241154,
+     "patch_ratio": 0.6698859279141104,
+     "completed": true,
+     "abort": null
+    }
+   ],
    "canonical": {
-    "combined": 0.4386043836627596,
-    "phys_score": 0.48450639869727985,
-    "patch_ratio": 0.32384934607645877
+    "combined": 0.24226130415195732,
+    "phys_score": 0.08269889925338406,
+    "patch_ratio": 0.6411673163983903
    },
    "unseen": {
-    "combined": 0.5357325761395323,
-    "phys_score": 0.5998325390666096,
-    "patch_ratio": 0.37548266882183906
+    "combined": 0.24727446582718265,
+    "phys_score": 0.07822988099241154,
+    "patch_ratio": 0.6698859279141104
    },
-   "degradation_ratio": 1.2380281058813956
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "degradation_ratio": 0.9459603658413913
   }
  },
  "dns_signature_canonical": 145888.8460796226,
  "dns_signature_unseen": 145473.71212274957,
- "qhas_degrades_more": false,
- "git_hash": "6ea9699cbea745799304fbc39ce66a718a55c37b",
+ "qhas_degrades_more": true,
+ "git_hash": "7f79e7b1e22c81ded39fcbe3c32953be4e9312b5",
  "cli_args": {
   "fold": "ot",
   "mode": "unseen-ic",
   "prefix": "t15_level3",
-  "seed": 0
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
  },
- "wall_s": 2099.0664935112
+ "wall_s": 12717.405799865723
 }

@@ -1,0 +1,14 @@
+================================================================================
+  V4 T22d - attainable floor, fold kh (kelvin_helmholtz)
+  classical arm at threshold 0.05 = refine almost everything
+================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for canonical/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (canonical/kh) ---
+
+
+--- Pre-computing DNS traces for unseen/kh ---
+Hot-Start captured at t=0.9048

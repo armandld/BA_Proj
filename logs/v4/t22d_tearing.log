@@ -1,0 +1,17 @@
+================================================================================
+  V4 T22d - attainable floor, fold tearing (harris_tearing)
+  classical arm at threshold 0.05 = refine almost everything
+================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for canonical/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (canonical/tearing) ---
+
+
+--- Pre-computing DNS traces for unseen/tearing ---
+Hot-Start captured at t=0.3059
+DNS pre-computed: 99 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (unseen/tearing) ---
+

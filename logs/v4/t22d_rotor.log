@@ -1,0 +1,8 @@
+================================================================================
+  V4 T22d - attainable floor, fold rotor (mhd_rotor)
+  classical arm at threshold 0.05 = refine almost everything
+================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for canonical/rotor ---
+Hot-Start captured at t=0.2009

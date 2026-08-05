@@ -1299,3 +1299,55 @@ separates "margin changes" from "verdict flips" and reports both; the
 This correction **strengthens and simplifies** the result: the pre-registered
 endpoint, once the failed fold is excluded as its own §5 requires, favours
 the classical arm robustly rather than ambiguously.
+
+---
+
+## T22b complete — the transfer signal does not survive replication
+
+56 runs, **zero aborted**, 5 Q-HAS draws per condition per fold, classical
+reference budget-matched everywhere.
+
+| fold | deg Q-HAS | deg classical | \|z\| | separable |
+|---|---|---|---|---|
+| `ot` † | 0.955 ± 0.373 | 0.946 | **0.02** | no |
+| `kh` | 1.027 ± 0.509 | 1.364 | **0.66** | no |
+| `rotor` | 0.312 ± 0.120 | 0.526 | **1.78** | no |
+| `tearing` | 0.166 ± 0.065 | 0.389 | 3.45 | **yes** |
+
+**1 fold of 4.** The single-run pass had suggested Q-HAS transfers
+relatively better on *all four* folds (ratios narrowing 0.22→0.17,
+2.52→1.81, 3.67→1.88, 2.94→1.01). Repeated with 5 draws, that pattern
+evaporates: on `ot` the two arms degrade identically (|z| = 0.02).
+
+† `ot` is unusable for this question regardless: its "unseen" condition
+shifts the trajectory by only 0.3 % (no IC parameters exist on
+`init_orszag_tang`).
+
+**What holds — the reference-free count:**
+
+| fold | ratio Q/C canonical → unseen | dominated on unseen |
+|---|---|---|
+| `ot` | 1.48× → 1.50× | 4/5 |
+| `kh` | 2.18× → 1.64× | 5/5 |
+| `rotor` | 2.48× → 1.47× | 4/5 |
+| `tearing` | 3.27× → 1.39× | 5/5 |
+| **total** | ratio narrows but never crosses 1 | **18/20** |
+
+> Q-HAS is strictly Pareto-dominated on **18 of 20** runs against initial
+> conditions it has never seen — less faithful *and* more expensive.
+
+**Answer to the leakage question.** The concern was well founded but the
+mechanism is sharper than "the model saw the end of a trajectory it trained
+on":
+
+1. a leak does exist (**D13**) — the QAOA arm's threshold was fitted on all
+   four classes including the held-out one — and it **favours Q-HAS**;
+2. the initial condition was never new, which T22 fixes;
+3. and facing genuinely unseen conditions, Q-HAS still does not transfer
+   better — it stays dominated.
+
+So the conclusion does not rest on the leak: Q-HAS loses **despite** an
+undue advantage, and loses again on conditions it has never met.
+
+**Still open:** the common-floor confound on `tearing`, the one separable
+fold. T22d measures it.
