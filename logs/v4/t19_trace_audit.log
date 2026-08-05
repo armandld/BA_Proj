@@ -19,3 +19,15 @@ DNS pre-computed: 975 steps, 15 flux snapshots stored.
     thr=0.4250  patch=0.2544  phys=0.6666  -> ABORTED
     thr=0.2375  patch=0.3181  phys=0.3859  -> ok
     thr=0.1438  patch=0.3353  phys=0.1142  -> ok
+    thr=0.0969  patch=0.3562  phys=0.0536  -> ok
+    -> 2/6 points came from an aborted run
+
+  fold tearing: auditing t15b bisection points
+
+--- Pre-computing DNS traces for trace/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (trace/tearing) ---
+
+    thr=0.0500  patch=0.9597  phys=0.0040  -> ok
+    thr=0.8000  patch=0.0727  phys=4.1258  -> ok
