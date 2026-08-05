@@ -15,3 +15,4 @@ DNS pre-computed: 408 steps, 18 flux snapshots stored.
   Q-HAS run 3/5: combined=0.2393 phys=0.0031 patch=0.8299
   Q-HAS run 4/5: combined=0.2413 phys=0.0053 patch=0.8313
   Q-HAS run 5/5: combined=0.2626 phys=0.0042 patch=0.9084
+  classical run 1/2: combined=0.1800 phys=0.0020
