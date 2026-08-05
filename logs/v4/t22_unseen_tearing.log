@@ -20,3 +20,17 @@ DNS pre-computed: 99 steps, 11 flux snapshots stored.
 
   DNS signature canonical=5.690435e+04  unseen=4.742551e+04
   trajectory actually changed: True
+
+  [qhas] canonical phys=0.0130 patch=0.8279
+  [qhas] unseen    phys=0.0017 patch=0.9417   degradation x0.13
+
+  [classical] canonical phys=0.0044 patch=0.6250
+  [classical] unseen    phys=0.0017 patch=0.6250   degradation x0.39
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.13  classical x0.39
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_tearing.json (695s)
+
+V4 Task 22 complete.

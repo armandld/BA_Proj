@@ -1,0 +1,54 @@
+{
+ "fold": "tearing",
+ "scenario": "harris_tearing",
+ "mode": "unseen-ic",
+ "unseen_condition": {
+  "ic": {
+   "B0": 0.8,
+   "shear_width": 0.22,
+   "perturbation": 0.02,
+   "k_mode": 2.0
+  },
+  "note": "thinner current sheet, mode 2 instead of mode 1"
+ },
+ "qaoa_threshold_leaked": true,
+ "arms": {
+  "qhas": {
+   "canonical": {
+    "combined": 0.24583607395509008,
+    "phys_score": 0.013005422015386967,
+    "patch_ratio": 0.8279127038043478
+   },
+   "unseen": {
+    "combined": 0.2703032396199294,
+    "phys_score": 0.0017353462787119268,
+    "patch_ratio": 0.941722972972973
+   },
+   "degradation_ratio": 0.1334325235012601
+  },
+  "classical": {
+   "canonical": {
+    "combined": 0.18173490078520044,
+    "phys_score": 0.004428861099280601,
+    "patch_ratio": 0.625
+   },
+   "unseen": {
+    "combined": 0.17980313050809932,
+    "phys_score": 0.0017243827113390183,
+    "patch_ratio": 0.625
+   },
+   "degradation_ratio": 0.3893512739921144
+  }
+ },
+ "dns_signature_canonical": 56904.34618755703,
+ "dns_signature_unseen": 47425.50837041255,
+ "qhas_degrades_more": false,
+ "git_hash": "3f0d05133894a02f7fd722faf616fd9093d46f3b",
+ "cli_args": {
+  "fold": "tearing",
+  "mode": "unseen-ic",
+  "prefix": "t15_level3",
+  "seed": 0
+ },
+ "wall_s": 695.4832277297974
+}
