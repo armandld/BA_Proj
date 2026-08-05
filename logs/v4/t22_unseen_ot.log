@@ -7,3 +7,4 @@ Environnement Local detecte. Ecriture directe sur le disque.
   classical threshold = 0.46161012794549355   (tuned on training classes only)
 
 --- Pre-computing DNS traces for canonical/ot ---
+Hot-Start captured at t=2.0016
