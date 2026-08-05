@@ -2,6 +2,8 @@
  "fold": "kh",
  "scenario": "kelvin_helmholtz",
  "mode": "unseen-ic",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "classical_tuned_arm_completed": null,
  "unseen_condition": {
   "ic": {
    "shear_width": 0.35,
@@ -13,41 +15,161 @@
  "qaoa_threshold_leaked": true,
  "arms": {
   "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 5,
+   "n_completed_unseen": 5,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.2489890736478305,
+     "phys_score": 0.0023742146012155256,
+     "patch_ratio": 0.8655262212643678,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2545623640306403,
+     "phys_score": 0.00513611232488872,
+     "patch_ratio": 0.8781279932950191,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.24147277958277572,
+     "phys_score": 0.005063807124698212,
+     "patch_ratio": 0.8324952107279694,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2538985284124453,
+     "phys_score": 0.004272594949837189,
+     "patch_ratio": 0.8779633620689655,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2577527863505394,
+     "phys_score": 0.001514820430984987,
+     "patch_ratio": 0.8983477011494253,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.20999011168197834,
+     "phys_score": 0.0028775254023887063,
+     "patch_ratio": 0.7277715773809523,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2241058935598981,
+     "phys_score": 0.00366640574576204,
+     "patch_ratio": 0.7752046130952381,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2110627874421275,
+     "phys_score": 0.003295087793128161,
+     "patch_ratio": 0.7304820365646258,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.23410577617168302,
+     "phys_score": 0.004012967592737134,
+     "patch_ratio": 0.8093377976190477,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.2173905260916833,
+     "phys_score": 0.00500575013379871,
+     "patch_ratio": 0.7483524659863946,
+     "completed": true,
+     "abort": null
+    }
+   ],
    "canonical": {
-    "combined": 0.2595736860821085,
-    "phys_score": 0.005087786951733427,
-    "patch_ratio": 0.895788433908046
+    "combined": 0.25133510640484624,
+    "phys_score": 0.0036723098863249265,
+    "patch_ratio": 0.8704920977011493
    },
    "unseen": {
-    "combined": 0.23256643263926685,
-    "phys_score": 0.0041591196405517655,
-    "patch_ratio": 0.8035847151360545
+    "combined": 0.21933101898947402,
+    "phys_score": 0.0037715473335629495,
+    "patch_ratio": 0.7582296981292516
    },
-   "degradation_ratio": 0.8174712659960612
+   "canonical_phys_sd": 0.0016415797589629931,
+   "unseen_phys_sd": 0.0008091483106060767,
+   "degradation_ratio": 1.027023168063122
   },
   "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.22813540490992895,
+     "phys_score": 0.0016812335405671738,
+     "patch_ratio": 0.7942708333333334,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.22813540490992895,
+     "phys_score": 0.0016812335405671738,
+     "patch_ratio": 0.7942708333333334,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.18020971923933218,
+     "phys_score": 0.0022936069350650555,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.18020971923933218,
+     "phys_score": 0.0022936069350650555,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    }
+   ],
    "canonical": {
-    "combined": 0.1800140864155247,
-    "phys_score": 0.002019720981734553,
-    "patch_ratio": 0.625
+    "combined": 0.22813540490992895,
+    "phys_score": 0.0016812335405671738,
+    "patch_ratio": 0.7942708333333334
    },
    "unseen": {
     "combined": 0.18020971923933218,
     "phys_score": 0.0022936069350650555,
     "patch_ratio": 0.625
    },
-   "degradation_ratio": 1.1356058365523771
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "degradation_ratio": 1.3642405291838837
   }
  },
  "dns_signature_canonical": 61756.79037528209,
  "dns_signature_unseen": 66395.9251107193,
  "qhas_degrades_more": false,
- "git_hash": "801b4e533589120f24e11385ba0012f87dd20aa7",
+ "git_hash": "e6bfaa966a87569d1a6b582a4aace0344198d5e5",
  "cli_args": {
   "fold": "kh",
   "mode": "unseen-ic",
   "prefix": "t15_level3",
-  "seed": 0
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
  },
- "wall_s": 1821.8023915290833
+ "wall_s": 10249.216994524002
 }

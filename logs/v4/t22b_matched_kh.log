@@ -37,3 +37,13 @@ DNS pre-computed: 460 steps, 18 flux snapshots stored.
     [classical] canonical run 1/2: phys=0.00168 patch=0.7943
     [classical] canonical run 2/2: phys=0.00168 patch=0.7943
     [classical] unseen run 1/2: phys=0.00229 patch=0.6250
+    [classical] unseen run 2/2: phys=0.00229 patch=0.6250
+  [classical] canonical phys=0.00168+-0.00000  unseen phys=0.00229+-0.00000  degradation x1.36
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x1.03  classical x1.36
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_kh.json (10249s)
+
+V4 Task 22 complete.
