@@ -29,3 +29,4 @@ DNS pre-computed: 99 steps, 11 flux snapshots stored.
     [qhas] unseen run 1/5: phys=0.00165 patch=0.9215
     [qhas] unseen run 2/5: phys=0.00200 patch=0.6814
     [qhas] unseen run 3/5: phys=0.00269 patch=0.7241
+    [qhas] unseen run 4/5: phys=0.00198 patch=0.8682
