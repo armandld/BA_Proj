@@ -145,27 +145,32 @@ D7/D8 and the D-bis/D-ter mechanism.
 
 ## 5. Robustness of Claim E against D11 and D12
 
-**D11 quantified.** T20 ran the Q-HAS arm 5× per fold on identical inputs.
-The classical control's range is exactly **0.00e+00** across 8 replays, so
-the spread is attributable to the unseeded QAOA path and nothing else.
+**D11 quantified — and the magnitudes do not survive.** T20 was re-run with
+the abort marker captured at execution time (the first pass had no guard and,
+the arm being non-deterministic, could never be audited afterwards).
 
-Coefficients of variation on `phys`: `ot` 17.2 %, `tearing` 37.4 %,
-`rotor` 41.8 %, `kh` 48.9 %.
+| fold | valid | CV | gap/sd | ratio vs matched classical |
+|---|---|---|---|---|
+| `ot` | 5/5 | 17.0 % | 1.35 | **1.30×** |
+| `kh` | 5/5 | **63.6 %** | 0.75 | **1.90×** |
+| `rotor` | **3/5** | 27.6 % | **2.30** | **2.74×** |
+| `tearing` | 5/5 | 24.1 % | 1.86 | **1.81×** |
 
-**Every ratio first published was inflated**, because each rested on one
-draw and the stored draw was the maximum on three folds of four (`rotor` is
-the exception, 67th percentile):
+The published ratios have shrunk twice: 2.57/4.41/3.62/4.38× (single draw) →
+1.56/1.93/2.86/2.05× (unguarded means) → **1.30/1.90/2.74/1.81×** (verified).
 
-| fold | published | **mean-based** | gap/sd |
-|---|---|---|---|
-| `ot` | 2.57× | **1.56×** | 2.09 |
-| `kh` | 4.41× | **1.93×** | 0.98 |
-| `rotor` | 3.62× | **2.86×** | 1.56 |
-| `tearing` | 4.38× | **2.05×** | 1.37 |
+**Only 1 fold of 4 reaches gap/sd ≥ 2 — and it is not the same fold as in
+the unguarded pass** (`ot` fell from 2.09 to 1.35, `rotor` rose from 1.56 to
+2.30). At n = 5 the separability verdict is itself unstable. **Do not quote
+per-fold magnitudes.** Quote the direction (verified mean above the matched
+classical on 4/4) and the dominance count (18/20 on unseen conditions).
 
-**gap/sd is below 2 on three folds of four**, so a single run per arm cannot
-support a magnitude claim. What survives is the count in §3: 19/20 less
-faithful, 18/20 costlier, 17/20 strictly dominated.
+**A failure mode no metric captures.** `rotor`'s Q-HAS arm aborted on 2 of 5
+draws (40 %) while its classical control at the same budget completed both
+times deterministically. `phys_score`, `patch_ratio`, the dominance count and
+the λ analysis all presuppose a run that finishes. The quantum rule
+destabilises the solver at a rate the classical rule does not — a distinct
+result deserving its own line.
 
 **D12 handled.** Divergence audit (T19), replaying every arm and checking it
 reproduces its stored value:

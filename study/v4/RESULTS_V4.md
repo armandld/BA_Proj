@@ -1451,3 +1451,64 @@ Every variance figure published from the unguarded pass — the CVs, the
 mean-based ratios (1.56×, 1.93×, 2.86×, 2.05×), the gap/sd values — rests on
 draws of unknown status. They are superseded by this pass, and on `rotor`
 the mean is now computed from **3 valid draws**, not 5.
+
+---
+
+## T20 verified — final numbers, and why the per-fold magnitudes cannot be quoted
+
+All four folds re-run with the abort marker captured at execution time, the
+classical control at a non-diverging threshold, and aborted draws excluded
+from the statistics.
+
+| fold | valid draws | mean phys | sd | CV | gap/sd | ratio vs matched classical |
+|---|---|---|---|---|---|---|
+| `ot` | 5/5 | 0.10727 | 0.01823 | 17.0 % | 1.35 | 1.30× |
+| `kh` | 5/5 | 0.00320 | 0.00203 | **63.6 %** | 0.75 | 1.90× |
+| `rotor` | **3/5** | 0.14725 | 0.04062 | 27.6 % | **2.30** | 2.74× |
+| `tearing` | 5/5 | 0.00801 | 0.00193 | 24.1 % | 1.86 | 1.81× |
+
+**Only 1 fold of 4 reaches gap/sd ≥ 2.**
+
+### The magnitudes have now shrunk twice
+
+| fold | first published (1 draw) | unguarded 5-draw mean | **verified 5-draw mean** |
+|---|---|---|---|
+| `ot` | 2.57× | 1.56× | **1.30×** |
+| `kh` | 4.41× | 1.93× | **1.90×** |
+| `rotor` | 3.62× | 2.86× | **2.74×** |
+| `tearing` | 4.38× | 2.05× | **1.81×** |
+
+### The decisive observation: which fold "passes" is not stable
+
+| fold | gap/sd unguarded | gap/sd verified |
+|---|---|---|
+| `ot` | 2.09 → **separable** | 1.35 → not |
+| `rotor` | 1.56 → not | 2.30 → **separable** |
+| `kh` | 0.98 | 0.75 |
+| `tearing` | 1.37 | 1.86 |
+
+Both passes report "1 of 4 folds separable" — **but not the same fold**. `ot`
+fell below the threshold and `rotor` rose above it. At n = 5 draws, the
+separability verdict is itself unstable, which is the clearest possible
+evidence that **per-fold magnitude claims are not supportable at this sample
+size**. Reporting "Q-HAS is 2.7× worse on rotor" would be reporting a number
+whose confidence interval is wide enough to swallow the effect.
+
+**What survives is the direction and the dominance count**, which do not
+depend on any single fold's ratio: the verified mean exceeds the
+budget-matched classical value on **4 folds of 4** (1.30×, 1.90×, 2.74×,
+1.81×), and Q-HAS was strictly Pareto-dominated on 18 of 20 unseen-condition
+runs (T22c).
+
+### A robustness asymmetry not captured by any metric
+
+`rotor`'s Q-HAS arm **aborted on 2 of 5 draws (40 %)** while its classical
+control at the same budget completed both times, deterministically (0.0536
+twice). Across the campaign, 6 Q-HAS aborts have been observed on `rotor`
+against 0 for the classical arm at a matched threshold.
+
+None of `phys_score`, `patch_ratio`, the dominance count or the λ analysis
+measures this: they all presuppose a run that finishes. The quantum decision
+rule produces refinement configurations that destabilise the solver at a
+rate the classical rule does not, and that is a distinct failure mode
+deserving its own line in the manuscript.

@@ -18,3 +18,26 @@ DNS pre-computed: 1136 steps, 14 flux snapshots stored.
   Q-HAS run 4/5: combined=0.3093 phys=0.1342 patch=0.7469
   Q-HAS run 5/5: combined=0.2862 phys=0.0868 patch=0.7848
   classical run 1/2: combined=0.4386 phys=0.4845
+  classical run 2/2: combined=0.4386 phys=0.4845
+
+  --------------------------------------------------------------------------------
+  metric          Q-HAS mean       std     range      CV   | classical range
+  combined            0.2926    0.0096    0.0230   0.033   | 0.00e+00
+  phys_score          0.1073    0.0182    0.0474   0.170   | 0.00e+00
+  patch_ratio         0.7558    0.0273    0.0714   0.036   | 0.00e+00
+
+  classical arm deterministic: True  (control — if False, the measurement chain itself is suspect)
+
+  classical reference: budget-matched classical
+
+  Q-HAS run-to-run std on phys : 0.01823  (CV 0.170)
+  stored fold value 0.19403 sits at the 100th percentile of the draws
+  gap / std, from the STORED draw : 6.11
+  gap / std, from the MEAN draw   : 1.35   <- the one to quote
+  => against sampling noise the between-arm gap is NOT large;
+     a single run per arm cannot support a directional claim on
+     the magnitude. Report the dominance count instead.
+
+  saved: t20_qhas_run_variance_ot.json (3402s)
+
+V4 Task 20 complete.
