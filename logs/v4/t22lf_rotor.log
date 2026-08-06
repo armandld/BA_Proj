@@ -36,3 +36,4 @@ DNS pre-computed: 648 steps, 15 flux snapshots stored.
     [qhas] unseen run 5/5: phys=1.27036 patch=0.1380   **ABORTED step 440**
     [qhas] 7 run(s) ABORTED, excluded from stats
     [qhas] EVERY run aborted on one condition — no operating point; continuing to the other arm
+    [classical] canonical run 1/2: phys=0.05365 patch=0.3562

@@ -1645,9 +1645,13 @@ covered by `t16_aggregate_v4.py` (119 rows, 0 DIFF, 0 MISSING).
 **1. Direction — robust, no free parameter.** The verified Q-HAS mean
 exceeds the budget-matched classical value on **4 folds of 4** (1.30×, 1.90×,
 2.74×, 1.81×). The pre-registered `combined` endpoint gives the classical arm
-the majority at **every λ from 0 to 100** — the verdict never flips, only the
-margin (2–1 below λ = 0.82, 3–0 above). Two of three usable folds are decided
-by Pareto dominance alone, needing no λ at all.
+the majority at **every λ on the swept grid** (12 points, 0 → 100) — the
+verdict never flips, only the margin: 2–1 from λ = 0 through λ = 0.8, then
+3–0 from λ = 1.0 onward. An earlier draft put the crossover at "λ = 0.82";
+that precision is not available from a 12-point grid — all that is measured
+is that the count changes somewhere in (0.8, 1.0]. The verdict, which is
+what the claim rests on, does not change anywhere. Two of three usable folds
+are decided by Pareto dominance alone, needing no λ at all.
 
 **2. Robustness — a failure mode outside every metric.** `rotor`'s Q-HAS arm
 aborted on **2 of 5** verified draws (40 %) while its classical control **at
