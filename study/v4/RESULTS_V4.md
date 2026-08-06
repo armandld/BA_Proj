@@ -1742,8 +1742,9 @@ covered by `t16_aggregate_v4.py` (143 rows, 0 DIFF; the 4 MISSING are the `ot`/`
 > completed repeated runs, more expensive on **16 of 18**, and strictly
 > Pareto-dominated on **16 of 18**. At that same operating point it also
 > **aborts on 2 of 20 draws where the classical rule aborts on 0 of 8**.
-> And when the one advantage it holds — a decision threshold fitted on the
-> held-out class (**D13**) — is taken away, it does not recover: it gets
+> And when the one undue advantage that *can* be taken away — a decision
+> threshold fitted on the held-out class (**D13**) — is removed, it does not
+> recover: it gets
 > **worse still**, and on `rotor` it stops completing at all.
 
 Each clause is recomputed from its artifact by `t16_aggregate_v4.py`
@@ -1794,10 +1795,18 @@ operating point where the two arms are compared, the classical arm completed
 every time and Q-HAS did not.** Divergence is a property of the threshold,
 and both arms have thresholds that diverge.
 
-**3. Transfer — no effect.** On genuinely unseen initial conditions,
-**1 fold of 4** shows a separable difference in degradation; on `ot`, |z| =
-0.02. The single-draw pass had suggested Q-HAS transfers *better* on all
-four; repeated with 5 draws that pattern evaporates.
+**3. Transfer — no effect, and the one apparent effect was the leak.** On
+genuinely unseen initial conditions, **1 fold of 4** shows a separable
+difference in degradation; on `ot`, |z| = 0.02. The single-draw pass had
+suggested Q-HAS transfers *better* on all four; repeated with 5 draws that
+pattern evaporates.
+
+The one fold that survived as separable was `tearing`, and it favoured
+Q-HAS (degradation ×0.166 against the classical ×0.389). **Leak-free, that
+reverses**: ×0.685 against ×0.389 — Q-HAS now degrades *more*. The single
+transfer result in the study's favour was an artefact of the leaked
+threshold, and removing the leak removes it. Nothing here supports a
+transfer advantage in either the leaked or the leak-free setting.
 
 **4. Magnitudes — not supportable.** Both variance passes report "1 fold of
 4 separable" **but not the same fold** (`ot` 2.09 → 1.35, `rotor` 1.56 →
