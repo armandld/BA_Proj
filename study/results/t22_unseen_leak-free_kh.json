@@ -111,7 +111,10 @@
    "degradation_ratio": 4.8353765664491615
   },
   "classical": {
-   "status": "in_progress",
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
    "canonical_runs": [
     {
      "combined": 0.22813540490992895,
@@ -135,8 +138,29 @@
      "patch_ratio": 0.625,
      "completed": true,
      "abort": null
+    },
+    {
+     "combined": 0.18020971923933218,
+     "phys_score": 0.0022936069350650555,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
     }
-   ]
+   ],
+   "canonical": {
+    "combined": 0.22813540490992895,
+    "phys_score": 0.0016812335405671738,
+    "patch_ratio": 0.7942708333333334
+   },
+   "unseen": {
+    "combined": 0.18020971923933218,
+    "phys_score": 0.0022936069350650555,
+    "patch_ratio": 0.625
+   },
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "status": "completed",
+   "degradation_ratio": 1.3642405291838837
   }
  },
  "thresholds_match": false,
@@ -146,12 +170,11 @@
  "unseen_condition_is_weak": false,
  "resumed_from_checkpoint": true,
  "n_runs_resumed": 1,
- "status": "partial",
- "partial_stage": "classical/unseen 1/2",
- "partial_warning": "INCOMPLETE RUN \u2014 written as a resume point after a container reclaim. Arm statistics present here are computed over the draws finished so far and MUST NOT be quoted.",
+ "status": "completed",
+ "qhas_degrades_more": true,
  "git_hash_at_start": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
  "dirty_at_start": true,
- "git_hash_at_save": "3cecd7b302c542675525727cb16e2d9f903a8a0b",
+ "git_hash_at_save": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
  "head_moved_during_run": true,
  "git_hash": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
  "cli_args": {
@@ -163,5 +186,5 @@
   "repeats": 5,
   "matched_reference": true
  },
- "wall_s": 6396.771776437759
+ "wall_s": 6748.664231300354
 }

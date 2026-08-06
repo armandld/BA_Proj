@@ -1,6 +1,39 @@
 {
  "folds": [
   {
+   "fold": "kh",
+   "status": "completed",
+   "qaoa_threshold": 0.46161012794549355,
+   "classical_threshold": 0.19062500000000002,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.5513290229885057,
+     "qhas_phys": 0.027448654807308247,
+     "frontier_phys_at_qhas_budget": 0.014723193574421728,
+     "ratio_vs_frontier": 1.864313925410461,
+     "out_of_swept_range": false,
+     "classical_patch": 0.7942708333333334,
+     "classical_phys": 0.0016812335405671738
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.4646391369047619,
+     "qhas_phys": 0.13272458223581043,
+     "frontier_phys_at_qhas_budget": 0.02967158487587268,
+     "ratio_vs_frontier": 4.473120758161282,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.0022936069350650555
+    }
+   }
+  },
+  {
    "fold": "rotor",
    "status": "total_abort",
    "qaoa_threshold": 0.5863920247793146,
@@ -63,8 +96,7 @@
   }
  ],
  "missing": [
-  "ot",
-  "kh"
+  "ot"
  ],
  "cli_args": {
   "folds": [
@@ -75,9 +107,9 @@
   ],
   "seed": 0
  },
- "git_hash_at_start": "39cdb762657ad39f1e413ddc0824d8f56743c610",
+ "git_hash_at_start": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
  "dirty_at_start": true,
- "git_hash_at_save": "39cdb762657ad39f1e413ddc0824d8f56743c610",
+ "git_hash_at_save": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
  "head_moved_during_run": false,
- "git_hash": "39cdb762657ad39f1e413ddc0824d8f56743c610"
+ "git_hash": "43a9a78d38b81b2288cd39d7d851baef4c2227b0"
 }

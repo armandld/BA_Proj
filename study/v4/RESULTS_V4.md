@@ -1668,7 +1668,7 @@ frontier interpolated at the budget Q-HAS actually realised**, and T24
 **refuses to interpolate outside the swept range** rather than let
 `np.interp` return an edge value that looks like a measurement.
 
-### Results, 2 folds of 4 so far
+### Results, 3 folds of 4 so far
 
 | fold | condition | Q-HAS budget | Q-HAS phys | classical frontier at that budget | ratio |
 |---|---|---|---|---|---|
@@ -1676,6 +1676,8 @@ frontier interpolated at the budget Q-HAS actually realised**, and T24
 | `rotor` | unseen | 0.0882 | 0.8535 | budget below the swept range | not computable |
 | `tearing` | canonical | 0.3846 | 3.7351 | 1.7982 | **2.1×** |
 | `tearing` | unseen | 0.4232 | 2.5600 | 1.5100 | **1.7×** |
+| `kh` | canonical | 0.5513 | 0.02745 | 0.01472 | **1.9×** |
+| `kh` | unseen | 0.4646 | 0.13272 | 0.02967 | **4.5×** |
 
 **Removing the leak makes Q-HAS dramatically worse, and on one fold
 inoperable.**
@@ -1688,6 +1690,35 @@ inoperable.**
   — it refines less than half as much — but **not all of it**: against the
   classical frontier *at its own realised budget* it is still **2.1×
   worse**.
+- On `kh`, 10 draws, **zero aborted**. Error rises from 0.0032 (leaked,
+  budget 0.870) to **0.02745** (leak-free, budget 0.551) — **1.9×** the
+  frontier at its own budget on the canonical condition and **4.5×** on the
+  unseen one.
+
+### `kh` also carries the sharpest transfer reversal
+
+| | leaked | leak-free |
+|---|---|---|
+| Q-HAS degradation | 1.027 | **×4.835** |
+| classical degradation | 1.364 | ×1.364 |
+| who degrades more | classical | **Q-HAS** |
+
+Under the leak, `kh` was one of the folds where Q-HAS degraded *less* than
+the classical rule on an unseen initial condition. Leak-free it degrades
+**3.5× more**. Together with `tearing` (×0.685 against ×0.389, also
+reversed) that is **every fold measured so far reversing in the same
+direction** once the leaked threshold is removed.
+
+**Run-to-run spread widens too.** `kh`'s leak-free draws give CV 26.3 %
+canonical and **64.7 %** unseen, against the 17–49 % band T20 measured for
+the leaked configuration. One draw (0.2854 against neighbours near 0.09)
+drives most of that — and the divergence guard confirms it **completed**,
+`abort = None`, so it stays in. Excluding a valid draw because it looks
+inconvenient is the mirror of the defect that contaminated `rotor`'s mean.
+At n = 5 with one dominant draw this is a flag for the manuscript, not a
+measurement: the leaked threshold appears to have been doing *stabilising*
+work, not only accuracy work, which is consistent with `rotor` losing its
+operating point entirely.
 
 ### Two caveats that must travel with these numbers
 
@@ -1766,7 +1797,7 @@ numbers (`t24/*` rows).
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (143 rows, 0 DIFF; the 4 MISSING are the `ot`/`kh` leak-free runs still in flight).
+covered by `t16_aggregate_v4.py` (145 rows, 0 DIFF; the 2 MISSING are the `ot` leak-free run, still in flight).
 
 ## The one-sentence result
 
@@ -1790,8 +1821,8 @@ that fold's 6 bisection points. Divergence is a property of the threshold;
 both arms have thresholds that diverge. What is asymmetric is that at the
 point where they are compared, one arm completed and the other did not.
 
-**The D13 clause is measured on 2 folds of 4** (`rotor`, `tearing`), with
-`ot` and `kh` still running, and it is a *bound*: `--mode leak-free`
+**The D13 clause is measured on 3 folds of 4** (`rotor`, `tearing`, `kh`), with
+`ot` still running, and it is a *bound*: `--mode leak-free`
 substitutes the threshold without re-tuning the QAOA arm. The definitive
 version — `threshold_amr` back in the Optuna search space, excluded from
 the held-out class — is not attempted.
