@@ -21,15 +21,17 @@ git diff --name-only $BASE HEAD -- src/                            # MUST be emp
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
 python -m pytest tests/v3 tests/v4 -q                              # 298 passed, 20 skipped
-python study/v4/t16_aggregate_v4.py                                # 119 rows, 0 DIFF, 0 MISSING
+python study/v4/t16_aggregate_v4.py                                # 129 rows, 0 DIFF (4 MISSING = ot/kh leak-free, in flight)
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**298 pytests passed** (20 skipped), master table **119/119 OK, 0 DIFF, 0 MISSING**
-(all four Level-3 folds are now present, so nothing is outstanding in it).
+**298 pytests passed** (20 skipped), master table **125 OK, 0 DIFF, 4
+MISSING**. All four Level-3 folds are present; the 4 MISSING rows are the
+`ot`/`kh` leak-free runs, which were still in flight when this was written.
+`MISSING` means "not produced yet", never "produced and lost".
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 `figures_v4/`, `logs/v4/`, `CLAUDE.md` was modified.
@@ -54,7 +56,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 119 rows.
+Markdown. It prints `0 DIFF` over 129 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
@@ -110,7 +112,7 @@ every cell above against `t20_qhas_run_variance_<fold>.json`.
 > and strictly Pareto-dominated on **16/18**. No run reverses the ordering
 > on both coordinates at once.
 
-Quote it this way. The per-fold ratios (1.56–2.86×) are means of a quantity
+Quote it this way. The per-fold ratios (1.30–2.74×) are means of a quantity
 with 17–49 % CV, and **gap/sd is below 2 on three folds of four** — a single
 run per arm cannot support a magnitude claim. The ratios first published
 (2.57–4.41×) each rested on one draw and were inflated 1.1–2.2×.

@@ -445,6 +445,43 @@ def rows_t23(results_dir, folds):
     return out
 
 
+def rows_t24(results_dir, folds):
+    """Le resultat sans fuite (D13 retire), recalcule depuis les artefacts.
+
+    Ne pose de reference que pour les folds deja publies ; les autres
+    apparaissent des qu'ils existent, sans figer un chiffre d'avance.
+    """
+    from t24_leak_free_summary import analyse
+    published = {
+        "tearing": {"canonical": dict(phys=3.7351, ratio=2.0771),
+                    "unseen": dict(phys=2.5600, ratio=1.6954)},
+        "rotor": {"canonical": dict(n_ok=0.0), "unseen": dict(phys=0.8535)},
+    }
+    out = []
+    for f in folds:
+        r = analyse(results_dir, f)
+        if r is None:
+            for m in ("leak-free canonical phys", "leak-free unseen phys"):
+                out.append(make_row(f"t24/{f}", m, None, None))
+            continue
+        ref = published.get(f, {})
+        for cond in ("canonical", "unseen"):
+            rec = r["conditions"][cond]
+            rf = ref.get(cond, {})
+            if not rec["n_completed"]:
+                # aucun tirage valide : on publie le CONSTAT, pas une moyenne
+                out.append(make_row(f"t24/{f}", f"leak-free {cond} completed",
+                                    0.0, rf.get("n_ok"), tol=0.5))
+                continue
+            out.append(make_row(f"t24/{f}", f"leak-free {cond} phys",
+                                rec["qhas_phys"], rf.get("phys"), tol=0.01))
+            if rec.get("ratio_vs_frontier") is not None:
+                out.append(make_row(
+                    f"t24/{f}", f"leak-free {cond} ratio vs frontier",
+                    rec["ratio_vs_frontier"], rf.get("ratio"), tol=0.01))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -514,6 +551,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
     rows += rows_t20(results_dir, folds)
     rows += rows_t22(results_dir, folds)
     rows += rows_t23(results_dir, folds)
+    rows += rows_t24(results_dir, folds)
     return rows
 
 

@@ -29,7 +29,7 @@ Consequences for your review:
 - the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
   `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
   number from the artifacts and compares it to the published value. It must
-  print `0 DIFF` (119 rows at the time of writing);
+  print `0 DIFF` (129 rows at the time of writing);
 - a `MISSING` row means the artifact was never produced, not that it was
   lost — the tracked set is the complete set;
 - everything except Level 3 re-runs in seconds to minutes (T11–T14, T17,
@@ -84,7 +84,7 @@ You will understand 80 % of the work from these:
 
 | # | file | why |
 |---|---|---|
-| 1 | `docs/v4_final_results_for_paper.md` | the whole argument, claims A–G, defect register D1–D13. **Start here.** |
+| 1 | `docs/v4_final_results_for_paper.md` | the whole argument, claims A–G, defect register D1–D15. **Start here.** |
 | 2 | `docs/level3_preregistration.md` | the decision rules, frozen *before* Level 3 ran. Check §4 against what §5 of this guide says I actually did |
 | 3 | `study/v4/t15c_fold_synthesis.py` | applies those rules; ~360 lines; where a bent rule would hide |
 | 4 | `study/v4/t19_arm_divergence_audit.py` | the catch that changed the conclusions (see §3) |
@@ -94,8 +94,9 @@ You will understand 80 % of the work from these:
 
 ## 3. Review the *accusations* hardest (~20 min)
 
-Thirteen defects (D1–D13) are claims that existing code is wrong. Those are
-the most damaging things here if any is mistaken. Each is independently
+Thirteen defects (D1–D13) are claims that **existing** code is wrong — the
+most damaging things here if any is mistaken. (D14 and D15 are defects in my
+own verification code; see §4.) Each is independently
 checkable in a couple of minutes — verify these before trusting anything
 downstream of them:
 
@@ -145,7 +146,25 @@ silently flip a result, ranked:
 5. **`make_pareto_panel.py::draw_panel`** — the annotated ratio must equal
    `q_phys / interp_frontier(front, q_patch)` and nothing else. A figure
    that computes its own number differently from the table is a classic
-   way to ship an inconsistency.
+   way to ship an inconsistency. It *did* ship one: the figure's
+   denominator (frontier interpolated at the realised budget) genuinely
+   differs from the tables' (the measured budget-matched point). Both are
+   now columns in `pareto_panel.csv`; check `ratio_vs_matched` reproduces
+   the tables.
+
+### Four defects found in my own code, listed so you can check the fixes
+
+| # | what was wrong | how to check the fix |
+|---|---|---|
+| **D14** | T20's classical control ran at the *tuned* threshold on `ot`/`kh` while the artifact says `"budget-matched classical"`. Recomputing from `classical_stats` gives phys 0.4845 on `ot` against the matched 0.0827 — it inverts that fold | `tests/v4/test_t23_headline_counts.py::test_reference_is_the_matched_point_not_the_t20_control` |
+| **D15** | `git_commit_hash()` was called at *save* time, so an hour-long run was stamped with code committed while it ran | `study/v4/provenance.py`, `tests/v4/test_provenance.py` |
+| — | the headline dominance count was **written by hand** and did not reproduce (19/20 → 18/18) | `python study/v4/t23_headline_counts.py`, checked by `t16` |
+| — | `t22` printed *"at the SAME operating point"* in leak-free mode, where the two arms differ by a factor of six in threshold | `tests/v4/test_t24_leak_free.py::test_no_claim_of_a_shared_operating_point` |
+
+**The pattern is the finding.** Every number that no script produced turned
+out to be wrong; every number `t16` recomputes was right. If you review
+nothing else in this section, check that the numbers you care about appear
+in `study/results/v4_master_table.md`.
 
 ---
 

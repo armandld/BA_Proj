@@ -1,8 +1,11 @@
 """Balayage systematique du motif de defaillance silencieuse (study/v4).
 
-Neuf instances du MEME motif ont ete trouvees au fil de l'eau pendant cette
-campagne : *un calcul qui echoue, ou ne fait pas ce qu'il annonce, et rend
-une valeur indiscernable d'une valeur valide*.
+DIX-SEPT instances du MEME motif ont ete trouvees pendant cette campagne :
+*un calcul qui echoue, ou ne fait pas ce qu'il annonce, et rend une valeur
+indiscernable d'une valeur valide*. Neuf au fil de l'eau, trois par ce
+balayage, et CINQ de plus en verifiant les NOMBRES PUBLIES contre leurs
+artefacts — dont le decompte de tete de l'etude, compose a la main et faux
+(cf. `study/v4/t23_headline_counts.py`).
 
   1-4. le garde-fou de divergence de V1 rend un score PARTIEL dont les cles
        sont identiques a celles d'une execution complete (T15, T20, T22 x2)
@@ -12,9 +15,16 @@ une valeur indiscernable d'une valeur valide*.
   9.   `--mode no-leak` accepte, documente, jamais implemente : seul le nom
        du fichier changeait
 
-Quatre des neuf etaient dans le code de VERIFICATION ecrit pour attraper les
-autres. Chercher au fil de l'eau ne suffit donc pas : ce module balaie les
-formes verifiables mecaniquement, pour qu'aucune ne revienne en silence.
+Une part d'entre elles etait dans le code de VERIFICATION ecrit pour
+attraper les autres. Chercher au fil de l'eau ne suffit donc pas : ce module
+balaie les formes verifiables mecaniquement, pour qu'aucune ne revienne en
+silence.
+
+La lecon la plus large ne se teste pas ici : TOUT nombre qu'aucun script ne
+produit s'est revele faux, et tout nombre recalcule par
+`t16_aggregate_v4.py` s'est revele juste. La parade n'est pas la relecture
+— elle a ete appliquee et a laisse passer — mais le fait de rendre le
+nombre fonction de l'artefact.
 
 Ce balayage ne pretend pas etre exhaustif — il couvre les formes qui ont
 reellement mordu. Ce qu'il garantit, c'est la NON-REGRESSION.

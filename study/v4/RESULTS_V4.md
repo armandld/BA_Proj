@@ -1719,7 +1719,7 @@ apparent transfer advantage was an artefact of the leaked threshold.
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (119 rows, 0 DIFF, 0 MISSING).
+covered by `t16_aggregate_v4.py` (129 rows, 0 DIFF; the 4 MISSING are the `ot`/`kh` leak-free runs still in flight).
 
 ## The one-sentence result
 
@@ -1801,9 +1801,9 @@ it loses anyway.
 
 ## The methodological finding, stated for the manuscript
 
-Twelve distinct instances of one failure mode were found and fixed: **a
-computation that fails, or does not do what it says, but returns a value
-indistinguishable from a valid one**:
+**Seventeen distinct instances** of one failure mode were found and fixed:
+**a computation that fails, or does not do what it says, but returns a value
+indistinguishable from a valid one**. Twelve were found by auditing code:
 
 | form | count | where |
 |---|---|---|
@@ -1817,13 +1817,32 @@ others**, and three more were found only by `tests/v4/test_silent_failure_sweep.
 which sweeps the mechanically checkable forms. Searching as you go is
 demonstrably not enough.
 
-A thirteenth defect is the *mirror* of the motif rather than an instance of
-it: a genuine outcome made **indistinguishable from a run never launched**.
-When every Q-HAS draw aborted at the leak-free operating point on `rotor`,
-the guard raised `SystemExit` before writing any artifact — and it exited on
-the first arm, leaving unmeasured the one question that mattered (does the
-classical rule survive at that same threshold?). Recorded now as
-`status = "total_abort"` with an undefined ratio.
+### Five more, found by auditing the documents against the artifacts
+
+The twelve above were found by auditing *code*. A final pass audited the
+**published numbers** instead — recomputing each from its artifact — and
+found five more instances, in the write-up and in the verification code:
+
+| # | instance | consequence |
+|---|---|---|
+| 13 | a total abort discarded before saving: `SystemExit` fired before any artifact was written, and on the *first* arm, so the question that mattered (does the classical rule survive that threshold?) went unmeasured | the mirror of the motif — a real outcome made indistinguishable from a run never launched |
+| 14 | **the headline count was written by hand**, not computed. 19/20, 18/20, 17/20 did not reproduce: `kh`'s two columns were transposed and `rotor`'s 2 aborted draws sat in the denominator | the study's most-quoted number was wrong; correct is **18/18, 16/18, 16/18** |
+| 15 | **D14** — T20's artifact says `classical_reference_source = "budget-matched classical"` next to a `classical_stats` block that, on `ot` and `kh`, was computed at the *tuned* threshold | 0.4845 against 0.0827 on `ot` — enough to invert that fold for anyone recomputing from it |
+| 16 | **D15** — `git_commit_hash()` taken at *save* time | hour-long runs stamped with code committed while they ran; the `ot`/`kh` artifacts point at a fix they never executed |
+| 17 | `t22` printed *"at the SAME operating point the classical arm completed"* in leak-free mode | the two arms differ by a factor of six in threshold; the sentence would have turned a budget difference into an arm-specific instability claim |
+
+Two more errors of a related but distinct kind — **false precision** rather
+than false results — were fixed in the same pass: a λ crossover quoted as
+"0.82" from a 12-point grid that only locates it in (0.8, 1.0], and a
+published figure still annotating the retracted single-draw ratios.
+
+**The pattern is the finding, and it is sharper than "check your code".**
+Every number that no script produced turned out to be wrong. Every number
+`t16_aggregate_v4.py` recomputes from its artifact was right. The defence
+that worked was not care, review, or re-reading — all of which were applied
+throughout and all of which missed these — but **making the number a
+function of the artifact and checking it mechanically**. Anything published
+as prose is unverified by construction.
 
 One aborted draw returned `phys = 0.4069` against valid draws of
 0.054–0.219: **contamination need not be visible in the values**. Any

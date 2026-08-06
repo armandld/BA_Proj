@@ -1,4 +1,4 @@
-# git_hash=ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41
+# git_hash=9b1b15cca4f91511b1d5be3b3a97e441939f6b78
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -119,3 +119,13 @@ t23,total dominated,16.000000,16.000000,OK
 t23,Q-HAS aborts at matched point,2.000000,2.000000,OK
 t23,classical replays at matched point,8.000000,8.000000,OK
 t23,classical aborts at matched point,0.000000,0.000000,OK
+t24/ot,leak-free canonical phys,,,MISSING
+t24/ot,leak-free unseen phys,,,MISSING
+t24/kh,leak-free canonical phys,,,MISSING
+t24/kh,leak-free unseen phys,,,MISSING
+t24/rotor,leak-free canonical completed,0.000000,0.000000,OK
+t24/rotor,leak-free unseen phys,0.853492,0.853500,OK
+t24/tearing,leak-free canonical phys,3.735120,3.735100,OK
+t24/tearing,leak-free canonical ratio vs frontier,2.077112,2.077100,OK
+t24/tearing,leak-free unseen phys,2.560021,2.560000,OK
+t24/tearing,leak-free unseen ratio vs frontier,1.695367,1.695400,OK
