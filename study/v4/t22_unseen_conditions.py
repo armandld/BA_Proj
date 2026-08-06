@@ -32,9 +32,18 @@ CE QUE FAIT CETTE TACHE.
                       fold et evalue les DEUX bras sur une condition
                       initiale INEDITE de la classe tenue. Compare la
                       degradation des deux bras. Bon marche.
-  mode `no-leak`    : re-regle le seuil du bras QAOA sur les classes
-                      d'entrainement SEULEMENT, exactement comme le bras
-                      classique, puis evalue. Supprime D13. Couteux.
+  mode `leak-free`  : evalue Q-HAS avec le seuil du bras CLASSIQUE de ce
+                      fold, issu de `train_classical_threshold_excluding`
+                      donc regle sur les seules classes d'entrainement.
+                      Supprime D13 sans nouveau reglage Optuna.
+
+Le mode `no-leak` a existe comme OPTION ACCEPTEE ET NON IMPLEMENTEE : il ne
+changeait que le nom du fichier de sortie, produisant un artefact nomme
+comme si la fuite avait ete supprimee alors que le calcul etait identique.
+C'est la neuvieme instance du motif que cette campagne traque — un calcul
+qui ne fait pas ce qu'il annonce et rend un resultat indiscernable d'un
+resultat valide. L'option est retiree et remplacee par `leak-free`, qui est
+reellement implemente ci-dessous.
 
 Les conditions inedites sont obtenues en substituant temporairement
 `_init_dns_scenario` de V1 pour transmettre des parametres physiques aux
@@ -165,8 +174,11 @@ def main():
     from config import RESULTS_DIR
 
     p.add_argument("--fold", required=True)
-    p.add_argument("--mode", choices=["unseen-ic", "no-leak"],
-                   default="unseen-ic")
+    p.add_argument("--mode", choices=["unseen-ic", "leak-free"],
+                   default="unseen-ic",
+                   help="unseen-ic: conditions initiales inedites. "
+                        "leak-free: seuil QAOA repris du bras classique du "
+                        "fold, regle hors classe tenue (supprime D13)")
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--repeats", type=int, default=1,
@@ -192,6 +204,18 @@ def main():
     cfg = dict(fold_scenarios(T, warn=False))[args.fold]
 
     hp_q = dict(rec["hyperparams"])
+    if args.mode == "leak-free":
+        # D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les
+        # QUATRE classes, classe tenue comprise. Celui du bras classique de
+        # ce fold vient de `train_classical_threshold_excluding`, donc des
+        # seules classes d'entrainement : le reprendre supprime la fuite.
+        leak_free_thr = float(rec["classical_params"]["threshold_amr"])
+        assert abs(hp_q["threshold_amr"] - LEAKED_THRESHOLD) < 1e-9, (
+            "the QAOA arm was not at the leaked threshold; check the fold")
+        hp_q["threshold_amr"] = leak_free_thr
+        print(f"  LEAK-FREE: QAOA threshold {LEAKED_THRESHOLD:.6f} "
+              f"-> {leak_free_thr:.6f} (tuned on training classes only)",
+              flush=True)
     # Le bras classique doit partir d'un point de fonctionnement QUI TERMINE :
     # sur `rotor` le seuil regle diverge, et comparer Q-HAS a une trajectoire
     # tronquee ne mesure rien (le piege a deja fausse T15, T20 et un premier

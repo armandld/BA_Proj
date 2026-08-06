@@ -91,3 +91,20 @@ def test_single_run_output_is_flagged_underpowered(tmp_path):
 
 def test_missing_fold_returns_none(tmp_path):
     assert load(str(tmp_path), "nope") is None
+
+
+def test_no_leak_mode_is_gone_and_leak_free_is_wired(tmp_path):
+    """Un mode accepte mais non implemente est un piege : `--mode no-leak`
+    ne changeait que le nom du fichier de sortie, produisant un artefact
+    nomme comme si la fuite D13 avait ete supprimee alors que le calcul
+    etait identique. Il doit avoir disparu, et son remplacant doit etre
+    REELLEMENT branche sur le seuil."""
+    src = open(os.path.join(_HERE, "..", "..", "study", "v4",
+                            "t22_unseen_conditions.py")).read()
+    assert '"no-leak"' not in src, "the unimplemented mode is back"
+    assert '"leak-free"' in src
+    # le mode doit modifier le seuil, pas seulement le nom de fichier
+    assert 'hp_q["threshold_amr"] = leak_free_thr' in src, \
+        "leak-free does not actually change the QAOA threshold"
+    assert 'rec["classical_params"]["threshold_amr"]' in src, \
+        "leak-free must take the threshold tuned on training classes only"
