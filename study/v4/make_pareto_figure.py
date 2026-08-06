@@ -117,7 +117,8 @@ def build_figure(front, q, tuned, fold, out_dir):
 
     ax.set_xlabel("Compute:  refined-pixel ratio  (lower is cheaper)",
                   color=INK_SECONDARY, fontsize=10)
-    ax.set_ylabel("Error:  relative $L_2$ vs DNS  (lower is better)",
+    ax.set_ylabel("Error:  instability-weighted relative $L_2$ vs DNS  "
+                  "(lower is better)",
                   color=INK_SECONDARY, fontsize=10)
     ax.set_title(f"Q-HAS lies above the classical frontier  "
                  f"(Level-3 fold: {fold})",

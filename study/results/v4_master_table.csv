@@ -1,4 +1,4 @@
-# git_hash=fdf8ec581c8ae0fd38419592f895e24320cb8e00
+# git_hash=60da15d559ff61bd4a0e1b71a485cef5d413db2a
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -84,3 +84,19 @@ t20/tearing,Q-HAS phys mean,0.008006,0.008010,OK
 t20/tearing,Q-HAS phys sd,0.001927,0.001930,OK
 t20/tearing,ratio vs matched (mean-based),1.807606,1.810000,OK
 t20,folds with deterministic classical arm,4.000000,4.000000,OK
+t22/ot,dominated on unseen,4.000000,4.000000,OK
+t22/ot,separation z,0.024813,0.020000,OK
+t22/ot,classical / floor (unseen),9.532272,9.530000,OK
+t22/ot,Q-HAS / floor (unseen),14.275925,14.280000,OK
+t22/kh,dominated on unseen,5.000000,5.000000,OK
+t22/kh,separation z,0.662208,0.660000,OK
+t22/kh,classical / floor (unseen),1.385712,1.390000,OK
+t22/kh,Q-HAS / floor (unseen),2.278629,2.280000,OK
+t22/rotor,dominated on unseen,4.000000,4.000000,OK
+t22/rotor,separation z,1.778592,1.780000,OK
+t22/rotor,classical / floor (unseen),0.981068,0.980000,OK
+t22/rotor,Q-HAS / floor (unseen),1.439803,1.440000,OK
+t22/tearing,dominated on unseen,5.000000,5.000000,OK
+t22/tearing,separation z,3.451921,3.450000,OK
+t22/tearing,classical / floor (unseen),1.114853,1.110000,OK
+t22/tearing,Q-HAS / floor (unseen),1.548873,1.550000,OK

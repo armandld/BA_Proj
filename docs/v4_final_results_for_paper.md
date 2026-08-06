@@ -239,7 +239,7 @@ Fold `ot`, Orszag–Tang excluded from **all** tuning of both arms:
 | endpoint | Q-HAS | tuned classical | Δ |
 |---|---|---|---|
 | combined (pre-registered primary) | 0.3328 | 0.4386 | −0.1058 |
-| phys (relative L2 vs DNS) | 0.1940 | 0.4845 | −0.2905 |
+| phys (instability-weighted relative L2 vs DNS) | 0.1940 | 0.4845 | −0.2905 |
 | patch_ratio (compute) | 0.6797 | 0.3238 | +0.3558 |
 
 Taken at face value Q-HAS wins. It must not be read that way: the arms sit

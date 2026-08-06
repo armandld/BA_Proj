@@ -2,6 +2,10 @@
 
 **Branch:** `claude/kind-babbage-927g10` · **Base:** `origin/main`
 **Scope:** 74 commits, 77 files, ~15 700 added lines.
+**The closed-loop study is closed** — see *CLOSING THE CLOSED-LOOP STUDY*
+at the end of `study/v4/RESULTS_V4.md` for the one-sentence result, the
+evidence ranked by strength, and what would overturn it.
+
 **Read `docs/CODE_REVIEW_GUIDE.md` first** — it orders the review by risk
 per minute. This file is the single entry point: what was done, what it
 concluded, what is unfinished, and what to check before merging.

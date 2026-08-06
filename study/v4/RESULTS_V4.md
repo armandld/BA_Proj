@@ -1512,3 +1512,83 @@ measures this: they all presuppose a run that finishes. The quantum decision
 rule produces refinement configurations that destabilise the solver at a
 rate the classical rule does not, and that is a distinct failure mode
 deserving its own line in the manuscript.
+
+---
+
+# CLOSING THE CLOSED-LOOP STUDY (Level 3)
+
+Everything below is measured, carries the control that validated it, and is
+covered by `t16_aggregate_v4.py` (100 rows, 0 DIFF, 0 MISSING).
+
+## The one-sentence result
+
+> Across four held-out instability classes, a Q-HAS closed loop is less
+> faithful than a plain threshold rule at matched compute on **19 of 20**
+> repeated runs, more expensive on **18 of 20**, strictly Pareto-dominated on
+> **17 of 20**, and it additionally destabilises the solver on a fraction of
+> runs where the classical rule never does.
+
+## What the closed loop establishes, by strength of evidence
+
+**1. Direction — robust, no free parameter.** The verified Q-HAS mean
+exceeds the budget-matched classical value on **4 folds of 4** (1.30×, 1.90×,
+2.74×, 1.81×). The pre-registered `combined` endpoint gives the classical arm
+the majority at **every λ from 0 to 100** — the verdict never flips, only the
+margin (2–1 below λ = 0.82, 3–0 above). Two of three usable folds are decided
+by Pareto dominance alone, needing no λ at all.
+
+**2. Robustness — a failure mode outside every metric.** `rotor`'s Q-HAS arm
+aborted on **2 of 5** verified draws (40 %) while its classical control at
+the same budget completed every time, deterministically. Six Q-HAS aborts
+against zero classical across the campaign. `phys_score`, `patch_ratio`, the
+dominance count and the λ analysis all presuppose a run that finishes.
+
+**3. Transfer — no effect.** On genuinely unseen initial conditions,
+**1 fold of 4** shows a separable difference in degradation; on `ot`, |z| =
+0.02. The single-draw pass had suggested Q-HAS transfers *better* on all
+four; repeated with 5 draws that pattern evaporates.
+
+**4. Magnitudes — not supportable.** Both variance passes report "1 fold of
+4 separable" **but not the same fold** (`ot` 2.09 → 1.35, `rotor` 1.56 →
+2.30). At n = 5 the separability verdict is itself unstable. Quote the
+direction and the counts; **do not quote per-fold ratios**.
+
+## Conditions under which the result was obtained — all adverse to the classical arm
+
+The conclusion is **conservative**: three known asymmetries favour Q-HAS and
+it loses anyway.
+
+| asymmetry | direction | status |
+|---|---|---|
+| **D13** — QAOA threshold fitted on all 4 classes incl. the held-out one | favours Q-HAS | measured, **not removed** |
+| **cost axis** excludes the QAOA circuit; Q-HAS uses 2.7–3.3× the wall time | favours Q-HAS | declared |
+| aborted Q-HAS draws excluded from its own statistics | favours Q-HAS | necessary, declared |
+
+## What would overturn it
+
+- removing D13 (`t22 --mode no-leak`) and finding Q-HAS wins;
+- ≥ 3 physics seeds per fold showing the direction is seed-specific;
+- the full 170-trial Optuna budget lifting Q-HAS above the matched classical;
+- counting decision cost, which would only make the result stronger.
+
+## What this study cannot say
+
+- **Nothing about magnitude** per fold (n = 5, unstable separability).
+- **Nothing about transfer on `ot`** — its unseen condition shifts the
+  trajectory by 0.3 %, `init_orszag_tang()` taking no parameters.
+- **Nothing about hardware**: the circuit is simulated, 8 qubits, noiseless.
+- **Nothing about larger `VQA_N`**: everything here is the deployed depth-0
+  size where the ground state is uniform (Claim A).
+
+## The methodological finding, stated for the manuscript
+
+Seven distinct instances of one failure mode were found and fixed: **a
+computation that fails but returns a value indistinguishable from a valid
+one** — V1's divergence guard returning a partial score with identical keys
+(4×), and fixed output filenames silently overwriting prior results (3×).
+Three of the seven were in the verification code written to catch the
+others. One aborted draw returned `phys = 0.4069` against valid draws of
+0.054–0.219: **contamination need not be visible in the values**. Any
+closed-loop AMR study of this kind should record run completion status at
+execution time, because with a non-deterministic arm it cannot be recovered
+afterwards.

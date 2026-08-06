@@ -231,7 +231,8 @@ def build_panel(records, out_dir, ncols=2):
              "Compute:  refined-pixel ratio  (lower is cheaper)",
              color=INK_SECONDARY, fontsize=9.5, ha="center", va="center")
     fig.text(0.13 / W, 0.5 * (bot_in / H + 1.0 - top_in / H),
-             "Error:  relative $L_2$ vs DNS  (lower is better)",
+             "Error:  instability-weighted relative $L_2$ vs DNS  "
+             "(lower is better)",
              color=INK_SECONDARY, fontsize=9.5, ha="center", va="center",
              rotation=90)
 

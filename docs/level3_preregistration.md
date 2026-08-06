@@ -62,7 +62,10 @@ with depth.
 ## 4. Decision rules (pre-specified)
 
 - **Primary endpoint:** `combined` = (phys + λ·patch)/(1+λ), paired per fold.
-  Secondary: `phys_score` (relative L2 vs DNS) and `patch_ratio` (compute),
+  Secondary: `phys_score` (**instability-weighted** relative L2 vs DNS —
+  `pipeline.score()` weights each field's error by
+  `w = 1 + 0.25(|Jz|/<|Jz|> + |omega|/<|omega|>)` built from the reference
+  fields, so it is not a plain L2) and `patch_ratio` (compute),
   reported jointly — a fidelity gain bought with compute is not a gain.
 - **Confirmation of P1:** TOST equivalence at a margin fixed here as **5% of
   the mean classical `combined`**, computed before seeing the deltas. TOST

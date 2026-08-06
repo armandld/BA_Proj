@@ -20,6 +20,7 @@ Couverture :
   T17   fenetre d'incertitude (mecanisme de l'inertie ZZ)
   T18   contrefactuel fenetre neutralisee
   T20   variance d'execution du bras Q-HAS (defaut D11)
+  T22   transfert vers conditions initiales inedites + plancher
 
 Les lignes de niveau 3 sont declarees MISSING tant que le fold n'a pas
 tourne : l'agregat montre donc explicitement l'etat d'avancement de la
@@ -338,6 +339,67 @@ def rows_t20(results_dir, folds):
     return out
 
 
+def rows_t22(results_dir, folds):
+    """Transfert vers conditions initiales INEDITES (T22/T22c) et plancher
+    atteignable (T22d).
+
+    Comme partout ailleurs, les tirages AVORTES sont exclus : ils ne sont
+    pas des points de mesure. Les references sont celles publiees dans
+    RESULTS_V4.md apres la passe repetee a 5 tirages.
+    """
+    ref = {
+        "ot": dict(dominated=4, z=0.02, floor_c=9.53, floor_q=14.28),
+        "kh": dict(dominated=5, z=0.66, floor_c=1.39, floor_q=2.28),
+        "rotor": dict(dominated=4, z=1.78, floor_c=0.98, floor_q=1.44),
+        "tearing": dict(dominated=5, z=3.45, floor_c=1.11, floor_q=1.55),
+    }
+    out = []
+    for f in folds:
+        r = ref.get(f, {})
+        p22 = os.path.join(results_dir, f"t22_unseen_unseen-ic_{f}.json")
+        if not os.path.exists(p22):
+            for m in ("dominated on unseen", "separation z",
+                      "classical / floor (unseen)", "Q-HAS / floor (unseen)"):
+                out.append(make_row(f"t22/{f}", m, None, None))
+            continue
+        d = json.load(open(p22))
+        c = d["arms"]["classical"]["unseen"]
+        runs = [x for x in d["arms"]["qhas"].get("unseen_runs", [])
+                if x.get("completed", True)]
+        dom = sum(1 for x in runs
+                  if x["phys_score"] > c["phys_score"]
+                  and x["patch_ratio"] > c["patch_ratio"])
+        out.append(make_row(f"t22/{f}", "dominated on unseen", float(dom),
+                            r.get("dominated"), tol=0.5))
+        # z de separabilite : recalcule comme dans t22c
+        q = d["arms"]["qhas"]
+        qc, qu = q["canonical"]["phys_score"], q["unseen"]["phys_score"]
+        cc, cu = d["arms"]["classical"]["canonical"]["phys_score"], c["phys_score"]
+        sqc, squ = q.get("canonical_phys_sd", 0.0), q.get("unseen_phys_sd", 0.0)
+        if qc and cc and qu:
+            sd = abs(qu / qc) * np.sqrt((squ / qu) ** 2 + (sqc / qc) ** 2)
+            z = abs(qu / qc - cu / cc) / sd if sd else float("nan")
+        else:
+            z = None
+        out.append(make_row(f"t22/{f}", "separation z", z, r.get("z"),
+                            tol=0.05))
+        pfl = os.path.join(results_dir, f"t22d_unseen_floor_{f}.json")
+        if os.path.exists(pfl):
+            a = json.load(open(pfl))["arms"]
+            out += [
+                make_row(f"t22/{f}", "classical / floor (unseen)",
+                         a["classical"]["unseen_over_floor"],
+                         r.get("floor_c"), tol=0.05),
+                make_row(f"t22/{f}", "Q-HAS / floor (unseen)",
+                         a["qhas"]["unseen_over_floor"], r.get("floor_q"),
+                         tol=0.05),
+            ]
+        else:
+            for m in ("classical / floor (unseen)", "Q-HAS / floor (unseen)"):
+                out.append(make_row(f"t22/{f}", m, None, None))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -405,6 +467,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
     rows += rows_t18(load_npz(os.path.join(
         results_dir, f"t18_window_counterfactual_N{N}_dim{dim}.npz")))
     rows += rows_t20(results_dir, folds)
+    rows += rows_t22(results_dir, folds)
     return rows
 
 
