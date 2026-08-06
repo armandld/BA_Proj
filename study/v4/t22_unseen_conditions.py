@@ -235,7 +235,18 @@ def main():
            "classical_reference_source": cls_src,
            "classical_tuned_arm_completed": cls_done,
            "unseen_condition": UNSEEN_CONDITIONS[scenario],
-           "qaoa_threshold_leaked": bool(leaked), "arms": {}}
+           "qaoa_threshold_leaked": bool(leaked),
+           # Les DEUX seuils, explicitement. En mode leak-free ils different
+           # (le QAOA prend le seuil classique regle du fold, le controle
+           # prend le seuil budget-apparie) : sans ces champs, un lecteur
+           # supposerait une comparaison a point de fonctionnement egal, ce
+           # qu'elle n'est pas.
+           "qaoa_threshold_amr": float(hp_q.get("threshold_amr", float("nan"))),
+           "classical_threshold_amr": float(
+               hp_c.get("threshold_amr", float("nan"))),
+           "arms": {}}
+    out["thresholds_match"] = bool(
+        abs(out["qaoa_threshold_amr"] - out["classical_threshold_amr"]) < 1e-12)
 
     # --- reference: canonical initial condition -----------------------
     dns_can = build_traces(T, args.fold, cfg, scenario, unseen=False)
@@ -395,12 +406,21 @@ def main():
         print(f"  no degradation ratio: the {', '.join(dead)} arm(s) aborted "
               f"on every draw of one condition")
         if alive:
-            # le fait marquant : au MEME point de fonctionnement, l'autre bras
-            # a bien tenu la trajectoire
-            print(f"  at the SAME operating point the {', '.join(alive)} "
-                  f"arm(s) completed "
+            # NE PAS ecrire « au meme point de fonctionnement » : c'est faux.
+            # En mode leak-free le bras QAOA tourne au seuil classique REGLE
+            # du fold, tandis que le bras classique de controle tourne au
+            # seuil BUDGET-APPARIE (--matched-reference). Les deux seuils
+            # different, souvent beaucoup (rotor : 0.5864 contre 0.0969).
+            # Affirmer l'egalite du point de fonctionnement aurait ete
+            # exactement le motif traque ici : une phrase qui ne decrit pas
+            # le calcul qu'elle accompagne.
+            print(f"  the {', '.join(alive)} arm(s) completed "
                   f"{out['arms'][alive[0]]['n_completed_canonical']}"
-                  f"+{out['arms'][alive[0]]['n_completed_unseen']} draws")
+                  f"+{out['arms'][alive[0]]['n_completed_unseen']} draws "
+                  f"at threshold {hp_c.get('threshold_amr'):.4f}, "
+                  f"against the QAOA arm's {hp_q.get('threshold_amr'):.4f} "
+                  f"— DIFFERENT operating points, so this is not evidence "
+                  f"of an arm-specific instability at equal budget")
     else:
         dq = out["arms"]["qhas"]["degradation_ratio"]
         dc = out["arms"]["classical"]["degradation_ratio"]

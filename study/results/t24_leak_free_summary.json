@@ -1,0 +1,83 @@
+{
+ "folds": [
+  {
+   "fold": "rotor",
+   "status": "total_abort",
+   "qaoa_threshold": 0.5863920247793146,
+   "classical_threshold": 0.09687500000000002,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 0,
+     "n_aborted": 5
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 3,
+     "n_aborted": 2,
+     "qhas_patch": 0.08822374326750448,
+     "qhas_phys": 0.8534915229451268,
+     "frontier_phys_at_qhas_budget": null,
+     "ratio_vs_frontier": null,
+     "out_of_swept_range": true,
+     "classical_patch": 0.383457697486535,
+     "classical_phys": 0.0281994814530657
+    }
+   },
+   "threshold_source": "reconstructed from t15 fold record"
+  },
+  {
+   "fold": "tearing",
+   "status": "completed",
+   "qaoa_threshold": 0.46161012794549355,
+   "classical_threshold": 0.42500000000000004,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.38461277173913044,
+     "qhas_phys": 3.735120129118871,
+     "frontier_phys_at_qhas_budget": 1.7982274832149718,
+     "ratio_vs_frontier": 2.0771121362470857,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.004428861099280601
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.42323690878378384,
+     "qhas_phys": 2.560020813613663,
+     "frontier_phys_at_qhas_budget": 1.510009492965009,
+     "ratio_vs_frontier": 1.6953673639407945,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.0017243827113390183
+    }
+   },
+   "threshold_source": "reconstructed from t15 fold record"
+  }
+ ],
+ "missing": [
+  "ot",
+  "kh"
+ ],
+ "cli_args": {
+  "folds": [
+   "ot",
+   "kh",
+   "rotor",
+   "tearing"
+  ],
+  "seed": 0
+ },
+ "git_hash_at_start": "ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41",
+ "dirty_at_start": true,
+ "git_hash_at_save": "ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41",
+ "head_moved_during_run": false,
+ "git_hash": "ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41"
+}

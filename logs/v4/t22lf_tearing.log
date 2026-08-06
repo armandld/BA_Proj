@@ -31,3 +31,18 @@ DNS pre-computed: 99 steps, 11 flux snapshots stored.
     [qhas] unseen run 2/5: phys=2.54650 patch=0.3014
     [qhas] unseen run 3/5: phys=4.00302 patch=0.5131
     [qhas] unseen run 4/5: phys=0.26125 patch=0.3438
+    [qhas] unseen run 5/5: phys=2.87559 patch=0.5509
+  [qhas] canonical phys=3.73512+-1.28361  unseen phys=2.56002+-1.39400  degradation x0.69
+    [classical] canonical run 1/2: phys=0.00443 patch=0.6250
+    [classical] canonical run 2/2: phys=0.00443 patch=0.6250
+    [classical] unseen run 1/2: phys=0.00172 patch=0.6250
+    [classical] unseen run 2/2: phys=0.00172 patch=0.6250
+  [classical] canonical phys=0.00443+-0.00000  unseen phys=0.00172+-0.00000  degradation x0.39
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.69  classical x0.39
+  => Q-HAS degrades more when the initial condition is new
+
+  saved: t22_unseen_leak-free_tearing.json (2726s)
+
+V4 Task 22 complete.

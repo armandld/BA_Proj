@@ -23,6 +23,3 @@ DNS pre-computed: 1123 steps, 14 flux snapshots stored.
   DNS signature canonical=1.458888e+05  unseen=1.454737e+05
   relative shift: 0.2846%
   WARNING: the unseen condition shifts the trajectory by only 0.2846% (< 1%). This fold's transfer test is NEARLY VACUOUS and must be reported as such.
-/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
-  fig, ax = plt.subplots(figsize=(10, 9))
-    [qhas] canonical run 1/5: phys=0.66941 patch=0.2950   **ABORTED step 1123**

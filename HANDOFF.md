@@ -20,7 +20,7 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 286 passed, 13 skipped
+python -m pytest tests/v3 tests/v4 -q                              # 298 passed, 20 skipped
 python study/v4/t16_aggregate_v4.py                                # 119 rows, 0 DIFF, 0 MISSING
 ```
 
@@ -28,7 +28,7 @@ All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**286 pytests passed** (13 skipped), master table **119/119 OK, 0 DIFF, 0 MISSING**
+**298 pytests passed** (20 skipped), master table **119/119 OK, 0 DIFF, 0 MISSING**
 (all four Level-3 folds are now present, so nothing is outstanding in it).
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
@@ -152,6 +152,10 @@ for the QAOA arm, whose decision threshold comes from
 `_run_classical_phase1` fitted on "KH + OT + Tearing + Rotor". The leak is
 **asymmetric and favours Q-HAS**, which still loses 18/18 — so the
 conclusion is conservative, but the protocol statement must be corrected.
+**Removing the leak has since been measured** on 2 folds of 4: Q-HAS gets
+*worse*, not better (2.1× the classical frontier at its own budget on
+`tearing`, total divergence on `rotor`), and the one transfer result that
+had favoured it reverses.
 
 **D11 and D12 most affect the conclusions.** D11: replaying fold `ot` with
 identical inputs gave phys **0.1345 vs 0.1940** stored (44 % swing) while
@@ -216,7 +220,7 @@ heuristic would have deleted valid data.
 | item | state | consequence |
 |---|---|---|
 | **T22 unseen initial conditions** | **done** (T22b: 5 draws x 2 conditions x 4 folds, 56 runs, 0 aborted) | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
-| **D13 removal** | **in progress** (`--mode leak-free`, Q-HAS at the fold's own classical threshold) | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode leak-free` is the entry point |
+| **D13 removal** | **partially done**: `--mode leak-free` measured on `rotor` and `tearing` (`ot`, `kh` running). Leak-free, Q-HAS is 2.1× worse than the classical frontier at its own budget on `tearing` and aborts on 5/5 canonical draws on `rotor` — the leak was propping it up | the *definitive* version still requires re-tuning the QAOA arm with `threshold_amr` in its Optuna search space on the training classes. `t24_leak_free_summary.py` reports what is measured |
 | physics seeds | still **1 per class** | T20's 18 completed runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
 | **T19 audit of `tearing`** | **done** | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | **done**, figure re-rendered | `rotor`'s 2 aborted points are excluded from the plotted frontier, and the Q-HAS marker is now the mean of the repeated draws with its spread, not a single run |

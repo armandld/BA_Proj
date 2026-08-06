@@ -1626,6 +1626,96 @@ deserving its own line in the manuscript.
 
 ---
 
+## T22 leak-free — D13 removed, and Q-HAS does not survive it
+
+```bash
+python study/v4/t22_unseen_conditions.py --fold <f> --mode leak-free \
+    --repeats 5 --matched-reference
+python study/v4/t24_leak_free_summary.py
+```
+
+`--mode leak-free` replaces the QAOA arm's leaked threshold
+(`0.14959824837662078`, fitted on all four classes) with the fold's **own
+classical tuned threshold**, produced by
+`train_classical_threshold_excluding` on the training classes only. The
+leak is gone.
+
+### What the mode does not do
+
+It does **not** re-tune the QAOA arm. The definitive experiment puts
+`threshold_amr` back into the Optuna search space, excluded from the
+held-out class, and is still not attempted. So this measures a **bound**:
+*does Q-HAS survive losing the leaked threshold without re-tuning?* — not
+*what is the best leak-free Q-HAS?*
+
+### The trap this result had to avoid
+
+The two arms **do not run at the same threshold**. `--matched-reference`
+holds the classical control at the budget-matched point, so on `rotor` the
+QAOA arm runs at 0.5864 while its control runs at 0.0969. Comparing their
+errors directly would confound the decision rule with the budget.
+
+My own code printed *"at the SAME operating point the classical arm
+completed"* when `rotor`'s Q-HAS arm died. **That sentence was false** —
+the thresholds differ by a factor of six — and it is the campaign's motif
+in its purest form: a line of output that does not describe the computation
+it accompanies. It now prints both thresholds and says explicitly that they
+differ. The artifact carries `qaoa_threshold_amr`,
+`classical_threshold_amr` and `thresholds_match`.
+
+The budget-controlled comparison is therefore against the **T15b classical
+frontier interpolated at the budget Q-HAS actually realised**, and T24
+**refuses to interpolate outside the swept range** rather than let
+`np.interp` return an edge value that looks like a measurement.
+
+### Results, 2 folds of 4 so far
+
+| fold | condition | Q-HAS budget | Q-HAS phys | classical frontier at that budget | ratio |
+|---|---|---|---|---|---|
+| `rotor` | canonical | — | — | — | **all 5 draws ABORTED** |
+| `rotor` | unseen | 0.0882 | 0.8535 | budget below the swept range | not computable |
+| `tearing` | canonical | 0.3846 | 3.7351 | 1.7982 | **2.1×** |
+| `tearing` | unseen | 0.4232 | 2.5600 | 1.5100 | **1.7×** |
+
+**Removing the leak makes Q-HAS dramatically worse, and on one fold
+inoperable.**
+
+- On `rotor`, **every canonical draw diverges** at the leak-free threshold.
+  The arm collapses to a budget of 0.09–0.27 where the classical control
+  spends 0.356. Two of five unseen draws also abort.
+- On `tearing`, Q-HAS's error rises from 0.0080 (leaked, budget 0.91) to
+  **3.735** (leak-free, budget 0.385). Most of that is the budget collapse
+  — it refines less than half as much — but **not all of it**: against the
+  classical frontier *at its own realised budget* it is still **2.1×
+  worse**.
+
+### Two caveats that must travel with these numbers
+
+1. **The `tearing` frontier is sparse where it matters.** Its swept points
+   jump from patch 0.0727 (phys 4.126) to patch 0.6250 (phys 0.00443), so
+   the interpolated value at 0.3846 spans a wide, strongly non-linear gap.
+   The 2.1× is an order-of-magnitude statement, not a measurement.
+2. **`rotor`'s leak-free budget is outside the swept range** (0.056–0.138
+   against a frontier starting at 0.152), so no ratio exists for it at all.
+
+### What this settles about D13
+
+The register listed D13 as *"measured, not removed"*, with the note that the
+leak favours Q-HAS and the conclusion is conservative because Q-HAS loses
+anyway. That is now **measured rather than argued**: with the leak removed,
+Q-HAS is not merely still beaten — it is beaten by a wider margin, and on
+`rotor` it cannot complete a trajectory at all.
+
+It also **reverses the one transfer result that had favoured Q-HAS**. Under
+the leak, `tearing` was the single separable fold and Q-HAS degraded *less*
+(0.166 against 0.389). Leak-free, the same fold gives Q-HAS **×0.685
+against the classical arm's ×0.389** — Q-HAS now degrades *more*. The
+apparent transfer advantage was an artefact of the leaked threshold.
+
+`ot` and `kh` are running; this entry will be completed with them.
+
+---
+
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
@@ -1689,13 +1779,13 @@ it loses anyway.
 
 | asymmetry | direction | status |
 |---|---|---|
-| **D13** — QAOA threshold fitted on all 4 classes incl. the held-out one | favours Q-HAS | measured, **not removed** |
+| **D13** — QAOA threshold fitted on all 4 classes incl. the held-out one | favours Q-HAS | **removed and measured** (T22 `--mode leak-free`): without it Q-HAS is 2.1× worse than the classical frontier at its own budget on `tearing`, and aborts on 5/5 canonical draws on `rotor` |
 | **cost axis** excludes the QAOA circuit; Q-HAS uses 2.7–3.3× the wall time on the three folds whose classical arm completed (`rotor` excluded: its 29 s classical run is the aborted tuned arm, not a comparable time) | favours Q-HAS | declared |
 | aborted Q-HAS draws excluded from its own statistics | favours Q-HAS | necessary, declared |
 
 ## What would overturn it
 
-- removing D13 (`t22 --mode leak-free`) and finding Q-HAS wins;
+- ~~removing D13 and finding Q-HAS wins~~ — **done, and it goes the other way**: leak-free, Q-HAS is worse still (2 folds of 4 measured so far). What would overturn the result is the *definitive* version, re-tuning the QAOA arm with `threshold_amr` in its Optuna search space on the training classes, which is not attempted;
 - ≥ 3 physics seeds per fold showing the direction is seed-specific;
 - the full 170-trial Optuna budget lifting Q-HAS above the matched classical;
 - counting decision cost, which would only make the result stronger.

@@ -37,3 +37,15 @@ DNS pre-computed: 648 steps, 15 flux snapshots stored.
     [qhas] 7 run(s) ABORTED, excluded from stats
     [qhas] EVERY run aborted on one condition — no operating point; continuing to the other arm
     [classical] canonical run 1/2: phys=0.05365 patch=0.3562
+    [classical] canonical run 2/2: phys=0.05365 patch=0.3562
+    [classical] unseen run 1/2: phys=0.02820 patch=0.3835
+    [classical] unseen run 2/2: phys=0.02820 patch=0.3835
+  [classical] canonical phys=0.05365+-0.00000  unseen phys=0.02820+-0.00000  degradation x0.53
+
+  ------------------------------------------------------------------------------
+  no degradation ratio: the qhas arm(s) aborted on every draw of one condition
+  at the SAME operating point the classical arm(s) completed 2+2 draws
+
+  saved: t22_unseen_leak-free_rotor.json (3243s)
+
+V4 Task 22 complete.
