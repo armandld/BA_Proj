@@ -1,4 +1,4 @@
-# git_hash=9b1b15cca4f91511b1d5be3b3a97e441939f6b78
+# git_hash=ecf05802cc397767104b3ddc6875f1bb84f09901
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -23,6 +23,20 @@ t13/v1,no_Z decisions changed,0.750000,0.750000,OK
 t13/v1,no_ZZ decisions changed,0.000000,0.000000,OK
 t13/v1,no_ZZZZ decisions changed,0.000000,0.000000,OK
 t13/v1,Z_only decisions changed,0.000000,0.000000,OK
+t13/v1,full n_optima,64.750000,64.800000,OK
+t13/v1,no_Z n_optima,88.000000,88.000000,OK
+t13/v1,no_ZZ n_optima,64.750000,64.800000,OK
+t13/v1,no_ZZZZ n_optima,64.750000,64.800000,OK
+t13/v1,Z_only n_optima,64.750000,64.800000,OK
+t13/v2,full n_optima,1.000000,1.000000,OK
+t13/v2,no_Z n_optima,8.000000,8.000000,OK
+t13/v2,no_ZZ n_optima,1.000000,1.000000,OK
+t13/v2,no_ZZZZ n_optima,1.000000,1.000000,OK
+t13/v2,Z_only n_optima,1.000000,1.000000,OK
+t17,spearman C/w (init_kelvin_helmholtz),-0.372488,-0.372500,OK
+t17,spearman C/w (init_orszag_tang),-0.008431,-0.008400,OK
+t17,spearman C/w (init_mhd_rotor),-0.459517,-0.459500,OK
+t17,spearman C/w (init_harris_tearing),-0.502145,-0.502100,OK
 t14,self-convergence order,0.999421,1.000000,OK
 t14,temporal order with projection,1.119384,1.120000,OK
 t14,temporal order without projection,3.997727,4.000000,OK

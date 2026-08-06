@@ -21,14 +21,14 @@ git diff --name-only $BASE HEAD -- src/                            # MUST be emp
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
 python -m pytest tests/v3 tests/v4 -q                              # 298 passed, 20 skipped
-python study/v4/t16_aggregate_v4.py                                # 129 rows, 0 DIFF (4 MISSING = ot/kh leak-free, in flight)
+python study/v4/t16_aggregate_v4.py                                # 143 rows, 0 DIFF (4 MISSING = ot/kh leak-free, in flight)
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**298 pytests passed** (20 skipped), master table **125 OK, 0 DIFF, 4
+**298 pytests passed** (20 skipped), master table **139 OK, 0 DIFF, 4
 MISSING**. All four Level-3 folds are present; the 4 MISSING rows are the
 `ot`/`kh` leak-free runs, which were still in flight when this was written.
 `MISSING` means "not produced yet", never "produced and lost".
@@ -56,7 +56,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 129 rows.
+Markdown. It prints `0 DIFF` over 143 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
@@ -70,11 +70,11 @@ at the deployed size (`VQA_N = 2` → 8 qubits):
 
 | claim | finding | source |
 |---|---|---|
-| **A** | cost Hamiltonian is diagonal; exact ground state is a **uniform mask on 100 %** of snapshots; V1 objective is 64.8/256-fold degenerate | T11 |
+| **A** | cost Hamiltonian is diagonal; exact ground state is a **uniform mask on 100 %** of snapshots (T11/T11b); the V1-mapper objective is **64.8/256-fold degenerate** — that figure is T13's `n_optima` on the v1 mapper, and it is mapper-specific: the v2 mapper gives 1.0 | T11, T11b, T13 |
 | **B** | every solver — exhaustive, greedy, SA, QAOA p1–p3, classical alone — reaches that optimum. Only *cold* SA struggles: the one not warm-started from the classical answer | T11 |
 | **C** | the circuit realises **0–8.5 %** of the displacement toward its own optimum, **decreasing with depth**, negative by p = 4 | T11b |
 | **D** | ablating **all** ZZ and **all** ZZZZ couplings changes **0.0000 decisions**; removing the Z bias destroys the decision entirely | T13, both mappers |
-| **D-bis** | *why*: a Gaussian window centred on the AMR threshold discards 88.6–99.99 % of the ZZ coupling, preferentially where it is largest (Spearman −0.37…−0.50) | T17 |
+| **D-bis** | *why*: a Gaussian window centred on the AMR threshold discards **88.6 % up to effectively 100 %** of the ZZ coupling (kept mass falls to 4×10⁻¹⁵⁴), preferentially where it is largest — Spearman −0.37…−0.50 on KH, rotor and tearing; on `ot` it is −0.01, but there the window keeps *no* ZZ mass at all so there is nothing left to correlate | T17 |
 | **D-ter** | **repairing that window does not rescue the couplings.** With the window neutralised (coupling restored to O(25–155)) ablation still changes 0.0000 decisions; and the V2 mapper, which has no window by construction, is equally inert | T18, T13-v2 |
 | **E** | closed loop: **Q-HAS is Pareto-dominated on 4/4 folds at equal budget** | T15/T15b |
 | **F** | solver converges at **order 1**, not 4 (RK4 → projection is Lie splitting) | T14 |

@@ -1719,7 +1719,7 @@ apparent transfer advantage was an artefact of the leaked threshold.
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (129 rows, 0 DIFF; the 4 MISSING are the `ot`/`kh` leak-free runs still in flight).
+covered by `t16_aggregate_v4.py` (143 rows, 0 DIFF; the 4 MISSING are the `ot`/`kh` leak-free runs still in flight).
 
 ## The one-sentence result
 

@@ -29,7 +29,7 @@ Consequences for your review:
 - the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
   `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
   number from the artifacts and compares it to the published value. It must
-  print `0 DIFF` (129 rows at the time of writing);
+  print `0 DIFF` (143 rows at the time of writing);
 - a `MISSING` row means the artifact was never produced, not that it was
   lost — the tracked set is the complete set;
 - everything except Level 3 re-runs in seconds to minutes (T11–T14, T17,

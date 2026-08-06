@@ -132,6 +132,45 @@ def rows_t13(d, mapper, refs):
             for n in names]
 
 
+def rows_t13_degeneracy(d, mapper, refs):
+    """`n_optima` par ablation — la degenerescence de l'objectif.
+
+    Le chiffre « 64.8/256 » figurait dans le tableau des revendications
+    sans etre verifie par personne, et il etait attribue a T11 alors qu'il
+    vient de T13, sur le mappeur v1 seulement (le v2 rend 1.0).
+    """
+    if d is None or "n_optima" not in d:
+        return [make_row(f"t13/{mapper}", f"{n} n_optima", None, None)
+                for n in refs]
+    abl = np.array([str(x) for x in d["ablation"]])
+    return [make_row(f"t13/{mapper}", f"{n} n_optima",
+                     _mean_where(d, "n_optima", abl == n), refs[n], tol=0.05)
+            for n in refs]
+
+
+def rows_t17_spearman(d):
+    """La correlation rang C_edges / poids de fenetre, par scenario.
+
+    Publiee comme « -0.37 a -0.50 », un intervalle qui EXCLUDE `ot` sans le
+    dire (-0.01 la-bas). L'exclusion est defendable — la fenetre n'y laisse
+    aucune masse ZZ, donc il n'y a rien a correler — mais elle doit etre
+    ecrite, pas subie.
+    """
+    ref = {"init_kelvin_helmholtz": -0.3725, "init_orszag_tang": -0.0084,
+           "init_mhd_rotor": -0.4595, "init_harris_tearing": -0.5021}
+    if d is None or "spearman_c_w" not in d:
+        return [make_row("t17", f"spearman C/w ({k})", None, None)
+                for k in ref]
+    sc = np.array([str(x) for x in d["scenario"]])
+    pa = np.array([str(x) for x in d["params"]])
+    out = []
+    for k, v in ref.items():
+        m = (sc == k) & (pa == "level3_trained")
+        out.append(make_row("t17", f"spearman C/w ({k})",
+                            _mean_where(d, "spearman_c_w", m), v, tol=0.005))
+    return out
+
+
 def rows_t14(d):
     metrics = ["self-convergence order", "temporal order with projection",
                "temporal order without projection", "max |div B| / rms|B|",
@@ -540,6 +579,16 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
         results_dir, f"t13_term_ablation_N{N}_dim{dim}.npz")), "v1",
         {"full": 0.0, "no_Z": 0.75, "no_ZZ": 0.0, "no_ZZZZ": 0.0,
          "Z_only": 0.0})
+    rows += rows_t13_degeneracy(load_npz(os.path.join(
+        results_dir, f"t13_term_ablation_N{N}_dim{dim}.npz")), "v1",
+        {"full": 64.8, "no_Z": 88.0, "no_ZZ": 64.8, "no_ZZZZ": 64.8,
+         "Z_only": 64.8})
+    rows += rows_t13_degeneracy(load_npz(os.path.join(
+        results_dir, f"t13_term_ablation_N{N}_dim{dim}_v2.npz")), "v2",
+        {"full": 1.0, "no_Z": 8.0, "no_ZZ": 1.0, "no_ZZZZ": 1.0,
+         "Z_only": 1.0})
+    rows += rows_t17_spearman(load_npz(os.path.join(
+        results_dir, "t17_uncertainty_window.npz")))
     rows += rows_t14(load_npz(os.path.join(
         results_dir, "t14_numerical_validation.npz")))
     rows += rows_level3(results_dir, folds)
