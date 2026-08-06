@@ -333,7 +333,29 @@ def main():
             print(f"    [{arm}] {n_ab} run(s) ABORTED, excluded from stats",
                   flush=True)
         if not can_ok or not uns_ok:
-            raise SystemExit(f"[{arm}] every run aborted on one condition")
+            # Un bras qui avorte sur la TOTALITE d'une condition est un
+            # resultat, pas une panne : il dit que le point de fonctionnement
+            # ne tient pas la trajectoire. Sortir ici sans rien ecrire rendait
+            # ce resultat indiscernable d'une execution jamais lancee. On
+            # enregistre donc le constat, avec un ratio NON DEFINI -- jamais
+            # un nombre reconstitue a partir des tirages avortes.
+            #
+            # Et surtout on POURSUIT avec l'autre bras : la question qui
+            # compte n'est pas « Q-HAS avorte-t-il ? » mais « avorte-t-il la
+            # ou le bras classique, AU MEME SEUIL, tient la trajectoire ? ».
+            # S'arreter ici laissait justement cette comparaison non mesuree.
+            out["arms"][arm] = {
+                "n_runs": n,
+                "n_completed_canonical": len(can_ok),
+                "n_completed_unseen": len(uns_ok),
+                "n_aborted": int(n_ab),
+                "canonical_runs": can, "unseen_runs": uns,
+                "status": "total_abort",
+                "degradation_ratio": float("nan"),
+            }
+            print(f"    [{arm}] EVERY run aborted on one condition — no "
+                  f"operating point; continuing to the other arm", flush=True)
+            continue
         mc = float(np.mean([r["phys_score"] for r in can_ok]))
         mu = float(np.mean([r["phys_score"] for r in uns_ok]))
         sc = (float(np.std([r["phys_score"] for r in can_ok], ddof=1))
@@ -351,6 +373,7 @@ def main():
             "unseen": {k: float(np.mean([r[k] for r in uns_ok]))
                        for k in KEYS},
             "canonical_phys_sd": sc, "unseen_phys_sd": su,
+            "status": "completed",
             "degradation_ratio": float(mu / mc) if mc else float("nan"),
         }
         print(f"  [{arm}] canonical phys={mc:.5f}+-{sc:.5f}  "
@@ -358,14 +381,34 @@ def main():
               f"degradation x{mu / mc if mc else float('nan'):.2f}",
               flush=True)
 
-    dq = out["arms"]["qhas"]["degradation_ratio"]
-    dc = out["arms"]["classical"]["degradation_ratio"]
-    out["qhas_degrades_more"] = bool(dq > dc)
+    dead = [a for a in ("qhas", "classical")
+            if out["arms"][a].get("status") == "total_abort"]
     print("\n  " + "-" * 78)
-    print(f"  degradation on the unseen condition: Q-HAS x{dq:.2f}  "
-          f"classical x{dc:.2f}")
-    print(f"  => {'Q-HAS' if dq > dc else 'the classical rule'} degrades more "
-          f"when the initial condition is new")
+    if dead:
+        # Un ratio de degradation n'existe pas quand un bras n'a aucune
+        # execution valide. Le comparatif est donc SANS OBJET et doit le
+        # rester : `qhas_degrades_more` reste absent plutot que faux.
+        out["status"] = "total_abort"
+        out["total_abort_arms"] = dead
+        alive = [a for a in ("qhas", "classical") if a not in dead]
+        print(f"  no degradation ratio: the {', '.join(dead)} arm(s) aborted "
+              f"on every draw of one condition")
+        if alive:
+            # le fait marquant : au MEME point de fonctionnement, l'autre bras
+            # a bien tenu la trajectoire
+            print(f"  at the SAME operating point the {', '.join(alive)} "
+                  f"arm(s) completed "
+                  f"{out['arms'][alive[0]]['n_completed_canonical']}"
+                  f"+{out['arms'][alive[0]]['n_completed_unseen']} draws")
+    else:
+        dq = out["arms"]["qhas"]["degradation_ratio"]
+        dc = out["arms"]["classical"]["degradation_ratio"]
+        out["status"] = "completed"
+        out["qhas_degrades_more"] = bool(dq > dc)
+        print(f"  degradation on the unseen condition: Q-HAS x{dq:.2f}  "
+              f"classical x{dc:.2f}")
+        print(f"  => {'Q-HAS' if dq > dc else 'the classical rule'} degrades "
+              f"more when the initial condition is new")
 
     out["git_hash"] = git_commit_hash()
     out["cli_args"] = vars(args)

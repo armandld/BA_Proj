@@ -66,6 +66,12 @@ def load(results_dir, fold, mode="unseen-ic"):
     if not os.path.exists(p):
         return None
     d = json.load(open(p))
+    # un enregistrement `total_abort` ne porte AUCUNE moyenne : le bras n'a
+    # pas de point de fonctionnement sur cette condition. Il ne doit ni etre
+    # analyse comme les autres, ni disparaitre du compte rendu.
+    if d.get("status") == "total_abort":
+        return {"fold": fold, "underpowered": True, "total_abort": True,
+                "total_abort_arm": d.get("total_abort_arm"), "raw": d}
     if d["arms"]["qhas"].get("n_runs", 1) < 2:
         return {"fold": fold, "underpowered": True, "raw": d}
     return {"fold": fold, "underpowered": False, "raw": d}
@@ -163,11 +169,13 @@ def main():
     p.add_argument("--mode", default="unseen-ic")
     args = p.parse_args()
 
-    recs, missing, weak = [], [], []
+    recs, missing, weak, dead = [], [], [], []
     for f in args.folds:
         r = load(RESULTS_DIR, f, args.mode)
         if r is None:
             missing.append(f)
+        elif r.get("total_abort"):
+            dead.append((f, r["total_abort_arm"]))
         elif r["underpowered"]:
             weak.append(f)
         else:
@@ -181,6 +189,11 @@ def main():
     if weak:
         print(f"  single-run only (cannot separate from D11 noise): "
               f"{', '.join(weak)}")
+    if dead:
+        for f, arm in dead:
+            print(f"  {f}: NO OPERATING POINT — the {arm} arm aborted on "
+                  f"every draw of one condition; no ratio is defined, and "
+                  f"this fold cannot be scored for or against transfer")
     if not recs:
         raise SystemExit("no fold with repeated draws; run t22 --repeats 5")
 
