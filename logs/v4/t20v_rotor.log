@@ -7,3 +7,8 @@ Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for variance/rotor ---
 Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (variance/rotor) ---
+
+  classical control runs at: budget-matched threshold 0.0969 (forced)
+  Q-HAS run 1/5: combined=0.6404 phys=0.7699 patch=0.3165   **ABORTED**
