@@ -68,7 +68,7 @@ sys.path.insert(0, os.path.join(_HERE, ".."))
 sys.path.insert(0, os.path.join(_HERE, "..", "v3"))
 sys.path.insert(0, _HERE)
 
-from t1_feature_selection import git_commit_hash
+import provenance
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
 from t19_arm_divergence_audit import (parse_abort,
@@ -229,6 +229,7 @@ def main():
     print(f"  classical threshold = {hp_c.get('threshold_amr')}"
           f"   (tuned on training classes only)", flush=True)
 
+    prov = provenance.start()   # D15 : le hash AVANT le calcul
     t0 = time.time()
     out = {"fold": args.fold, "scenario": scenario, "mode": args.mode,
            "classical_reference_source": cls_src,
@@ -410,7 +411,7 @@ def main():
         print(f"  => {'Q-HAS' if dq > dc else 'the classical rule'} degrades "
               f"more when the initial condition is new")
 
-    out["git_hash"] = git_commit_hash()
+    out.update(provenance.finish(prov))
     out["cli_args"] = vars(args)
     out["wall_s"] = time.time() - t0
     op = os.path.join(RESULTS_DIR,

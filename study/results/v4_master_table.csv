@@ -1,4 +1,4 @@
-# git_hash=1d14a5ada7aa1f16b862a52fd04817f5c0a180fe
+# git_hash=19369485cf74d468a577af9d82b7e7b880a2cdc1
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -100,3 +100,19 @@ t22/tearing,dominated on unseen,5.000000,5.000000,OK
 t22/tearing,separation z,3.451921,3.450000,OK
 t22/tearing,classical / floor (unseen),1.114853,1.110000,OK
 t22/tearing,Q-HAS / floor (unseen),1.548873,1.550000,OK
+t23/ot,less faithful,5.000000,5.000000,OK
+t23/ot,costlier,5.000000,5.000000,OK
+t23/ot,dominated,5.000000,5.000000,OK
+t23/kh,less faithful,5.000000,5.000000,OK
+t23/kh,costlier,4.000000,4.000000,OK
+t23/kh,dominated,4.000000,4.000000,OK
+t23/rotor,less faithful,3.000000,3.000000,OK
+t23/rotor,costlier,2.000000,2.000000,OK
+t23/rotor,dominated,2.000000,2.000000,OK
+t23/tearing,less faithful,5.000000,5.000000,OK
+t23/tearing,costlier,5.000000,5.000000,OK
+t23/tearing,dominated,5.000000,5.000000,OK
+t23,total runs (completed),18.000000,18.000000,OK
+t23,total less faithful,18.000000,18.000000,OK
+t23,total costlier,16.000000,16.000000,OK
+t23,total dominated,16.000000,16.000000,OK

@@ -1064,18 +1064,39 @@ point, whose completion the T19 trace audit verified.
 
 ### The robust statement
 
-| fold | less faithful | costlier | strictly dominated |
-|---|---|---|---|
-| `ot` | 5/5 | 5/5 | **5/5** |
-| `kh` | 4/5 | 5/5 | **4/5** |
-| `rotor` | 5/5 | 3/5 | **3/5** |
-| `tearing` | 5/5 | 5/5 | **5/5** |
-| **total** | **19/20** | **18/20** | **17/20** |
+```bash
+python study/v4/t23_headline_counts.py     # recomputes the table below
+```
 
-> Across four held-out classes and 20 independent closed-loop runs, Q-HAS is
-> less faithful than the budget-matched classical rule on **19 of 20 runs**,
-> more expensive on **18 of 20**, and strictly Pareto-dominated on **17 of
-> 20**. No run reverses the ordering on both coordinates at once.
+| fold | n | aborted | less faithful | costlier | strictly dominated |
+|---|---|---|---|---|---|
+| `ot` | 5 | 0 | 5/5 | 5/5 | **5/5** |
+| `kh` | 5 | 0 | 5/5 | 4/5 | **4/5** |
+| `rotor` | 3 | 2 | 3/3 | 2/3 | **2/3** |
+| `tearing` | 5 | 0 | 5/5 | 5/5 | **5/5** |
+| **total** | **18** | 2 | **18/18** | **16/18** | **16/18** |
+
+> Across four held-out classes and **18 completed** closed-loop runs, Q-HAS
+> is less faithful than the budget-matched classical rule on **every one of
+> the 18**, more expensive on **16 of 18**, and strictly Pareto-dominated on
+> **16 of 18**. No run reverses the ordering on both coordinates at once.
+
+**Correction — this table previously read 19/20, 18/20, 17/20.** It was the
+only headline in the study composed by hand rather than computed, and it did
+not reproduce from the artifacts. Two errors, both of a kind already in the
+register:
+
+1. on `kh`, *less faithful* and *costlier* were **transposed** (4/5 and 5/5
+   instead of 5/5 and 4/5);
+2. on `rotor`, the **2 aborted draws were counted in the denominator**,
+   giving a total out of 20 when only 18 runs completed — the exact defect
+   ("an aggregation mixing aborted draws with valid ones") that had been
+   fixed in the code and reappeared in the prose.
+
+The corrected count is **stronger on fidelity** (unanimous, 18/18, where the
+old figure conceded one run) and **weaker on cost** (16/18). The direction of
+the conclusion is unchanged. T23 now computes it and `t16` checks it, so the
+number can no longer drift from its artifacts.
 
 This is the form Claim E should take in the manuscript. It is weaker-sounding
 than "2.6–4.4× worse" and far harder to attack: it depends on no single draw,
@@ -1115,8 +1136,8 @@ The classical arm has no such problem: `train_classical_threshold_excluding`
 re-tunes its threshold per fold on the training classes only.
 
 **The leak is asymmetric and favours Q-HAS.** It is therefore *conservative*
-with respect to the conclusion — Q-HAS is beaten on 19/20 runs despite
-holding an advantage it should not have. But the protocol's claim of a clean
+with respect to the conclusion — Q-HAS is beaten on all 18 completed runs
+despite holding an advantage it should not have. But the protocol's claim of a clean
 LOSO is wrong as written and must be corrected in the manuscript.
 
 This is also the precise form of defect D4: not merely "different operating
@@ -1169,7 +1190,8 @@ every `run_arm` call site in `study/v4/`:
 | `t20:129` classical control | was no | yes |
 | `t22:250` both arms | **yes** (fixed) | — |
 
-**The one that mattered: T20's Q-HAS draws.** Those 20 runs underpin the
+**The one that mattered: T20's Q-HAS draws.** Those 18 completed runs (of
+20 launched) underpin the
 restated Claim E, and their completion was never verified. Because the arm
 is non-deterministic, it **cannot** be verified now — replaying does not
 reproduce the draw.
@@ -1445,6 +1467,45 @@ exactly — but it no longer validates the measurement chain, which is its
 purpose. It should run at the budget-matched threshold, as the *reference
 value* already does.
 
+### D14 — the fix landed after two of the four folds had started
+
+`always_matched=True` was added to T20's control, and the campaign was
+*not* re-run: `ot` and `kh` had already been launched. Their control
+therefore replays the **tuned** threshold while their artifact records
+`classical_reference_source = "budget-matched classical"`. Both statements
+are individually true — the field describes the *reference value*, read
+correctly from T15b — but a reader naturally attaches it to the neighbouring
+`classical_stats` block, and that block is something else entirely:
+
+| fold | matched thr | replayed thr | matched phys | replayed phys |
+|---|---|---|---|---|
+| `ot` | 0.1906 | 0.4616 (tuned) | 0.0827 | **0.4845** |
+| `kh` | 0.1906 | 0.4616 (tuned) | 0.00168 | 0.00202 |
+| `rotor` | 0.0969 | 0.0969 ✓ | 0.05365 | 0.05365 |
+| `tearing` | 0.4250 | 0.4250 ✓ | 0.00443 | 0.00443 |
+
+`rotor` and `tearing` agree because the pre-fix code already fell back to
+the matched threshold when the tuned arm had aborted.
+
+**On `ot` this is enough to invert the fold.** Against the matched 0.0827,
+Q-HAS's 0.1291 is 1.56× worse; against the replayed 0.4845 it is 3.75×
+*better*. The published numbers use the matched value and are unaffected,
+but anyone recomputing from `classical_stats` — as I did while building T23 —
+gets the opposite sign on that fold. The two references are now split into
+distinct fields and T23 documents which one is correct.
+
+### D15 — the provenance stamp is taken at the wrong moment
+
+`git_commit_hash()` runs when the artifact is *saved*. A run lasting an hour
+is therefore stamped with whatever was committed while it was still
+executing. That is exactly how the `ot` and `kh` artifacts carry a hash
+postdating the `always_matched=True` commit while having executed the
+pre-fix code — the stamp actively pointed away from the truth.
+
+CLAUDE.md requires the commit hash in every output. It is necessary but
+**not sufficient for long runs**: the hash must be captured at start, and a
+run that spans a commit to its own source should say so.
+
 ### Consequence
 
 Every variance figure published from the unguarded pass — the CVs, the
@@ -1523,9 +1584,10 @@ covered by `t16_aggregate_v4.py` (100 rows, 0 DIFF, 0 MISSING).
 ## The one-sentence result
 
 > Across four held-out instability classes, a Q-HAS closed loop is less
-> faithful than a plain threshold rule at matched compute on **19 of 20**
-> repeated runs, more expensive on **18 of 20**, strictly Pareto-dominated on
-> **17 of 20**, and it additionally destabilises the solver on a fraction of
+> faithful than a plain threshold rule at matched compute on **18 of 18**
+> completed repeated runs, more expensive on **16 of 18**, strictly
+> Pareto-dominated on **16 of 18**, and it additionally destabilises the
+> solver on a fraction of
 > runs where the classical rule never does.
 
 ## What the closed loop establishes, by strength of evidence

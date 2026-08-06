@@ -29,7 +29,7 @@ Consequences for your review:
 - the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
   `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
   number from the artifacts and compares it to the published value. It must
-  print `0 DIFF` (100 rows at the time of writing);
+  print `0 DIFF` (116 rows at the time of writing);
 - a `MISSING` row means the artifact was never produced, not that it was
   lost — the tracked set is the complete set;
 - everything except Level 3 re-runs in seconds to minutes (T11–T14, T17,
@@ -60,7 +60,7 @@ breach. Everything new lives in `study/v3/`, `study/v4/`, `tests/v3/`,
 ### 1b. The test gate
 
 ```bash
-python -m pytest tests/v3 tests/v4 -q      # expect 262 passed, 12 skipped
+python -m pytest tests/v3 tests/v4 -q      # expect 286 passed, 13 skipped
 ```
 
 Note `bash run_tests.sh` (the V1 suite) **fails 8 tests on a clean
@@ -170,11 +170,15 @@ If you find a deviation I did *not* declare, that is a real finding.
 
 ## 6. What the conclusions rest on, and how to stress them
 
-The headline is a **count over 20 runs**, not a ratio:
+The headline is a **count over 18 completed runs**, not a ratio:
 
 > Q-HAS is less faithful than the budget-matched classical rule on
-> **19/20** runs, more expensive on **18/20**, strictly Pareto-dominated
-> on **17/20**.
+> **18/18**, more expensive on **16/18**, strictly Pareto-dominated
+> on **16/18**.
+
+Verify it with `python study/v4/t23_headline_counts.py`. Earlier drafts
+said 19/20, 18/20, 17/20 — that table was written by hand, transposed two
+columns on `kh` and counted `rotor`'s 2 aborted draws in the denominator.
 
 An earlier draft of this guide quoted per-fold ratios of 2.6×, 4.4×, 3.6×,
 4.4×. **Those are retracted**: each rested on a single draw of a

@@ -1,0 +1,67 @@
+{
+ "folds": [
+  {
+   "fold": "ot",
+   "ref_phys": 0.08269889925338406,
+   "ref_patch": 0.6411673163983903,
+   "n_runs": 5,
+   "n_completed": 5,
+   "n_aborted": 0,
+   "less_faithful": 5,
+   "costlier": 5,
+   "dominated": 5
+  },
+  {
+   "fold": "kh",
+   "ref_phys": 0.0016812335405671738,
+   "ref_patch": 0.7942708333333334,
+   "n_runs": 5,
+   "n_completed": 5,
+   "n_aborted": 0,
+   "less_faithful": 5,
+   "costlier": 4,
+   "dominated": 4
+  },
+  {
+   "fold": "rotor",
+   "ref_phys": 0.0536450871441004,
+   "ref_patch": 0.3561988015776699,
+   "n_runs": 5,
+   "n_completed": 3,
+   "n_aborted": 2,
+   "less_faithful": 3,
+   "costlier": 2,
+   "dominated": 2
+  },
+  {
+   "fold": "tearing",
+   "ref_phys": 0.004428861099280601,
+   "ref_patch": 0.625,
+   "n_runs": 5,
+   "n_completed": 5,
+   "n_aborted": 0,
+   "less_faithful": 5,
+   "costlier": 5,
+   "dominated": 5
+  }
+ ],
+ "total": {
+  "n_completed": 18,
+  "n_aborted": 2,
+  "less_faithful": 18,
+  "costlier": 16,
+  "dominated": 16
+ },
+ "n_folds": 4,
+ "missing": [],
+ "git_hash": "19369485cf74d468a577af9d82b7e7b880a2cdc1",
+ "cli_args": {
+  "folds": [
+   "ot",
+   "kh",
+   "rotor",
+   "tearing"
+  ],
+  "seed": 0
+ }
+}

@@ -20,15 +20,15 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 262 passed, 12 skipped
-python study/v4/t16_aggregate_v4.py                                # 100 rows, 0 DIFF, 0 MISSING
+python -m pytest tests/v3 tests/v4 -q                              # 286 passed, 13 skipped
+python study/v4/t16_aggregate_v4.py                                # 116 rows, 0 DIFF, 0 MISSING
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**262 pytests passed** (12 skipped), master table **100/100 OK, 0 DIFF, 0 MISSING**
+**286 pytests passed** (13 skipped), master table **116/116 OK, 0 DIFF, 0 MISSING**
 (all four Level-3 folds are now present, so nothing is outstanding in it).
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
@@ -54,7 +54,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 100 rows.
+Markdown. It prints `0 DIFF` over 116 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
@@ -83,7 +83,7 @@ at the deployed size (`VQA_N = 2` → 8 qubits):
 the inertness survives a full repair of the defect it uncovered, and is
 confirmed independently by a mapper that never had the defect.
 
-### Claim E in detail — 20 runs, 4 held-out classes
+### Claim E in detail — 18 completed runs, 4 held-out classes
 
 Q-HAS repeated **5×** per fold (identical inputs); classical arm verified
 deterministic across 8 replays (range exactly 0.00e+00). Comparison is
@@ -99,9 +99,9 @@ trace audit verified.
 
 **The headline is a count, not a ratio:**
 
-> Over 20 independent closed-loop runs, Q-HAS is less faithful than the
-> budget-matched classical rule on **19/20**, more expensive on **18/20**,
-> and strictly Pareto-dominated on **17/20**. No run reverses the ordering
+> Over 18 completed closed-loop runs, Q-HAS is less faithful than the
+> budget-matched classical rule on **18/18**, more expensive on **16/18**,
+> and strictly Pareto-dominated on **16/18**. No run reverses the ordering
 > on both coordinates at once.
 
 Quote it this way. The per-fold ratios (1.56–2.86×) are means of a quantity
@@ -115,9 +115,10 @@ reproduces exactly, so this row stands.
 
 ---
 
-## 4. Defect register (D1–D13)
+## 4. Defect register (D1–D15)
 
-Thirteen claims that existing code is wrong. Full detail and per-defect
+Fifteen claims that code is wrong — D1–D13 about existing code, D14–D15
+about my own verification code. Full detail and per-defect
 verification commands in `docs/v4_final_results_for_paper.md` §3 and
 `docs/CODE_REVIEW_GUIDE.md` §3.
 
@@ -136,12 +137,14 @@ verification commands in `docs/v4_final_results_for_paper.md` §3 and
 | **D11** | **the Q-HAS arm is not deterministic** — no RNG seed anywhere in V1's VQA chain | `src/VQA/execute.py`, `runtime.py` |
 | **D12** | aborted runs return a **partial score with keys identical** to a completed run | `src/pipeline.py:499` |
 | **D13** | **train/test leak**: the QAOA arm's threshold `0.1496` was fitted on *all four* classes, including the held-out one, while the classical arm re-tunes per fold | `TrainHyperParam_v2:632`, `t15:154` |
+| **D14** | *(mine, found late)* T20's classical **determinism control** ran at the *tuned* threshold on `ot` and `kh` while the artifact field reads `"budget-matched classical"`. The field describes the reference *value* (correctly read from T15b), not the replayed control. Recomputing from `classical_stats` gives phys **0.4845** on `ot` against the matched **0.0827** — enough to flip the fold's direction | `t20:122`, `t20:298` |
+| **D15** | *(mine, found late)* `git_commit_hash()` is called at **save** time, so a 1-hour run is stamped with code committed *after* it started. This is how the `ot`/`kh` T20 artifacts carry a hash that postdates the `always_matched=True` fix while having executed the pre-fix code. The provenance stamp CLAUDE.md requires is therefore not sufficient on its own for long runs | every `study/v4/t*.py` |
 
 **D13 is the one to disclose first.** The pre-registration claims the
 held-out class is excluded from **all** tuning of both arms; that is false
 for the QAOA arm, whose decision threshold comes from
 `_run_classical_phase1` fitted on "KH + OT + Tearing + Rotor". The leak is
-**asymmetric and favours Q-HAS**, which still loses 19/20 — so the
+**asymmetric and favours Q-HAS**, which still loses 18/18 — so the
 conclusion is conservative, but the protocol statement must be corrected.
 
 **D11 and D12 most affect the conclusions.** D11: replaying fold `ot` with
@@ -208,7 +211,7 @@ heuristic would have deleted valid data.
 |---|---|---|
 | **T22 unseen initial conditions** | single-run pass done (inconclusive); **repeated pass running** | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
 | **D13 removal** | not attempted | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode leak-free` is the entry point |
-| physics seeds | still **1 per class** | T20's 20 runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
+| physics seeds | still **1 per class** | T20's 18 completed runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
 | **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |

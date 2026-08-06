@@ -400,6 +400,46 @@ def rows_t22(results_dir, folds):
     return out
 
 
+def rows_t23(results_dir, folds):
+    """Le decompte de tete, RECALCULE depuis les artefacts.
+
+    Il etait auparavant compose a la main dans RESULTS_V4.md et personne ne
+    le verifiait — d'ou 19/20 la ou les artefacts disent 18/18 (colonnes
+    transposees sur `kh`, tirages avortes comptes au denominateur sur
+    `rotor`). Le nombre le plus cite de l'etude etait le seul a n'avoir
+    aucun controle de transcription. Il en a un maintenant.
+    """
+    from t23_headline_counts import fold_counts, totals
+    ref_fold = {
+        "ot": (5, 5, 5), "kh": (5, 4, 4),
+        "rotor": (3, 2, 2), "tearing": (5, 5, 5),
+    }
+    ref_total = dict(n=18, less=18, cost=16, dom=16)
+    out, got = [], []
+    for f in folds:
+        r = fold_counts(results_dir, f)
+        if r is None:
+            for m in ("less faithful", "costlier", "dominated"):
+                out.append(make_row(f"t23/{f}", m, None, None))
+            continue
+        got.append(r)
+        rf = ref_fold.get(f, (None, None, None))
+        for m, v, rv in (("less faithful", r["less_faithful"], rf[0]),
+                         ("costlier", r["costlier"], rf[1]),
+                         ("dominated", r["dominated"], rf[2])):
+            out.append(make_row(f"t23/{f}", m, float(v),
+                                None if rv is None else float(rv), tol=0.5))
+    if got:
+        t = totals(got)
+        for m, k, rk in (("total runs (completed)", "n_completed", "n"),
+                         ("total less faithful", "less_faithful", "less"),
+                         ("total costlier", "costlier", "cost"),
+                         ("total dominated", "dominated", "dom")):
+            out.append(make_row("t23", m, float(t[k]),
+                                float(ref_total[rk]), tol=0.5))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -468,6 +508,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
         results_dir, f"t18_window_counterfactual_N{N}_dim{dim}.npz")))
     rows += rows_t20(results_dir, folds)
     rows += rows_t22(results_dir, folds)
+    rows += rows_t23(results_dir, folds)
     return rows
 
 

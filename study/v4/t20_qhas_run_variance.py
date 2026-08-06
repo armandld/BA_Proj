@@ -48,7 +48,7 @@ sys.path.insert(0, os.path.join(_HERE, ".."))
 sys.path.insert(0, os.path.join(_HERE, "..", "v3"))
 sys.path.insert(0, _HERE)
 
-from t1_feature_selection import git_commit_hash
+import provenance
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
 from t19_arm_divergence_audit import parse_abort
@@ -123,6 +123,7 @@ def main():
         rec, RESULTS_DIR, args.fold, always_matched=True)
     print(f"  classical control runs at: {hp_c_src}", flush=True)
 
+    prov = provenance.start()   # D15 : le hash AVANT le calcul
     t0 = time.time()
     def guarded(hp, only):
         """Une execution, avec son statut d'avortement CAPTURE.
@@ -298,7 +299,7 @@ def main():
         "classical_reference_source": ref_source,
         "classical_arm_completed": classical_completed,
         "shots": cfg.get("shots"),
-        "git_hash": git_commit_hash(),
+        **provenance.finish(prov),
         "cli_args": vars(args),
         "wall_s": time.time() - t0,
     }
