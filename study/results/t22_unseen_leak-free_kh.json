@@ -25,6 +25,13 @@
      "patch_ratio": 0.5391672653256705,
      "completed": true,
      "abort": null
+    },
+    {
+     "combined": 0.17344569474600746,
+     "phys_score": 0.01952416421529165,
+     "patch_ratio": 0.5582495210727969,
+     "completed": true,
+     "abort": null
     }
    ]
   }
@@ -34,21 +41,24 @@
  "dns_signature_unseen": 66395.9251107193,
  "dns_relative_shift": 0.07511942747099111,
  "unseen_condition_is_weak": false,
+ "resumed_from_checkpoint": true,
+ "n_runs_resumed": 1,
  "status": "partial",
- "partial_stage": "qhas/canonical 1/5",
+ "partial_stage": "qhas/canonical 2/5",
  "partial_warning": "INCOMPLETE RUN \u2014 written as a resume point after a container reclaim. Arm statistics present here are computed over the draws finished so far and MUST NOT be quoted.",
  "git_hash_at_start": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
- "dirty_at_start": false,
- "git_hash_at_save": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
- "head_moved_during_run": false,
+ "dirty_at_start": true,
+ "git_hash_at_save": "28f1c1df3c38e0631265b5140db0b5dda146380d",
+ "head_moved_during_run": true,
  "git_hash": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
  "cli_args": {
   "fold": "kh",
   "mode": "leak-free",
+  "no_resume": false,
   "prefix": "t15_level3",
   "seed": 0,
   "repeats": 5,
   "matched_reference": true
  },
- "wall_s": 704.5656247138977
+ "wall_s": 699.7951679229736
 }
