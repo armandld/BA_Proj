@@ -1,0 +1,60 @@
+{
+ "fold": "ot",
+ "scenario": "orszag_tang",
+ "mode": "leak-free",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "classical_tuned_arm_completed": null,
+ "unseen_condition": {
+  "ic": {},
+  "re": 600,
+  "note": "init_orszag_tang takes NO parameters; the only available unseen condition is a different Reynolds number"
+ },
+ "qaoa_threshold_leaked": false,
+ "qaoa_threshold_amr": 0.46161012794549355,
+ "classical_threshold_amr": 0.19062500000000002,
+ "arms": {
+  "qhas": {
+   "status": "in_progress",
+   "canonical_runs": [
+    {
+     "combined": 0.38702241820010713,
+     "phys_score": 0.4311107624517588,
+     "patch_ratio": 0.2768015575709779,
+     "completed": false,
+     "abort": {
+      "abort_step": 955,
+      "abort_time": 2.7903,
+      "partial_combined": 0.387,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    }
+   ]
+  }
+ },
+ "thresholds_match": false,
+ "dns_signature_canonical": 145888.8460796226,
+ "dns_signature_unseen": 145473.71212274957,
+ "dns_relative_shift": 0.002845549663518914,
+ "unseen_condition_is_weak": true,
+ "resumed_from_checkpoint": false,
+ "n_runs_resumed": 0,
+ "status": "partial",
+ "partial_stage": "qhas/canonical 1/5",
+ "partial_warning": "INCOMPLETE RUN \u2014 written as a resume point after a container reclaim. Arm statistics present here are computed over the draws finished so far and MUST NOT be quoted.",
+ "git_hash_at_start": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
+ "dirty_at_start": true,
+ "git_hash_at_save": "fc9d0bdc634e087da337eb7063269fb027b3786b",
+ "head_moved_during_run": true,
+ "git_hash": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
+ "cli_args": {
+  "fold": "ot",
+  "mode": "leak-free",
+  "no_resume": false,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
+ },
+ "wall_s": 573.300637960434
+}
