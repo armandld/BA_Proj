@@ -179,6 +179,9 @@ def main():
                    help="unseen-ic: conditions initiales inedites. "
                         "leak-free: seuil QAOA repris du bras classique du "
                         "fold, regle hors classe tenue (supprime D13)")
+    p.add_argument("--no-resume", action="store_true",
+                   help="ignorer un point de sauvegarde existant et tout "
+                        "recalculer depuis le premier tirage")
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--repeats", type=int, default=1,
@@ -292,7 +295,7 @@ def main():
     cfg_uns = unseen_config(cfg, scenario)
     KEYS = ("combined", "phys_score", "patch_ratio")
 
-    def repeat(hp, only, cfg_, dns_, n, tag, on_run=None):
+    def repeat(hp, only, cfg_, dns_, n, tag, on_run=None, done=None):
         """n executions, chacune verifiee CONTRE LA DIVERGENCE.
 
         Sans ce controle une trajectoire avortee se melange aux autres :
@@ -303,8 +306,11 @@ def main():
         pas deterministe (D11), donc un rejeu ne reproduit pas le tirage
         fautif. Il faut le capturer AU MOMENT de l'execution.
         """
-        runs = []
-        for i in range(n):
+        runs = list(done or [])
+        if runs:
+            print(f"    {tag}: resuming, {len(runs)}/{n} draw(s) reused "
+                  f"from the checkpoint", flush=True)
+        for i in range(len(runs), n):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 r = run_arm(T, args.fold, cfg_, dns_, hp, only, verbose=True)
@@ -338,6 +344,50 @@ def main():
 
     op = os.path.join(RESULTS_DIR,
                       f"t22_unseen_{args.mode}_{args.fold}.json")
+
+    # ---- reprise depuis un point de sauvegarde -----------------------
+    # Un fold coute ~4 h sur `kh` et `ot` ; le conteneur vit ~1 h 30. Sans
+    # reprise, le point de sauvegarde ne fait que CONSERVER les donnees, il
+    # ne permet pas de terminer : chaque relance repartait du tirage 1, et
+    # ces deux folds ne pouvaient donc structurellement jamais aboutir.
+    #
+    # Les tirages repris viennent d'un AUTRE processus. C'est sans effet sur
+    # la statistique — le bras est non deterministe (D11), les tirages sont
+    # i.i.d. et le bras classique est exactement reproductible — mais cela
+    # ne doit pas etre invisible : `resumed_from_checkpoint` et
+    # `n_runs_resumed` l'enregistrent.
+    _resume = {}
+    if os.path.exists(op) and not args.no_resume:
+        try:
+            prev = json.load(open(op))
+        except ValueError:
+            prev = None
+        if prev is not None and prev.get("status") == "partial":
+            same = (prev.get("fold") == args.fold
+                    and prev.get("mode") == args.mode
+                    and prev.get("cli_args", {}).get("repeats")
+                    == args.repeats
+                    and prev.get("cli_args", {}).get("matched_reference")
+                    == args.matched_reference)
+            if same:
+                _resume = prev.get("arms", {})
+                print(f"  RESUMING from checkpoint "
+                      f"({prev.get('partial_stage')})", flush=True)
+            else:
+                # une reprise sous une AUTRE configuration melangerait des
+                # tirages incomparables : on refuse plutot que de deviner
+                print("  checkpoint found but its configuration differs; "
+                      "starting over", flush=True)
+
+    def resume_runs(arm, cond, n):
+        """Tirages deja faits pour ce bras/condition, tronques a n."""
+        got = _resume.get(arm, {}).get(f"{cond}_runs", []) or []
+        return got[:n]
+
+    out["resumed_from_checkpoint"] = bool(_resume)
+    out["n_runs_resumed"] = sum(
+        len(v.get(f"{c}_runs", []) or [])
+        for v in _resume.values() for c in ("canonical", "unseen"))
 
     def checkpoint(stage):
         """Ecrit l'etat PARTIEL, explicitement marque comme tel.
@@ -382,10 +432,12 @@ def main():
             return cb
 
         can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical",
-                     on_run=_tick("canonical"))
+                     on_run=_tick("canonical"),
+                     done=resume_runs(arm, "canonical", n))
         out["arms"][arm]["canonical_runs"] = can
         uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen",
-                     on_run=_tick("unseen"))
+                     on_run=_tick("unseen"),
+                     done=resume_runs(arm, "unseen", n))
         out["arms"][arm]["unseen_runs"] = uns
         # une trajectoire avortee n'est pas un point de mesure : on la
         # compte et on l'exclut, jamais on ne la moyenne avec les autres

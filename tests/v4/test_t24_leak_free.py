@@ -28,8 +28,18 @@ FOLDS = ("ot", "kh", "rotor", "tearing")
 
 
 def _have(fold):
-    return os.path.exists(os.path.join(
-        RESULTS, f"t22_unseen_leak-free_{fold}.json"))
+    """Artefact leak-free COMPLET. Un point de reprise n'en est pas un.
+
+    Sans cette distinction les tests ci-dessous se mettaient a echouer des
+    qu'une execution etait en cours — et un test qui echoue parce qu'un
+    calcul tourne n'apprend rien sur le code."""
+    p = os.path.join(RESULTS, f"t22_unseen_leak-free_{fold}.json")
+    if not os.path.exists(p):
+        return False
+    try:
+        return json.load(open(p)).get("status") != "partial"
+    except ValueError:
+        return False
 
 
 def test_no_claim_of_a_shared_operating_point():
@@ -145,3 +155,38 @@ def test_a_partial_record_is_rejected_by_the_summary(tmp_path):
     assert r["status"] == "partial"
     assert r["conditions"] == {}, (
         "un enregistrement partiel a produit des statistiques de condition")
+
+
+def test_resume_reuses_only_matching_configurations():
+    """Reprendre sous une AUTRE configuration melangerait des tirages
+    incomparables. Le code doit refuser plutot que deviner."""
+    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+               encoding="utf-8").read()
+    for guard in ('prev.get("fold") == args.fold',
+                  'prev.get("mode") == args.mode',
+                  '"repeats"',
+                  '"matched_reference"'):
+        assert guard in src, (
+            f"la reprise ne verifie pas {guard} — elle pourrait melanger "
+            f"des tirages issus d'une autre configuration")
+    assert 'prev.get("status") == "partial"' in src, (
+        "la reprise devrait ne repartir que d'un point de sauvegarde")
+
+
+def test_resume_is_recorded_never_silent():
+    """Des tirages venus d'un autre processus doivent etre declares.
+
+    C'est sans effet statistique (bras non deterministe, tirages i.i.d.)
+    mais l'invisibilite serait le motif : un artefact qui ne dit pas d'ou
+    viennent ses donnees."""
+    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+               encoding="utf-8").read()
+    assert "resumed_from_checkpoint" in src and "n_runs_resumed" in src
+
+
+def test_resume_truncates_to_the_requested_count():
+    """`--repeats 3` apres un point a 5 tirages ne doit pas en rendre 5."""
+    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+               encoding="utf-8").read()
+    assert "return got[:n]" in src, (
+        "les tirages repris ne sont pas tronques a n")
