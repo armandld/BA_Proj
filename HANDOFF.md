@@ -36,6 +36,14 @@ MISSING**. All four Level-3 folds are present; the 4 MISSING rows are the
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 `figures_v4/`, `logs/v4/`, `CLAUDE.md` was modified.
 
+**Verified from a clean checkout, not from the working tree.** The four
+commands above were re-run in a detached worktree of the *pushed* branch
+(`git worktree add --detach <dir> origin/claude/kind-babbage-927g10`) and
+all four reproduce there: `src/` 0 files, V2 phase code 0 files, nothing
+outside the allowed directories, 298 tests, 143 rows / 0 DIFF. That is the
+form of the check worth trusting — a working tree can pass while the
+branch does not.
+
 **`bash run_tests.sh` fails 8 tests — do not treat this as a regression.**
 It is defect D6, pre-existing, reproduced at `cf93ba3` (the last commit
 touching `src/`/`tests/`, before any of this work).
