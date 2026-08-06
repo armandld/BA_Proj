@@ -1712,6 +1712,39 @@ the leak, `tearing` was the single separable fold and Q-HAS degraded *less*
 against the classical arm's ×0.389** — Q-HAS now degrades *more*. The
 apparent transfer advantage was an artefact of the leaked threshold.
 
+### How these runs survive the container, and what that puts in the artifact
+
+A reviewer will find `resumed_from_checkpoint`, `n_runs_resumed`,
+`status: "partial"` and `partial_stage` in these files. They exist because
+a leak-free fold costs ~4 h on `kh` and `ot` while this container is
+reclaimed roughly every 1.5 h. Two mechanisms, and the second is what
+actually made those folds possible:
+
+1. **Checkpoint after every draw.** `t22` writes its state after each
+   individual run (~7 min of exposure, not the ~35 min a whole condition
+   would cost). Every such write is marked `status: "partial"` with
+   `partial_stage` naming the exact draw (`qhas/canonical 3/5`), and
+   **both consumers (`t24`, `t22c`) refuse to analyse it** — its arm
+   statistics are computed over however many draws finished, which is not
+   a result. Without that marking the safety measure would have introduced
+   the very defect this campaign documents.
+
+2. **Resume from the checkpoint.** Checkpointing alone only *preserved*
+   data: each relaunch restarted from draw 1, so `kh` and `ot` could never
+   finish however many times they were run. `t22` now reloads the partial
+   artifact and skips the draws already made. It resumes **only** from a
+   `partial` record whose fold, mode, `repeats` and `matched_reference` all
+   match, and refuses aloud otherwise rather than blending incomparable
+   draws; `--no-resume` forces a clean recomputation.
+
+**What resuming does and does not cost.** The reused draws come from a
+different process. That has no statistical effect here — the Q-HAS arm is
+non-deterministic (D11), the draws are i.i.d., and the classical arm
+reproduces bit-exactly — but it is recorded rather than left invisible,
+because an artifact that does not say where its data came from is exactly
+the failure mode catalogued above. A fold whose `n_runs_resumed` is
+non-zero is not weaker evidence; it is evidence that says so.
+
 ### Why only 2 folds so far, stated rather than left to be inferred
 
 `ot` and `kh` are the two most expensive folds (T20 spent 3402 s and
