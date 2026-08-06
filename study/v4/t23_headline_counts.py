@@ -78,18 +78,28 @@ def fold_counts(results_dir, fold):
     cost = sum(1 for r in ok if r["patch_ratio"] > ref_patch)
     dom = sum(1 for r in ok
               if r["phys_score"] > ref_phys and r["patch_ratio"] > ref_patch)
+    # Le controle classique du meme artefact : combien de ses rejeux ont
+    # avorte AU POINT COMPARE. C'est la seule forme sous laquelle
+    # l'asymetrie d'avortement peut etre affirmee — le bras classique
+    # diverge lui aussi a d'AUTRES seuils (T19 : le seuil regle de `rotor`,
+    # et 2 de ses 6 points de bissection).
+    cr = t.get("classical_runs", [])
+    c_ab = sum(1 for r in cr if not r.get("completed", True))
     return {
         "fold": fold,
         "ref_phys": ref_phys, "ref_patch": ref_patch,
         "n_runs": len(t["qhas_runs"]),
         "n_completed": len(ok),
         "n_aborted": len(t["qhas_runs"]) - len(ok),
+        "n_classical_runs": len(cr),
+        "n_classical_aborted": c_ab,
         "less_faithful": less, "costlier": cost, "dominated": dom,
     }
 
 
 def totals(rows):
     t = {"n_completed": 0, "n_aborted": 0,
+         "n_classical_runs": 0, "n_classical_aborted": 0,
          "less_faithful": 0, "costlier": 0, "dominated": 0}
     for r in rows:
         for k in t:
@@ -138,6 +148,13 @@ def main():
     print(f"  budget-matched classical rule on {t['less_faithful']}/{n}, "
           f"more expensive on {t['costlier']}/{n}, and strictly")
     print(f"  Pareto-dominated on {t['dominated']}/{n}.")
+    print(f"\n  aborts at the compared operating point: "
+          f"Q-HAS {t['n_aborted']}/{n + t['n_aborted']}, "
+          f"classical {t['n_classical_aborted']}/{t['n_classical_runs']}.")
+    print("  This is NOT a claim that the classical rule never diverges: "
+          "T19 records\n  its tuned threshold aborting on `rotor`, and 2 of "
+          "that fold's 6 bisection\n  points. Divergence is a property of "
+          "the threshold, and both arms have\n  thresholds that diverge.")
 
     out = {"folds": rows, "total": t, "n_folds": len(rows),
            "missing": missing, "git_hash": git_commit_hash(),

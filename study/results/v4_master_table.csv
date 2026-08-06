@@ -1,4 +1,4 @@
-# git_hash=f90b8e15f56797246137ea9b27905efad69e4dea
+# git_hash=54cc6c072e61cd6fb88be2e1d1b05a09d9df62fe
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -116,3 +116,6 @@ t23,total runs (completed),18.000000,18.000000,OK
 t23,total less faithful,18.000000,18.000000,OK
 t23,total costlier,16.000000,16.000000,OK
 t23,total dominated,16.000000,16.000000,OK
+t23,Q-HAS aborts at matched point,2.000000,2.000000,OK
+t23,classical replays at matched point,8.000000,8.000000,OK
+t23,classical aborts at matched point,0.000000,0.000000,OK

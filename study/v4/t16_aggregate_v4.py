@@ -414,7 +414,7 @@ def rows_t23(results_dir, folds):
         "ot": (5, 5, 5), "kh": (5, 4, 4),
         "rotor": (3, 2, 2), "tearing": (5, 5, 5),
     }
-    ref_total = dict(n=18, less=18, cost=16, dom=16)
+    ref_total = dict(n=18, less=18, cost=16, dom=16, ab=2, cab=0, crun=8)
     out, got = [], []
     for f in folds:
         r = fold_counts(results_dir, f)
@@ -434,7 +434,12 @@ def rows_t23(results_dir, folds):
         for m, k, rk in (("total runs (completed)", "n_completed", "n"),
                          ("total less faithful", "less_faithful", "less"),
                          ("total costlier", "costlier", "cost"),
-                         ("total dominated", "dominated", "dom")):
+                         ("total dominated", "dominated", "dom"),
+                         ("Q-HAS aborts at matched point", "n_aborted", "ab"),
+                         ("classical replays at matched point",
+                          "n_classical_runs", "crun"),
+                         ("classical aborts at matched point",
+                          "n_classical_aborted", "cab")):
             out.append(make_row("t23", m, float(t[k]),
                                 float(ref_total[rk]), tol=0.5))
     return out

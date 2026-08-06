@@ -1629,7 +1629,7 @@ deserving its own line in the manuscript.
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (100 rows, 0 DIFF, 0 MISSING).
+covered by `t16_aggregate_v4.py` (119 rows, 0 DIFF, 0 MISSING).
 
 ## The one-sentence result
 
@@ -1650,10 +1650,23 @@ margin (2–1 below λ = 0.82, 3–0 above). Two of three usable folds are decid
 by Pareto dominance alone, needing no λ at all.
 
 **2. Robustness — a failure mode outside every metric.** `rotor`'s Q-HAS arm
-aborted on **2 of 5** verified draws (40 %) while its classical control at
-the same budget completed every time, deterministically. Six Q-HAS aborts
-against zero classical across the campaign. `phys_score`, `patch_ratio`, the
-dominance count and the λ analysis all presuppose a run that finishes.
+aborted on **2 of 5** verified draws (40 %) while its classical control **at
+the budget-matched threshold** completed every time, deterministically.
+Across the recorded T20 and T22 artifacts: **2 Q-HAS aborts out of 20 draws,
+0 classical aborts out of 8 replays at the matched point.** `phys_score`,
+`patch_ratio`, the dominance count and the λ analysis all presuppose a run
+that finishes.
+
+**Do not read this as "the classical rule never diverges" — it does.** The
+T19 audits record `rotor`'s *tuned* classical arm aborting at step 208
+(threshold 0.4616), and 2 of `rotor`'s 6 bisection points aborting as well.
+An earlier draft of this section claimed "six Q-HAS aborts against zero
+classical across the campaign"; the second half of that is false and the
+first is not reproducible from the artifacts, which record 2. The claim that
+holds is narrower and is the one the comparison actually needs: **at the
+operating point where the two arms are compared, the classical arm completed
+every time and Q-HAS did not.** Divergence is a property of the threshold,
+and both arms have thresholds that diverge.
 
 **3. Transfer — no effect.** On genuinely unseen initial conditions,
 **1 fold of 4** shows a separable difference in degradation; on `ot`, |z| =
@@ -1673,7 +1686,7 @@ it loses anyway.
 | asymmetry | direction | status |
 |---|---|---|
 | **D13** — QAOA threshold fitted on all 4 classes incl. the held-out one | favours Q-HAS | measured, **not removed** |
-| **cost axis** excludes the QAOA circuit; Q-HAS uses 2.7–3.3× the wall time | favours Q-HAS | declared |
+| **cost axis** excludes the QAOA circuit; Q-HAS uses 2.7–3.3× the wall time on the three folds whose classical arm completed (`rotor` excluded: its 29 s classical run is the aborted tuned arm, not a comparable time) | favours Q-HAS | declared |
 | aborted Q-HAS draws excluded from its own statistics | favours Q-HAS | necessary, declared |
 
 ## What would overturn it

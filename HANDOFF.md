@@ -21,14 +21,14 @@ git diff --name-only $BASE HEAD -- src/                            # MUST be emp
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
 python -m pytest tests/v3 tests/v4 -q                              # 286 passed, 13 skipped
-python study/v4/t16_aggregate_v4.py                                # 116 rows, 0 DIFF, 0 MISSING
+python study/v4/t16_aggregate_v4.py                                # 119 rows, 0 DIFF, 0 MISSING
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**286 pytests passed** (13 skipped), master table **116/116 OK, 0 DIFF, 0 MISSING**
+**286 pytests passed** (13 skipped), master table **119/119 OK, 0 DIFF, 0 MISSING**
 (all four Level-3 folds are now present, so nothing is outstanding in it).
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
@@ -54,7 +54,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 116 rows.
+Markdown. It prints `0 DIFF` over 119 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
