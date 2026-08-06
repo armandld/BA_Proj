@@ -286,11 +286,13 @@ def rows_t20(results_dir, folds):
     Le determinisme du bras classique est le CONTROLE : s'il tombe, la
     dispersion mesuree n'est plus attribuable au seul chemin QAOA.
     """
+    # Valeurs de la passe VERIFIEE (avortements captures a l'execution et
+    # exclus). Les references precedentes venaient de la passe non protegee.
     ref = {
-        "ot": dict(mean=0.1291, sd=0.0222, ratio=1.56),
-        "kh": dict(mean=0.00324, sd=0.00158, ratio=1.93),
-        "rotor": dict(mean=0.1537, sd=0.0642, ratio=2.86),
-        "tearing": dict(mean=0.00908, sd=0.00340, ratio=2.05),
+        "ot": dict(mean=0.10727, sd=0.01823, ratio=1.30),
+        "kh": dict(mean=0.00320, sd=0.00203, ratio=1.90),
+        "rotor": dict(mean=0.14725, sd=0.04062, ratio=2.74),
+        "tearing": dict(mean=0.00801, sd=0.00193, ratio=1.81),
     }
     out, n_det, n_seen = [], 0, 0
     for f in folds:
@@ -302,7 +304,18 @@ def rows_t20(results_dir, folds):
                 out.append(make_row(f"t20/{f}", m, None, None))
             continue
         d = json.load(open(p))
-        q = np.array([x["phys_score"] for x in d["qhas_runs"]], dtype=float)
+        # EXCLURE les tirages avortes : une trajectoire tronquee n'est pas
+        # un point de mesure. Sans ce filtre la table republiait une moyenne
+        # contaminee — sur `rotor`, 0.3328 au lieu de 0.1473, parce que les
+        # deux tirages divergents y etaient moyennes avec les trois valides.
+        runs = [x for x in d["qhas_runs"] if x.get("completed", True)]
+        n_ab = len(d["qhas_runs"]) - len(runs)
+        if len(runs) < 2:
+            for m in ("Q-HAS phys mean", "Q-HAS phys sd",
+                      "ratio vs matched (mean-based)"):
+                out.append(make_row(f"t20/{f}", m, None, None))
+            continue
+        q = np.array([x["phys_score"] for x in runs], dtype=float)
         mean, sd = float(np.mean(q)), float(np.std(q, ddof=1))
         out += [
             make_row(f"t20/{f}", "Q-HAS phys mean", mean, r.get("mean"),
@@ -310,7 +323,9 @@ def rows_t20(results_dir, folds):
             make_row(f"t20/{f}", "Q-HAS phys sd", sd, r.get("sd"),
                      tol=max(1e-6, 0.05 * r.get("sd", 1.0))),
             make_row(f"t20/{f}", "ratio vs matched (mean-based)",
-                     d.get("ratio_mean_based"), r.get("ratio"),
+                     (mean / d["stored_classical_phys"]
+                      if d.get("stored_classical_phys") else None),
+                     r.get("ratio"),
                      tol=max(1e-3, 0.03 * r.get("ratio", 1.0))),
         ]
         n_seen += 1

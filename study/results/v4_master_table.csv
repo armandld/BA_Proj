@@ -1,4 +1,4 @@
-# git_hash=f1fe444b4f1b9d31faafd9a560799be8b383e684
+# git_hash=fdf8ec581c8ae0fd38419592f895e24320cb8e00
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -71,16 +71,16 @@ t18,no_ZZZZ changed (no window),0.000000,0.000000,OK
 t18,control full (windowed),0.000000,0.000000,OK
 t18,control full (no window),0.000000,0.000000,OK
 t18,window's own effect,0.250000,0.250000,OK
-t20/ot,Q-HAS phys mean,0.129145,0.129100,OK
-t20/ot,Q-HAS phys sd,0.022195,0.022200,OK
-t20/ot,ratio vs matched (mean-based),1.561632,1.560000,OK
-t20/kh,Q-HAS phys mean,0.003238,0.003240,OK
-t20/kh,Q-HAS phys sd,0.001583,0.001580,OK
-t20/kh,ratio vs matched (mean-based),1.925940,1.930000,OK
-t20/rotor,Q-HAS phys mean,0.153669,0.153700,OK
-t20/rotor,Q-HAS phys sd,0.064197,0.064200,OK
-t20/rotor,ratio vs matched (mean-based),2.864549,2.860000,OK
-t20/tearing,Q-HAS phys mean,0.009085,0.009080,OK
-t20/tearing,Q-HAS phys sd,0.003399,0.003400,OK
-t20/tearing,ratio vs matched (mean-based),2.051281,2.050000,OK
+t20/ot,Q-HAS phys mean,0.107267,0.107270,OK
+t20/ot,Q-HAS phys sd,0.018229,0.018230,OK
+t20/ot,ratio vs matched (mean-based),1.297073,1.300000,OK
+t20/kh,Q-HAS phys mean,0.003199,0.003200,OK
+t20/kh,Q-HAS phys sd,0.002034,0.002030,OK
+t20/kh,ratio vs matched (mean-based),1.902697,1.900000,OK
+t20/rotor,Q-HAS phys mean,0.147251,0.147250,OK
+t20/rotor,Q-HAS phys sd,0.040622,0.040620,OK
+t20/rotor,ratio vs matched (mean-based),2.744905,2.740000,OK
+t20/tearing,Q-HAS phys mean,0.008006,0.008010,OK
+t20/tearing,Q-HAS phys sd,0.001927,0.001930,OK
+t20/tearing,ratio vs matched (mean-based),1.807606,1.810000,OK
 t20,folds with deterministic classical arm,4.000000,4.000000,OK
