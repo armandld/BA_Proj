@@ -209,6 +209,17 @@ def main():
         except ValueError:
             pass
 
+    # Reference CANONIQUE : sans elle, « on a fait varier la physique » est
+    # une affirmation invérifiée. Une condition qui ne deplace pas la
+    # trajectoire ne teste rien, et son resultat serait indiscernable d'un
+    # vrai test de robustesse — le motif de cette campagne. On mesure donc
+    # le deplacement et on le RECORD, comme T22 le fait pour ses conditions
+    # inedites.
+    dns_can = T._precompute_dns_for([(args.fold, cfg)],
+                                    label=f"robust/canonical-{args.fold}")
+    sig_can = signature(dns_can, args.fold)
+    print(f"  canonical DNS signature = {sig_can:.6e}", flush=True)
+
     prov = provenance.start()
     t0 = time.time()
     out = {"fold": args.fold, "scenario": scenario,
@@ -248,6 +259,14 @@ def main():
         print(f"\n  --- {cond['tag']}: {cond['note']} ---", flush=True)
         dns, cfg2 = build_trace(T, args.fold, cfg, scenario, cond)
         sig = signature(dns, args.fold)
+        shift = abs(sig - sig_can) / max(abs(sig_can), 1e-30)
+        weak = shift < 0.01
+        print(f"    DNS signature {sig:.6e}  shift vs canonical "
+              f"{100 * shift:.4f}%", flush=True)
+        if weak:
+            print(f"    WARNING: this condition moves the trajectory by "
+                  f"only {100 * shift:.4f}% (< 1%) — it tests almost "
+                  f"nothing and must be reported as such", flush=True)
 
         q = []
         for i in range(args.repeats):
@@ -281,6 +300,9 @@ def main():
                  "is_ic_variation": "re" not in cond,
                  "is_true_seed_change": "rng" in cond,
                  "dns_signature": sig,
+                 "dns_signature_canonical": sig_can,
+                 "dns_relative_shift": float(shift),
+                 "condition_is_weak": bool(weak),
                  "qhas_runs": q, "classical_frontier": front,
                  "n_qhas_completed": len(q_ok),
                  "n_qhas_aborted": len(q) - len(q_ok),
@@ -315,9 +337,17 @@ def main():
         out["conditions"].append(entry)
         checkpoint(cond["tag"])
 
-    dec = [c for c in out["conditions"] if c.get("qhas_worse") is not None]
+    # Une condition qui ne deplace pas la trajectoire ne peut ni confirmer
+    # ni infirmer la direction : elle sort du decompte, dans les deux sens.
+    dec = [c for c in out["conditions"]
+           if c.get("qhas_worse") is not None and not c.get("condition_is_weak")]
+    weak_n = sum(1 for c in out["conditions"] if c.get("condition_is_weak"))
     out["n_decidable"] = len(dec)
     out["n_qhas_worse"] = sum(1 for c in dec if c["qhas_worse"])
+    out["n_weak_excluded"] = weak_n
+    if weak_n:
+        print(f"  {weak_n} condition(s) excluded as vacuous "
+              f"(trajectory shift < 1%)")
     out["status"] = "completed"
     out.update(provenance.finish(prov))
     out["cli_args"] = vars(args)

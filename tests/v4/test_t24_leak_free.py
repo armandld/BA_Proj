@@ -190,3 +190,51 @@ def test_resume_truncates_to_the_requested_count():
                encoding="utf-8").read()
     assert "return got[:n]" in src, (
         "les tirages repris ne sont pas tronques a n")
+
+
+# ---------------------------------------------------------------- T25
+# La robustesse physique ne doit pas se compter sur des conditions qui ne
+# deplacent pas la trajectoire.
+
+def test_t25_verifies_the_condition_actually_moved_the_physics():
+    """Une condition qui ne bouge rien ne teste rien.
+
+    T25 existe pour montrer que la direction ne tient pas a un etat initial
+    arbitraire. Une condition dont la trajectoire est identique a la
+    canonique donnerait un resultat indiscernable d'un vrai test de
+    robustesse — le motif de la campagne, applique au controle lui-meme."""
+    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+               encoding="utf-8").read()
+    assert "dns_relative_shift" in src and "condition_is_weak" in src, (
+        "t25 ne mesure pas le deplacement de trajectoire de ses conditions")
+    assert "not c.get(\"condition_is_weak\")" in src, (
+        "t25 compte des conditions vacues dans son decompte de direction")
+
+
+def test_t25_never_extrapolates_its_frontier():
+    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+               encoding="utf-8").read()
+    assert "out_of_swept_range" in src and "xs[0] <= qp <= xs[-1]" in src, (
+        "t25 pourrait extrapoler hors de la frontiere balayee")
+
+
+def test_t25_marks_reynolds_as_not_an_ic_variation():
+    """`ot` n'a aucun parametre : son levier Reynolds n'est pas une
+    variation de condition initiale et ne doit pas etre compte comme telle."""
+    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+               encoding="utf-8").read()
+    assert 'is_ic_variation' in src
+
+
+def test_t25_rng_override_changes_the_draw_and_restores_numpy():
+    """La seule vraie graine de la suite doit etre reellement substituee,
+    et numpy rendu intact — sinon la substitution contaminerait tout ce qui
+    suit dans le meme processus."""
+    import numpy as np
+    from t25_physics_robustness import rng_override
+    base = np.random.default_rng(42).standard_normal(8)
+    with rng_override(7):
+        alt = np.random.default_rng(42).standard_normal(8)
+    after = np.random.default_rng(42).standard_normal(8)
+    assert not np.allclose(base, alt), "la substitution de graine n'a rien changé"
+    assert np.allclose(base, after), "numpy n'a pas ete restaure"
