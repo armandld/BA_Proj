@@ -146,6 +146,13 @@
      "patch_ratio": 0.6411673163983903,
      "completed": true,
      "abort": null
+    },
+    {
+     "combined": 0.24226130415195732,
+     "phys_score": 0.08269889925338406,
+     "patch_ratio": 0.6411673163983903,
+     "completed": true,
+     "abort": null
     }
    ]
   }
@@ -158,11 +165,11 @@
  "resumed_from_checkpoint": false,
  "n_runs_resumed": 0,
  "status": "partial",
- "partial_stage": "classical/canonical 1/2",
+ "partial_stage": "classical/canonical 2/2",
  "partial_warning": "INCOMPLETE RUN \u2014 written as a resume point after a container reclaim. Arm statistics present here are computed over the draws finished so far and MUST NOT be quoted.",
  "git_hash_at_start": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
  "dirty_at_start": true,
- "git_hash_at_save": "edb2d47babb6f94185cdacd8b74cf5bb443c1df7",
+ "git_hash_at_save": "4e57678587b46903360d47a8b1a5224d98a6d0ab",
  "head_moved_during_run": true,
  "git_hash": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
  "cli_args": {
@@ -174,5 +181,5 @@
   "repeats": 5,
   "matched_reference": true
  },
- "wall_s": 4876.456859827042
+ "wall_s": 5461.8356602191925
 }
