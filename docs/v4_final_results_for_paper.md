@@ -260,11 +260,16 @@ Budget-matched classical frontier on the held-out class:
 | 0.8000 | 0.0156 | 0.5894 |
 | *Q-HAS* | *0.6797* | *0.1940* |
 
-**At equal (indeed slightly lower) compute the classical rule achieves 2.3×
-lower error — 2.57× worse for Q-HAS against the interpolated frontier.**
-Q-HAS is strictly Pareto-dominated. At a *matched threshold* the gap is the
-same: classical at 0.1438 gives phys 0.0649 where Q-HAS at 0.1496 gives
-0.1940.
+**At equal (indeed slightly lower) compute the classical rule achieves
+lower error, and Q-HAS is strictly Pareto-dominated on 5/5 repeated runs.**
+
+The `0.1940` above is **one draw** of a non-deterministic arm (D11). Over 5
+repeats the mean is **0.10727 ± 0.01823**, so the honest ratios are
+**1.30×** against the measured budget-matched point and **1.79×** against
+the interpolated frontier at the realised mean budget. The single-draw
+figure of 2.57× is retracted; `figures_v4/pareto_panel.csv` now carries
+both denominators, and `study/v4/t23_headline_counts.py` computes the
+dominance counts.
 
 **Robustness note for the referee:** this compares Q-HAS to a *frontier*,
 not to one classical setting. Being dominated by a frontier neutralises the

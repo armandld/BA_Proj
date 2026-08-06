@@ -21,6 +21,26 @@ Palette, encres et fond : importes de `make_pareto_figure` (slots
 categoriels 1 et 2 valides par `scripts/validate_palette.js --mode light`).
 Aucune couleur, aucune fonction n'est redefinie ici.
 
+DEUX DENOMINATEURS, ET POURQUOI ILS DIFFERENT.
+
+Le rapport annote ici n'est PAS celui des tableaux de RESULTS_V4.md, et
+c'est voulu :
+
+  - figure  : phys(Q-HAS) / frontiere INTERPOLEE au budget REALISE par
+              Q-HAS. Denominateur construit par interpolation lineaire de
+              la trace de bissection.
+  - tableau : phys(Q-HAS) / phys du point budget-apparie MESURE par T15b.
+              Denominateur mesure, a un budget legerement different.
+
+L'ecart vient de la moyenne : T15b a apparie son seuil sur UN tirage
+Q-HAS, alors que le point trace est la moyenne de 5. Sur `ot` le budget
+realise moyen est 0.756 contre 0.680 pour ce tirage — la frontiere y est
+plus basse, donc le rapport est plus grand (1.79x contre 1.30x).
+
+Les deux sont justes ; ils ne repondent pas a la meme question. La colonne
+`ratio_vs_matched` du CSV donne le second a cote du premier pour que le
+lecteur n'ait pas a deviner lequel il regarde.
+
 Sortie : figures_v4/pareto_panel.pdf / .png / .csv
 Usage :
   python study/v4/make_pareto_panel.py
@@ -46,6 +66,34 @@ FOLD_TITLES = {
     "rotor": "MHD rotor",
     "tearing": "Harris tearing",
 }
+
+
+def verified_qhas_point(results_dir, fold):
+    """Point Q-HAS a partir des tirages REPETES de T20, ou None.
+
+    `t15b["qhas"]` est UN tirage unique d'un bras non deterministe (D11).
+    La figure l'annotait comme s'il etait la mesure : elle portait 2.6x,
+    4.4x, 3.6x, 4.4x, c'est-a-dire les rapports RETRACTES, gonfles de 1.1
+    a 2.2 fois par rapport aux moyennes sur 5 tirages. Un lecteur qui
+    compare la figure au tableau corrige y verrait deux etudes.
+
+    On prend donc la moyenne des tirages ACHEVES (les avortes ne sont pas
+    des points de mesure) et on rend aussi leur dispersion, pour que la
+    figure montre ce qu'un tirage unique cachait.
+    """
+    p = os.path.join(results_dir, f"t20_qhas_run_variance_{fold}.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p))
+    ok = [r for r in d.get("qhas_runs", []) if r.get("completed")]
+    if len(ok) < 2:
+        return None
+    ph = np.array([r["phys_score"] for r in ok], dtype=float)
+    pa = np.array([r["patch_ratio"] for r in ok], dtype=float)
+    return {"patch": float(pa.mean()), "phys": float(ph.mean()),
+            "patch_sd": float(pa.std(ddof=1)),
+            "phys_sd": float(ph.std(ddof=1)),
+            "n": len(ok), "n_aborted": len(d.get("qhas_runs", [])) - len(ok)}
 
 
 def available_folds(results_dir, folds):
@@ -115,9 +163,19 @@ def draw_panel(ax, front, q, fold):
             markeredgecolor=SURFACE, markeredgewidth=1.4, zorder=4)
     ax.plot([q["patch"], q["patch"]], [q_ref, q["phys"]],
             linestyle=(0, (3, 3)), color=INK_MUTED, linewidth=1.2, zorder=2)
+    # Dispersion sur les tirages repetes, quand elle existe. Sans elle la
+    # figure affirmait une precision que le bras n'a pas (D11).
+    if q.get("n"):
+        ax.errorbar([q["patch"]], [q["phys"]],
+                    xerr=[q.get("patch_sd", 0.0)],
+                    yerr=[q.get("phys_sd", 0.0)],
+                    fmt="none", ecolor=C_QHAS, elinewidth=1.3,
+                    capsize=3, capthick=1.3, zorder=4.5, alpha=0.85)
     ax.plot([q["patch"]], [q["phys"]], "D", color=C_QHAS, markersize=8,
             markeredgecolor=SURFACE, markeredgewidth=1.6, zorder=5,
-            label="Q-HAS (closed loop, held-out class)")
+            label=("Q-HAS (closed loop, held-out class): mean of "
+                   f"{q['n']} runs \u00b1 sd" if q.get("n")
+                   else "Q-HAS (closed loop, held-out class): single run"))
 
     # Les deux etiquettes sont EMPILEES AU-DESSUS du marqueur, en unites de
     # points. Ancrer le rapport au milieu de l'ecart semblait naturel, mais
@@ -154,8 +212,9 @@ def draw_panel(ax, front, q, fold):
     # distance verticale dans tous les panneaux, ce que l'echelle lineaire
     # ne permet pas.
     ax.set_yscale("log")
-    lo = min(min(ys), q["phys"])
-    hi = max(max(ys), q["phys"])
+    lo = min(min(ys), q["phys"] - q.get("phys_sd", 0.0))
+    hi = max(max(ys), q["phys"] + q.get("phys_sd", 0.0))
+    lo = max(lo, 1e-12)   # axe log
     ax.set_ylim(lo / 2.2, hi * 2.6)
     return q_ref, ratio
 
@@ -292,6 +351,19 @@ def main():
             if n_drop:
                 print(f"  {f}: dropped {n_drop} frontier point(s) from "
                       f"aborted runs (t19 audit)")
+        # Priorite au point VERIFIE (moyenne des tirages repetes). Le
+        # tirage unique de t15b ne sert que de repli, et il est alors
+        # annonce comme tel dans la legende et dans la table.
+        qv = verified_qhas_point(RESULTS_DIR, f)
+        if qv is not None:
+            print(f"  {f}: Q-HAS point = mean of {qv['n']} completed runs"
+                  + (f" ({qv['n_aborted']} aborted, excluded)"
+                     if qv["n_aborted"] else ""))
+            q = qv
+        else:
+            print(f"  {f}: Q-HAS point = SINGLE t15b draw (no repeated "
+                  f"runs available) — the ratio below is one draw of a "
+                  f"non-deterministic arm")
         records.append({"fold": f, "front": front, "q": q, "tuned": tuned})
 
     base, rows = build_panel(records, args.out_dir, ncols=args.ncols)
@@ -299,12 +371,20 @@ def main():
     # table d'accompagnement : la figure n'est jamais le seul acces aux
     # nombres qu'elle montre
     with open(base + ".csv", "w") as fh:
-        fh.write("fold,qhas_patch_ratio,qhas_phys,frontier_phys_at_budget,"
-                 "ratio\n")
+        fh.write("fold,qhas_patch_ratio,qhas_phys,qhas_phys_sd,n_runs,"
+                 "frontier_phys_at_budget,ratio,"
+                 "matched_phys,ratio_vs_matched\n")
         for r in rows:
+            mp = json.load(open(os.path.join(
+                RESULTS_DIR,
+                f"t15b_budget_matched_{r['fold']}.json"
+            )))["matched_classical"]["phys_score"]
             fh.write(f"{r['fold']},{r['q']['patch']:.6f},"
-                     f"{r['q']['phys']:.6f},{r['q_ref']:.6f},"
-                     f"{r['ratio']:.4f}\n")
+                     f"{r['q']['phys']:.6f},"
+                     f"{r['q'].get('phys_sd', float('nan')):.6f},"
+                     f"{r['q'].get('n', 1)},{r['q_ref']:.6f},"
+                     f"{r['ratio']:.4f},{mp:.6f},"
+                     f"{r['q']['phys'] / mp:.4f}\n")
 
     print(f"  panels: {len(rows)}  ({', '.join(r['fold'] for r in rows)})")
     for r in rows:

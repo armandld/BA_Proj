@@ -215,11 +215,11 @@ heuristic would have deleted valid data.
 
 | item | state | consequence |
 |---|---|---|
-| **T22 unseen initial conditions** | single-run pass done (inconclusive); **repeated pass running** | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
-| **D13 removal** | not attempted | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode leak-free` is the entry point |
+| **T22 unseen initial conditions** | **done** (T22b: 5 draws x 2 conditions x 4 folds, 56 runs, 0 aborted) | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
+| **D13 removal** | **in progress** (`--mode leak-free`, Q-HAS at the fold's own classical threshold) | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode leak-free` is the entry point |
 | physics seeds | still **1 per class** | T20's 18 completed runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
-| **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
-| **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |
+| **T19 audit of `tearing`** | **done** | the only fold whose arms are unverified |
+| **T19 `--trace-only`** | **done**, figure re-rendered | `rotor`'s 2 aborted points are excluded from the plotted frontier, and the Q-HAS marker is now the mean of the repeated draws with its spread, not a single run |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |
 | 170 Optuna trials | not attempted (4 used) | Q-HAS deliberately under-tuned; declared, but "Q-HAS loses" is partly "Q-HAS was barely tuned" |
 | Hardware / noise | not attempted | audit judged it premature without a positive L3 |

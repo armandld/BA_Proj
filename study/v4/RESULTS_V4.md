@@ -966,6 +966,31 @@ classes span 1–3 decades, and since the compared quantity *is* a ratio, a
 log axis makes a given ratio span the same vertical distance in every panel.
 The full data, including excluded points, remains in the `.csv`.
 
+**(c) The Q-HAS marker is no longer a single draw.** It plotted
+`t15b["qhas"]`, one run of an unseeded arm, and annotated 2.57×, 4.41×,
+3.62×, 4.38× — the retracted ratios. Anyone comparing the figure with the
+corrected tables would have seen two different studies. It now plots the
+**mean of the completed repeated draws with x and y error bars**
+(`rotor`: 3 draws, its 2 aborted ones excluded), and falls back to the
+single draw only when no repeats exist — saying so in the legend.
+
+**The figure's ratio and the tables' ratio are different quantities.** The
+figure divides by the frontier *interpolated at the budget Q-HAS actually
+realised*; the tables divide by the budget-matched point T15b *measured*.
+They differ because T15b matched its threshold to one draw while the plotted
+point is a mean of five — on `ot`, budget 0.756 against 0.680, and the
+frontier is lower there:
+
+| fold | vs interpolated frontier (figure) | vs measured matched point (tables) |
+|---|---|---|
+| `ot` | 1.79× | 1.30× |
+| `kh` | 2.10× | 1.90× |
+| `rotor` | 2.49× | 2.74× |
+| `tearing` | 1.98× | 1.81× |
+
+Both are in `pareto_panel.csv` (`ratio` and `ratio_vs_matched`) so no reader
+has to guess which one a number came from.
+
 ---
 
 ## T20 — Q-HAS run-to-run variance on fold `kh` (D11 quantified)
