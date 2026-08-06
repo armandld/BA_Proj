@@ -1,7 +1,8 @@
 # Q-HAS V4 — hand-off for merge
 
 **Branch:** `claude/kind-babbage-927g10` · **Base:** `origin/main`
-**Scope:** 74 commits, 77 files, ~15 700 added lines.
+**Scope:** 199 commits, 186 files, ~23 000 added lines
+(76 files are tracked artifacts under `study/results/`).
 **The closed-loop study is closed** — see *CLOSING THE CLOSED-LOOP STUDY*
 at the end of `study/v4/RESULTS_V4.md` for the one-sentence result, the
 evidence ranked by strength, and what would overturn it.
@@ -19,7 +20,7 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 205 passed
+python -m pytest tests/v3 tests/v4 -q                              # 262 passed, 12 skipped
 python study/v4/t16_aggregate_v4.py                                # 100 rows, 0 DIFF, 0 MISSING
 ```
 
@@ -27,7 +28,7 @@ All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**205 pytests passed**, master table **100/100 OK, 0 DIFF, 0 MISSING**
+**262 pytests passed** (12 skipped), master table **100/100 OK, 0 DIFF, 0 MISSING**
 (all four Level-3 folds are now present, so nothing is outstanding in it).
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
@@ -116,7 +117,7 @@ reproduces exactly, so this row stands.
 
 ## 4. Defect register (D1–D13)
 
-Twelve claims that existing code is wrong. Full detail and per-defect
+Thirteen claims that existing code is wrong. Full detail and per-defect
 verification commands in `docs/v4_final_results_for_paper.md` §3 and
 `docs/CODE_REVIEW_GUIDE.md` §3.
 

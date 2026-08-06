@@ -1,6 +1,7 @@
 # How to review this branch efficiently
 
-73 commits, 76 files, ~15 500 added lines. Reading it front to back is the
+199 commits, 186 files, ~23 000 added lines (76 of those files are the
+tracked artifacts under `study/results/`). Reading it front to back is the
 wrong strategy. This guide orders the review by **risk per minute**: the
 checks that would change your conclusions come first, and each one is a
 command you can paste.
@@ -10,7 +11,7 @@ Budget: **~15 min** for the gate checks, **~90 min** for a serious review,
 
 ---
 
-## 0. Before anything: what is *not* in the repo
+## 0. Before anything: the artifacts are in the repo
 
 `study/results/` **is tracked** — 76 artifacts, 6.3 MB of `.json`/`.npz`.
 Every number quoted in the docs can therefore be recomputed from a fresh
@@ -46,16 +47,20 @@ command and it is the single most important check:
 ```bash
 BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                      # MUST be empty
-git diff --name-only $BASE HEAD -- study/ | grep -v '^study/v[34]/'   # MUST be empty
+git diff --name-only $BASE HEAD -- study/ \
+  | grep -v '^study/v[34]/' | grep -v '^study/results/'      # MUST be empty
 ```
 
-Both were empty at `966b26d`. Everything new lives in `study/v3/`,
-`study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`, `figures_v4/`, `logs/v4/`.
+Both are empty at HEAD. The second command **must** exclude
+`study/results/`: those are tracked artifacts, not V2 phase code, and
+without the exclusion it returns 76 files and looks like a guardrail
+breach. Everything new lives in `study/v3/`, `study/v4/`, `tests/v3/`,
+`tests/v4/`, `docs/`, `figures_v4/`, `logs/v4/`.
 
 ### 1b. The test gate
 
 ```bash
-python -m pytest tests/v3 tests/v4 -q      # expect 196 passed
+python -m pytest tests/v3 tests/v4 -q      # expect 262 passed, 12 skipped
 ```
 
 Note `bash run_tests.sh` (the V1 suite) **fails 8 tests on a clean
@@ -165,13 +170,22 @@ If you find a deviation I did *not* declare, that is a real finding.
 
 ## 6. What the conclusions rest on, and how to stress them
 
-The headline: **Q-HAS is Pareto-dominated on 4/4 folds at equal budget**
-(2.6×, 4.4×, 3.6×, 4.4× worse). Three ways to attack it:
+The headline is a **count over 20 runs**, not a ratio:
 
-1. **Sampling noise (D11).** Q-HAS is unseeded; two draws on `ot` gave phys
-   0.1345 and 0.1940. The direction survives (worst draw still 1.6× worse
-   than classical), but check `t20_qhas_run_variance.py` output for the
-   gap/σ ratio — under ~2 and a single run per arm proves nothing.
+> Q-HAS is less faithful than the budget-matched classical rule on
+> **19/20** runs, more expensive on **18/20**, strictly Pareto-dominated
+> on **17/20**.
+
+An earlier draft of this guide quoted per-fold ratios of 2.6×, 4.4×, 3.6×,
+4.4×. **Those are retracted**: each rested on a single draw of a
+non-deterministic arm and was inflated 1.1–2.2× relative to the 5-draw
+means. Do not quote per-fold magnitudes at all — gap/sd is below 2 on three
+folds of four. Three ways to attack the count:
+
+1. **Sampling noise (D11).** Q-HAS is unseeded. This is why the claim is a
+   count and not a magnitude. Check `t20_qhas_run_variance.py` for the
+   gap/σ ratio per fold — under ~2, a single run per arm proves nothing,
+   which is exactly what happened to the retracted ratios above.
 2. **Divergence (D12).** Verify the *matched* classical runs completed, not
    just the tuned ones. `rotor`'s matched point was separately confirmed
    clean and reproduced exactly.
@@ -209,8 +223,9 @@ Honest list of the weakest points, so you do not have to find them:
   under-optimised; this is declared, but it means "Q-HAS loses" is
   partly "Q-HAS was barely tuned". The budget-matched control mitigates
   this but does not remove it.
-- **T20 has not finished yet** at the time of writing, so the variance is
-  characterised from 2 draws on 2 folds, not a proper distribution.
+- **n = 5 draws per fold in T20**, which pins the direction but not the
+  magnitude. Only 1 fold of 4 is separable, and not the same fold across
+  passes.
 - **The `rotor` primary comparison is void**, not merely noisy. I report
   its budget-matched comparison instead and say so, but a stricter reading
   would drop the fold entirely.
