@@ -112,8 +112,16 @@ def main():
                                      label=f"variance/{args.fold}")
 
     hp_q = dict(rec["hyperparams"])
-    hp_c = dict(rec["hyperparams"])
-    hp_c.update(rec["classical_params"])
+    # Le CONTROLE classique doit tourner a un point de fonctionnement QUI
+    # TERMINE. Le seuil regle diverge sur `rotor` : les deux executions de
+    # controle avortaient, `c_ok` etait vide et la tache s'arretait sans
+    # rien sauvegarder — T20 ne pouvait donc structurellement pas aboutir
+    # sur ce fold. On prend le seuil budget-apparie, le meme que celui deja
+    # utilise comme valeur de reference.
+    from t19_arm_divergence_audit import safe_classical_hyperparams
+    hp_c, hp_c_src, _ = safe_classical_hyperparams(
+        rec, RESULTS_DIR, args.fold, always_matched=True)
+    print(f"  classical control runs at: {hp_c_src}", flush=True)
 
     t0 = time.time()
     def guarded(hp, only):

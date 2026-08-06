@@ -6,19 +6,3 @@
 Environnement Local detecte. Ecriture directe sur le disque.
 
 --- Pre-computing DNS traces for variance/rotor ---
-Hot-Start captured at t=0.2009
-DNS pre-computed: 975 steps, 15 flux snapshots stored.
---- DNS pre-computation complete (variance/rotor) ---
-
-/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
-  fig, ax = plt.subplots(figsize=(10, 9))
-  Q-HAS run 1/5: combined=0.2605 phys=0.2191 patch=0.3638
-  Q-HAS run 2/5: combined=0.1749 phys=0.0978 patch=0.3676
-  Q-HAS run 3/5: combined=0.5877 phys=0.6877 patch=0.3379   **ABORTED**
-  Q-HAS run 4/5: combined=0.1345 phys=0.0536 patch=0.3365
-  Q-HAS run 5/5: combined=0.3699 phys=0.4069 patch=0.2773   **ABORTED**
-  classical run 1/2: combined=0.9294 phys=1.1731
-  classical run 2/2: combined=0.9294 phys=1.1731
-
-  4 run(s) ABORTED — excluded from the statistics
-too few completed runs to summarise
