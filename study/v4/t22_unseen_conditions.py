@@ -292,7 +292,7 @@ def main():
     cfg_uns = unseen_config(cfg, scenario)
     KEYS = ("combined", "phys_score", "patch_ratio")
 
-    def repeat(hp, only, cfg_, dns_, n, tag):
+    def repeat(hp, only, cfg_, dns_, n, tag, on_run=None):
         """n executions, chacune verifiee CONTRE LA DIVERGENCE.
 
         Sans ce controle une trajectoire avortee se melange aux autres :
@@ -328,6 +328,12 @@ def main():
             print(f"    {tag} run {i + 1}/{n}: "
                   f"phys={ri['phys_score']:.5f} "
                   f"patch={ri['patch_ratio']:.4f}{tail}", flush=True)
+            # reprise apres CHAQUE execution, pas seulement en fin de
+            # condition : une execution coute ~7 min, une condition ~35, et
+            # le conteneur est recycle sans preavis. La granularite fine ne
+            # coute qu'une ecriture JSON.
+            if on_run is not None:
+                on_run(runs, i + 1, n)
         return runs
 
     op = os.path.join(RESULTS_DIR,
@@ -367,12 +373,20 @@ def main():
         # le bras classique ne comporte aucun echantillonnage (T20 : etendue
         # exactement nulle sur 8 rejeux), 2 executions suffisent en controle
         n = args.repeats if arm == "qhas" else min(2, args.repeats)
-        can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical")
-        out["arms"][arm] = {"status": "in_progress", "canonical_runs": can}
-        checkpoint(f"{arm}/canonical")
-        uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen")
+        out["arms"][arm] = {"status": "in_progress"}
+
+        def _tick(cond):
+            def cb(runs_so_far, k, total):
+                out["arms"][arm][f"{cond}_runs"] = list(runs_so_far)
+                checkpoint(f"{arm}/{cond} {k}/{total}")
+            return cb
+
+        can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical",
+                     on_run=_tick("canonical"))
+        out["arms"][arm]["canonical_runs"] = can
+        uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen",
+                     on_run=_tick("unseen"))
         out["arms"][arm]["unseen_runs"] = uns
-        checkpoint(f"{arm}/unseen")
         # une trajectoire avortee n'est pas un point de mesure : on la
         # compte et on l'exclut, jamais on ne la moyenne avec les autres
         can_ok = [r for r in can if r["completed"]]
