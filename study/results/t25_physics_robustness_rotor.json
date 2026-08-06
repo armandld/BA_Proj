@@ -1,0 +1,38 @@
+{
+ "fold": "rotor",
+ "scenario": "mhd_rotor",
+ "classical_reference_source": "budget-matched threshold 0.0969 (forced)",
+ "matched_threshold": 0.09687500000000002,
+ "conditions": [
+  {
+   "tag": "rotor_seed7",
+   "note": "canonical parameters, RNG seed 42 -> 7 (a TRUE seed change, the only one available anywhere in the suite)",
+   "is_ic_variation": true,
+   "is_true_seed_change": true,
+   "dns_signature": 92744.7370214499,
+   "dns_signature_canonical": 92742.66049605537,
+   "dns_relative_shift": 2.2390185739998374e-05,
+   "condition_is_weak": true,
+   "skipped_as_vacuous": true,
+   "qhas_worse": null,
+   "ratio_vs_frontier": null
+  }
+ ],
+ "status": "partial",
+ "partial_stage": "rotor_seed7",
+ "partial_warning": "INCOMPLETE \u2014 resume point, not a result",
+ "git_hash_at_start": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
+ "dirty_at_start": false,
+ "git_hash_at_save": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
+ "head_moved_during_run": false,
+ "git_hash": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
+ "cli_args": {
+  "fold": "rotor",
+  "repeats": 3,
+  "frontier_points": 3,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "no_resume": false,
+  "run_weak": false
+ }
+}
