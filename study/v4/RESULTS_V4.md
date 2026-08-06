@@ -1970,7 +1970,22 @@ function of the artifact and checking it mechanically**. Anything published
 as prose is unverified by construction.
 
 One aborted draw returned `phys = 0.4069` against valid draws of
-0.054–0.219: **contamination need not be visible in the values**. Any
+0.054–0.219: **contamination need not be visible in the values**.
+
+**And its direction cannot be bounded either.** On `ot` leak-free the three
+aborted draws returned 0.4311, 0.4239 and 0.4529 while the one draw that
+*completed* returned **0.6587** — the invalid runs looked **better** than
+the valid one. The mechanism is plain once seen: those runs stopped near
+step 930 of ~1136, so the trajectory had less time to depart from the DNS
+reference and accumulated less error. On `rotor` the opposite happened,
+because there the abort came *after* the fields blew up.
+
+So the tempting bounding argument — *"an aborted run scores badly, so
+including it is conservative"* — is **empirically false**. Contamination
+inflates the error when the blow-up is captured and deflates it when the
+run is merely truncated, and which one you get depends on where the guard
+fires. There is no safe direction to assume, which is why the status has to
+be captured at execution time rather than inferred from the value. Any
 closed-loop AMR study of this kind should record run completion status at
 execution time, because with a non-deterministic arm it cannot be recovered
 afterwards.
