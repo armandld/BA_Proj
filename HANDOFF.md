@@ -110,7 +110,10 @@ every cell above against `t20_qhas_run_variance_<fold>.json`.
 > Over 18 completed closed-loop runs, Q-HAS is less faithful than the
 > budget-matched classical rule on **18/18**, more expensive on **16/18**,
 > and strictly Pareto-dominated on **16/18**. No run reverses the ordering
-> on both coordinates at once.
+> on both coordinates at once. It aborts on **2 of 20** draws where the
+> classical arm aborts on **0 of 8** at that same point — and removing the
+> D13 leak, its one undue advantage, makes it **worse still** rather than
+> better (measured on 2 folds of 4).
 
 Quote it this way. The per-fold ratios (1.30–2.74×) are means of a quantity
 with 17–49 % CV, and **gap/sd is below 2 on three folds of four** — a single

@@ -1725,10 +1725,28 @@ covered by `t16_aggregate_v4.py` (143 rows, 0 DIFF; the 4 MISSING are the `ot`/`
 
 > Across four held-out instability classes, a Q-HAS closed loop is less
 > faithful than a plain threshold rule at matched compute on **18 of 18**
-> completed repeated runs, more expensive on **16 of 18**, strictly
-> Pareto-dominated on **16 of 18**, and it additionally destabilises the
-> solver on a fraction of
-> runs where the classical rule never does.
+> completed repeated runs, more expensive on **16 of 18**, and strictly
+> Pareto-dominated on **16 of 18**. At that same operating point it also
+> **aborts on 2 of 20 draws where the classical rule aborts on 0 of 8**.
+> And when the one advantage it holds — a decision threshold fitted on the
+> held-out class (**D13**) — is taken away, it does not recover: it gets
+> **worse still**, and on `rotor` it stops completing at all.
+
+Each clause is recomputed from its artifact by `t16_aggregate_v4.py`
+(rows `t23/*`, `t24/*`). None of it is transcribed.
+
+**Read the abort clause narrowly.** It says the classical arm did not
+abort *at the compared operating point*. It does abort elsewhere — T19
+records `rotor`'s tuned classical threshold diverging at step 208, and 2 of
+that fold's 6 bisection points. Divergence is a property of the threshold;
+both arms have thresholds that diverge. What is asymmetric is that at the
+point where they are compared, one arm completed and the other did not.
+
+**The D13 clause is measured on 2 folds of 4** (`rotor`, `tearing`), with
+`ot` and `kh` still running, and it is a *bound*: `--mode leak-free`
+substitutes the threshold without re-tuning the QAOA arm. The definitive
+version — `threshold_amr` back in the Optuna search space, excluded from
+the held-out class — is not attempted.
 
 ## What the closed loop establishes, by strength of evidence
 
