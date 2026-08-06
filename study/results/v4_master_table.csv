@@ -1,4 +1,4 @@
-# git_hash=f7cc776168739c32112e6ff99e7da91176ed6cbb
+# git_hash=aae07eb1dde6a81c10d187a3eef163b567933b98
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -51,26 +51,26 @@ t15b/ot,delta phys at equal budget,0.111336,0.111300,OK
 t15/kh,Q-HAS phys,0.007002,0.007000,OK
 t15/kh,classical phys,0.002020,0.002000,OK
 t15/kh,Q-HAS patch,0.837644,0.837600,OK
-t15b/kh,budget-matched classical phys,0.001681,,OK
-t15b/kh,budget-matched patch,0.794271,,OK
-t15b/kh,delta phys at equal budget,0.005321,,OK
-t15/rotor,Q-HAS phys,0.167772,,OK
-t15/rotor,classical phys,1.173099,,OK
-t15/rotor,Q-HAS patch,0.376105,,OK
-t15b/rotor,budget-matched classical phys,0.053645,,OK
-t15b/rotor,budget-matched patch,0.356199,,OK
-t15b/rotor,delta phys at equal budget,0.114127,,OK
-t15/tearing,Q-HAS phys,0.018542,,OK
-t15/tearing,classical phys,0.004429,,OK
-t15/tearing,Q-HAS patch,0.769192,,OK
-t15b/tearing,budget-matched classical phys,0.004429,,OK
-t15b/tearing,budget-matched patch,0.625000,,OK
-t15b/tearing,delta phys at equal budget,0.014113,,OK
-t15c,folds completed,4.000000,,OK
-t15c,folds where Q-HAS better (combined),2.000000,,OK
-t15c,budget-matched folds,4.000000,,OK
-t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,,OK
-t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,,OK
+t15b/kh,budget-matched classical phys,0.001681,0.001700,OK
+t15b/kh,budget-matched patch,0.794271,0.794300,OK
+t15b/kh,delta phys at equal budget,0.005321,0.005300,OK
+t15/rotor,Q-HAS phys,0.167772,0.167800,OK
+t15/rotor,classical phys,1.173099,1.173100,OK
+t15/rotor,Q-HAS patch,0.376105,0.376100,OK
+t15b/rotor,budget-matched classical phys,0.053645,0.053600,OK
+t15b/rotor,budget-matched patch,0.356199,0.356200,OK
+t15b/rotor,delta phys at equal budget,0.114127,0.114100,OK
+t15/tearing,Q-HAS phys,0.018542,0.018500,OK
+t15/tearing,classical phys,0.004429,0.004400,OK
+t15/tearing,Q-HAS patch,0.769192,0.769200,OK
+t15b/tearing,budget-matched classical phys,0.004429,0.004400,OK
+t15b/tearing,budget-matched patch,0.625000,0.625000,OK
+t15b/tearing,delta phys at equal budget,0.014113,0.014100,OK
+t15c,folds completed,4.000000,4.000000,OK
+t15c,folds where Q-HAS better (combined),2.000000,2.000000,OK
+t15c,budget-matched folds,4.000000,4.000000,OK
+t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,4.000000,OK
+t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,0.061200,OK
 t17,ZZ mass kept (kelvin_helmholtz; level3_trained),0.114230,0.114200,OK
 t17,ZZ mass kept (harris_tearing; level3_trained),0.001990,0.001990,OK
 t17,ZZ mass kept (mhd_rotor; level3_trained),0.000395,0.000395,OK

@@ -60,7 +60,7 @@ breach. Everything new lives in `study/v3/`, `study/v4/`, `tests/v3/`,
 ### 1b. The test gate
 
 ```bash
-python -m pytest tests/v3 tests/v4 -q      # expect 298 passed, 20 skipped
+python -m pytest tests/v3 tests/v4 -q      # expect 301 passed, 20 skipped
 ```
 
 Note `bash run_tests.sh` (the V1 suite) **fails 8 tests on a clean

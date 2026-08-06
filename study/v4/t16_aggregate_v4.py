@@ -209,7 +209,19 @@ def rows_level3(results_dir, folds, prefix="t15_level3"):
                    qhas_patch=0.6797, matched_phys=0.0827,
                    matched_patch=0.6412, delta_matched=0.1113),
         "kh": dict(qhas_phys=0.0070, classical_phys=0.0020,
-                   qhas_patch=0.8376),
+                   qhas_patch=0.8376, matched_phys=0.0017,
+                   matched_patch=0.7943, delta_matched=0.0053),
+        # `rotor` et `tearing` n'avaient AUCUNE reference : leurs lignes
+        # passaient donc quoi qu'il arrive. Elles sont figees ici. Le
+        # 1.1731 de `rotor` est la valeur du bras classique REGLE, qui a
+        # AVORTE (T19) : on l'epingle pour qu'elle ne bouge pas en silence,
+        # pas parce qu'elle serait un point de mesure.
+        "rotor": dict(qhas_phys=0.1678, classical_phys=1.1731,
+                      qhas_patch=0.3761, matched_phys=0.0536,
+                      matched_patch=0.3562, delta_matched=0.1141),
+        "tearing": dict(qhas_phys=0.0185, classical_phys=0.0044,
+                        qhas_patch=0.7692, matched_phys=0.0044,
+                        matched_patch=0.6250, delta_matched=0.0141),
     }
     out = []
     for f in folds:
@@ -542,19 +554,26 @@ def rows_t15c(results_dir, folds):
 
     pri = primary_analysis(recs)
     sec = secondary_analysis(recs)
+    # Ces lignes n'avaient AUCUNE reference : elles passaient donc quoi
+    # qu'il arrive, y compris « 4/4 folds domines », qui est la forme sous
+    # laquelle la revendication E circule. Une ligne sans reference n'est
+    # pas un controle, c'est un affichage.
     out = [
-        make_row("t15c", "folds completed", float(pri["n_folds"]), None),
+        make_row("t15c", "folds completed", float(pri["n_folds"]),
+                 4.0, tol=0.5),
         make_row("t15c", "folds where Q-HAS better (combined)",
-                 float(pri["n_qhas_better"]), None),
+                 float(pri["n_qhas_better"]), 2.0, tol=0.5),
         make_row("t15c", "budget-matched folds",
-                 float(sec["n_folds"]), None),
+                 float(sec["n_folds"]), 4.0, tol=0.5),
         make_row("t15c", "folds where Q-HAS Pareto-dominated "
-                 "at equal budget", float(sec["n_qhas_dominated"]), None),
+                 "at equal budget", float(sec["n_qhas_dominated"]),
+                 4.0, tol=0.5),
     ]
     if sec["n_folds"]:
         out.append(make_row("t15c", "mean delta phys at equal budget "
                             "(>0 = Q-HAS worse)",
-                            sec["mean_delta_phys_matched"], None))
+                            sec["mean_delta_phys_matched"], 0.0612,
+                            tol=0.001))
     return out
 
 
