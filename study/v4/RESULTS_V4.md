@@ -1372,8 +1372,20 @@ on":
 1. a leak does exist (**D13**) — the QAOA arm's threshold was fitted on all
    four classes including the held-out one — and it **favours Q-HAS**;
 2. the initial condition was never new, which T22 fixes;
-3. and facing genuinely unseen conditions, Q-HAS still does not transfer
-   better — it stays dominated.
+3. and facing genuinely unseen conditions, Q-HAS remains **strictly
+   dominated on 18 of 20 runs** — less faithful *and* more expensive.
+
+On the third point, be precise about what is and is not claimed. Q-HAS's
+*relative* degradation is smaller than the classical arm's on the one fold
+where the difference is separable (`tearing`, 0.166 against 0.389, |z| =
+3.45). That is a real observation and it is **not** evidence that Q-HAS
+transfers better: it degrades less from a starting point that was already
+worse, and it is still dominated on both coordinates on 5/5 of that fold's
+unseen runs. T22d tests the obvious alternative explanation — that both arms
+are approaching a common attainable floor — and that confound is not
+resolved. So the honest statement is *"Q-HAS is not shown to transfer
+better, and remains dominated in absolute terms"*, not *"Q-HAS transfers
+worse"*.
 
 So the conclusion does not rest on the leak: Q-HAS loses **despite** an
 undue advantage, and loses again on conditions it has never met.
