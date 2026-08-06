@@ -23,3 +23,64 @@ DNS pre-computed: 1123 steps, 14 flux snapshots stored.
   DNS signature canonical=1.458888e+05  unseen=1.454737e+05
   relative shift: 0.2846%
   WARNING: the unseen condition shifts the trajectory by only 0.2846% (< 1%). This fold's transfer test is NEARLY VACUOUS and must be reported as such.
+    [qhas] canonical run 1/5: phys=0.43111 patch=0.2768   **ABORTED step 955**
+    [checkpoint] partial state saved after qhas/canonical 1/5
+    [qhas] canonical run 2/5: phys=0.42390 patch=0.2817   **ABORTED step 928**
+    [checkpoint] partial state saved after qhas/canonical 2/5
+    [qhas] canonical run 3/5: phys=0.45290 patch=0.2630   **ABORTED step 918**
+    [checkpoint] partial state saved after qhas/canonical 3/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] canonical run 4/5: phys=0.65871 patch=0.2878
+    [checkpoint] partial state saved after qhas/canonical 4/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] canonical run 5/5: phys=0.53951 patch=0.2495
+    [checkpoint] partial state saved after qhas/canonical 5/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] unseen run 1/5: phys=0.45990 patch=0.2345
+    [checkpoint] partial state saved after qhas/unseen 1/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] unseen run 2/5: phys=0.67744 patch=0.3150   **ABORTED step 1092**
+    [checkpoint] partial state saved after qhas/unseen 2/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] unseen run 3/5: phys=0.45174 patch=0.3135
+    [checkpoint] partial state saved after qhas/unseen 3/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] unseen run 4/5: phys=0.70073 patch=0.2599   **ABORTED step 1096**
+    [checkpoint] partial state saved after qhas/unseen 4/5
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] unseen run 5/5: phys=0.60050 patch=0.2492
+    [checkpoint] partial state saved after qhas/unseen 5/5
+    [qhas] 5 run(s) ABORTED, excluded from stats
+  [qhas] canonical phys=0.59911+-0.08429  unseen phys=0.50405+-0.08363  degradation x0.84
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [classical] canonical run 1/2: phys=0.08270 patch=0.6412
+    [checkpoint] partial state saved after classical/canonical 1/2
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [classical] canonical run 2/2: phys=0.08270 patch=0.6412
+    [checkpoint] partial state saved after classical/canonical 2/2
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [classical] unseen run 1/2: phys=0.07823 patch=0.6699
+    [checkpoint] partial state saved after classical/unseen 1/2
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [classical] unseen run 2/2: phys=0.07823 patch=0.6699
+    [checkpoint] partial state saved after classical/unseen 2/2
+  [classical] canonical phys=0.08270+-0.00000  unseen phys=0.07823+-0.00000  degradation x0.95
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.84  classical x0.95
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_leak-free_ot.json (6656s)
+
+V4 Task 22 complete.

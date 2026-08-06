@@ -509,6 +509,8 @@ def rows_t24(results_dir, folds):
         "rotor": {"canonical": dict(n_ok=0.0), "unseen": dict(phys=0.8535)},
         "kh": {"canonical": dict(phys=0.0274, ratio=1.8649),
                "unseen": dict(phys=0.1327, ratio=4.4733)},
+        "ot": {"canonical": dict(phys=0.5991, ratio=1.6352),
+               "unseen": dict(phys=0.5041, ratio=1.3661)},
     }
     out = []
     for f in folds:

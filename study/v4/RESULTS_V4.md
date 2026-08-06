@@ -1668,7 +1668,7 @@ frontier interpolated at the budget Q-HAS actually realised**, and T24
 **refuses to interpolate outside the swept range** rather than let
 `np.interp` return an edge value that looks like a measurement.
 
-### Results, 3 folds of 4 so far
+### Results, all 4 folds
 
 | fold | condition | Q-HAS budget | Q-HAS phys | classical frontier at that budget | ratio |
 |---|---|---|---|---|---|
@@ -1678,6 +1678,28 @@ frontier interpolated at the budget Q-HAS actually realised**, and T24
 | `tearing` | unseen | 0.4232 | 2.5600 | 1.5100 | **1.7×** |
 | `kh` | canonical | 0.5513 | 0.02745 | 0.01472 | **1.9×** |
 | `kh` | unseen | 0.4646 | 0.13272 | 0.02967 | **4.5×** |
+| `ot` | canonical (n=2/5) | 0.2686 | 0.59911 | 0.36638 | **1.6×** |
+| `ot` | unseen (n=3/5) | 0.2657 | 0.50405 | 0.36895 | **1.4×** |
+
+**Every fold with a computable ratio puts Q-HAS above the classical
+frontier at its own realised budget — 3 of 3, with `rotor` unmeasurable
+because it has no operating point at all.**
+
+### Aborts: the sharpest number in the campaign
+
+| fold | Q-HAS aborted | classical aborted |
+|---|---|---|
+| `rotor` | **7 / 10** | 0 / 4 |
+| `ot` | **5 / 10** | 0 / 4 |
+| `kh` | 0 / 10 | 0 / 4 |
+| `tearing` | 0 / 10 | 0 / 4 |
+| **total** | **12 / 40 (30 %)** | **0 / 16** |
+
+Removing the leak costs Q-HAS **30 % of its runs outright**, concentrated
+on two folds of four, while the classical arm at its budget-matched
+threshold completes every single draw. On `ot` the two arms are visible
+side by side: the classical control completes 2/2 deterministically at
+budget 0.64, Q-HAS aborts 3/5 and spends 0.27 on the draws that survive.
 
 **Removing the leak makes Q-HAS dramatically worse, and on one fold
 inoperable.**
@@ -1726,8 +1748,26 @@ against them.
 Under the leak, `kh` was one of the folds where Q-HAS degraded *less* than
 the classical rule on an unseen initial condition. Leak-free it degrades
 **3.5× more**. Together with `tearing` (×0.685 against ×0.389, also
-reversed) that is **every fold measured so far reversing in the same
+reversed) that is **both informative folds reversing in the same
 direction** once the leaked threshold is removed.
+
+### The full transfer picture, including the fold that goes the other way
+
+| fold | Q-HAS degradation | classical | Q-HAS worse? | reading |
+|---|---|---|---|---|
+| `kh` | ×4.835 | ×1.364 | **yes** | reversal |
+| `tearing` | ×0.685 | ×0.389 | **yes** | reversal |
+| `rotor` | undefined | ×0.526 | — | no operating point |
+| `ot` | ×0.841 | ×0.946 | no | **vacuous by construction** |
+
+**`ot` goes the other way and I am not counting it — as pre-registered
+above, before the number existed.** Its "unseen" condition shifts the
+trajectory by 0.2846 %, so both arms barely move (×0.84 and ×0.95, i.e.
+nothing happened to either). That is the outcome the pre-registration
+anticipated for a vacuous condition, and the commitment cuts both ways:
+this fold was excluded from supporting the reversal, so it cannot now be
+admitted to undermine it. The reversal claim rests on `kh` and `tearing`
+— **2 of 2 informative folds**, not 4 of 4.
 
 **Run-to-run spread widens too.** `kh`'s leak-free draws give CV 26.3 %
 canonical and **64.7 %** unseen, against the 17–49 % band T20 measured for
@@ -1817,7 +1857,7 @@ numbers (`t24/*` rows).
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (145 rows, 0 DIFF; the 2 MISSING are the `ot` leak-free run, still in flight).
+covered by `t16_aggregate_v4.py` (**147 rows, 147 OK, 0 DIFF, 0 MISSING**).
 
 ## The one-sentence result
 
@@ -1828,8 +1868,9 @@ covered by `t16_aggregate_v4.py` (145 rows, 0 DIFF; the 2 MISSING are the `ot` l
 > **aborts on 2 of 20 draws where the classical rule aborts on 0 of 8**.
 > And when the one undue advantage that *can* be taken away — a decision
 > threshold fitted on the held-out class (**D13**) — is removed, it does not
-> recover: it gets
-> **worse still**, and on `rotor` it stops completing at all.
+> recover: it gets **worse still** on every fold where a comparison is
+> possible, and **12 of its 40 leak-free draws fail to complete a
+> trajectory at all**, against 0 of 16 for the classical arm.
 
 Each clause is recomputed from its artifact by `t16_aggregate_v4.py`
 (rows `t23/*`, `t24/*`). None of it is transcribed.
@@ -1841,11 +1882,14 @@ that fold's 6 bisection points. Divergence is a property of the threshold;
 both arms have thresholds that diverge. What is asymmetric is that at the
 point where they are compared, one arm completed and the other did not.
 
-**The D13 clause is measured on 3 folds of 4** (`rotor`, `tearing`, `kh`), with
-`ot` still running, and it is a *bound*: `--mode leak-free`
-substitutes the threshold without re-tuning the QAOA arm. The definitive
-version — `threshold_amr` back in the Optuna search space, excluded from
-the held-out class — is not attempted.
+**The D13 clause is measured on all 4 folds**, and it is a *bound*:
+`--mode leak-free` substitutes the threshold without re-tuning the QAOA
+arm. The definitive version — `threshold_amr` back in the Optuna search
+space, excluded from the held-out class — is not attempted. What the bound
+says: Q-HAS above the classical frontier at its own realised budget on
+**3 of 3 measurable folds** (1.6×, 1.9×, 2.1× canonical), **no operating
+point at all** on the fourth, and **12 of 40 draws aborting against 0 of
+16** for the classical arm.
 
 ## What the closed loop establishes, by strength of evidence
 

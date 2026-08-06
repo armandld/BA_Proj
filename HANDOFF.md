@@ -20,17 +20,15 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 303 passed, 20 skipped
-python study/v4/t16_aggregate_v4.py                                # 145 rows, 0 DIFF (2 MISSING = ot leak-free, in flight)
+python -m pytest tests/v3 tests/v4 -q                              # 312 passed, 14 skipped
+python study/v4/t16_aggregate_v4.py                                # 147 rows, 0 DIFF, 0 MISSING
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**303 pytests passed** (20 skipped), master table **143 OK, 0 DIFF, 2
-MISSING**. All four Level-3 folds are present; the 2 MISSING rows are the
-`ot` leak-free run, still in flight when this was written.
+**312 pytests passed** (14 skipped), master table **147/147 OK, 0 DIFF, 0 MISSING** — nothing outstanding.
 `MISSING` means "not produced yet", never "produced and lost".
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
@@ -40,7 +38,7 @@ Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 commands above were re-run in a detached worktree of the *pushed* branch
 (`git worktree add --detach <dir> origin/claude/kind-babbage-927g10`) and
 all four reproduce there: `src/` 0 files, V2 phase code 0 files, nothing
-outside the allowed directories, 303 tests, 143 rows / 0 DIFF. That is the
+outside the allowed directories, 312 tests, 147 rows / 0 DIFF. That is the
 form of the check worth trusting — a working tree can pass while the
 branch does not.
 
@@ -64,7 +62,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 145 rows.
+Markdown. It prints `0 DIFF` over 147 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
@@ -121,7 +119,7 @@ every cell above against `t20_qhas_run_variance_<fold>.json`.
 > on both coordinates at once. It aborts on **2 of 20** draws where the
 > classical arm aborts on **0 of 8** at that same point — and removing the
 > D13 leak, its one undue advantage, makes it **worse still** rather than
-> better (measured on 3 folds of 4, every one reversing in the same direction).
+> better (all 4 folds; 12/40 draws abort against 0/16 classical).
 
 Quote it this way. The per-fold ratios (1.30–2.74×) are means of a quantity
 with 17–49 % CV, and **gap/sd is below 2 on three folds of four** — a single
@@ -233,7 +231,7 @@ heuristic would have deleted valid data.
 | item | state | consequence |
 |---|---|---|
 | **T22 unseen initial conditions** | **done** (T22b: 5 draws x 2 conditions x 4 folds, 56 runs, 0 aborted) | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
-| **D13 removal** | **partially done**: `--mode leak-free` measured on `rotor`, `tearing` and `kh` (`ot` running). Leak-free, Q-HAS is 2.1× worse than the classical frontier at its own budget on `tearing`, 1.9x/4.5x on `kh`, and aborts on 5/5 canonical draws on `rotor` — the leak was propping it up | the *definitive* version still requires re-tuning the QAOA arm with `threshold_amr` in its Optuna search space on the training classes. `t24_leak_free_summary.py` reports what is measured |
+| **D13 removal** | **partially done**: **done, all 4 folds**. Leak-free, Q-HAS is 2.1× worse than the classical frontier at its own budget on `tearing`, 1.9x/4.5x on `kh`, and aborts on 5/5 canonical draws on `rotor` — the leak was propping it up | the *definitive* version still requires re-tuning the QAOA arm with `threshold_amr` in its Optuna search space on the training classes. `t24_leak_free_summary.py` reports what is measured |
 | physics seeds | still **1 per class** | T20's 18 completed runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
 | **T19 audit of `tearing`** | **done** | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | **done**, figure re-rendered | `rotor`'s 2 aborted points are excluded from the plotted frontier, and the Q-HAS marker is now the mean of the repeated draws with its spread, not a single run |
