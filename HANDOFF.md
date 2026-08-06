@@ -39,19 +39,24 @@ touching `src/`/`tests/`, before any of this work).
 
 ---
 
-## 2. Before the container dies: rescue the artifacts
+## 2. The artifacts are in the repo
 
-`study/results/` is **gitignored** — 65 artifacts, ~100 MB. Every number in
-these documents lives **only on this container**, which has already been
-reclaimed seven times. The repo has the code that regenerates them and the
-values transcribed into Markdown, but a fresh clone can verify nothing.
+`study/results/` **is tracked** — 76 artifacts, 6.3 MB of `.json`/`.npz`.
+Every number in these documents is reproducible from a fresh clone. Earlier
+drafts of this file said the opposite, because the directory was gitignored
+for most of the campaign and the container has been reclaimed eight times;
+un-ignoring it is what removed that dependency.
 
-`study/v4/t16_aggregate_v4.py` is the only transcription cross-check: it
+Only `study/results/dns_*_N256.npz` stays out — 4 files, 94 MB of DNS
+reference snapshots. They are **inputs**, not results, and the solver is
+deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
+
+`study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It printed `0 DIFF`.
+Markdown. It prints `0 DIFF` over 100 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
-Expensive (hours): the Level-3 campaign.
+Expensive (hours): the Level-3 campaign, T20, T22.
 
 ---
 
@@ -201,7 +206,7 @@ heuristic would have deleted valid data.
 | item | state | consequence |
 |---|---|---|
 | **T22 unseen initial conditions** | single-run pass done (inconclusive); **repeated pass running** | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
-| **D13 removal** | not attempted | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode no-leak` is the entry point |
+| **D13 removal** | not attempted | requires re-tuning the QAOA arm with `threshold_amr` in its search space so both arms optimise the same free parameters. `t22 --mode leak-free` is the entry point |
 | physics seeds | still **1 per class** | T20's 20 runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
 | **T19 audit of `tearing`** | running | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | running | diverged points still plotted on the "attainable frontier" in `figures_v4/pareto_panel.*`. **Re-render before using the figure in the paper** |

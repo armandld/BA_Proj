@@ -1566,7 +1566,7 @@ it loses anyway.
 
 ## What would overturn it
 
-- removing D13 (`t22 --mode no-leak`) and finding Q-HAS wins;
+- removing D13 (`t22 --mode leak-free`) and finding Q-HAS wins;
 - ≥ 3 physics seeds per fold showing the direction is seed-specific;
 - the full 170-trial Optuna budget lifting Q-HAS above the matched classical;
 - counting decision cost, which would only make the result stronger.
@@ -1582,12 +1582,31 @@ it loses anyway.
 
 ## The methodological finding, stated for the manuscript
 
-Seven distinct instances of one failure mode were found and fixed: **a
-computation that fails but returns a value indistinguishable from a valid
-one** — V1's divergence guard returning a partial score with identical keys
-(4×), and fixed output filenames silently overwriting prior results (3×).
-Three of the seven were in the verification code written to catch the
-others. One aborted draw returned `phys = 0.4069` against valid draws of
+Twelve distinct instances of one failure mode were found and fixed: **a
+computation that fails, or does not do what it says, but returns a value
+indistinguishable from a valid one**:
+
+| form | count | where |
+|---|---|---|
+| V1's divergence guard returns a partial score with identical keys | 4× | T15, T20, T22 (×2) |
+| a fixed output filename silently overwrites the prior result | 6× | T13 mappers, T19 folds, T20 pass, then T11, T11b, T12 (`--mapper` absent from the name) |
+| an aggregation averaging aborted draws with valid ones | 1× | T16 |
+| a CLI mode accepted and documented but never implemented | 1× | `--mode no-leak`: only the filename changed |
+
+**Four of the twelve were in the verification code written to catch the
+others**, and three more were found only by `tests/v4/test_silent_failure_sweep.py`,
+which sweeps the mechanically checkable forms. Searching as you go is
+demonstrably not enough.
+
+A thirteenth defect is the *mirror* of the motif rather than an instance of
+it: a genuine outcome made **indistinguishable from a run never launched**.
+When every Q-HAS draw aborted at the leak-free operating point on `rotor`,
+the guard raised `SystemExit` before writing any artifact — and it exited on
+the first arm, leaving unmeasured the one question that mattered (does the
+classical rule survive at that same threshold?). Recorded now as
+`status = "total_abort"` with an undefined ratio.
+
+One aborted draw returned `phys = 0.4069` against valid draws of
 0.054–0.219: **contamination need not be visible in the values**. Any
 closed-loop AMR study of this kind should record run completion status at
 execution time, because with a non-deterministic arm it cannot be recovered

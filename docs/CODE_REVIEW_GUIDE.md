@@ -12,23 +12,27 @@ Budget: **~15 min** for the gate checks, **~90 min** for a serious review,
 
 ## 0. Before anything: what is *not* in the repo
 
-`study/results/` is **gitignored** — 65 artifacts, ~100 MB of `.npz`/`.json`.
-**Every number quoted in the docs lives only on the machine that produced
-it.** The repo contains the code that generates them and the values
-transcribed into Markdown, but you cannot verify a single figure from a
-fresh clone without re-running.
+`study/results/` **is tracked** — 76 artifacts, 6.3 MB of `.json`/`.npz`.
+Every number quoted in the docs can therefore be recomputed from a fresh
+clone. This was not always so: the directory was gitignored for most of the
+campaign, and the guide said the numbers lived only on the producing
+machine. That is no longer true and the change matters for how you review.
+
+The only exclusion is `study/results/dns_*_N256.npz` — 4 files, 94 MB, the
+DNS reference snapshots. They are **inputs**, not results: the solver is
+deterministic, so `study/v4/t15_level3_closed_loop.py` regenerates them
+byte-identically (a few minutes each).
 
 Consequences for your review:
 
-- treat the numbers in `RESULTS_V4.md` as **claims to spot-check**, not as
-  data you can diff;
-- the one mechanism that cross-checks transcription is
-  `study/v4/t16_aggregate_v4.py`, which recomputes every headline number
-  from the artifacts and compares it to the value published in
-  `RESULTS_V4.md`. On the producing machine it must print `0 DIFF`;
-- if you want the artifacts, copy `study/results/` off the container before
-  it is reclaimed, or re-run the cheap tasks (T11–T14, T17, T18 are
-  seconds-to-minutes; Level 3 is hours).
+- the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
+  `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
+  number from the artifacts and compares it to the published value. It must
+  print `0 DIFF` (100 rows at the time of writing);
+- a `MISSING` row means the artifact was never produced, not that it was
+  lost — the tracked set is the complete set;
+- everything except Level 3 re-runs in seconds to minutes (T11–T14, T17,
+  T18); Level 3 and T20/T22 are hours.
 
 ---
 
@@ -75,7 +79,7 @@ You will understand 80 % of the work from these:
 
 | # | file | why |
 |---|---|---|
-| 1 | `docs/v4_final_results_for_paper.md` | the whole argument, claims A–G, defect register D1–D12. **Start here.** |
+| 1 | `docs/v4_final_results_for_paper.md` | the whole argument, claims A–G, defect register D1–D13. **Start here.** |
 | 2 | `docs/level3_preregistration.md` | the decision rules, frozen *before* Level 3 ran. Check §4 against what §5 of this guide says I actually did |
 | 3 | `study/v4/t15c_fold_synthesis.py` | applies those rules; ~360 lines; where a bent rule would hide |
 | 4 | `study/v4/t19_arm_divergence_audit.py` | the catch that changed the conclusions (see §3) |
@@ -85,7 +89,7 @@ You will understand 80 % of the work from these:
 
 ## 3. Review the *accusations* hardest (~20 min)
 
-Twelve defects (D1–D12) are claims that existing code is wrong. Those are
+Thirteen defects (D1–D13) are claims that existing code is wrong. Those are
 the most damaging things here if any is mistaken. Each is independently
 checkable in a couple of minutes — verify these before trusting anything
 downstream of them:
