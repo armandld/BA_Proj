@@ -1695,6 +1695,26 @@ inoperable.**
   frontier at its own budget on the canonical condition and **4.5×** on the
   unseen one.
 
+### What `ot` can and cannot contribute, decided before it lands
+
+`ot` is running. Its two halves are **not** equally informative, and that
+is fixed by the physics, not by the result:
+
+- its **canonical** half is fully informative — it asks whether Q-HAS
+  survives its own fold's leak-free threshold, exactly as on the other
+  three;
+- its **unseen** half is **nearly vacuous** and must be reported as such.
+  `init_orszag_tang()` takes no parameters, so the only available unseen
+  condition is a different Reynolds number, which shifts the hot-start
+  trajectory by **0.2846 %** — 20–50× less than the other three folds.
+  `t22` emits the warning at run time and records
+  `unseen_condition_is_weak`.
+
+Stating this now, before the number exists, so that whichever way it falls
+it cannot be recruited as a transfer result. If `ot` shows a reversal it
+adds nothing to the 3/3 above; if it shows none, that is not evidence
+against them.
+
 ### `kh` also carries the sharpest transfer reversal
 
 | | leaked | leak-free |
