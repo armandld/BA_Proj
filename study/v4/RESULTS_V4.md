@@ -1712,7 +1712,21 @@ the leak, `tearing` was the single separable fold and Q-HAS degraded *less*
 against the classical arm's ×0.389** — Q-HAS now degrades *more*. The
 apparent transfer advantage was an artefact of the leaked threshold.
 
-`ot` and `kh` are running; this entry will be completed with them.
+### Why only 2 folds so far, stated rather than left to be inferred
+
+`ot` and `kh` are the two most expensive folds (T20 spent 3402 s and
+3046 s on them respectively, against 2735 s for `rotor`). A leak-free run
+is 14 simulations, and this container is reclaimed roughly every 1.5 h —
+the campaign has now lost these two folds to reclamation **three times**,
+twice as a pair sharing 4 CPUs and once mid-DNS. They are being run one at
+a time instead. If they land, this entry gets two more rows; if they do
+not, the finding stands on `rotor` and `tearing` and **the sample size is
+2 of 4, not 4 of 4**, which is why the closing section says so explicitly.
+
+Nothing about the two completed folds changes either way: they were run to
+completion with the abort status captured per draw, and `t16` checks their
+numbers (`t24/*` rows).
+
 
 ---
 
