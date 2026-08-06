@@ -70,6 +70,15 @@ def analyse(results_dir, fold):
     if not os.path.exists(p):
         return None
     d = json.load(open(p))
+    # Un point de reprise n'est PAS un resultat. Ses moyennes portent sur
+    # les tirages faits jusque-la et n'ont aucune validite. Les lire comme
+    # les autres serait le motif de la campagne introduit par la mesure
+    # censee l'eviter.
+    if d.get("status") == "partial":
+        return {"fold": fold, "status": "partial",
+                "partial_stage": d.get("partial_stage"),
+                "qaoa_threshold": None, "classical_threshold": None,
+                "thresholds_match": None, "conditions": {}}
     fr = frontier(results_dir, fold)
     out = {
         "fold": fold,
@@ -147,6 +156,15 @@ def main():
     print("  budget-matched threshold. THESE DIFFER — the comparison that")
     print("  controls for budget is against the T15b frontier interpolated")
     print("  at the budget Q-HAS actually realised.\n")
+
+    partial = [r for r in rows if r.get("status") == "partial"]
+    rows = [r for r in rows if r.get("status") != "partial"]
+    for r in partial:
+        print(f"  {r['fold']}: INCOMPLETE (checkpoint after "
+              f"{r['partial_stage']}) — not analysed; the run was "
+              f"interrupted and its partial means are not results")
+    if not rows:
+        raise SystemExit("no COMPLETE leak-free artifact yet")
 
     for r in rows:
         qt = ("%.4f" % r["qaoa_threshold"] if r["qaoa_threshold"] is not None

@@ -109,3 +109,39 @@ def test_summary_script_declares_it_is_only_a_bound():
     src = open(os.path.join(V4, "t24_leak_free_summary.py"),
                encoding="utf-8").read()
     assert "BORNE" in src and "Optuna" in src
+
+
+def test_partial_checkpoints_are_never_analysed():
+    """Un point de reprise ne doit jamais etre lu comme un resultat.
+
+    Les executions leak-free durent plus longtemps que la duree de vie du
+    conteneur, d'ou l'ecriture d'un etat partiel apres chaque condition.
+    Cette mesure de sauvegarde INTRODUIRAIT le motif de la campagne si un
+    artefact partiel etait indiscernable d'un artefact complet : ses
+    moyennes portent sur les tirages faits jusque-la."""
+    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+               encoding="utf-8").read()
+    assert '"partial"' in src and "partial_warning" in src, (
+        "t22 ecrit des points de reprise sans les marquer")
+    for consumer in ("t24_leak_free_summary.py", "t22c_transfer_summary.py"):
+        cs = open(os.path.join(V4, consumer), encoding="utf-8").read()
+        assert '== "partial"' in cs, (
+            f"{consumer} ne filtre pas les artefacts partiels — il "
+            f"publierait des moyennes sur une execution interrompue")
+
+
+def test_a_partial_record_is_rejected_by_the_summary(tmp_path):
+    """Verification fonctionnelle, pas seulement textuelle."""
+    import json as _json
+    import t24_leak_free_summary as t24
+    d = tmp_path / "res"
+    d.mkdir()
+    (d / "t22_unseen_leak-free_kh.json").write_text(_json.dumps({
+        "fold": "kh", "status": "partial", "partial_stage": "qhas/canonical",
+        "arms": {"qhas": {"canonical_runs": [
+            {"phys_score": 1.0, "patch_ratio": 0.5, "completed": True}]}},
+    }))
+    r = t24.analyse(str(d), "kh")
+    assert r["status"] == "partial"
+    assert r["conditions"] == {}, (
+        "un enregistrement partiel a produit des statistiques de condition")

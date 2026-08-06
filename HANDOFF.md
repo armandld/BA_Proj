@@ -20,7 +20,7 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 301 passed, 20 skipped
+python -m pytest tests/v3 tests/v4 -q                              # 303 passed, 20 skipped
 python study/v4/t16_aggregate_v4.py                                # 143 rows, 0 DIFF (4 MISSING = ot/kh leak-free, in flight)
 ```
 
@@ -28,7 +28,7 @@ All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**301 pytests passed** (20 skipped), master table **139 OK, 0 DIFF, 4
+**303 pytests passed** (20 skipped), master table **139 OK, 0 DIFF, 4
 MISSING**. All four Level-3 folds are present; the 4 MISSING rows are the
 `ot`/`kh` leak-free runs, which were still in flight when this was written.
 `MISSING` means "not produced yet", never "produced and lost".
@@ -40,7 +40,7 @@ Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 commands above were re-run in a detached worktree of the *pushed* branch
 (`git worktree add --detach <dir> origin/claude/kind-babbage-927g10`) and
 all four reproduce there: `src/` 0 files, V2 phase code 0 files, nothing
-outside the allowed directories, 301 tests, 143 rows / 0 DIFF. That is the
+outside the allowed directories, 303 tests, 143 rows / 0 DIFF. That is the
 form of the check worth trusting — a working tree can pass while the
 branch does not.
 

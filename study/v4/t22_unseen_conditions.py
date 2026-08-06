@@ -330,12 +330,49 @@ def main():
                   f"patch={ri['patch_ratio']:.4f}{tail}", flush=True)
         return runs
 
+    op = os.path.join(RESULTS_DIR,
+                      f"t22_unseen_{args.mode}_{args.fold}.json")
+
+    def checkpoint(stage):
+        """Ecrit l'etat PARTIEL, explicitement marque comme tel.
+
+        Ces executions durent ~2 h 30 sur les folds couteux, le conteneur
+        est recycle toutes les ~1 h 30, et l'artefact n'etait ecrit qu'a la
+        toute fin : `ot` et `kh` ont ainsi ete perdus trois fois, chaque
+        fois integralement. Un point de reprise apres chaque condition ne
+        coute rien et borne la perte a une seule execution.
+
+        Le marquage est la partie qui compte. Un artefact partiel qui
+        ressemblerait a un artefact complet serait precisement le motif que
+        cette campagne traque, introduit par la mesure censee la sauver :
+        `status` vaut donc `"partial"` et `partial_stage` dit ou l'on en
+        etait. `t24` et `t16` ne lisent que `status == "completed"` ou
+        `"total_abort"`.
+        """
+        snap = dict(out)
+        snap["status"] = "partial"
+        snap["partial_stage"] = stage
+        snap["partial_warning"] = (
+            "INCOMPLETE RUN — written as a resume point after a container "
+            "reclaim. Arm statistics present here are computed over the "
+            "draws finished so far and MUST NOT be quoted.")
+        snap.update(provenance.finish(prov))
+        snap["cli_args"] = vars(args)
+        snap["wall_s"] = time.time() - t0
+        json.dump(snap, open(op, "w"), indent=1)
+        print(f"    [checkpoint] partial state saved after {stage}",
+              flush=True)
+
     for arm, hp, only in (("qhas", hp_q, False), ("classical", hp_c, True)):
         # le bras classique ne comporte aucun echantillonnage (T20 : etendue
         # exactement nulle sur 8 rejeux), 2 executions suffisent en controle
         n = args.repeats if arm == "qhas" else min(2, args.repeats)
         can = repeat(hp, only, cfg, dns_can, n, f"[{arm}] canonical")
+        out["arms"][arm] = {"status": "in_progress", "canonical_runs": can}
+        checkpoint(f"{arm}/canonical")
         uns = repeat(hp, only, cfg_uns, dns_uns, n, f"[{arm}] unseen")
+        out["arms"][arm]["unseen_runs"] = uns
+        checkpoint(f"{arm}/unseen")
         # une trajectoire avortee n'est pas un point de mesure : on la
         # compte et on l'exclut, jamais on ne la moyenne avec les autres
         can_ok = [r for r in can if r["completed"]]
@@ -434,8 +471,10 @@ def main():
     out.update(provenance.finish(prov))
     out["cli_args"] = vars(args)
     out["wall_s"] = time.time() - t0
-    op = os.path.join(RESULTS_DIR,
-                      f"t22_unseen_{args.mode}_{args.fold}.json")
+    # `status` a deja ete fixe a "completed" ou "total_abort" plus haut ;
+    # cette ecriture ecrase le dernier point de reprise partiel.
+    out.pop("partial_stage", None)
+    out.pop("partial_warning", None)
     json.dump(out, open(op, "w"), indent=1)
     print(f"\n  saved: {os.path.basename(op)} ({time.time() - t0:.0f}s)")
     print("\nV4 Task 22 complete.")

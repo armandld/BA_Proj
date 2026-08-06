@@ -69,6 +69,10 @@ def load(results_dir, fold, mode="unseen-ic"):
     # un enregistrement `total_abort` ne porte AUCUNE moyenne : le bras n'a
     # pas de point de fonctionnement sur cette condition. Il ne doit ni etre
     # analyse comme les autres, ni disparaitre du compte rendu.
+    if d.get("status") == "partial":
+        # point de reprise : aucune statistique exploitable
+        return {"fold": fold, "underpowered": True, "partial": True,
+                "raw": d}
     if d.get("status") == "total_abort":
         return {"fold": fold, "underpowered": True, "total_abort": True,
                 "total_abort_arm": d.get("total_abort_arm"), "raw": d}
