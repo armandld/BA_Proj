@@ -34,6 +34,13 @@ fresh clone),
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 `figures_v4/`, `logs/v4/`, `CLAUDE.md` was modified.
 
+**Final verification, from a clean checkout of the pushed branch.** Every
+gate above was re-run in a detached worktree of
+`origin/claude/kind-babbage-927g10` at `c998dbe`, after the leak-free
+campaign completed: `src/` **0** files, V2 phase code **0** files, nothing
+outside the allowed directories, **312 tests**, **147 rows / 147 OK / 0
+DIFF / 0 MISSING**. Nothing in the master table is outstanding.
+
 **Verified from a clean checkout, not from the working tree.** The four
 commands above were re-run in a detached worktree of the *pushed* branch
 (`git worktree add --detach <dir> origin/claude/kind-babbage-927g10`) and
