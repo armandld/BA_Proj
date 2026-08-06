@@ -167,6 +167,10 @@ def main():
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-resume", action="store_true")
+    p.add_argument("--run-weak", action="store_true",
+                   help="simuler quand meme les conditions vacues (< 1 %% de "
+                        "deplacement). Par defaut on ne les simule pas : "
+                        "elles sont exclues du decompte de toute facon")
     args = p.parse_args()
 
     path = os.path.join(RESULTS_DIR, f"{args.prefix}_fold_{args.fold}.json")
@@ -279,6 +283,27 @@ def main():
             print(f"    WARNING: this condition moves the trajectory by "
                   f"only {100 * shift:.4f}% (< 1%) — it tests almost "
                   f"nothing and must be reported as such", flush=True)
+            if not args.run_weak:
+                # Une condition vacue est deja exclue du decompte : y
+                # consacrer ~1 h 30 de simulation produirait un resultat qui
+                # ne peut ni confirmer ni infirmer quoi que ce soit, tout en
+                # RESSEMBLANT a une confirmation de robustesse. On enregistre
+                # le constat — qui est lui-meme le resultat — et on passe.
+                out["conditions"].append({
+                    "tag": cond["tag"], "note": cond["note"],
+                    "is_ic_variation": "re" not in cond,
+                    "is_true_seed_change": "rng" in cond,
+                    "dns_signature": sig,
+                    "dns_signature_canonical": sig_can,
+                    "dns_relative_shift": float(shift),
+                    "condition_is_weak": True,
+                    "skipped_as_vacuous": True,
+                    "qhas_worse": None, "ratio_vs_frontier": None,
+                })
+                print(f"    => SKIPPED: no draws run. The finding is the "
+                      f"shift itself, not a comparison.", flush=True)
+                checkpoint(cond["tag"])
+                continue
 
         q = []
         for i in range(args.repeats):
