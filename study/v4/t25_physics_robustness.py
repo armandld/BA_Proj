@@ -206,8 +206,13 @@ def main():
                 prev = {c["tag"]: c for c in d.get("conditions", [])}
                 print(f"  RESUMING: {len(prev)} condition(s) already done",
                       flush=True)
-        except ValueError:
-            pass
+        except ValueError as exc:
+            # NE PAS avaler : un point de reprise illisible ferait repartir
+            # de zero en silence, et l'artefact final serait indiscernable
+            # d'une execution qui n'a jamais ete interrompue. On le dit.
+            print(f"  WARNING: checkpoint at {os.path.basename(op)} is "
+                  f"unreadable ({exc}); starting over from the first "
+                  f"condition", flush=True)
 
     # Reference CANONIQUE : sans elle, « on a fait varier la physique » est
     # une affirmation invérifiée. Une condition qui ne deplace pas la
@@ -231,6 +236,13 @@ def main():
         with contextlib.redirect_stdout(buf):
             r = run_arm(T, args.fold, cfg_, dns_, hp, only, verbose=True)
         ab = parse_abort(buf.getvalue())
+        # V1 en mode verbeux ouvre des figures matplotlib et ne les ferme
+        # jamais (src/visual.py). Sur des dizaines d'executions cela epuise
+        # la memoire et le processus est tue. Le mode verbeux est pourtant
+        # obligatoire ici : c'est lui qui emet le marqueur d'avortement.
+        # L'echec de cette fermeture ne peut fausser AUCUN resultat — elle
+        # ne touche qu'a l'etat graphique — d'ou le `pass`, justifie ici et
+        # non laisse muet.
         try:
             import matplotlib.pyplot as _plt
             _plt.close("all")
