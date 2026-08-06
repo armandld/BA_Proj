@@ -1,0 +1,25 @@
+====================================================================================
+  V4 T22 - fold tearing (harris_tearing)  mode=leak-free
+  unseen condition: thinner current sheet, mode 2 instead of mode 1
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  LEAK-FREE: QAOA threshold 0.149598 -> 0.461610 (tuned on training classes only)
+  classical reference: budget-matched threshold 0.4250 (forced)
+  QAOA arm threshold = 0.46161012794549355
+  classical threshold = 0.42500000000000004   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (canonical/tearing) ---
+
+
+--- Pre-computing DNS traces for unseen/tearing ---
+Hot-Start captured at t=0.3059
+DNS pre-computed: 99 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (unseen/tearing) ---
+
+
+  DNS signature canonical=5.690435e+04  unseen=4.742551e+04
+  relative shift: 16.6575%
+    [qhas] canonical run 1/5: phys=6.40646 patch=0.5266

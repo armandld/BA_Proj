@@ -42,6 +42,10 @@ REGLE DE DECISION (pre-specifiee, avant execution) :
     approximation (potentiellement favorable par accident), jamais comme
     un avantage : elle n'est pas controlable a l'avance.
 
+# Le nom porte le mappeur des qu'il n'est pas le defaut v2 :
+# sans cela, relancer avec --mapper v1 ecraserait le resultat v2
+# et la comparaison entre mappeurs ne tiendrait pas dans les
+# artefacts (defaut D9, deja rencontre sur t13 et t19).
 Sortie : results/t11_solver_attribution_N{N}_dim{D}.npz (+ hash git, args CLI)
 
 Usage :
@@ -417,7 +421,9 @@ def main():
 
     out = os.path.join(
         RESULTS_DIR,
-        f"t11_solver_attribution_N{args.N}_dim{args.dim}.npz")
+        f"t11_solver_attribution_N{args.N}_dim{args.dim}"
+        + ("" if args.mapper == "v2" else f"_{args.mapper}")
+        + ".npz")
     np.savez_compressed(
         out,
         scenario=np.array([r["scenario"] for r in records]),

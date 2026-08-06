@@ -32,6 +32,10 @@ acquierent un signe supplementaire. Les deux conventions sont implementees
 et c'est le test (1) qui tranche empiriquement laquelle commute avec le
 solveur : aucune n'est postulee.
 
+# Le nom porte le mappeur des qu'il n'est pas le defaut v2 :
+# sans cela, relancer avec --mapper v1 ecraserait le resultat v2
+# et la comparaison entre mappeurs ne tiendrait pas dans les
+# artefacts (defaut D9, deja rencontre sur t13 et t19).
 Sortie : results/t12_equivariance_N{N}_dim{D}.npz
 Usage :
   python study/v4/t12_equivariance.py --N 64 --dim 2 --n-snaps 2
@@ -340,7 +344,9 @@ def main():
           "the physics.")
 
     out = os.path.join(RESULTS_DIR,
-                       f"t12_equivariance_N{args.N}_dim{args.dim}.npz")
+                       f"t12_equivariance_N{args.N}_dim{args.dim}"
+        + ("" if args.mapper == "v2" else f"_{args.mapper}")
+        + ".npz")
     np.savez_compressed(
         out,
         scenario=np.array([r["scenario"] for r in rows]),

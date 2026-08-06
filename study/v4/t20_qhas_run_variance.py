@@ -227,8 +227,13 @@ def main():
                 if r["fold"] == args.fold:
                     classical_completed = bool(
                         r["arms"]["classical"]["completed"])
-        except (ValueError, KeyError):
-            pass
+        except (ValueError, KeyError) as exc:
+            # NE PAS avaler : un audit illisible ferait retomber sur
+            # `completed = None`, c'est-a-dire « bras suppose termine » —
+            # exactement la defaillance silencieuse que cet audit existe
+            # pour empecher. On le signale bruyamment.
+            print(f"  WARNING: divergence audit unreadable ({exc}); the "
+                  f"tuned arm's completion is UNVERIFIED", flush=True)
     bpath = os.path.join(
         RESULTS_DIR, f"t15b_budget_matched_{args.fold}.json")
     if os.path.exists(bpath):

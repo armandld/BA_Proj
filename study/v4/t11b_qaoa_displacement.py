@@ -34,6 +34,10 @@ INTERPRETATION PRE-SPECIFIEE.
 Une progression qui n'augmente pas avec la profondeur est rapportee comme
 telle : elle signifie que l'objectif declare n'est pas l'objectif optimise.
 
+# Le nom porte le mappeur des qu'il n'est pas le defaut v2 :
+# sans cela, relancer avec --mapper v1 ecraserait le resultat v2
+# et la comparaison entre mappeurs ne tiendrait pas dans les
+# artefacts (defaut D9, deja rencontre sur t13 et t19).
 Sortie : results/t11b_qaoa_displacement_N{N}_dim{D}.npz
 Usage :
   python study/v4/t11b_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4
@@ -216,7 +220,9 @@ def main():
         "the circuit moves substantially toward its own optimum."))
 
     out = os.path.join(
-        RESULTS_DIR, f"t11b_qaoa_displacement_N{args.N}_dim{args.dim}.npz")
+        RESULTS_DIR, f"t11b_qaoa_displacement_N{args.N}_dim{args.dim}"
+        + ("" if args.mapper == "v2" else f"_{args.mapper}")
+        + ".npz")
     np.savez_compressed(
         out,
         scenario=np.array([r["scenario"] for r in rows]),

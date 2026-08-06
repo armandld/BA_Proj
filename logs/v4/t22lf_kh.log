@@ -1,0 +1,24 @@
+====================================================================================
+  V4 T22 - fold kh (kelvin_helmholtz)  mode=leak-free
+  unseen condition: narrower shear layer, weaker seed, faster drift
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  LEAK-FREE: QAOA threshold 0.149598 -> 0.461610 (tuned on training classes only)
+  classical reference: budget-matched threshold 0.1906 (forced)
+  QAOA arm threshold = 0.46161012794549355
+  classical threshold = 0.19062500000000002   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (canonical/kh) ---
+
+
+--- Pre-computing DNS traces for unseen/kh ---
+Hot-Start captured at t=0.9048
+DNS pre-computed: 460 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (unseen/kh) ---
+
+
+  DNS signature canonical=6.175679e+04  unseen=6.639593e+04
+  relative shift: 7.5119%
