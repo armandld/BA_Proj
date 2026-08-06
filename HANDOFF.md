@@ -17,13 +17,17 @@ concluded, what is unfinished, and what to check before merging.
 ```bash
 BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
-git diff --name-only $BASE HEAD -- study/ | grep -v '^study/v[34]/'  # MUST be empty (V2 read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 196 passed
-python study/v4/t16_aggregate_v4.py                                # 71 rows, 0 DIFF, 0 MISSING
+git diff --name-only $BASE HEAD -- study/ \
+  | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
+python -m pytest tests/v3 tests/v4 -q                              # 205 passed
+python study/v4/t16_aggregate_v4.py                                # 100 rows, 0 DIFF, 0 MISSING
 ```
 
-All four held: `src/` 0 files changed, V2 phases 0 files changed,
-**196 pytests passed**, master table **71/71 OK, 0 DIFF, 0 MISSING**
+All four held: `src/` **0** files changed, V2 phase **code** **0** files
+changed (the 76 files under `study/results/` are tracked artifacts, not V2
+code — `study/results/` was un-ignored so the numbers are verifiable from a
+fresh clone),
+**205 pytests passed**, master table **100/100 OK, 0 DIFF, 0 MISSING**
 (all four Level-3 folds are now present, so nothing is outstanding in it).
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
