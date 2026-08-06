@@ -236,8 +236,10 @@ heuristic would have deleted valid data.
   budget-matched comparison.
 - **The interpretive step in §3** — rejecting the primary endpoint as
   D4-contaminated — carries the whole reading and is a judgement call.
-- **The 4-panel figure currently plots diverged points** as if they were
-  attainable operating points (fix running).
+- **The 4-panel figure** plotted diverged points as attainable operating
+  points, and its Q-HAS marker was a single draw annotated with the
+  retracted ratios. Both are fixed and the figure re-rendered; if you pull
+  an older copy of the PDF, check it against `pareto_panel.csv`.
 
 ---
 

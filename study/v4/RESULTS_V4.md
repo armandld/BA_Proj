@@ -1,10 +1,13 @@
 # V4 results log — experimental answer to the scientific audit
 
-One entry per study. V4 answers the audit's missing proof blocks that are
-executable without the (still pending) closed-loop Level-3 campaign:
-**quantum attribution** (P0), **confirmatory statistics** (P0),
-**equivariance** (P1), **causal term ablations** (P1) and **numerical
-validation** (P1).
+One entry per study, in the order they were run. The opening tasks answer
+the audit's proof blocks that are executable without the closed-loop
+campaign — **quantum attribution** (P0), **confirmatory statistics** (P0),
+**equivariance** (P1), **causal term ablations** (P1), **numerical
+validation** (P1) — and the later ones (T15–T23) are the Level-3 closed-loop
+campaign itself, which has since run on all four folds. Entries written
+before a result was superseded are kept, with the retraction stated in
+place; read *CLOSING THE CLOSED-LOOP STUDY* at the end for what stands.
 
 Continuity rule: no V1/V2/V3 symbol is redefined. Everything reusable is
 imported — `MHDSolver`, `build_patch_hamiltonian`, `build_ising_terms`,
@@ -316,7 +319,10 @@ divergence-free projection in `solver.py::step_full`.
 
 `study/v4/t15_level3_closed_loop.py`
 
-### Status: driver built, code path validated, campaign not yet run
+### Status when this entry was written: driver built, campaign not yet run
+
+> The campaign has since run on all four folds. This entry describes the
+> driver; the results are in the T15/T15b/T15c/T19/T20/T23 entries below.
 
 The driver performs a true pipeline-level LOSO fold: for each held-out
 instability class it (1) tunes the QAOA hyperparameters with Optuna on the

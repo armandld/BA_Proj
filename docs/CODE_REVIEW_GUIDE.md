@@ -234,5 +234,8 @@ Honest list of the weakest points, so you do not have to find them:
   its budget-matched comparison instead and say so, but a stricter reading
   would drop the fold entirely.
 - **The trace-audit exclusion** (diverged points on the plotted frontier)
-  was implemented after the 4-panel figure was first rendered; re-render
-  after running `t19 --trace-only` before using the figure in the paper.
+  was implemented after the 4-panel figure was first rendered. It has since
+  been re-rendered, and the Q-HAS marker changed from a single draw to the
+  mean of the repeated draws with error bars — the annotated ratios moved
+  from 2.6/4.4/3.6/4.4× to 1.79/2.10/2.49/1.98×. If you have an older PDF,
+  it carries retracted numbers.
