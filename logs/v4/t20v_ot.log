@@ -14,3 +14,4 @@ DNS pre-computed: 1136 steps, 14 flux snapshots stored.
   fig, ax = plt.subplots(figsize=(10, 9))
   Q-HAS run 1/5: combined=0.2865 phys=0.1158 patch=0.7135
   Q-HAS run 2/5: combined=0.2917 phys=0.1004 patch=0.7701
+  Q-HAS run 3/5: combined=0.2891 phys=0.0992 patch=0.7637
