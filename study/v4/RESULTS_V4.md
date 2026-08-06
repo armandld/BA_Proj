@@ -1030,6 +1030,13 @@ magnitudes. Repeating T20 per fold is the fix; it costs ~1 h per fold.
 
 ## T20 complete — Claim E restated as a dominance count over repeated draws
 
+> **SUPERSEDED — do not quote the per-fold numbers in this section.** This
+> pass did not capture each draw's abort status, so `rotor`'s mean silently
+> included 2 diverged trajectories. See *T20 verified* below for the numbers
+> that stand (1.30×, 1.90×, 2.74×, 1.81×); the section is kept because the
+> comparison between the two passes is what shows how much an unguarded
+> draw distorts a mean.
+
 5 Q-HAS repeats per fold, identical inputs, plus 2 classical repeats per
 fold as a determinism control. **The classical control's range is exactly
 0.00e+00 on every metric of every fold** — 8 independent replays. The spread

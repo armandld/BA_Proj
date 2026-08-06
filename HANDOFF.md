@@ -85,17 +85,23 @@ confirmed independently by a mapper that never had the defect.
 
 ### Claim E in detail — 18 completed runs, 4 held-out classes
 
-Q-HAS repeated **5×** per fold (identical inputs); classical arm verified
+Q-HAS repeated **5×** per fold (identical inputs), of which 18 draws
+completed — `rotor` lost 2 to divergence; classical arm verified
 deterministic across 8 replays (range exactly 0.00e+00). Comparison is
 against the **budget-matched** classical point, whose completion the T19
 trace audit verified.
 
-| fold | Q-HAS mean ± sd | matched classical | ratio (mean) | gap/sd |
-|---|---|---|---|---|
-| `ot` | 0.1291 ± 0.0222 | **0.0827** | 1.56× | 2.09 |
-| `kh` | 0.0032 ± 0.0016 | **0.00168** | 1.93× | 0.98 |
-| `rotor` † | 0.1537 ± 0.0642 | **0.0536** | 2.86× | 1.56 |
-| `tearing` | 0.0091 ± 0.0034 | **0.00443** | 2.05× | 1.37 |
+| fold | n | Q-HAS mean ± sd | matched classical | ratio (mean) | gap/sd |
+|---|---|---|---|---|---|
+| `ot` | 5 | 0.10727 ± 0.01823 | **0.08270** | 1.30× | 1.35 |
+| `kh` | 5 | 0.00320 ± 0.00203 | **0.00168** | 1.90× | 0.75 |
+| `rotor` † | 3 | 0.14725 ± 0.04062 | **0.05365** | 2.74× | 2.30 |
+| `tearing` | 5 | 0.00801 ± 0.00193 | **0.00443** | 1.81× | 1.86 |
+
+This table previously read 1.56×, 1.93×, 2.86×, 2.05×. Those came from the
+**pre-guard** pass, whose draws were not checked for divergence; the guarded
+re-run superseded them and `rotor` dropped to 3 valid draws. `t16` checks
+every cell above against `t20_qhas_run_variance_<fold>.json`.
 
 **The headline is a count, not a ratio:**
 
