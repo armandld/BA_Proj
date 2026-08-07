@@ -154,6 +154,58 @@ def signature(trace, key):
                          for k in ("vx", "vy", "Bx", "By")]))
 
 
+
+# Facteur maximal tolere entre les deux points encadrants. Au-dela,
+# l'interpolation traverse une variation trop brutale pour que « l'erreur
+# classique a ce budget » ait un sens.
+FRONTIER_MAX_LOCAL_RATIO = 5.0
+
+
+def frontier_verdict(f_ok, qp, qe):
+    """Erreur classique au budget `qp`, ou un refus motive.
+
+    LE PIEGE, TROUVE EN LISANT LES PREMIERES SORTIES. Sur les conditions
+    initiales alternatives, la relation budget -> erreur du bras classique
+    n'est PAS monotone. Sur `tearing_b` :
+
+        patch 0.0156 -> phys 0.043     patch 0.6250 -> phys 0.012
+        patch 0.2297 -> phys 9.659     patch 0.8742 -> phys 1.289
+
+    Raffiner davantage y donne parfois une erreur 30x pire. Interpoler
+    « la frontiere atteignable » sur de tels points produit un nombre
+    d'apparence normale qui ne mesure rien — exactement le motif traque
+    par cette campagne, et il aurait ete publie comme un ratio.
+
+    On n'accepte donc l'interpolation que si le voisinage encadrant est
+    LOCALEMENT SAIN : erreur non croissante avec le budget, et les deux
+    points a moins d'un facteur `FRONTIER_MAX_LOCAL_RATIO`. Sinon on rend
+    le motif du refus, jamais un chiffre.
+    """
+    xs = [r["patch_ratio"] for r in f_ok]
+    ys = [r["phys_score"] for r in f_ok]
+    if len(f_ok) < 2:
+        return None, "fewer than 2 completed classical runs"
+    if not (xs[0] <= qp <= xs[-1]):
+        return None, (f"budget {qp:.4f} outside the swept range "
+                      f"[{xs[0]:.4f}, {xs[-1]:.4f}]")
+    i = max(1, min(len(xs) - 1,
+                   next(k for k in range(1, len(xs)) if xs[k] >= qp)))
+    lo_x, lo_y, hi_x, hi_y = xs[i - 1], ys[i - 1], xs[i], ys[i]
+    if hi_y > lo_y:
+        return None, (f"frontier NOT monotone in the bracketing interval: "
+                      f"budget {lo_x:.4f}->{hi_x:.4f} gives error "
+                      f"{lo_y:.5f}->{hi_y:.5f} (more refinement, worse "
+                      f"error) — no attainable error is defined here")
+    lo_m, hi_m = max(lo_y, 1e-30), max(hi_y, 1e-30)
+    ratio = max(lo_m, hi_m) / min(lo_m, hi_m)
+    if ratio > FRONTIER_MAX_LOCAL_RATIO:
+        return None, (f"bracketing points differ by {ratio:.1f}x "
+                      f"(> {FRONTIER_MAX_LOCAL_RATIO:.0f}x) over a budget "
+                      f"gap of {hi_x - lo_x:.4f} — too steep to interpolate")
+    t = (qp - lo_x) / (hi_x - lo_x) if hi_x > lo_x else 0.0
+    return float(lo_y + t * (hi_y - lo_y)), None
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     from config import RESULTS_DIR
@@ -171,7 +223,52 @@ def main():
                    help="simuler quand meme les conditions vacues (< 1 %% de "
                         "deplacement). Par defaut on ne les simule pas : "
                         "elles sont exclues du decompte de toute facon")
+    p.add_argument("--recompute", action="store_true",
+                   help="re-derive the verdicts from a stored artifact "
+                        "WITHOUT simulating anything. Sert quand la regle "
+                        "de verdict change : les tirages et la frontiere "
+                        "sont deja la, seule leur lecture evolue.")
     args = p.parse_args()
+
+    if args.recompute:
+        op = os.path.join(RESULTS_DIR,
+                          f"t25_physics_robustness_{args.fold}.json")
+        if not os.path.exists(op):
+            raise SystemExit(f"no artifact for fold {args.fold}")
+        d = json.load(open(op))
+        changed = 0
+        for c in d.get("conditions", []):
+            if c.get("skipped_as_vacuous"):
+                continue
+            f_ok = sorted([r for r in c.get("classical_frontier", [])
+                           if r["completed"]], key=lambda r: r["patch_ratio"])
+            q_ok = [r for r in c.get("qhas_runs", []) if r["completed"]]
+            if not q_ok or len(f_ok) < 2:
+                continue
+            qp = float(np.mean([r["patch_ratio"] for r in q_ok]))
+            qe = float(np.mean([r["phys_score"] for r in q_ok]))
+            ref, why = frontier_verdict(f_ok, qp, qe)
+            before = c.get("ratio_vs_frontier")
+            c["frontier_at_qhas_budget"] = ref
+            c["frontier_refusal"] = why
+            c["ratio_vs_frontier"] = (qe / ref) if ref else None
+            c["qhas_worse"] = bool(qe > ref) if ref else None
+            after = c["ratio_vs_frontier"]
+            if (before is None) != (after is None):
+                changed += 1
+                print(f"  {c['tag']}: "
+                      + (f"{before:.2f}x -> NO VERDICT ({why})" if before
+                         else f"NO VERDICT -> {after:.2f}x"))
+        dec = [c for c in d["conditions"]
+               if c.get("qhas_worse") is not None
+               and not c.get("condition_is_weak")]
+        d["n_decidable"] = len(dec)
+        d["n_qhas_worse"] = sum(1 for c in dec if c["qhas_worse"])
+        d["verdicts_recomputed"] = True
+        json.dump(d, open(op, "w"), indent=1)
+        print(f"  {changed} verdict(s) changed; direction now "
+              f"{d['n_qhas_worse']}/{d['n_decidable']}")
+        raise SystemExit(0)
 
     path = os.path.join(RESULTS_DIR, f"{args.prefix}_fold_{args.fold}.json")
     if not os.path.exists(path):
@@ -351,21 +448,18 @@ def main():
             xs = [r["patch_ratio"] for r in f_ok]
             ys = [r["phys_score"] for r in f_ok]
             entry.update(qhas_patch=qp, qhas_phys=qe)
-            if xs[0] <= qp <= xs[-1]:
-                ref = float(np.interp(qp, xs, ys))
-                entry["frontier_at_qhas_budget"] = ref
-                entry["ratio_vs_frontier"] = qe / ref if ref else None
-                entry["qhas_worse"] = bool(ref and qe > ref)
-                entry["out_of_swept_range"] = False
+            ref, why = frontier_verdict(f_ok, qp, qe)
+            entry["frontier_at_qhas_budget"] = ref
+            entry["frontier_refusal"] = why
+            if ref:
+                entry["ratio_vs_frontier"] = qe / ref
+                entry["qhas_worse"] = bool(qe > ref)
                 print(f"    => Q-HAS {qe:.5f} vs frontier {ref:.5f} "
                       f"at budget {qp:.4f}  ratio={qe / ref:.2f}x")
             else:
-                # jamais d'extrapolation : `np.interp` rendrait le bord
-                entry["out_of_swept_range"] = True
                 entry["ratio_vs_frontier"] = None
                 entry["qhas_worse"] = None
-                print(f"    => budget {qp:.4f} OUTSIDE the swept range "
-                      f"[{xs[0]:.4f}, {xs[-1]:.4f}] — no ratio")
+                print(f"    => NO VERDICT: {why}")
         else:
             entry["ratio_vs_frontier"] = None
             entry["qhas_worse"] = None

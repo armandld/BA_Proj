@@ -104,7 +104,8 @@
    "frontier_at_qhas_budget": 0.3532105502092179,
    "ratio_vs_frontier": 0.8609507052012679,
    "qhas_worse": false,
-   "out_of_swept_range": false
+   "out_of_swept_range": false,
+   "frontier_refusal": null
   }
  ],
  "n_decidable": 1,
@@ -125,5 +126,6 @@
   "no_resume": false,
   "run_weak": false
  },
- "wall_s": 5606.903223991394
+ "wall_s": 5606.903223991394,
+ "verdicts_recomputed": true
 }
