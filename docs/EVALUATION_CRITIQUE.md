@@ -103,7 +103,22 @@ Le mappeur v2, qui n'a aucune fenêtre par construction, est tout aussi
 inerte.
 
 **Ce que ça permet d'affirmer :** l'inertie des couplages n'est pas un bug
-d'implémentation. C'est une propriété de la formulation à cette taille.
+d'implémentation. C'est une propriété de la formulation **à cette taille**.
+
+🔴 **Et T26 montre que « à cette taille » est essentiel.** Le scan
+8 → 32 → 128 qubits donne :
+
+| dim | qubits | ZZ+ZZZZ enlevés | uniformité du fondamental |
+|---|---|---|---|
+| 2 | 8 | **0.0000** | 1.00 |
+| 4 | 32 | **0.0312** | 0.75 |
+| 8 | 128 | **0.0794** | 0.17 |
+
+**L'inertie casse avant 32 qubits.** Toute formulation du type « cette
+famille de mappings Ising est inerte » est donc **fausse** ; elle est inerte
+à 8 qubits et cesse de l'être ensuite, en même temps que l'état fondamental
+cesse d'être uniforme. A1–A3 restent exacts mais leur portée est **le régime
+déployé**, pas la méthode.
 
 ### A4. Le mécanisme est identifié et mesuré
 
@@ -336,11 +351,13 @@ Par rapport coût / gain :
 | **2** | 170 essais Optuna au lieu de 4 | retire « Q-HAS a été à peine réglé » |
 | **3** | ≥ 10 tirages par fold | rendrait les magnitudes citables (actuellement C1) |
 | **4** | ≥ 5 conditions initiales par classe avec frontière dense | trancherait C2, aujourd'hui à une chacune |
-| **5** | `VQA_N` plus grand | teste si A1 (fondamental uniforme) se lève — c'est **la** question ouverte |
+| ~~5~~ | ~~`VQA_N` plus grand~~ | **FAIT (T26)** : le fondamental cesse d'être uniforme (1.00 → 0.75 → 0.17) et les couplages redeviennent causaux avant 32 qubits |
+| **5′** | localiser la frontière entre 8 et 32 qubits (dim = 3, 18 qubits, encore exhaustivement vérifiable — demande un DNS à `N` divisible par 3) | donnerait la taille exacte de la transition |
 | — | graines physiques | **inutile**, cf. A7 : rien à faire varier |
 
-**La priorité 5 est la seule qui pourrait renverser A1–A3.** Les autres
-consolident ; celle-là teste la limite du régime.
+**La priorité 5 a été faite et elle a bougé la conclusion** : A1–A3 tiennent
+mais ne valent qu'à 8 qubits. La question restante n'est plus « est-ce que
+ça se lève ? » mais « **où** ». C'est la priorité 5′.
 
 ---
 

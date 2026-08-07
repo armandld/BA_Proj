@@ -569,6 +569,43 @@ def rows_t25(results_dir, folds):
     return [make_row("t25", m, float(got[m]), ref[m], tol=0.5) for m in ref]
 
 
+def rows_t26(results_dir, N=256, mapper="v1"):
+    """Le scan en taille : l'inertie des couplages tient-elle ?
+
+    C'est le resultat qui repond a l'objection centrale (« a 8 qubits,
+    evidemment »), donc il doit etre verifie comme les autres.
+    """
+    ref = {2: dict(no_ZZ=0.0, no_ZZZZ=0.0, Z_only=0.0, uniform=1.0),
+           4: dict(no_ZZ=0.0, no_ZZZZ=0.0312, Z_only=0.0312, uniform=0.75),
+           8: dict(no_ZZ=0.0469, no_ZZZZ=0.0690, Z_only=0.0794,
+                   uniform=0.1667)}
+    p = os.path.join(results_dir, f"t26_size_scan_N{N}_{mapper}.json")
+    if not os.path.exists(p):
+        return [make_row(f"t26/dim{d}", m, None, None)
+                for d in ref for m in ("no_ZZ", "no_ZZZZ", "Z_only")]
+    got = {s["dim"]: s for s in json.load(open(p)).get("summary", [])}
+    out = []
+    for d, r in ref.items():
+        s_ = got.get(d)
+        for m in ("no_ZZ", "no_ZZZZ", "Z_only", "uniform"):
+            out.append(make_row(f"t26/dim{d}", m,
+                                None if s_ is None else float(s_[m]),
+                                r[m], tol=0.002))
+        # le controle `full` doit valoir 0 partout, sinon rien n'est lisible
+        if s_ is not None:
+            out.append(make_row(f"t26/dim{d}", "full (control)",
+                                float(s_["full"]), 0.0))
+    # le contrôle glouton force : a dim=2 il doit rendre 0 comme l'exhaustif
+    cp = os.path.join(results_dir,
+                      f"t26_size_scan_N{N}_forcegreedy_{mapper}.json")
+    if os.path.exists(cp):
+        g = {s["dim"]: s for s in json.load(open(cp)).get("summary", [])}
+        if 2 in g:
+            out.append(make_row("t26/control", "greedy at dim2 (Z_only)",
+                                float(g[2]["Z_only"]), 0.0))
+    return out
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -657,6 +694,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
     rows += rows_t23(results_dir, folds)
     rows += rows_t24(results_dir, folds)
     rows += rows_t25(results_dir, folds)
+    rows += rows_t26(results_dir, N)
     return rows
 
 

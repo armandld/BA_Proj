@@ -1941,10 +1941,83 @@ this study makes.
 
 ---
 
+## T26 — l'inertie des couplages est un artefact de PETITE TAILLE
+
+```bash
+python study/v4/t26_size_scan.py --dims 2 4 8 --n-snaps 3 --mapper v1
+python study/v4/t26_size_scan.py --dims 2 --force-greedy   # contrôle
+```
+
+### Pourquoi cette tâche existe
+
+T13 et T18 montrent que les couplages ZZ/ZZZZ changent **exactement 0**
+décision, et que réparer la fenêtre n'y change rien. Ces résultats sont
+exacts — mais mesurés à `dim = 2`, soit **8 qubits**, précisément le régime
+où l'état fondamental est uniforme sur 100 % des instantanés. L'objection
+évidente est : *« à 8 qubits, évidemment »*. Elle est fondée, et c'était la
+faiblesse centrale de l'étude.
+
+### Résultat
+
+| dim | qubits | méthode | no_ZZ | no_ZZZZ | Z_only | uniformité du fondamental |
+|---|---|---|---|---|---|---|
+| 2 | 8 | exhaustive | 0.0000 | 0.0000 | 0.0000 | **1.00** |
+| 2 | 8 | glouton *(contrôle)* | 0.0000 | 0.0000 | 0.0000 | 1.00 |
+| 4 | 32 | glouton | 0.0000 | **0.0312** | **0.0312** | 0.75 |
+| 8 | 128 | glouton | **0.0469** | **0.0690** | **0.0794** | **0.17** |
+
+> **L'inertie casse avec la taille.** À 32 et 128 qubits, ablater les
+> couplages change des décisions. Et l'uniformité de l'état fondamental
+> s'effondre en parallèle : 1.00 → 0.75 → 0.17.
+
+Les deux phénomènes vont ensemble et forment un mécanisme cohérent : tant
+que l'optimum est un masque constant, aucun couplage ne peut le déplacer ;
+dès que la structure combinatoire apparaît, les couplages redeviennent
+causaux.
+
+### Le contrôle qui rend ce résultat lisible
+
+L'énumération exhaustive est refusée au-delà de 22 qubits, donc dim ≥ 4
+utilise la descente gloutonne à chaud. Le risque évident : que ce soit **le
+proxy** qui fabrique les changements, pas les couplages.
+
+Deux garde-fous, tous deux passés :
+
+1. **Le contrôle `full` vaut 0.0000 à toutes les tailles.** Rejouer sans
+   ablation redonne exactement la même décision : le glouton est
+   déterministe à hamiltonien et amorce fixés, donc tout écart non nul est
+   *causé* par l'ablation.
+2. **`--force-greedy` à dim = 2** — là où l'exhaustif dit 0.0000 — donne
+   également **0.0000**. Le proxy ne fabrique pas de changements dans le
+   régime où l'on peut le vérifier.
+
+⚠️ **Réserve à conserver.** Le glouton et l'exhaustif ne choisissent pas le
+même masque sur 25 % des cellules à dim = 2 (accord 0.7500), tout en étant
+tous deux insensibles à l'ablation. Le scan mesure donc *« les couplages
+changent-ils la décision du solveur déployé »*, pas *« l'optimum exact
+change-t-il »*. C'est la question opérationnelle — le pipeline n'utilise pas
+l'exhaustif non plus — mais elle doit être citée telle quelle.
+
+### Ce que ça change pour les conclusions de l'étude
+
+**Ce qui reste vrai :** à la taille déployée (`VQA_N = 2`, 8 qubits), la
+formulation est inerte, et c'est exact.
+
+**Ce qui devient faux :** toute lecture du type *« cette famille de mappings
+Ising est intrinsèquement inerte »*. Elle ne l'est pas. Elle l'est **à 8
+qubits**, et cesse de l'être avant 32.
+
+**Ce que ça ouvre :** la frontière est entre 8 et 32 qubits. C'est une
+question bien posée, bon marché à raffiner (il faudrait un DNS à `N`
+divisible par 3 pour atteindre dim = 3, soit 18 qubits, seule taille
+intermédiaire encore exhaustivement vérifiable).
+
+---
+
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (**152 rows, 152 OK, 0 DIFF, 0 MISSING**).
+covered by `t16_aggregate_v4.py` (**168 rows, 168 OK, 0 DIFF, 0 MISSING**).
 
 ## The one-sentence result
 

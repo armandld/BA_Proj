@@ -1,4 +1,4 @@
-# git_hash=8ae109bba3ace6cdce5959b563de1a915ade456c
+# git_hash=cd0ef3002a119f9437af84139824bf8550513772
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -152,3 +152,19 @@ t25,vacuous,2.000000,2.000000,OK
 t25,refused,3.000000,3.000000,OK
 t25,decidable,2.000000,2.000000,OK
 t25,direction_held,1.000000,1.000000,OK
+t26/dim2,no_ZZ,0.000000,0.000000,OK
+t26/dim2,no_ZZZZ,0.000000,0.000000,OK
+t26/dim2,Z_only,0.000000,0.000000,OK
+t26/dim2,uniform,1.000000,1.000000,OK
+t26/dim2,full (control),0.000000,0.000000,OK
+t26/dim4,no_ZZ,0.000000,0.000000,OK
+t26/dim4,no_ZZZZ,0.031250,0.031200,OK
+t26/dim4,Z_only,0.031250,0.031200,OK
+t26/dim4,uniform,0.750000,0.750000,OK
+t26/dim4,full (control),0.000000,0.000000,OK
+t26/dim8,no_ZZ,0.046875,0.046900,OK
+t26/dim8,no_ZZZZ,0.069010,0.069000,OK
+t26/dim8,Z_only,0.079427,0.079400,OK
+t26/dim8,uniform,0.166667,0.166700,OK
+t26/dim8,full (control),0.000000,0.000000,OK
+t26/control,greedy at dim2 (Z_only),0.000000,0.000000,OK
