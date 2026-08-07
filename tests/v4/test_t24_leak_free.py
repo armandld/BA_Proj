@@ -214,8 +214,39 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
 def test_t25_never_extrapolates_its_frontier():
     src = open(os.path.join(V4, "t25_physics_robustness.py"),
                encoding="utf-8").read()
-    assert "out_of_swept_range" in src and "xs[0] <= qp <= xs[-1]" in src, (
+    assert "xs[0] <= qp <= xs[-1]" in src, (
         "t25 pourrait extrapoler hors de la frontiere balayee")
+
+
+def test_t25_refuses_a_non_monotone_bracketing_interval():
+    """Interpoler « l'erreur atteignable » sur une frontiere non monotone
+    rend un nombre d'apparence normale qui ne mesure rien.
+
+    Sur `tearing_b`, raffiner de 0.625 a 0.874 fait passer l'erreur de
+    0.012 a 1.289 — trente fois PIRE. `np.interp` y repondait sans
+    broncher, et 1.28x avait deja ete affiche comme un resultat."""
+    from t25_physics_robustness import frontier_verdict
+    f = lambda pts: [{"patch_ratio": p, "phys_score": e, "completed": True}
+                     for p, e in pts]
+    # anti-monotone dans l'intervalle encadrant -> refus motive
+    ref, why = frontier_verdict(f([(0.625, 0.012), (0.874, 1.289)]), 0.75, 1.0)
+    assert ref is None and "not monotone" in why.lower()
+    # trop raide -> refus motive
+    ref, why = frontier_verdict(f([(0.3, 10.0), (0.5, 0.1)]), 0.4, 1.0)
+    assert ref is None and "steep" in why.lower()
+    # sain -> verdict rendu
+    ref, why = frontier_verdict(f([(0.3, 0.4), (0.5, 0.2)]), 0.4, 1.0)
+    assert ref is not None and why is None
+    assert ref == pytest.approx(0.3)
+
+
+def test_t25_can_recompute_verdicts_without_simulating():
+    """Quand la regle de verdict change, les tirages restent valables :
+    seule leur lecture evolue. Sans ce mode il faudrait re-simuler des
+    heures pour corriger une interpretation."""
+    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+               encoding="utf-8").read()
+    assert "--recompute" in src and "verdicts_recomputed" in src
 
 
 def test_t25_marks_reynolds_as_not_an_ic_variation():
