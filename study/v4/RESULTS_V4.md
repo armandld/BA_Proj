@@ -1975,6 +1975,43 @@ que l'optimum est un masque constant, aucun couplage ne peut le déplacer ;
 dès que la structure combinatoire apparaît, les couplages redeviennent
 causaux.
 
+### ⚠️ Mais « changer une décision » n'est PAS « mieux détecter »
+
+Le tableau ci-dessus mesure l'influence **causale** des couplages, pas leur
+**utilité**. La question d'origine du projet est la détection des patches
+durs à grossir. Elle se mesure contre la vérité terrain
+(`l2_errors >= l2_threshold`), et elle donne :
+
+| dim | qubits | F1 hamiltonien complet | F1 Z seul | F1 règle classique | **gain des couplages** |
+|---|---|---|---|---|---|
+| 2 | 8 | 0.3333 | 0.3333 | **0.3889** | **+0.0000** |
+| 4 | 32 | 0.5199 | 0.5524 | 0.5524 | **−0.0325** |
+| 8 | 128 | 0.5916 | 0.6481 | 0.6481 | **−0.0565** |
+
+> **Les couplages ne détectent jamais mieux, et à grande taille ils
+> détectent MOINS BIEN.** Quand ils deviennent causalement actifs, leur
+> effet est de dégrader le F1 : −0.033 à 32 qubits, −0.057 à 128.
+
+Trois lectures qui en découlent, toutes vérifiables dans la table maîtresse :
+
+1. **Le meilleur cas de la formulation Ising est d'égaler la règle de
+   seuil.** À dim = 4 et 8, `F1(Z seul) = F1(classique)` **exactement**
+   (0.5524 et 0.6481) : le hamiltonien réduit à son biais reproduit la règle
+   classique, terme pour terme.
+2. **Ajouter les couplages retire de la performance.** Ils n'apportent pas
+   du signal, ils apportent du bruit.
+3. **Le F1 monte avec `dim` (0.33 → 0.55 → 0.65) pour les deux bras
+   identiquement** — c'est le raffinement du découpage qui aide, pas la
+   couche quantique. Attribuer cette montée au quantique serait une erreur
+   de lecture.
+
+**Correction d'une formulation antérieure de cette section.** J'avais écrit
+que la rupture d'inertie « ouvre un horizon » et était « plus intéressante à
+publier qu'un résultat négatif ». C'était prématuré : la frontière existe,
+mais de l'autre côté les couplages **nuisent**. Ce n'est pas un horizon,
+c'est la fermeture propre de la porte — avec, cette fois, la mesure qui
+répond à la question d'origine du projet.
+
 ### Le contrôle qui rend ce résultat lisible
 
 L'énumération exhaustive est refusée au-delà de 22 qubits, donc dim ≥ 4
@@ -2007,17 +2044,23 @@ formulation est inerte, et c'est exact.
 Ising est intrinsèquement inerte »*. Elle ne l'est pas. Elle l'est **à 8
 qubits**, et cesse de l'être avant 32.
 
-**Ce que ça ouvre :** la frontière est entre 8 et 32 qubits. C'est une
-question bien posée, bon marché à raffiner (il faudrait un DNS à `N`
-divisible par 3 pour atteindre dim = 3, soit 18 qubits, seule taille
-intermédiaire encore exhaustivement vérifiable).
+**Ce que ça ferme :** l'espoir que la formulation devienne utile en
+montant en taille. Les couplages deviennent actifs mais nuisibles, sur toute
+la plage testée (8 → 128 qubits). Le meilleur cas de cette famille de
+mappings est d'égaler la règle de seuil qu'elle est censée remplacer.
+
+**Ce qui reste ouvert :** la localisation exacte de la transition (entre 8
+et 32 qubits ; dim = 3, 18 qubits, serait encore exhaustivement vérifiable
+mais demande un DNS à `N` divisible par 3), et surtout **une autre
+construction de couplages** — le diagnostic F1 ci-dessus est le test que
+toute nouvelle proposition devrait passer avant d'être revendiquée.
 
 ---
 
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (**168 rows, 168 OK, 0 DIFF, 0 MISSING**).
+covered by `t16_aggregate_v4.py` (**180 rows, 180 OK, 0 DIFF, 0 MISSING**).
 
 ## The one-sentence result
 

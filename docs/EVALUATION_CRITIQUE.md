@@ -120,6 +120,21 @@ famille de mappings Ising est inerte » est donc **fausse** ; elle est inerte
 cesse d'être uniforme. A1–A3 restent exacts mais leur portée est **le régime
 déployé**, pas la méthode.
 
+🔴 **Et la mesure de DÉTECTION dit l'essentiel** — c'est la question
+d'origine du projet, et elle n'avait jamais été posée directement :
+
+| dim | qubits | F1 complet | F1 Z seul | F1 classique | gain des couplages |
+|---|---|---|---|---|---|
+| 2 | 8 | 0.3333 | 0.3333 | **0.3889** | +0.0000 |
+| 4 | 32 | 0.5199 | 0.5524 | 0.5524 | **−0.0325** |
+| 8 | 128 | 0.5916 | 0.6481 | 0.6481 | **−0.0565** |
+
+**Les couplages ne détectent jamais mieux ; devenus actifs, ils détectent
+moins bien.** Et `F1(Z seul) = F1(classique)` exactement à dim 4 et 8 : le
+meilleur cas de la formulation est d'égaler la règle de seuil. La montée du
+F1 avec `dim` (0.33 → 0.55 → 0.65) est identique pour les deux bras — c'est
+le découpage plus fin qui aide, pas le quantique.
+
 ### A4. Le mécanisme est identifié et mesuré
 
 La fenêtre gaussienne centrée sur le seuil AMR détruit la masse de couplage

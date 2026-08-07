@@ -575,10 +575,15 @@ def rows_t26(results_dir, N=256, mapper="v1"):
     C'est le resultat qui repond a l'objection centrale (« a 8 qubits,
     evidemment »), donc il doit etre verifie comme les autres.
     """
-    ref = {2: dict(no_ZZ=0.0, no_ZZZZ=0.0, Z_only=0.0, uniform=1.0),
-           4: dict(no_ZZ=0.0, no_ZZZZ=0.0312, Z_only=0.0312, uniform=0.75),
+    ref = {2: dict(no_ZZ=0.0, no_ZZZZ=0.0, Z_only=0.0, uniform=1.0,
+                   f1_full=0.3333, f1_Zonly=0.3333, f1_classical=0.3889,
+                   f1_gain_from_couplings=0.0),
+           4: dict(no_ZZ=0.0, no_ZZZZ=0.0312, Z_only=0.0312, uniform=0.75,
+                   f1_full=0.5199, f1_Zonly=0.5524, f1_classical=0.5524,
+                   f1_gain_from_couplings=-0.0325),
            8: dict(no_ZZ=0.0469, no_ZZZZ=0.0690, Z_only=0.0794,
-                   uniform=0.1667)}
+                   uniform=0.1667, f1_full=0.5916, f1_Zonly=0.6481,
+                   f1_classical=0.6481, f1_gain_from_couplings=-0.0565)}
     p = os.path.join(results_dir, f"t26_size_scan_N{N}_{mapper}.json")
     if not os.path.exists(p):
         return [make_row(f"t26/dim{d}", m, None, None)
@@ -587,7 +592,9 @@ def rows_t26(results_dir, N=256, mapper="v1"):
     out = []
     for d, r in ref.items():
         s_ = got.get(d)
-        for m in ("no_ZZ", "no_ZZZZ", "Z_only", "uniform"):
+        for m in ("no_ZZ", "no_ZZZZ", "Z_only", "uniform",
+                  "f1_full", "f1_Zonly", "f1_classical",
+                  "f1_gain_from_couplings"):
             out.append(make_row(f"t26/dim{d}", m,
                                 None if s_ is None else float(s_[m]),
                                 r[m], tol=0.002))

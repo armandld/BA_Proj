@@ -66,6 +66,7 @@ from t11_solver_attribution import (classical_init_spins,
                                     exhaustive_ground_state,
                                     greedy_local_search)
 from t11b_qaoa_displacement import mask_uniformity
+from t11_solver_attribution import f1_from_masks
 from t13_term_ablation import zero_hamiltonian_terms
 from phase5_qaoa_eval import prepare_qaoa_inputs
 
@@ -168,6 +169,14 @@ def main():
                         g, _, _, _ = decide(hp, dim, False, init)
                         agree = float(np.mean(g == base))
 
+                    # VERITE TERRAIN : les patches reellement durs a
+                    # grossir. C'est l'objectif d'origine du projet —
+                    # « changer une decision » n'est pas « mieux detecter »,
+                    # et sans ce F1 le scan ne dit rien sur la detection.
+                    gt = np.asarray(l2[si] >= thr)
+                    f1_classical = f1_from_masks(
+                        np.asarray(score > thr_amr), gt)
+
                     for name, drop in ABLATIONS:
                         hp2 = zero_hamiltonian_terms(hp, drop)
                         m, uni, _, _ = decide(hp2, dim, exact_ok, init)
@@ -175,6 +184,8 @@ def main():
                         rows.append(dict(
                             dim=dim, n_qubits=n_q, scenario=sc, re=re,
                             snap=si, ablation=name, changed=changed,
+                            f1=f1_from_masks(m, gt),
+                            f1_classical=float(f1_classical),
                             uniform=float(uni), base_uniform=float(base_uni),
                             method=method,
                             greedy_agrees_with_exhaustive=agree))
@@ -190,9 +201,9 @@ def main():
     print("\n" + "=" * 88)
     print("  SYNTHESIS — decisions changed by ablating the coupling families")
     print("=" * 88)
-    print(f"  {'dim':>4s} {'qubits':>7s} {'method':>12s} "
-          f"{'no_ZZ':>9s} {'no_ZZZZ':>9s} {'Z_only':>9s} "
-          f"{'uniform':>8s} {'proxy ok':>9s}")
+    print(f"  {'dim':>4s} {'qubits':>7s} {'Z_only chg':>11s} "
+          f"{'F1 full':>8s} {'F1 Z-only':>10s} {'F1 classic':>11s} "
+          f"{'uniform':>8s}")
     summary = []
     for dim in args.dims:
         sub = [r for r in rows if r["dim"] == dim]
@@ -205,14 +216,19 @@ def main():
               if r["greedy_agrees_with_exhaustive"] is not None]
         agree = float(np.mean(ag)) if ag else None
         meth = sub[0]["method"]
-        print(f"  {dim:4d} {sub[0]['n_qubits']:7d} {meth:>12s} "
-              f"{g('no_ZZ'):9.4f} {g('no_ZZZZ'):9.4f} {g('Z_only'):9.4f} "
-              f"{uni:8.2f} " + (f"{agree:9.4f}" if agree is not None
-                                else f"{'—':>9s}"))
+        f1 = lambda a: float(np.mean([r["f1"] for r in sub
+                                      if r["ablation"] == a]))
+        f1c = float(np.mean([r["f1_classical"] for r in sub]))
+        print(f"  {dim:4d} {sub[0]['n_qubits']:7d} {g('Z_only'):11.4f} "
+              f"{f1('full'):8.4f} {f1('Z_only'):10.4f} {f1c:11.4f} "
+              f"{uni:8.2f}")
         summary.append(dict(dim=dim, n_qubits=sub[0]["n_qubits"],
                             method=meth, no_ZZ=g("no_ZZ"),
                             no_ZZZZ=g("no_ZZZZ"), Z_only=g("Z_only"),
                             full=g("full"), uniform=uni,
+                            f1_full=f1("full"), f1_Zonly=f1("Z_only"),
+                            f1_classical=f1c,
+                            f1_gain_from_couplings=f1("full") - f1("Z_only"),
                             greedy_agreement=agree, n=len(sub)))
 
     broke = [s for s in summary if s["Z_only"] > 0]
@@ -227,6 +243,17 @@ def main():
         print("  Inertness HOLDS at every size scanned. The couplings change "
               "no decision\n  from 8 to "
               f"{max(s['n_qubits'] for s in summary)} qubits.")
+    print()
+    print("  DETECTION — le gain apporte par les couplages (F1 full - F1 Z-only)")
+    for s_ in summary:
+        d_ = s_["f1_gain_from_couplings"]
+        verdict = ("les couplages AIDENT" if d_ > 1e-6 else
+                   "les couplages NUISENT" if d_ < -1e-6 else
+                   "aucun effet")
+        print(f"    dim={s_['dim']:<2d} ({s_['n_qubits']:3d} q): "
+              f"{d_:+.4f}   {verdict}")
+    print("  Rappel : « changer une decision » n'est PAS « mieux detecter ».")
+
     ctrl = [s["full"] for s in summary]
     if any(c != 0 for c in ctrl):
         print(f"  WARNING: the `full` control is non-zero somewhere "

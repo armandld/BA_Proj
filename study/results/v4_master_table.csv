@@ -1,4 +1,4 @@
-# git_hash=cd0ef3002a119f9437af84139824bf8550513772
+# git_hash=9f9d98aa59921a37091da0aa766335ffcc10e6b9
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -156,15 +156,27 @@ t26/dim2,no_ZZ,0.000000,0.000000,OK
 t26/dim2,no_ZZZZ,0.000000,0.000000,OK
 t26/dim2,Z_only,0.000000,0.000000,OK
 t26/dim2,uniform,1.000000,1.000000,OK
+t26/dim2,f1_full,0.333333,0.333300,OK
+t26/dim2,f1_Zonly,0.333333,0.333300,OK
+t26/dim2,f1_classical,0.388889,0.388900,OK
+t26/dim2,f1_gain_from_couplings,0.000000,0.000000,OK
 t26/dim2,full (control),0.000000,0.000000,OK
 t26/dim4,no_ZZ,0.000000,0.000000,OK
 t26/dim4,no_ZZZZ,0.031250,0.031200,OK
 t26/dim4,Z_only,0.031250,0.031200,OK
 t26/dim4,uniform,0.750000,0.750000,OK
+t26/dim4,f1_full,0.519870,0.519900,OK
+t26/dim4,f1_Zonly,0.552410,0.552400,OK
+t26/dim4,f1_classical,0.552410,0.552400,OK
+t26/dim4,f1_gain_from_couplings,-0.032540,-0.032500,OK
 t26/dim4,full (control),0.000000,0.000000,OK
 t26/dim8,no_ZZ,0.046875,0.046900,OK
 t26/dim8,no_ZZZZ,0.069010,0.069000,OK
 t26/dim8,Z_only,0.079427,0.079400,OK
 t26/dim8,uniform,0.166667,0.166700,OK
+t26/dim8,f1_full,0.591570,0.591600,OK
+t26/dim8,f1_Zonly,0.648062,0.648100,OK
+t26/dim8,f1_classical,0.648062,0.648100,OK
+t26/dim8,f1_gain_from_couplings,-0.056492,-0.056500,OK
 t26/dim8,full (control),0.000000,0.000000,OK
 t26/control,greedy at dim2 (Z_only),0.000000,0.000000,OK
