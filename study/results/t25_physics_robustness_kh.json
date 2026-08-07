@@ -80,15 +80,93 @@
    "frontier_refusal": null,
    "ratio_vs_frontier": 1.2399706542192321,
    "qhas_worse": true
+  },
+  {
+   "tag": "kh_c",
+   "note": "intermediate layer, weaker seed, faster drift",
+   "is_ic_variation": true,
+   "is_true_seed_change": false,
+   "dns_signature": 64136.63528035801,
+   "dns_signature_canonical": 61756.79037528209,
+   "dns_relative_shift": 0.03853576085502719,
+   "condition_is_weak": false,
+   "qhas_runs": [
+    {
+     "phys_score": 0.007733591922200573,
+     "patch_ratio": 0.8255536196043165,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "phys_score": 0.004081707358816281,
+     "patch_ratio": 0.8493002473021583,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "phys_score": 0.005901267740031421,
+     "patch_ratio": 0.8363449865107914,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "classical_frontier": [
+    {
+     "threshold": 0.02,
+     "phys_score": 0.00042680492448315103,
+     "patch_ratio": 1.0,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.95,
+     "phys_score": 0.050297247570118886,
+     "patch_ratio": 0.015625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.485,
+     "phys_score": 0.0014038519149190039,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.2525,
+     "phys_score": 0.0014038519149190039,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.13625,
+     "phys_score": 0.0007511208794143294,
+     "patch_ratio": 0.8711780575539568,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "n_qhas_completed": 3,
+   "n_qhas_aborted": 0,
+   "n_classical_completed": 5,
+   "n_classical_aborted": 0,
+   "qhas_patch": 0.837066284472422,
+   "qhas_phys": 0.005905522340349425,
+   "frontier_at_qhas_budget": null,
+   "frontier_refusal": "bisection did not converge: bracketing budgets 0.6250/0.8712 are 0.2462 apart (> 0.12, twice its own tolerance) \u2014 nothing is measured in between",
+   "ratio_vs_frontier": null,
+   "qhas_worse": null
   }
  ],
- "status": "partial",
- "partial_stage": "kh_b",
- "partial_warning": "INCOMPLETE \u2014 resume point, not a result",
+ "n_decidable": 1,
+ "n_qhas_worse": 1,
+ "n_weak_excluded": 0,
+ "status": "completed",
  "git_hash_at_start": "779778005cbbe2efeb28616c310fbc7d40bc0d6c",
  "dirty_at_start": false,
- "git_hash_at_save": "779778005cbbe2efeb28616c310fbc7d40bc0d6c",
- "head_moved_during_run": false,
+ "git_hash_at_save": "b454d766df9ee9505848f37d9adfa1ed9cc244f8",
+ "head_moved_during_run": true,
  "git_hash": "779778005cbbe2efeb28616c310fbc7d40bc0d6c",
  "cli_args": {
   "fold": "kh",
@@ -99,5 +177,7 @@
   "no_resume": false,
   "run_weak": false,
   "recompute": false
- }
+ },
+ "wall_s": 6790.573186159134,
+ "verdicts_recomputed": true
 }

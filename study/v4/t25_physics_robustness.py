@@ -160,6 +160,15 @@ def signature(trace, key):
 # classique a ce budget » ait un sens.
 FRONTIER_MAX_LOCAL_RATIO = 5.0
 
+# Tolerance que la bissection se donne pour encadrer le budget vise. Si
+# l'intervalle final reste bien plus large, c'est que la bissection N'A PAS
+# CONVERGE — souvent parce que la reponse budget(seuil) est en marches et
+# qu'aucun seuil n'atterrit dans l'intervalle. Interpoler a travers un tel
+# trou est une hypothese, pas une mesure. Le critere est celui que le code
+# s'est lui-meme fixe, pas un seuil choisi apres coup.
+BISECTION_TOL = 0.06
+FRONTIER_MAX_BRACKET_GAP = 2.0 * BISECTION_TOL
+
 
 def frontier_verdict(f_ok, qp, qe):
     """Erreur classique au budget `qp`, ou un refus motive.
@@ -196,6 +205,12 @@ def frontier_verdict(f_ok, qp, qe):
                       f"budget {lo_x:.4f}->{hi_x:.4f} gives error "
                       f"{lo_y:.5f}->{hi_y:.5f} (more refinement, worse "
                       f"error) — no attainable error is defined here")
+    gap = hi_x - lo_x
+    if gap > FRONTIER_MAX_BRACKET_GAP:
+        return None, (f"bisection did not converge: bracketing budgets "
+                      f"{lo_x:.4f}/{hi_x:.4f} are {gap:.4f} apart "
+                      f"(> {FRONTIER_MAX_BRACKET_GAP:.2f}, twice its own "
+                      f"tolerance) — nothing is measured in between")
     lo_m, hi_m = max(lo_y, 1e-30), max(hi_y, 1e-30)
     ratio = max(lo_m, hi_m) / min(lo_m, hi_m)
     if ratio > FRONTIER_MAX_LOCAL_RATIO:
@@ -456,7 +471,7 @@ def main():
                 if below and above:
                     gap = (min(above, key=lambda r: r["patch_ratio"])["patch_ratio"]
                            - max(below, key=lambda r: r["patch_ratio"])["patch_ratio"])
-                    if gap <= 0.06:
+                    if gap <= BISECTION_TOL:
                         break
                 mid = 0.5 * (lo + hi)
                 r_mid = _eval(mid)
