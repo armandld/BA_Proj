@@ -79,13 +79,42 @@ recherche.
 | biais Z enlevé | **0.7500** | — |
 
 C'est un **zéro exact**, pas un petit nombre. Les termes à deux corps et à
-quatre corps — c'est-à-dire toute la structure qui justifie une formulation
-quantique — peuvent être supprimés sans qu'une seule décision de raffinement
+quatre corps peuvent être supprimés sans qu'une seule décision de raffinement
 change. Seul le biais à un corps (`Z`) porte la décision, et le retirer la
 détruit entièrement.
 
 **Reproduit sur deux mappeurs indépendants**, dont le v2 qui n'a pas le
 défaut de fenêtre du v1.
+
+🔴 **Correction importante : à la taille déployée, la moitié de ce résultat
+est TAUTOLOGIQUE.** En comptant les termes qui atteignent réellement le
+solveur :
+
+| dim | qubits | nb termes ZZ | nb termes ZZZZ | \|h\| médian | \|J\| médian | \|K\| médian |
+|---|---|---|---|---|---|---|
+| 2 | 8 | **0** | 4 | 358 | — | 50 |
+| 4 | 32 | **0** | 16 | 391 | — | 57 |
+| 8 | 128 | 48 | 62 | 136 | 36 | 53 |
+
+À dim = 2 et 4 il n'y a **aucun terme ZZ** : la fenêtre les a tous annulés
+avant que le solveur ne les voie. « Ablater ZZ ne change rien » y est donc
+vrai *parce qu'il n'y a rien à ablater*. Ce n'est pas une confirmation
+indépendante de A4 — c'est **le même fait vu deux fois**.
+
+**Ce qui reste non tautologique et porte le résultat :**
+
+- **ZZZZ existe bel et bien** à toutes les tailles (4, 16, 62 plaquettes,
+  \|K\| ≈ 50–57) et l'ablater ne change **rien** à dim = 2. Là, le zéro est
+  un vrai zéro.
+- **T18** (fenêtre neutralisée, couplage restauré à O(25–155)) est
+  **la** pièce maîtresse : c'est la seule configuration où les ZZ existent
+  vraiment et ne changent quand même rien.
+
+**Et le mécanisme est quantitatif** : le rapport biais/couplage s'effondre
+avec la taille — 358/50 ≈ **7,2** à dim 2 ; 391/57 ≈ **6,9** à dim 4 ;
+136/53 ≈ **2,6** à dim 8. Quand le biais domine d'un facteur ~7, les
+couplages sont inertes ; à ~2,6 ils mordent. C'est la même transition que
+celle mesurée par T26, expliquée par un seul nombre.
 
 ### A3. Réparer le défaut qui supprimait les couplages ne les ressuscite pas
 
