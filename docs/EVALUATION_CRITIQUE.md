@@ -29,26 +29,39 @@ adversaire.
 
 ## A. Solide — exploitable tel quel
 
-### A1. Le hamiltonien de coût est diagonal, donc il n'y a rien à optimiser quantiquement
+### A1. L'état fondamental est un masque uniforme sur 100 % des instantanés
 
 | mesure | valeur | source |
 |---|---|---|
-| hamiltonien diagonal | **1.0000** (100 % des instantanés) | `t11` |
 | état fondamental = masque uniforme | **1.0000** (100 %) | `t11b` |
+| hamiltonien diagonal | 1.0000 | `t11` — commodité de calcul, **pas** un argument (voir ci-dessous) |
 | solveur exhaustif atteint l'optimum | **1.0000** | `t11` |
 | glouton atteint l'optimum | **1.0000** | `t11` |
 | QAOA p1 reproduit le masque | **1.0000** | `t11` |
 | QAOA p2 reproduit le masque | **1.0000** | `t11` |
 
-Un hamiltonien diagonal a son état fondamental dans la base de calcul. Il
-n'y a **pas de superposition à exploiter** : le problème est un simple
-argmin sur des scalaires. Le fait que le solveur exhaustif, le glouton et
-QAOA donnent tous la même réponse n'est pas une coïncidence statistique,
-c'est une conséquence structurelle.
+⚠️ **Correction d'une erreur que j'avais commise dans une version
+antérieure de ce document.** J'avais écrit : *« le hamiltonien est diagonal,
+donc il n'y a pas de superposition à exploiter »*. **Cet argument est
+faux.** Le hamiltonien de coût d'un QAOA est **toujours** diagonal dans la
+base de calcul — c'est la définition même d'un encodage QUBO/Ising d'un coût
+classique. La non-commutativité vient du **mixeur** (champ transverse), pas
+du coût. Si cet argument valait, QAOA serait inutile pour *tout* problème
+combinatoire, ce qui dépasse de très loin ce que ces données montrent.
+`RESULTS_V4.md` utilise correctement la diagonalité pour ce qu'elle vaut :
+une commodité de calcul (la diagonalisation exacte se réduit à une
+énumération, donc on peut vérifier l'optimum par force brute).
 
-**Ce que ça permet d'affirmer :** à la taille déployée, la formulation Ising
-ne pose pas un problème que le quantique puisse résoudre mieux qu'un tri.
-C'est vrai par construction, pas en moyenne.
+**Le vrai résultat est ailleurs, et il n'a pas besoin de cet argument :**
+l'état fondamental **exact** est un masque **uniforme** — tout raffiné ou
+rien — sur **100 %** des instantanés. L'optimum du problème posé est donc
+trivial : il n'y a aucune structure combinatoire à trouver, quel que soit le
+solveur. Ce n'est pas une conséquence de la diagonalité, c'est une propriété
+mesurée de **cette** application physique → hamiltonien.
+
+**Ce que ça permet d'affirmer :** à la taille déployée, cette formulation ne
+pose pas un problème d'optimisation combinatoire. Elle en pose un dont la
+solution est constante.
 
 **Le seul solveur qui échoue** est le recuit simulé *à froid* (0.5833), le
 seul qui ne soit pas initialisé depuis la réponse classique — ce qui indique
@@ -333,8 +346,8 @@ consolident ; celle-là teste la limite du régime.
 
 ## G. Résumé en une page
 
-**À utiliser sans réserve :** le hamiltonien est diagonal et son fondamental
-uniforme (100 %) ; les couplages ZZ/ZZZZ changent **exactement 0** décision
+**À utiliser sans réserve :** l'état fondamental exact est un masque
+uniforme sur **100 %** des instantanés ; les couplages ZZ/ZZZZ changent **exactement 0** décision
 sur deux mappeurs ; réparer la fenêtre ne change rien ; la fenêtre jette
 88,6 %–~100 % du couplage préférentiellement là où il est le plus fort ; le
 solveur est d'ordre 1 ; le circuit se déplace de 0–8,5 % et recule avec la
