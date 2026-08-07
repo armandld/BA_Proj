@@ -1,0 +1,102 @@
+{
+ "fold": "tearing",
+ "scenario": "harris_tearing",
+ "classical_reference_source": "budget-matched threshold 0.4250 (forced)",
+ "matched_threshold": 0.42500000000000004,
+ "conditions": [
+  {
+   "tag": "tearing_b",
+   "note": "stronger field, thicker sheet, weaker seed",
+   "is_ic_variation": true,
+   "is_true_seed_change": false,
+   "dns_signature": 68192.01846603602,
+   "dns_signature_canonical": 56904.34618755703,
+   "dns_relative_shift": 0.19836221720700856,
+   "condition_is_weak": false,
+   "qhas_runs": [
+    {
+     "phys_score": 0.5027283279904313,
+     "patch_ratio": 0.7246436403508771,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "phys_score": 1.1000862119472532,
+     "patch_ratio": 0.7297834429824561,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "phys_score": 0.9830439932196828,
+     "patch_ratio": 0.8070175438596491,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "classical_frontier": [
+    {
+     "threshold": 0.06375,
+     "phys_score": 1.2890199999118315,
+     "patch_ratio": 0.8741776315789473,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.23375,
+     "phys_score": 0.012418855535653082,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.425,
+     "phys_score": 0.012418855535653082,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.68,
+     "phys_score": 9.659412498883402,
+     "patch_ratio": 0.22971491228070176,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.935,
+     "phys_score": 0.043448448320577586,
+     "patch_ratio": 0.015625,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "n_qhas_completed": 3,
+   "n_qhas_aborted": 0,
+   "n_classical_completed": 5,
+   "n_classical_aborted": 0,
+   "qhas_patch": 0.7538148757309941,
+   "qhas_phys": 0.861952844385789,
+   "frontier_at_qhas_budget": 0.6723706205830743,
+   "ratio_vs_frontier": 1.2819608977535493,
+   "qhas_worse": true,
+   "out_of_swept_range": false
+  }
+ ],
+ "status": "partial",
+ "partial_stage": "tearing_b",
+ "partial_warning": "INCOMPLETE \u2014 resume point, not a result",
+ "git_hash_at_start": "70ff6fff490068c6bfdfe97c74daf51649006fa5",
+ "dirty_at_start": true,
+ "git_hash_at_save": "4155ac96b2550f7912b4a68e0e1081dfe75ad43a",
+ "head_moved_during_run": true,
+ "git_hash": "70ff6fff490068c6bfdfe97c74daf51649006fa5",
+ "cli_args": {
+  "fold": "tearing",
+  "repeats": 3,
+  "frontier_points": 3,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "no_resume": false,
+  "run_weak": false
+ }
+}
