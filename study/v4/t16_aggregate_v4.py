@@ -537,6 +537,38 @@ def rows_t24(results_dir, folds):
     return out
 
 
+def rows_t25(results_dir, folds):
+    """Robustesse physique : decompte et refus, recalcules.
+
+    Ce sont des nombres qui QUALIFIENT la conclusion plutot qu'ils ne la
+    soutiennent ; raison de plus pour qu'ils soient verifies comme les
+    autres et non recopies.
+    """
+    ref = {"attempted": 7.0, "vacuous": 2.0, "refused": 3.0,
+           "decidable": 2.0, "direction_held": 1.0}
+    att = vac = refu = dec = held = 0
+    seen = False
+    for f in folds:
+        p = os.path.join(results_dir, f"t25_physics_robustness_{f}.json")
+        if not os.path.exists(p):
+            continue
+        seen = True
+        for c in json.load(open(p)).get("conditions", []):
+            att += 1
+            if c.get("skipped_as_vacuous"):
+                vac += 1
+            elif c.get("ratio_vs_frontier") is None:
+                refu += 1
+            else:
+                dec += 1
+                held += bool(c.get("qhas_worse"))
+    if not seen:
+        return [make_row("t25", m, None, None) for m in ref]
+    got = dict(attempted=att, vacuous=vac, refused=refu,
+               decidable=dec, direction_held=held)
+    return [make_row("t25", m, float(got[m]), ref[m], tol=0.5) for m in ref]
+
+
 def rows_t15c(results_dir, folds):
     """Lignes AGREGEES du niveau 3 : les comptages sur lesquels reposent
     les conclusions, recalcules ici a partir des JSON de fold plutot que
@@ -624,6 +656,7 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
     rows += rows_t22(results_dir, folds)
     rows += rows_t23(results_dir, folds)
     rows += rows_t24(results_dir, folds)
+    rows += rows_t25(results_dir, folds)
     return rows
 
 

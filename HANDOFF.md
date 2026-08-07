@@ -20,34 +20,25 @@ BASE=$(git merge-base HEAD origin/main)
 git diff --name-only $BASE HEAD -- src/                            # MUST be empty (V1 read-only)
 git diff --name-only $BASE HEAD -- study/ \
   | grep -v '^study/v[34]/' | grep -v '^study/results/'   # MUST be empty (V2 code read-only)
-python -m pytest tests/v3 tests/v4 -q                              # 312 passed, 14 skipped
-python study/v4/t16_aggregate_v4.py                                # 147 rows, 0 DIFF, 0 MISSING
+python -m pytest tests/v3 tests/v4 -q                              # 321 passed, 15 skipped
+python study/v4/t16_aggregate_v4.py                                # 152 rows, 0 DIFF, 0 MISSING
 ```
 
 All four held: `src/` **0** files changed, V2 phase **code** **0** files
 changed (the 76 files under `study/results/` are tracked artifacts, not V2
 code — `study/results/` was un-ignored so the numbers are verifiable from a
 fresh clone),
-**312 pytests passed** (14 skipped), master table **147/147 OK, 0 DIFF, 0 MISSING** — nothing outstanding.
+**321 pytests passed** (15 skipped), master table **152/152 OK, 0 DIFF, 0 MISSING** — nothing outstanding.
 `MISSING` means "not produced yet", never "produced and lost".
 
 Nothing outside `study/v3/`, `study/v4/`, `tests/v3/`, `tests/v4/`, `docs/`,
 `figures_v4/`, `logs/v4/`, `CLAUDE.md` was modified.
 
-**Final verification, from a clean checkout of the pushed branch.** Every
-gate above was re-run in a detached worktree of
-`origin/claude/kind-babbage-927g10` at `c998dbe`, after the leak-free
-campaign completed: `src/` **0** files, V2 phase code **0** files, nothing
-outside the allowed directories, **312 tests**, **147 rows / 147 OK / 0
-DIFF / 0 MISSING**. Nothing in the master table is outstanding.
-
-**Verified from a clean checkout, not from the working tree.** The four
-commands above were re-run in a detached worktree of the *pushed* branch
-(`git worktree add --detach <dir> origin/claude/kind-babbage-927g10`) and
-all four reproduce there: `src/` 0 files, V2 phase code 0 files, nothing
-outside the allowed directories, 312 tests, 147 rows / 0 DIFF. That is the
-form of the check worth trusting — a working tree can pass while the
-branch does not.
+**Verified from a clean checkout of the pushed branch, not the working
+tree** — a working tree can pass every gate while the branch does not. The
+four commands above are re-run in a detached worktree of
+`origin/claude/kind-babbage-927g10` and reproduce there. Re-run this after
+pulling; the counts in the block above are the current expected values.
 
 **`bash run_tests.sh` fails 8 tests — do not treat this as a regression.**
 It is defect D6, pre-existing, reproduced at `cf93ba3` (the last commit
@@ -69,7 +60,7 @@ deterministic, so `t15_level3_closed_loop.py` regenerates them identically.
 
 `study/v4/t16_aggregate_v4.py` is the transcription cross-check: it
 recomputes each published number from its artifact and diffs against the
-Markdown. It prints `0 DIFF` over 147 rows.
+Markdown. It prints `0 DIFF` over 152 rows.
 
 Cheap to regenerate (seconds–minutes): T11, T11b, T12, T13, T14, T17, T18.
 Expensive (hours): the Level-3 campaign, T20, T22.
@@ -239,7 +230,7 @@ heuristic would have deleted valid data.
 |---|---|---|
 | **T22 unseen initial conditions** | **done** (T22b: 5 draws x 2 conditions x 4 folds, 56 runs, 0 aborted) | the single-run signal (Q-HAS relatively better on unseen conditions, all 4 folds) sits inside D11's 17–49 % CV. The repeated pass (5 draws × 2 conditions, budget-matched reference) is what can settle it |
 | **D13 removal** | **partially done**: **done, all 4 folds**. Leak-free, Q-HAS is 2.1× worse than the classical frontier at its own budget on `tearing`, 1.9x/4.5x on `kh`, and aborts on 5/5 canonical draws on `rotor` — the leak was propping it up | the *definitive* version still requires re-tuning the QAOA arm with `threshold_amr` in its Optuna search space on the training classes. `t24_leak_free_summary.py` reports what is measured |
-| physics seeds | still **1 per class** | T20's 18 completed runs vary QAOA sampling only; T22 varies the initial condition but at n=1 per condition so far |
+| physics seeds | **the requirement was void** (T25) | 3 of 4 scenarios have NO RNG in their initial condition; `rotor`'s is hard-coded and moves the trajectory 0.0022 %. Robustness was instead probed by varying IC *parameters*: 2 of 7 conditions decidable, **one each way** — the direction is NOT established off the canonical conditions |
 | **T19 audit of `tearing`** | **done** | the only fold whose arms are unverified |
 | **T19 `--trace-only`** | **done**, figure re-rendered | `rotor`'s 2 aborted points are excluded from the plotted frontier, and the Q-HAS marker is now the mean of the repeated draws with its spread, not a single run |
 | ≥ 3 physics seeds | not attempted | protocol wanted ≥3; everything is n = 1 per class |

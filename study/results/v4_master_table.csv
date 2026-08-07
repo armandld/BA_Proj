@@ -1,4 +1,4 @@
-# git_hash=d6b9ed7e70b5691dec1754fc10da1778a63b27ac
+# git_hash=8ae109bba3ace6cdce5959b563de1a915ade456c
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -147,3 +147,8 @@ t24/tearing,leak-free canonical phys,3.735120,3.735100,OK
 t24/tearing,leak-free canonical ratio vs frontier,2.077112,2.077100,OK
 t24/tearing,leak-free unseen phys,2.560021,2.560000,OK
 t24/tearing,leak-free unseen ratio vs frontier,1.695367,1.695400,OK
+t25,attempted,7.000000,7.000000,OK
+t25,vacuous,2.000000,2.000000,OK
+t25,refused,3.000000,3.000000,OK
+t25,decidable,2.000000,2.000000,OK
+t25,direction_held,1.000000,1.000000,OK

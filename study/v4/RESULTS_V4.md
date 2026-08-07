@@ -1854,10 +1854,97 @@ numbers (`t24/*` rows).
 
 ---
 
+## T25 — robustness to the physics, and the "≥ 3 seeds" requirement
+
+```bash
+python study/v4/t25_physics_robustness.py --fold <f> --repeats 3
+python study/v4/t25_physics_robustness.py --fold <f> --recompute
+```
+
+### First: there is no physics seed to vary
+
+The pre-registration asks for ≥ 3 physics seeds per class, and this study
+declared "1 seed per class" as a limitation throughout. **Both statements
+are mis-specified.**
+
+| scenario | randomness in its initial condition |
+|---|---|
+| `init_kelvin_helmholtz` | **none.** `noise_amplitude` multiplies `sin(X)` — a deterministic *mode* |
+| `init_harris_tearing` | **none.** `perturbation` multiplies `cos(k·X)` |
+| `init_orszag_tang` | **none**, and no parameters at all |
+| `init_mhd_rotor` | a real RNG, but `np.random.default_rng(42)` is **hard-coded** |
+
+And the one real seed **does not move the physics**: changing it 42 → 7
+shifts the DNS trajectory signature by **0.0022 %**, because the RNG enters
+only as `perturbation * standard_normal(...)` with `perturbation = 0.005` —
+a symmetry breaker on a field of O(1). So a seed sweep was never possible in
+three classes and would have measured nothing in the fourth. **The declared
+limitation was not a limitation; it was a non-experiment.**
+
+### What was run instead
+
+The lever that does move the physics is the initial-condition *parameter*.
+T25 evaluates each fold on additional initial conditions, comparing Q-HAS
+against a classical frontier **built on that same condition** and placed by
+bisection on the budget Q-HAS actually realised there.
+
+| fold | condition | trajectory shift | verdict |
+|---|---|---|---|
+| `rotor` | `rotor_seed7` (true seed 42→7) | 0.0022 % | **vacuous** — skipped |
+| `rotor` | `rotor_b` | 21.03 % | **0.86× — Q-HAS BETTER** |
+| `tearing` | `tearing_b` | 19.84 % | no verdict — frontier anti-monotone |
+| `tearing` | `tearing_c` | 8.16 % | no verdict — budget outside swept range |
+| `kh` | `kh_b` | 6.53 % | **1.24× — Q-HAS worse** |
+| `kh` | `kh_c` | 3.85 % | no verdict — bisection unconverged |
+| `ot` | `ot_re900` (Reynolds, not an IC) | 0.12 % | **vacuous** — skipped |
+
+**7 conditions attempted, 2 vacuous, 3 refused, 2 decidable — one each way.**
+
+### The honest reading
+
+> **On genuinely different initial conditions the direction of the result is
+> not established.** It holds on `kh_b` and reverses on `rotor_b`.
+
+This does **not** overturn the closed-loop result, which is measured on the
+canonical conditions against T15b's dense bisected frontier with proper
+budget matching. It does bound its scope: *Q-HAS is worse on the initial
+conditions studied*, not *Q-HAS is worse in general*. Any manuscript claim
+must carry that boundary.
+
+### Why three conditions produced no verdict, and why that is reported
+
+On alternative initial conditions the classical relation budget → error is
+often **not monotone**: on `tearing_b`, refining from budget 0.625 to 0.874
+makes the error **30× worse** (0.012 → 1.289). "The attainable classical
+error at budget X" is undefined on such a set, yet `np.interp` answers with
+a normal-looking number — and it had already printed **1.28×** as a result.
+
+`frontier_verdict()` therefore refuses unless the bracketing interval is
+locally sound: error non-increasing with budget, points within 5×, and the
+bisection converged to within twice its own declared tolerance. Each refusal
+carries its reason in the artifact.
+
+**Which way the guards cut, stated because it is checkable:** all three
+criteria removed evidence *favouring* the study (`tearing_b` 1.28×, `kh_c`
+7.02×), and the single result *contradicting* it (`rotor_b` 0.86×) survived
+all three. If these filters are biased, they are biased against the claim
+this study makes.
+
+### What T25 cannot say
+
+- **Nothing about magnitude** — n = 3 draws per condition, and on `kh_c` two
+  draws at the same budget differed by 1.9×.
+- **Nothing from an independent seed axis** — it does not exist. The
+  physics-robustness evidence rests entirely on parameter variation.
+- **Nothing about `ot`** — no IC parameters exist, and its Reynolds lever
+  shifts the trajectory 0.12 %.
+
+---
+
 # CLOSING THE CLOSED-LOOP STUDY (Level 3)
 
 Everything below is measured, carries the control that validated it, and is
-covered by `t16_aggregate_v4.py` (**147 rows, 147 OK, 0 DIFF, 0 MISSING**).
+covered by `t16_aggregate_v4.py` (**152 rows, 152 OK, 0 DIFF, 0 MISSING**).
 
 ## The one-sentence result
 
@@ -1881,6 +1968,16 @@ records `rotor`'s tuned classical threshold diverging at step 208, and 2 of
 that fold's 6 bisection points. Divergence is a property of the threshold;
 both arms have thresholds that diverge. What is asymmetric is that at the
 point where they are compared, one arm completed and the other did not.
+
+**Scope boundary, from T25.** Everything above is measured on the
+**canonical initial conditions**. On genuinely different initial states the
+direction is **not established**: of 7 alternative conditions, 2 were
+vacuous, 3 gave no sound verdict, and the 2 decidable ones split one each
+way (`kh_b` 1.24× for, `rotor_b` 0.86× against). The claim is therefore
+*Q-HAS is worse on the initial conditions studied*, not *in general*. And
+the pre-registered "≥ 3 physics seeds" was never available: three of four
+scenarios have no RNG at all, and the fourth's hard-coded seed moves the
+trajectory by 0.0022 %.
 
 **The D13 clause is measured on all 4 folds**, and it is a *bound*:
 `--mode leak-free` substitutes the threshold without re-tuning the QAOA

@@ -29,7 +29,7 @@ Consequences for your review:
 - the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
   `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
   number from the artifacts and compares it to the published value. It must
-  print `0 DIFF` (147 rows, 0 MISSING);
+  print `0 DIFF` (152 rows, 0 MISSING);
 - a `MISSING` row means the artifact was never produced, not that it was
   lost — the tracked set is the complete set;
 - everything except Level 3 re-runs in seconds to minutes (T11–T14, T17,
@@ -60,7 +60,7 @@ breach. Everything new lives in `study/v3/`, `study/v4/`, `tests/v3/`,
 ### 1b. The test gate
 
 ```bash
-python -m pytest tests/v3 tests/v4 -q      # expect 312 passed, 14 skipped
+python -m pytest tests/v3 tests/v4 -q      # expect 321 passed, 15 skipped
 ```
 
 Note `bash run_tests.sh` (the V1 suite) **fails 8 tests on a clean

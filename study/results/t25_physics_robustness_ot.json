@@ -1,0 +1,41 @@
+{
+ "fold": "ot",
+ "scenario": "orszag_tang",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "matched_threshold": 0.19062500000000002,
+ "conditions": [
+  {
+   "tag": "ot_re900",
+   "note": "init_orszag_tang takes NO parameters; this varies the Reynolds number, which is NOT an initial-condition variation and must not be counted as one",
+   "is_ic_variation": false,
+   "is_true_seed_change": false,
+   "dns_signature": 146067.78089695156,
+   "dns_signature_canonical": 145888.8460796226,
+   "dns_relative_shift": 0.0012265147208807418,
+   "condition_is_weak": true,
+   "skipped_as_vacuous": true,
+   "qhas_worse": null,
+   "ratio_vs_frontier": null
+  }
+ ],
+ "n_decidable": 0,
+ "n_qhas_worse": 0,
+ "n_weak_excluded": 1,
+ "status": "completed",
+ "git_hash_at_start": "8ae109bba3ace6cdce5959b563de1a915ade456c",
+ "dirty_at_start": false,
+ "git_hash_at_save": "8ae109bba3ace6cdce5959b563de1a915ade456c",
+ "head_moved_during_run": false,
+ "git_hash": "8ae109bba3ace6cdce5959b563de1a915ade456c",
+ "cli_args": {
+  "fold": "ot",
+  "repeats": 3,
+  "frontier_points": 3,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "no_resume": false,
+  "run_weak": false,
+  "recompute": false
+ },
+ "wall_s": 109.2392840385437
+}

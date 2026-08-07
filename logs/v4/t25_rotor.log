@@ -1,0 +1,53 @@
+Environnement Local detecte. Ecriture directe sur le disque.
+====================================================================================
+  V4 T25 - physics robustness, fold rotor (mhd_rotor)
+  2 extra initial condition(s), 3 Q-HAS draws each
+  classical frontier anchored at the matched threshold 0.0969
+====================================================================================
+
+--- Pre-computing DNS traces for robust/canonical-rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (robust/canonical-rotor) ---
+
+  canonical DNS signature = 9.274266e+04
+
+  --- rotor_seed7: canonical parameters, RNG seed 42 -> 7 (a TRUE seed change, the only one available anywhere in the suite) ---
+
+--- Pre-computing DNS traces for robust/rotor_seed7 ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (robust/rotor_seed7) ---
+
+    DNS signature 9.274474e+04  shift vs canonical 0.0022%
+    WARNING: this condition moves the trajectory by only 0.0022% (< 1%) — it tests almost nothing and must be reported as such
+    => SKIPPED: no draws run. The finding is the shift itself, not a comparison.
+    [checkpoint] rotor_seed7
+
+  --- rotor_b: faster, larger rotor with a sharper taper ---
+
+--- Pre-computing DNS traces for robust/rotor_b ---
+Hot-Start captured at t=0.2003
+DNS pre-computed: 1398 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (robust/rotor_b) ---
+
+    DNS signature 1.122451e+05  shift vs canonical 21.0286%
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] 1/3: phys=0.26847 patch=0.3627
+    [qhas] 2/3: phys=0.60214 patch=0.3297   **ABORTED step 974**
+    [qhas] 3/3: phys=0.33972 patch=0.3508
+    [classical] thr=0.0145: phys=0.19562 patch=0.5765
+    [classical] thr=0.0533: phys=0.07858 patch=0.4237
+    [classical] thr=0.0969: phys=0.18435 patch=0.3817
+    [classical] thr=0.1550: phys=0.51660 patch=0.3326
+    [classical] thr=0.2131: phys=0.52998 patch=0.2698   **ABORTED**
+    => Q-HAS 0.30410 vs frontier 0.35321 at budget 0.3568  ratio=0.86x
+    [checkpoint] rotor_b
+  1 condition(s) excluded as vacuous (trajectory shift < 1%)
+
+  ------------------------------------------------------------------------------
+  direction held on 0/1 decidable condition(s) for fold rotor
+  saved: t25_physics_robustness_rotor.json (5607s)
+
+V4 Task 25 complete.

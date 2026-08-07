@@ -1,0 +1,83 @@
+Environnement Local detecte. Ecriture directe sur le disque.
+====================================================================================
+  V4 T25 - physics robustness, fold kh (kelvin_helmholtz)
+  2 extra initial condition(s), 3 Q-HAS draws each
+  classical frontier anchored at the matched threshold 0.1906
+====================================================================================
+
+--- Pre-computing DNS traces for robust/canonical-kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (robust/canonical-kh) ---
+
+  canonical DNS signature = 6.175679e+04
+
+  --- kh_b: wider shear layer, stronger seed mode, slower drift ---
+
+--- Pre-computing DNS traces for robust/kh_b ---
+Hot-Start captured at t=0.9041
+DNS pre-computed: 365 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (robust/kh_b) ---
+
+    DNS signature 5.772239e+04  shift vs canonical 6.5327%
+Environnement Local detecte. Ecriture directe sur le disque.
+====================================================================================
+  V4 T25 - physics robustness, fold kh (kelvin_helmholtz)
+  2 extra initial condition(s), 3 Q-HAS draws each
+  classical frontier anchored at the matched threshold 0.1906
+====================================================================================
+
+--- Pre-computing DNS traces for robust/canonical-kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (robust/canonical-kh) ---
+
+  canonical DNS signature = 6.175679e+04
+
+  --- kh_b: wider shear layer, stronger seed mode, slower drift ---
+
+--- Pre-computing DNS traces for robust/kh_b ---
+Hot-Start captured at t=0.9041
+DNS pre-computed: 365 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (robust/kh_b) ---
+
+    DNS signature 5.772239e+04  shift vs canonical 6.5327%
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] 1/3: phys=0.00287 patch=0.9443
+    [qhas] 2/3: phys=0.00450 patch=0.9651
+    [qhas] 3/3: phys=0.00312 patch=0.9566
+    [classical] thr=0.0200: phys=0.00276 patch=1.0000
+    [classical] thr=0.9500: phys=0.03331 patch=0.0156
+    [classical] thr=0.4850: phys=0.00874 patch=0.6659
+    [classical] thr=0.2525: phys=0.00291 patch=0.8935
+    [classical] thr=0.1363: phys=0.00276 patch=1.0000
+    => Q-HAS 0.00350 vs frontier 0.00282 at budget 0.9554  ratio=1.24x
+    [checkpoint] kh_b
+
+  --- kh_c: intermediate layer, weaker seed, faster drift ---
+
+--- Pre-computing DNS traces for robust/kh_c ---
+Hot-Start captured at t=0.9010
+DNS pre-computed: 434 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (robust/kh_c) ---
+
+    DNS signature 6.413664e+04  shift vs canonical 3.8536%
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] 1/3: phys=0.00773 patch=0.8256
+    [qhas] 2/3: phys=0.00408 patch=0.8493
+    [qhas] 3/3: phys=0.00590 patch=0.8363
+    [classical] thr=0.0200: phys=0.00043 patch=1.0000
+    [classical] thr=0.9500: phys=0.05030 patch=0.0156
+    [classical] thr=0.4850: phys=0.00140 patch=0.6250
+    [classical] thr=0.2525: phys=0.00140 patch=0.6250
+    [classical] thr=0.1363: phys=0.00075 patch=0.8712
+    => Q-HAS 0.00591 vs frontier 0.00084 at budget 0.8371  ratio=7.02x
+    [checkpoint] kh_c
+
+  ------------------------------------------------------------------------------
+  direction held on 2/2 decidable condition(s) for fold kh
+  saved: t25_physics_robustness_kh.json (6791s)
+
+V4 Task 25 complete.
