@@ -231,11 +231,15 @@ def test_t25_refuses_a_non_monotone_bracketing_interval():
     # anti-monotone dans l'intervalle encadrant -> refus motive
     ref, why = frontier_verdict(f([(0.625, 0.012), (0.874, 1.289)]), 0.75, 1.0)
     assert ref is None and "not monotone" in why.lower()
-    # trop raide -> refus motive
-    ref, why = frontier_verdict(f([(0.3, 10.0), (0.5, 0.1)]), 0.4, 1.0)
+    # trop raide -> refus motive (ecart de budget volontairement etroit
+    # pour isoler le critere de raideur du critere de convergence)
+    ref, why = frontier_verdict(f([(0.35, 10.0), (0.45, 0.1)]), 0.4, 1.0)
     assert ref is None and "steep" in why.lower()
+    # bissection non convergee -> refus motive
+    ref, why = frontier_verdict(f([(0.30, 0.4), (0.60, 0.2)]), 0.4, 1.0)
+    assert ref is None and "did not converge" in why.lower()
     # sain -> verdict rendu
-    ref, why = frontier_verdict(f([(0.3, 0.4), (0.5, 0.2)]), 0.4, 1.0)
+    ref, why = frontier_verdict(f([(0.35, 0.4), (0.45, 0.2)]), 0.4, 1.0)
     assert ref is not None and why is None
     assert ref == pytest.approx(0.3)
 
