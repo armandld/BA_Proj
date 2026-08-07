@@ -16,15 +16,105 @@
    "skipped_as_vacuous": true,
    "qhas_worse": null,
    "ratio_vs_frontier": null
+  },
+  {
+   "tag": "rotor_b",
+   "note": "faster, larger rotor with a sharper taper",
+   "is_ic_variation": true,
+   "is_true_seed_change": false,
+   "dns_signature": 112245.12030686493,
+   "dns_signature_canonical": 92742.66049605537,
+   "dns_relative_shift": 0.2102857488290307,
+   "condition_is_weak": false,
+   "qhas_runs": [
+    {
+     "phys_score": 0.2684736409895373,
+     "patch_ratio": 0.3627189616850127,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "phys_score": 0.6021409976758751,
+     "patch_ratio": 0.32971223614775724,
+     "completed": false,
+     "abort": {
+      "abort_step": 974,
+      "abort_time": 0.9536,
+      "partial_combined": 0.5243,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "phys_score": 0.3397201035847706,
+     "patch_ratio": 0.35082160245554617,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "classical_frontier": [
+    {
+     "threshold": 0.014531,
+     "phys_score": 0.19561807431855582,
+     "patch_ratio": 0.5764976714648603,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.053281,
+     "phys_score": 0.07858088299691839,
+     "patch_ratio": 0.4237239362828112,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.096875,
+     "phys_score": 0.18435294657799722,
+     "patch_ratio": 0.38169784610499574,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.155,
+     "phys_score": 0.5166012586920254,
+     "patch_ratio": 0.33264976714648603,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "threshold": 0.213125,
+     "phys_score": 0.529983689299245,
+     "patch_ratio": 0.26983432112068967,
+     "completed": false,
+     "abort": {
+      "abort_step": 912,
+      "abort_time": 0.8786,
+      "partial_combined": 0.4557,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    }
+   ],
+   "n_qhas_completed": 2,
+   "n_qhas_aborted": 1,
+   "n_classical_completed": 4,
+   "n_classical_aborted": 1,
+   "qhas_patch": 0.35677028207027944,
+   "qhas_phys": 0.304096872287154,
+   "frontier_at_qhas_budget": 0.3532105502092179,
+   "ratio_vs_frontier": 0.8609507052012679,
+   "qhas_worse": false,
+   "out_of_swept_range": false
   }
  ],
- "status": "partial",
- "partial_stage": "rotor_seed7",
- "partial_warning": "INCOMPLETE \u2014 resume point, not a result",
+ "n_decidable": 1,
+ "n_qhas_worse": 0,
+ "n_weak_excluded": 1,
+ "status": "completed",
  "git_hash_at_start": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
  "dirty_at_start": false,
- "git_hash_at_save": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
- "head_moved_during_run": false,
+ "git_hash_at_save": "70ff6fff490068c6bfdfe97c74daf51649006fa5",
+ "head_moved_during_run": true,
  "git_hash": "25eaafd3b01add8a1d9719742e621432c4cbc1c3",
  "cli_args": {
   "fold": "rotor",
@@ -34,5 +124,6 @@
   "seed": 0,
   "no_resume": false,
   "run_weak": false
- }
+ },
+ "wall_s": 5606.903223991394
 }
