@@ -412,21 +412,58 @@ def main():
                   f"patch={q[-1]['patch_ratio']:.4f}{tail}", flush=True)
         q_ok = [r for r in q if r["completed"]]
 
-        # frontiere classique : le seuil apparie, plus des seuils
-        # l'encadrant, pour pouvoir interpoler au budget realise par Q-HAS
-        thrs = [thr_matched]
-        for k in range(1, args.frontier_points):
-            thrs += [thr_matched * (1.0 + 0.6 * k),
-                     thr_matched * max(0.15, 1.0 - 0.45 * k)]
-        thrs = sorted({round(t, 6) for t in thrs})[:args.frontier_points + 2]
+        # FRONTIERE CLASSIQUE, PLACEE PAR BISSECTION SUR LE BUDGET VISE.
+        #
+        # La premiere version balayait des seuils derives du seuil apparie,
+        # c'est-a-dire calibre sur la condition CANONIQUE. Sur une autre
+        # condition initiale le budget realise par Q-HAS se deplace, et la
+        # plage balayee ne l'encadrait souvent pas : `tearing_c` a rendu un
+        # budget de 0.7689 pour une plage [0.0156, 0.6250]. Deux conditions
+        # sur trois sortaient donc sans verdict — la tache refusait
+        # correctement, mais ne mesurait rien.
+        #
+        # On cible desormais le budget que Q-HAS vient REELLEMENT de
+        # realiser sur CETTE condition. `patch_ratio` decroit avec le seuil,
+        # ce qui rend la bissection valide ; chaque evaluation est gardee
+        # contre la divergence, et toutes sont conservees : la frontiere est
+        # la trace complete, pas seulement le point le plus proche.
+        target = (float(np.mean([r["patch_ratio"] for r in q_ok]))
+                  if q_ok else None)
         front = []
-        for t in thrs:
-            hpc = dict(hp_c); hpc["threshold_amr"] = float(t)
+
+        def _eval(thr):
+            hpc = dict(hp_c); hpc["threshold_amr"] = float(thr)
             r = guarded(hpc, True, cfg2, dns)
-            front.append({"threshold": float(t), **r})
-            print(f"    [classical] thr={t:.4f}: "
+            front.append({"threshold": float(thr), **r})
+            print(f"    [classical] thr={thr:.4f}: "
                   f"phys={r['phys_score']:.5f} patch={r['patch_ratio']:.4f}"
                   f"{'' if r['completed'] else '   **ABORTED**'}", flush=True)
+            return r
+
+        if target is None:
+            # aucun tirage Q-HAS valide : rien a encadrer, on se rabat sur
+            # le seuil apparie pour garder une trace exploitable
+            _eval(thr_matched)
+        else:
+            lo, hi = 0.02, 0.95           # patch eleve <-> seuil bas
+            r_lo, r_hi = _eval(lo), _eval(hi)
+            for _ in range(args.frontier_points):
+                # arret des que le budget vise est encadre serre
+                below = [r for r in front
+                         if r["completed"] and r["patch_ratio"] <= target]
+                above = [r for r in front
+                         if r["completed"] and r["patch_ratio"] >= target]
+                if below and above:
+                    gap = (min(above, key=lambda r: r["patch_ratio"])["patch_ratio"]
+                           - max(below, key=lambda r: r["patch_ratio"])["patch_ratio"])
+                    if gap <= 0.06:
+                        break
+                mid = 0.5 * (lo + hi)
+                r_mid = _eval(mid)
+                if r_mid["patch_ratio"] > target:
+                    lo = mid
+                else:
+                    hi = mid
 
         f_ok = sorted([r for r in front if r["completed"]],
                       key=lambda r: r["patch_ratio"])
