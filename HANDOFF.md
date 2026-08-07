@@ -7,6 +7,11 @@
 at the end of `study/v4/RESULTS_V4.md` for the one-sentence result, the
 evidence ranked by strength, and what would overturn it.
 
+**Read `docs/EVALUATION_CRITIQUE.md` before quoting any number.** It
+triages every result into: usable as-is (deterministic, exact, no budget
+matching), usable with a mandatory caveat, and do-not-quote. The
+headline you probably want is not the closed-loop one.
+
 **Read `docs/CODE_REVIEW_GUIDE.md` first** — it orders the review by risk
 per minute. This file is the single entry point: what was done, what it
 concluded, what is unfinished, and what to check before merging.
