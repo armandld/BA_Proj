@@ -174,8 +174,12 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     if hamilt_params is not None:
         for key, value in hamilt_params.items():
             if key == 'E_max':
+                # E_max est un scalaire d'echelle, pas un champ : il ne doit
+                # PAS etre reduit. Le `if` suivant etait un `if` et non un
+                # `elif`, si bien qu'un E_max devenu tableau aurait ete
+                # silencieusement remplace par sa version poolee.
                 mini_hamilt_params[key] = value
-            if isinstance(value, (tuple, list)):
+            elif isinstance(value, (tuple, list)):
                 mini_hamilt_params[key] = tuple(
                     _process_hamilt(v, type_filter) for v in value
                 )

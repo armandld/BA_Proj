@@ -230,6 +230,7 @@ def f1_from_masks(pred, gt):
 def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
+                 zero_psi=False, scale_kopt=False,
                  run_qaoa=True, seed=0):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from phase5_qaoa_eval import (                      # V2, reutilise
@@ -242,6 +243,15 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     thr_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
     data_in, hp, score_vqa = prepare_qaoa_inputs(
         vx, vy, Bx, By, N, dim, re, use_v2=use_v2)
+
+    # Ablation psi : psi porte une derivee temporelle du flux qui n'existe
+    # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
+    # information que son propre cout ignore. La mettre a zero isole ce que
+    # psi apporte, sans toucher a theta ni a H.
+    if zero_psi:
+        for _k in ("psi_h", "psi_v"):
+            if _k in data_in:
+                data_in[_k] = np.zeros_like(np.asarray(data_in[_k], float)).tolist()
 
     h_bias, edges, plaqs = build_ising_terms(hp, dim)
     n_q = 2 * dim * dim
@@ -293,7 +303,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
             ws = classical_warm_start_params(score_vqa, thr_amr, reps)
             t0 = time.time()
             _, dh, dv, _, _ = run_qaoa_on_snapshot(
-                data_in, hp, dim, reps=reps, K_opt=k_opt,
+                data_in, hp, dim, reps=reps,
+                K_opt=(k_opt * reps if scale_kopt else k_opt),
                 shots=qaoa_shots, backend_name="state_vector",
                 warm_start_params=ws)
             s = np.ones(n_q, dtype=np.int8)
@@ -306,7 +317,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
         ws = classical_warm_start_params(score_vqa, thr_amr, reps)
         t0 = time.time()
         _, dh, dv, _, _ = run_qaoa_on_snapshot(
-            data_in, hp, dim, reps=reps, K_opt=k_opt,
+            data_in, hp, dim, reps=reps,
+            K_opt=(k_opt * reps if scale_kopt else k_opt),
             shots=qaoa_shots, backend_name="aer",
             warm_start_params=ws)
         s = np.ones(n_q, dtype=np.int8)
@@ -407,6 +419,15 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", type=int, default=2,
                    help="2 = 8 qubits = regime effectif du pipeline V1")
+    p.add_argument("--zero-psi", action="store_true",
+                   help="met psi a zero dans l'etat initial du QAOA. Isole "
+                        "ce que l'encodage de phase apporte a la descente "
+                        "vers le fondamental et a la detection.")
+    p.add_argument("--scale-kopt", action="store_true",
+                   help="budget COBYLA proportionnel a p (k_opt * reps). Sans "
+                        "ce drapeau, p=6 optimise 12 parametres avec le meme "
+                        "budget que p=1 en optimise 2, et le balayage confond "
+                        "profondeur et sous-optimisation.")
     p.add_argument("--qaoa-reps", nargs="+", type=int, default=[1, 2, 3],
                    help="profondeurs p du QAOA. Balayer p=1..6 sert a tester "
                         "si la qualite de detection DECROIT quand le circuit "
@@ -457,6 +478,7 @@ def main():
                     l2[si], thr, use_v2=(args.mapper == "v2"),
                     sweeps=args.sweeps, n_restarts=args.restarts,
                     qaoa_reps=tuple(args.qaoa_reps), qaoa_shots=args.shots,
+                    zero_psi=args.zero_psi, scale_kopt=args.scale_kopt,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
                     seed=args.seed)
                 diag_flags.append(out["diagonal"])
@@ -518,6 +540,8 @@ def main():
     out = os.path.join(
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
+        + ("_zeropsi" if args.zero_psi else "")
+        + ("_scalekopt" if args.scale_kopt else "")
         + ("" if args.mapper == "v2" else f"_{args.mapper}")
         + ".npz")
     np.savez_compressed(
