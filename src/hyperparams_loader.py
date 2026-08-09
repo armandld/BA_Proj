@@ -22,7 +22,12 @@ import json
 import os
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DEFAULT_PATH = os.path.join(_PROJECT_ROOT, 'best_hyperparams.json')
+# Les hyperparametres sont une SORTIE d'entrainement, rangee avec les autres
+# resultats. L'ancien emplacement racine reste accepte en repli.
+_DEFAULT_PATH = os.path.join(_PROJECT_ROOT, 'results', 'hyperparams',
+                             'best_hyperparams.json')
+if not os.path.isfile(_DEFAULT_PATH):
+    _DEFAULT_PATH = os.path.join(_PROJECT_ROOT, 'best_hyperparams.json')
 
 
 def load_hyperparams(path=None, method='quantum', scenario=None, combo=None,

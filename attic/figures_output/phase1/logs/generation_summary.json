@@ -1,5 +1,0 @@
-{"phase": 1, "lambda": 0.4, "scripts": [
-  {"script": "fig5_qaoa_detailed_analysis.py", "status": "ok", "duration_s": 647}
-],
-"succeeded": 1, "failed": 0
-}

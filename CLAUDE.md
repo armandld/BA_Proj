@@ -40,9 +40,11 @@ figures/                code produisant les figures À PARTIR de results/
                         (figures/v1_legacy/ = figures de l'ère V1)
 scripts/                lanceurs de campagne (.sh)
 docs/                   protocole, résultats, critique d'évaluation
-attic/                  fourre-tout : anciens résultats Optuna/DNS conservés
-                        le temps de prouver qu'ils sont reproductibles ;
-                        à supprimer ensuite
+results/hyperparams/    entrées gelées : campagne Optuna (~1 semaine) et
+                        best_hyperparams.json — voir son PROVENANCE.md,
+                        seul dossier non reproductible par une commande
+results/v1_runs/        sorties de l'ère V1
+results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 ```
 
 ## Garde-fous

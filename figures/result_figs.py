@@ -3,7 +3,7 @@
 Generate the two result figures for the Q-HAS falsification study.
 
 Reads numbers from the full-run log files (N=256, 4 scenarios, seed=0)
-that are checked into `attic/logs/Result_phase*.txt`. The numbers are reported
+that are checked into `results/logs_v2/Result_phase*.txt`. The numbers are reported
 to 3 decimals -- more than adequate for a bar chart.
 
 Outputs:
@@ -26,8 +26,8 @@ os.makedirs(OUT, exist_ok=True)
 # ---------------------------------------------------------------
 # Fig 1. Ceiling bar chart
 # ---------------------------------------------------------------
-# Numbers from logs/Result_phase7.txt (SA, classical) and
-# logs/Result_phase11.txt (random split) and logs/Result_phase_end.txt (LOSO).
+# Numbers from results/logs_v2/Result_phase7.txt (SA, classical) and
+# results/logs_v2/Result_phase11.txt (random split) and results/logs_v2/Result_phase_end.txt (LOSO).
 
 bar_labels = [
     "Classical\nAMR",
@@ -80,7 +80,7 @@ print(f"  wrote {out1}")
 # ---------------------------------------------------------------
 # Fig 2. Per-scenario LOSO scatter
 # ---------------------------------------------------------------
-# From logs/Result_phase_end.txt
+# From results/logs_v2/Result_phase_end.txt
 scenarios = ["orszag_tang", "harris_tearing", "kelvin_helmholtz", "mhd_rotor"]
 f1_class_loso = np.array([0.264, 0.400, 0.400, 0.672])
 f1_site_loso  = np.array([0.327, 0.000, 0.353, 0.084])
