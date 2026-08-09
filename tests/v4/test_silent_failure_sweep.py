@@ -29,6 +29,28 @@ nombre fonction de l'artefact.
 Ce balayage ne pretend pas etre exhaustif — il couvre les formes qui ont
 reellement mordu. Ce qu'il garantit, c'est la NON-REGRESSION.
 """
+
+import os
+import sys
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+
+def _study_file(name):
+    """Chemin d'un module de study/ quel que soit son dossier d'hypothese."""
+    for _d in ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common"):
+        _c = os.path.join(_REPO_ROOT, "study", _d, name)
+        if os.path.exists(_c):
+            return _c
+    raise FileNotFoundError(name)
+
 import ast
 import os
 import re
@@ -36,16 +58,28 @@ import re
 import pytest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-V4 = os.path.abspath(os.path.join(_HERE, "..", "..", "study", "v4"))
+V4 = os.path.join(_REPO_ROOT, "study")
 
-TASK_SCRIPTS = sorted(
-    f for f in os.listdir(V4)
+_STUDY_DIRS = ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common")
+
+TASK_SCRIPTS = sorted({
+    f
+    for _d in _STUDY_DIRS
+    for f in os.listdir(os.path.join(_REPO_ROOT, "study", _d))
     if f.startswith("t") and f.endswith(".py")
+})
+
+# Un balayage qui ne balaie rien est exactement le motif que ce fichier
+# traque : il doit crier plutot que passer.
+assert len(TASK_SCRIPTS) >= 20, (
+    f"seulement {len(TASK_SCRIPTS)} scripts balayes — la selection est "
+    "cassee, pas le depot"
 )
 
 
 def _source(name):
-    return open(os.path.join(V4, name), encoding="utf-8").read()
+    return open(_study_file(name), encoding="utf-8").read()
 
 
 def _tree(name):

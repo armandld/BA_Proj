@@ -4,6 +4,18 @@ Le critere d'acceptation chiffre (reproduction des nombres de phase 11A
 sur le split aleatoire : classique 0.475, GBT 0.980) est valide par
 l'execution sur les vraies donnees.
 """
+
+import os
+import sys
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import os
 import sys
 
@@ -11,9 +23,8 @@ import numpy as np
 import pytest
 from sklearn.metrics import f1_score
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "..", "study", "v3"))
 from t4_blocked_split import (
+
     apply_per_config_threshold,
     per_config_thresholds,
     ranking_metrics_per_snapshot,

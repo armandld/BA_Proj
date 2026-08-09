@@ -4,6 +4,18 @@ Modele leger injecte (regression logistique) : ni qiskit ni donnees DNS.
 La reproduction exacte du stencil publie (k=1 LOSO = 0.215) est validee
 par le critere d'acceptation du protocole sur les vraies donnees.
 """
+
+import os
+import sys
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import os
 import sys
 
@@ -12,10 +24,9 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "..", "study", "v3"))
 from t1_feature_selection import loso_f1_subset
 from t1b_cone_curve import (
+
     blocked_split_indices,
     capped_model_factory,
     khop_features,

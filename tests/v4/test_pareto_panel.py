@@ -12,12 +12,23 @@ import sys
 
 import pytest
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-for sub in ("v4", "v3", ""):
-    sys.path.insert(0, os.path.join(_HERE, "..", "..", "study", sub))
 
-from make_pareto_figure import interp_frontier, load_points
-from make_pareto_panel import FOLD_TITLES, available_folds, build_panel
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+_FIGURES = os.path.join(_REPO_ROOT, "figures")
+if _FIGURES not in sys.path:
+    sys.path.insert(0, _FIGURES)
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+from pareto_frontier import interp_frontier, load_points
+from pareto_panel import FOLD_TITLES, available_folds, build_panel
 
 
 def _mk_budget_json(dirpath, fold, q_patch=0.68, q_phys=0.194, scale=1.0):

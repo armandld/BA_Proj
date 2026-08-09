@@ -12,9 +12,16 @@ import sys
 import numpy as np
 import pytest
 
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-for sub in ("v4", "v3", ""):
-    sys.path.insert(0, os.path.join(_HERE, "..", "..", "study", sub))
 
 from t13_term_ablation import ABLATIONS
 from t18_window_counterfactual import HUGE_SIGMA, _c_amplitude, ablate_all

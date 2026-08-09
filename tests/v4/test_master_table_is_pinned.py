@@ -11,13 +11,25 @@ Ce test echoue si une ligne EXISTANTE (valeur presente) n'a pas de
 reference. Les lignes MISSING sont normales : elles disent qu'un artefact
 n'a pas encore ete produit.
 """
+
+import os
+import sys
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import csv
 import os
 
 import pytest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.abspath(os.path.join(_HERE, "..", "..", "study", "results"))
+RESULTS = os.path.join(_REPO_ROOT, "results")
 TABLE = os.path.join(RESULTS, "v4_master_table.csv")
 
 

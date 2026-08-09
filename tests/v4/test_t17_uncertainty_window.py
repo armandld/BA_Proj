@@ -14,9 +14,16 @@ import sys
 import numpy as np
 import pytest
 
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-for sub in ("v4", "v3", ""):
-    sys.path.insert(0, os.path.join(_HERE, "..", "..", "study", sub))
 
 from t17_uncertainty_window import PARAM_SETS, SCENARIOS, uncertainty_window
 
@@ -111,7 +118,6 @@ def test_deployed_params_are_read_from_the_pipeline_not_hardcoded():
 def test_scenario_names_exist_on_the_v1_solver():
     """Garde-fou : un nom errone ferait silencieusement sauter une classe
     (le script se contente de la signaler comme indisponible)."""
-    sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
     from Simulation.solver import MHDSolver
     for s in SCENARIOS:
         assert hasattr(MHDSolver, s), s

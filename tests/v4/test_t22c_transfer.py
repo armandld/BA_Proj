@@ -11,9 +11,26 @@ import sys
 import numpy as np
 import pytest
 
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-for sub in ("v4", "v3", ""):
-    sys.path.insert(0, os.path.join(_HERE, "..", "..", "study", sub))
+
+
+def _study_file(name):
+    """Chemin d'un module de study/ quel que soit son dossier d'hypothese."""
+    for _d in ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common"):
+        _c = os.path.join(_REPO_ROOT, "study", _d, name)
+        if os.path.exists(_c):
+            return _c
+    raise FileNotFoundError(name)
 
 from t22c_transfer_summary import analyse, load, ratio_sd
 
@@ -99,7 +116,7 @@ def test_no_leak_mode_is_gone_and_leak_free_is_wired(tmp_path):
     nomme comme si la fuite D13 avait ete supprimee alors que le calcul
     etait identique. Il doit avoir disparu, et son remplacant doit etre
     REELLEMENT branche sur le seuil."""
-    src = open(os.path.join(_HERE, "..", "..", "study", "v4",
+    src = open(_study_file(
                             "t22_unseen_conditions.py")).read()
     assert '"no-leak"' not in src, "the unimplemented mode is back"
     assert '"leak-free"' in src

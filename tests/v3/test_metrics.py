@@ -1,5 +1,17 @@
 """Tests V3 Task 2 : exemples 6 patches calcules a la main + planchers
 verifies analytiquement (critere d'acceptation du protocole)."""
+
+import os
+import sys
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import os
 import sys
 
@@ -7,9 +19,8 @@ import numpy as np
 import pytest
 from sklearn.metrics import f1_score
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "..", "study", "v3"))
 from metrics import (
+
     captured_error_at_budget,
     ce_curve,
     degeneracy_flag,

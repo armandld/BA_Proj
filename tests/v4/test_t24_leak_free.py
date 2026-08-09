@@ -16,11 +16,28 @@ import sys
 
 import pytest
 
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+
+def _study_file(name):
+    """Chemin d'un module de study/ quel que soit son dossier d'hypothese."""
+    for _d in ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common"):
+        _c = os.path.join(_REPO_ROOT, "study", _d, name)
+        if os.path.exists(_c):
+            return _c
+    raise FileNotFoundError(name)
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-V4 = os.path.abspath(os.path.join(_HERE, "..", "..", "study", "v4"))
-RESULTS = os.path.abspath(os.path.join(_HERE, "..", "..", "study", "results"))
-sys.path.insert(0, os.path.join(V4, "..", "v3"))
-sys.path.insert(0, V4)
+V4 = os.path.join(_REPO_ROOT, "study")
+RESULTS = os.path.join(_REPO_ROOT, "results")
 
 from t24_leak_free_summary import analyse, frontier, frontier_at
 
@@ -48,7 +65,7 @@ def test_no_claim_of_a_shared_operating_point():
     En mode leak-free il n'y en a pas ; l'affirmer effacait la seule
     reserve qui empeche de lire l'avortement de Q-HAS comme une
     instabilite propre au bras a budget egal."""
-    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+    src = open(_study_file("t22_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "at the SAME operating point" not in src, (
         "t22 affirme un point de fonctionnement commun que le mode "
@@ -116,7 +133,7 @@ def test_summary_script_declares_it_is_only_a_bound():
 
     Sans cette reserve, « la fuite retiree, Q-HAS empire » se lirait comme
     le test definitif, alors que le reglage n'a pas ete refait."""
-    src = open(os.path.join(V4, "t24_leak_free_summary.py"),
+    src = open(_study_file("t24_leak_free_summary.py"),
                encoding="utf-8").read()
     assert "BORNE" in src and "Optuna" in src
 
@@ -129,12 +146,12 @@ def test_partial_checkpoints_are_never_analysed():
     Cette mesure de sauvegarde INTRODUIRAIT le motif de la campagne si un
     artefact partiel etait indiscernable d'un artefact complet : ses
     moyennes portent sur les tirages faits jusque-la."""
-    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+    src = open(_study_file("t22_unseen_conditions.py"),
                encoding="utf-8").read()
     assert '"partial"' in src and "partial_warning" in src, (
         "t22 ecrit des points de reprise sans les marquer")
     for consumer in ("t24_leak_free_summary.py", "t22c_transfer_summary.py"):
-        cs = open(os.path.join(V4, consumer), encoding="utf-8").read()
+        cs = open(_study_file(consumer), encoding="utf-8").read()
         assert '== "partial"' in cs, (
             f"{consumer} ne filtre pas les artefacts partiels — il "
             f"publierait des moyennes sur une execution interrompue")
@@ -160,7 +177,7 @@ def test_a_partial_record_is_rejected_by_the_summary(tmp_path):
 def test_resume_reuses_only_matching_configurations():
     """Reprendre sous une AUTRE configuration melangerait des tirages
     incomparables. Le code doit refuser plutot que deviner."""
-    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+    src = open(_study_file("t22_unseen_conditions.py"),
                encoding="utf-8").read()
     for guard in ('prev.get("fold") == args.fold',
                   'prev.get("mode") == args.mode',
@@ -179,14 +196,14 @@ def test_resume_is_recorded_never_silent():
     C'est sans effet statistique (bras non deterministe, tirages i.i.d.)
     mais l'invisibilite serait le motif : un artefact qui ne dit pas d'ou
     viennent ses donnees."""
-    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+    src = open(_study_file("t22_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "resumed_from_checkpoint" in src and "n_runs_resumed" in src
 
 
 def test_resume_truncates_to_the_requested_count():
     """`--repeats 3` apres un point a 5 tirages ne doit pas en rendre 5."""
-    src = open(os.path.join(V4, "t22_unseen_conditions.py"),
+    src = open(_study_file("t22_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "return got[:n]" in src, (
         "les tirages repris ne sont pas tronques a n")
@@ -203,7 +220,7 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
     arbitraire. Une condition dont la trajectoire est identique a la
     canonique donnerait un resultat indiscernable d'un vrai test de
     robustesse — le motif de la campagne, applique au controle lui-meme."""
-    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+    src = open(_study_file("t25_physics_robustness.py"),
                encoding="utf-8").read()
     assert "dns_relative_shift" in src and "condition_is_weak" in src, (
         "t25 ne mesure pas le deplacement de trajectoire de ses conditions")
@@ -212,7 +229,7 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
 
 
 def test_t25_never_extrapolates_its_frontier():
-    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+    src = open(_study_file("t25_physics_robustness.py"),
                encoding="utf-8").read()
     assert "xs[0] <= qp <= xs[-1]" in src, (
         "t25 pourrait extrapoler hors de la frontiere balayee")
@@ -248,7 +265,7 @@ def test_t25_can_recompute_verdicts_without_simulating():
     """Quand la regle de verdict change, les tirages restent valables :
     seule leur lecture evolue. Sans ce mode il faudrait re-simuler des
     heures pour corriger une interpretation."""
-    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+    src = open(_study_file("t25_physics_robustness.py"),
                encoding="utf-8").read()
     assert "--recompute" in src and "verdicts_recomputed" in src
 
@@ -256,7 +273,7 @@ def test_t25_can_recompute_verdicts_without_simulating():
 def test_t25_marks_reynolds_as_not_an_ic_variation():
     """`ot` n'a aucun parametre : son levier Reynolds n'est pas une
     variation de condition initiale et ne doit pas etre compte comme telle."""
-    src = open(os.path.join(V4, "t25_physics_robustness.py"),
+    src = open(_study_file("t25_physics_robustness.py"),
                encoding="utf-8").read()
     assert 'is_ic_variation' in src
 

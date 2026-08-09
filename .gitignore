@@ -1,9 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-# study/results/ is NOT ignored: the scientific artifacts must be reviewable
-# from a fresh clone. Only the four large DNS input snapshots are excluded --
-# 96 MB of the 100 MB, they are INPUTS rather than results, and the solver is
-# deterministic (verified bit-exact in T13), so they regenerate exactly with
-#   python study/phase1_dns.py
-study/results/dns_*_N256.npz
+.DS_Store
+.venv/
+env/

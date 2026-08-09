@@ -12,9 +12,27 @@ import sys
 
 import pytest
 
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+
+def _study_file(name):
+    """Chemin d'un module de study/ quel que soit son dossier d'hypothese."""
+    for _d in ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common"):
+        _c = os.path.join(_REPO_ROOT, "study", _d, name)
+        if os.path.exists(_c):
+            return _c
+    raise FileNotFoundError(name)
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-V4 = os.path.abspath(os.path.join(_HERE, "..", "..", "study", "v4"))
-sys.path.insert(0, V4)
+V4 = os.path.join(_REPO_ROOT, "study")
 
 import provenance
 
@@ -61,7 +79,7 @@ def test_long_tasks_capture_the_hash_before_computing(script):
     """`provenance.start()` doit preceder le premier `run_arm`.
 
     Prendre le hash apres coup, meme via ce module, reproduirait D15."""
-    src = open(os.path.join(V4, script), encoding="utf-8").read()
+    src = open(_study_file(script), encoding="utf-8").read()
     tree = ast.parse(src)
     start_line = run_line = None
     for node in ast.walk(tree):
@@ -87,7 +105,7 @@ def test_long_tasks_capture_the_hash_before_computing(script):
 @pytest.mark.parametrize("script", LONG_TASKS)
 def test_long_tasks_no_longer_stamp_at_save_time(script):
     """Plus aucun appel a `git_commit_hash()` dans les taches longues."""
-    src = open(os.path.join(V4, script), encoding="utf-8").read()
+    src = open(_study_file(script), encoding="utf-8").read()
     assert "git_commit_hash()" not in src, (
         f"{script}: appelle encore git_commit_hash() — le tampon serait "
         f"pris a la sauvegarde (D15)")
