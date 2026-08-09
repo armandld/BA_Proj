@@ -6,12 +6,13 @@ it is not.
 do is make three of its silent behaviours *loud*, so that no present or
 future V1 test can mistake them for a normal outcome:
 
-  A. The placeholder Hamiltonian. `cost_hamiltonian.py` prunes every
-     coefficient below 1e-6, and when that empties the term list it injects
-     ("Z", [0], 1e-3) so Qiskit does not crash on an empty observable. The
-     object returned is then a *signal that no Hamiltonian was built*, not a
-     Hamiltonian. `is_null_placeholder` is the detector; use it before
-     interpreting any operator coming out of V1.
+  A. The empty Hamiltonian. `cost_hamiltonian.py` prunes every coefficient
+     below COEFF_MIN = 1e-6. When that empties the term list it now raises
+     `NullHamiltonianError` instead of injecting a ("Z", [0], 1e-3)
+     placeholder: the patch defines no optimisation problem, and saying so
+     is the only way the caller can tell that apart from a weak Hamiltonian.
+     `refinement.py` catches it, keeps the classical decision for that patch
+     and records it in `null_hamiltonian_patches()`.
 
   B. The pruning threshold. The Gaussian uncertainty window drives C_edges
      to ~1e-42, which is 36 orders of magnitude below the 1e-6 cut, so the
@@ -44,36 +45,12 @@ from qiskit.quantum_info import SparsePauliOp
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.HamiltParams import PhysicalMapper
-from VQA.cost_hamiltonian import create_period_hamiltonian
+from VQA.cost_hamiltonian import (
+    COEFF_MIN, NullHamiltonianError, create_period_hamiltonian,
+)
 
 DIM = 2                      # deployed size: 2*DIM^2 = 8 qubits
-PRUNE_THRESHOLD = 1e-6       # cost_hamiltonian.py:117 etc.
-PLACEHOLDER_COEFF = 1e-3     # cost_hamiltonian.py:215 / :295
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  THE DETECTOR
-# ═══════════════════════════════════════════════════════════════════════
-
-def is_null_placeholder(op, coeff=PLACEHOLDER_COEFF, tol=1e-12):
-    """True iff `op` is the placeholder V1 substitutes for an empty term list.
-
-    The placeholder is a single ("Z", [0], 1e-3). Qiskit writes qubit 0 as
-    the RIGHTMOST character of the label, so the label is 'I...IZ'.
-
-    Any test that receives a Hamiltonian from V1 should call this first: a
-    placeholder means the patch produced no coefficient above the pruning
-    threshold, which is a different event from "the Hamiltonian is weak".
-    """
-    terms = op.to_list()
-    if len(terms) != 1:
-        return False
-    label, c = terms[0]
-    if label.count("Z") != 1 or set(label) - {"I", "Z"}:
-        return False
-    if not label.endswith("Z"):
-        return False
-    return abs(complex(c) - coeff) < tol
+PRUNE_THRESHOLD = COEFF_MIN  # 1e-6
 
 
 def _flat_params(value, dim=DIM):
@@ -92,94 +69,58 @@ def _diagonal_energies(op):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  A. THE PLACEHOLDER MUST BE DETECTABLE
+#  A. AN EMPTY HAMILTONIAN MUST RAISE, NOT BE FAKED
 # ═══════════════════════════════════════════════════════════════════════
 
-class TestNullPlaceholder:
+class TestNullHamiltonian:
 
-    def test_all_coefficients_pruned_yields_the_placeholder(self):
-        """Every coefficient below 1e-6 -> the operator is the placeholder."""
+    def test_all_coefficients_pruned_raises(self):
+        """Every coefficient below COEFF_MIN -> NullHamiltonianError."""
         tiny = PRUNE_THRESHOLD / 1000.0          # 1e-9
-        op = create_period_hamiltonian(_flat_params(tiny), DIM)
+        with pytest.raises(NullHamiltonianError) as excinfo:
+            create_period_hamiltonian(_flat_params(tiny), DIM)
 
-        assert is_null_placeholder(op), (
-            f"expected the injected placeholder, got {op.to_list()}"
-        )
+        err = excinfo.value
+        assert err.num_qubits == 2 * DIM * DIM
+        assert err.threshold == COEFF_MIN
+        assert str(COEFF_MIN) in str(err) or f"{COEFF_MIN:g}" in str(err)
+
+    def test_nothing_is_returned_that_could_pass_for_a_hamiltonian(self):
+        """The whole point: no object comes back at all.
+
+        The previous behaviour returned ("Z", [0], 1e-3) — a term 1e6 times
+        larger than the signal it replaced, whose ground state excites qubit
+        0, and which slipped past the all-zero shortcut in `execute.py`
+        (atol 1e-8). Downstream had no way to tell it from a real operator.
+        """
+        with pytest.raises(NullHamiltonianError):
+            create_period_hamiltonian(
+                _flat_params(PRUNE_THRESHOLD / 1000.0), DIM)
+
+    def test_a_coefficient_above_the_cut_builds_a_hamiltonian(self):
+        """The boundary is the pruning cut and nothing else."""
+        just_above = PRUNE_THRESHOLD * 2.0
+        op = create_period_hamiltonian(_flat_params(just_above), DIM)
+        assert len(op.to_list()) > 0
         assert op.num_qubits == 2 * DIM * DIM
 
-    def test_the_placeholder_dominates_what_it_replaced(self):
-        """The substitute is not small — it is 1e6 times the pruned signal.
+        just_below = PRUNE_THRESHOLD / 2.0
+        with pytest.raises(NullHamiltonianError):
+            create_period_hamiltonian(_flat_params(just_below), DIM)
 
-        This is why it must be detected rather than tolerated: reading the
-        placeholder as a Hamiltonian overstates the physics by six orders
-        of magnitude.
-        """
-        tiny = PRUNE_THRESHOLD / 1000.0
-        op = create_period_hamiltonian(_flat_params(tiny), DIM)
-        placeholder = abs(complex(op.to_list()[0][1]))
-
-        assert placeholder / tiny == pytest.approx(1e6, rel=1e-9)
-
-    def test_the_placeholder_is_not_physically_neutral(self):
-        """It biases qubit 0, deterministically.
-
-        The source comment says the injected term "has no physical effect".
-        It has one: ("Z", [0], +1e-3) is minimised by Z = -1 on qubit 0,
-        i.e. the ground state refines edge 0 and only edge 0. Half the
-        spectrum is strictly preferred over the other half.
-        """
-        op = create_period_hamiltonian(
-            _flat_params(PRUNE_THRESHOLD / 1000.0), DIM)
-        energies = _diagonal_energies(op)
-        n = op.num_qubits
-
-        # basis index -> bit of qubit 0 (Qiskit: qubit 0 is the LSB)
-        q0 = np.array([(i >> 0) & 1 for i in range(2 ** n)])
-
-        assert energies.min() < energies.max(), (
-            "the placeholder is claimed to be neutral, but a strictly flat "
-            "spectrum would make this assertion fail — check the source"
-        )
-        best = np.flatnonzero(energies == energies.min())
-        assert set(q0[best]) == {1}, (
-            "every ground state must have qubit 0 excited — the placeholder "
-            "is a refine-edge-0 bias"
-        )
-        assert energies.min() == pytest.approx(-PLACEHOLDER_COEFF, rel=1e-12)
-
-    def test_placeholder_escapes_the_null_hamiltonian_shortcut(self):
-        """`execute()` skips COBYLA only for an all-zero operator.
-
-        Its test is `np.allclose(np.abs(coeffs), 0.0)`, whose default atol
-        is 1e-8. The placeholder sits at 1e-3, so it does NOT trigger the
-        shortcut: a patch with no surviving coefficient runs a full
-        variational optimisation against a fabricated single-Z operator.
-        Pinned here because the two thresholds live in different files and
-        nothing else connects them.
-        """
-        op = create_period_hamiltonian(
-            _flat_params(PRUNE_THRESHOLD / 1000.0), DIM)
-
-        assert not np.allclose(np.abs(op.coeffs), 0.0), (
-            "if this ever becomes True the shortcut fires and the "
-            "placeholder path changes meaning"
-        )
-        # ... whereas a genuinely zero operator does trigger it
-        zero_op = SparsePauliOp.from_sparse_list(
-            [("Z", [0], 0.0)], num_qubits=op.num_qubits)
-        assert np.allclose(np.abs(zero_op.coeffs), 0.0)
-
-    def test_a_real_hamiltonian_is_not_flagged(self):
-        """The detector must not fire on ordinary operators."""
+    def test_a_real_hamiltonian_is_built_normally(self):
         op = create_period_hamiltonian(_flat_params(0.5), DIM)
-        assert not is_null_placeholder(op)
         assert len(op.to_list()) > 1
+        energies = _diagonal_energies(op)
+        assert energies.min() < energies.max()
 
-        single_real_term = SparsePauliOp.from_sparse_list(
-            [("Z", [0], 0.7)], num_qubits=2 * DIM * DIM)
-        assert not is_null_placeholder(single_real_term), (
-            "a single Z with a physical coefficient is not the placeholder"
+    def test_refinement_exposes_the_null_patch_counter(self):
+        """`refinement.py` records the event instead of hiding it."""
+        from Simulation.refinement import (
+            null_hamiltonian_patches, reset_null_hamiltonian_patches,
         )
+        reset_null_hamiltonian_patches()
+        assert null_hamiltonian_patches() == []
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -275,3 +216,54 @@ class TestSamplerShotOption:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  D. THE REFINEMENT HANDLER, END TO END
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestRefinementHandlesNullHamiltonian:
+    """`refinement.py` must survive a patch with no Hamiltonian, keep its
+    classical decision, and record the event.
+
+    Before the change, such a patch received the injected placeholder and
+    ran a full COBYLA optimisation against it; nothing distinguished it from
+    a patch that had a real Hamiltonian.
+    """
+
+    def test_null_patch_is_recorded_and_the_scan_continues(self):
+        from types import SimpleNamespace
+
+        from Simulation import refinement as R
+        from Simulation.PhysToAngle import AngleMapper
+
+        N = 16
+        grid = PeriodicGrid(N)
+        sim = MHDSolver(grid, dt=1e-3, Re=400, Rm=400)
+        # Champ parfaitement uniforme : aucun coefficient ne passera le seuil
+        for name in ('vx', 'vy', 'Bx', 'By'):
+            setattr(sim, name, np.full((N, N), 0.5))
+
+        args = SimpleNamespace(
+            reps=2, mode="simulator", backend="state_vector",
+            shots=1024, method="COBYLA", opt_level=1,
+            AdvAnomaliesEnable=False, K_opt=20, eps=1e-2,
+            eta=0.001, Bz_guide=0.1, c_s=1.0, Re=400, Rm=400,
+        )
+
+        R.reset_null_hamiltonian_patches()
+        result = R.run_adaptive_vqa(
+            sim, AngleMapper(), PhysicalMapper(cs=1.0, eta_mhd=0.01,
+                                               dx=grid.dx),
+            args, None,
+            beta=1.0, threshold_amr=0.3, target_dim=DIM,
+            max_depth=1, min_size=4, verbose=False,
+        )
+
+        assert result is not None, "the scan must complete, not propagate"
+        recorded = R.null_hamiltonian_patches()
+        assert recorded, (
+            "a uniform field defines no Hamiltonian anywhere, so at least "
+            "one patch must be recorded"
+        )
+        assert all('bounds' in r and 'depth' in r for r in recorded)

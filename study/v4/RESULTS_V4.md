@@ -2523,3 +2523,61 @@ the sign held in both.
 325 v3/v4 tests pass, 15 skipped
 9 of 9 default script/pytest stages carry an acceptance check
 ```
+
+---
+
+# V1 NE FABRIQUE PLUS D'HAMILTONIEN QUAND IL N'Y EN A PAS
+
+Modification de `src/` (première depuis le gel de V1), commit parent `32d124a`.
+
+## Ce qui change
+
+`cost_hamiltonian.py` élague tout coefficient sous `COEFF_MIN = 1e-6`.
+Quand il ne reste rien, il ajoutait `("Z", [0], 1e-3)` pour éviter le crash
+Qiskit sur observable vide. Il lève désormais **`NullHamiltonianError`**.
+
+`execute.py:184` : le `try/except Exception: pass` autour de
+`sampler.options.default_shots = mps_shots` est supprimé. Si l'affectation
+échoue, la lecture MPS tournerait au mauvais nombre de tirs.
+
+`refinement.py` attrape l'exception, **conserve la décision classique** du
+patch, et l'enregistre dans `null_hamiltonian_patches()`. Le VQA n'est pas
+appelé. C'est un changement de comportement assumé : l'ancien chemin faisait
+tourner COBYLA contre un opérateur dont l'état fondamental excite le qubit 0.
+
+## Ce que la levée d'erreur a révélé immédiatement
+
+Trois tests de V1 comparaient une anomalie à une « ligne de base calme ». Ils
+échouent maintenant, et la raison est le résultat :
+
+| champ | Hamiltonien construit ? | max abs(H) | max abs(C) | max abs(K) |
+|---|---|---|---|---|
+| cisaillement | oui | 1.670e+00 | 1.786e-42 | 2.227e+01 |
+| **calme (vx = 1.0)** | **non** | — | — | — |
+| point X | oui | 3.462e+00 | 8.518e-86 | 4.300e+01 |
+| **calme (vx = 0.01)** | **non** | — | — | — |
+| combiné | oui | 2.392e+00 | 1.113e-38 | 2.328e+01 |
+| **calme (vx = 0.0)** | **non** | — | — | — |
+
+Les trois lignes de base n'avaient **aucun** coefficient au-dessus de 1e-6.
+Elles recevaient le terme de remplissage, et l'écart de marginales mesuré
+contre elles — l'assertion « le cisaillement produit une réponse VQA
+différente du calme » — était un écart contre un opérateur fabriqué.
+
+L'énoncé correct est plus net : **sur un champ uniforme, la construction ne
+produit rien à optimiser, et elle le dit.** Les trois tests l'affirment
+maintenant ainsi, plus le contrôle que le champ anormal, lui, définit bien un
+Hamiltonien.
+
+`test_module_validation::test_zero_coefficients_filtered` testait
+explicitement l'ancien comportement (« Should only have the safety term ») ;
+il teste la levée, plus le contrôle qu'un seul coefficient au-dessus du seuil
+suffit à construire l'opérateur.
+
+## Gate
+
+```
+185 tests V1 (180 + 10 gardes, dont un bout-en-bout sur refinement.py)
+325 tests v3/v4, 15 skipped
+diag_qaoa_contribution.py : 0/48 décisions changées, exit 0
+```

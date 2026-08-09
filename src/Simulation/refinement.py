@@ -2,6 +2,7 @@ import numpy as np
 from scipy.ndimage import zoom
 
 from call_vqa_shell import call_vqa_shell
+from VQA.cost_hamiltonian import NullHamiltonianError
 
 from help_visual import visualize_vqa_step
 
@@ -9,6 +10,22 @@ from Simulation.RescaleArrays import get_adaptive_flux, _process_score
 
 
 from Simulation.utils import slice_hamiltonian_params, get_periodic_patch
+
+
+#: Patches dont l'Hamiltonien était vide (tous coefficients < COEFF_MIN).
+#: Renseigné à l'exécution ; consultable via `null_hamiltonian_patches()`.
+#: Ces patches conservent leur décision classique — le VQA n'est pas appelé.
+_NULL_HAMILTONIAN_PATCHES = []
+
+
+def null_hamiltonian_patches():
+    """Patches rencontrés sans Hamiltonien, depuis le dernier reset."""
+    return list(_NULL_HAMILTONIAN_PATCHES)
+
+
+def reset_null_hamiltonian_patches():
+    """Vide le compteur (à appeler en début de run si on veut le mesurer)."""
+    _NULL_HAMILTONIAN_PATCHES.clear()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -241,25 +258,40 @@ def _run_level(
             if ws_params is None:
                 ws_params = warm_start_cache.get('_global')
 
-        result = call_vqa_shell(
-            angles, mini_hamilt_params, verbose, args,
-            period_bound=period_bound,
-            vqa_runtime=vqa_runtime,
-            warm_start_params=ws_params,
-        )
-        if result is None:
-            continue
-        probs, optimal_params = result
+        try:
+            result = call_vqa_shell(
+                angles, mini_hamilt_params, verbose, args,
+                period_bound=period_bound,
+                vqa_runtime=vqa_runtime,
+                warm_start_params=ws_params,
+            )
+        except NullHamiltonianError as exc:
+            # Le patch ne définit aucun problème d'optimisation : tous ses
+            # coefficients sont sous COEFF_MIN. On garde explicitement la
+            # décision classique (θ-init) et on compte l'événement, au lieu
+            # de faire tourner le VQA contre un opérateur fabriqué.
+            _NULL_HAMILTONIAN_PATCHES.append({'bounds': bounds, 'depth': depth})
+            if verbose:
+                print(f"\n  ┌─ Depth {depth} | Patch {bounds} | {exc}")
+                print(f"  │  décision classique conservée (VQA non appelé)")
+                print(f"  └─")
+            prob_map = np.asarray(prob_map_avant_qaoa, dtype=float)
+            optimal_params = ws_params
+            result = None
+        else:
+            if result is None:
+                continue
+            probs, optimal_params = result
+
+            num_edges = target_dim * target_dim
+            probs_h = probs[:num_edges].reshape(target_dim, target_dim)
+            probs_v = probs[num_edges:].reshape(target_dim, target_dim)
+            prob_map = 0.5 * (probs_h + probs_v)
 
         # Store optimal params for warm-starting next hybrid step
-        if warm_start_cache is not None:
+        if warm_start_cache is not None and optimal_params is not None:
             warm_start_cache[bounds] = optimal_params
             warm_start_cache['_global'] = optimal_params  # fallback for new patches
-
-        num_edges = target_dim * target_dim
-        probs_h = probs[:num_edges].reshape(target_dim, target_dim)
-        probs_v = probs[num_edges:].reshape(target_dim, target_dim)
-        prob_map = 0.5 * (probs_h + probs_v)
 
         # Boundary activation detection (for directional probing info)
         boundary_flags = _boundary_activation(prob_map, target_dim)

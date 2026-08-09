@@ -178,11 +178,11 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             print("\n--- Final MPS Sampling ---")
         optimized_circuit.measure_all()
         mps_shots = max(shots, 8192)
-        # Re-configure the sampler's shot count for the final readout
-        try:
-            sampler.options.default_shots = mps_shots
-        except Exception:
-            pass
+        # Re-configure the sampler's shot count for the final readout.
+        # Volontairement non protégé : si l'affectation échoue, la lecture
+        # se ferait au mauvais nombre de tirs et toutes les marginales en
+        # aval seraient silencieusement plus bruitées.
+        sampler.options.default_shots = mps_shots
         pub = (optimized_circuit,)
         job = sampler.run([pub])
         pub_result = job.result()[0]

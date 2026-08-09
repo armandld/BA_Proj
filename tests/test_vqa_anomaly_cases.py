@@ -37,7 +37,9 @@ from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
 from Simulation.HamiltParams import PhysicalMapper
-from VQA.cost_hamiltonian import create_period_hamiltonian, create_bounded_hamiltonian
+from VQA.cost_hamiltonian import (
+    NullHamiltonianError, create_period_hamiltonian, create_bounded_hamiltonian,
+)
 from VQA.init_qbits_state import init_qbits_state
 from VQA.mapping import mapping
 from VQA.execute import execute
@@ -231,7 +233,18 @@ class TestShearAnomaly(unittest.TestCase):
     """
 
     def test_shear_activates_edges(self):
-        """Sheared field should produce meaningfully different VQA response than calm."""
+        """A sheared field defines a Hamiltonian; a calm one defines none.
+
+        The original test compared the VQA output on shear against the VQA
+        output on a uniform field. The uniform field has NO coefficient above
+        the 1e-6 encoding cut, so that second run never had a Hamiltonian at
+        all — it used to receive the injected ("Z", [0], 1e-3) placeholder,
+        and the "difference in VQA response" was a difference against a
+        fabricated operator.
+
+        Stated properly, the contrast is sharper: on calm fields the
+        construction produces nothing to optimise, and it says so.
+        """
         V = 1.0
         N = DIM
         fields = {
@@ -245,27 +258,19 @@ class TestShearAnomaly(unittest.TestCase):
         marginals_shear, hp, info = _run_vqa_on_fields(
             fields, dim=N, alpha=2.0,
         )
+        H_max = max(np.max(np.abs(hp['H_edges'][0])),
+                    np.max(np.abs(hp['H_edges'][1])))
+        K_max = np.max(np.abs(hp['K_plaquettes']))
+        print(f"\n[SHEAR] max|H| = {H_max:.4e}, max|K| = {K_max:.4e}")
+        print(f"[SHEAR] mean P(1) = {np.mean(marginals_shear):.4f}")
 
-        # Calm baseline (uniform velocity)
+        self.assertGreater(max(H_max, K_max), 1e-6,
+                           "the sheared field must define a Hamiltonian")
+
+        # Calm baseline (uniform velocity): nothing survives the cut
         fields_calm = _make_flat_fields(N, vx_val=V)
-        marginals_calm, _, _ = _run_vqa_on_fields(
-            fields_calm, dim=N, alpha=2.0,
-        )
-
-        mean_shear = np.mean(marginals_shear)
-        mean_calm = np.mean(marginals_calm)
-
-        print(f"\n[SHEAR] Sheared mean P(1): {mean_shear:.4f}")
-        print(f"[SHEAR] Calm    mean P(1): {mean_calm:.4f}")
-
-        # The sheared field creates non-zero flux and vorticity
-        # while the calm field has zero flux → different VQA response
-        diff = abs(mean_shear - mean_calm)
-        print(f"[SHEAR] |Difference|: {diff:.4f}")
-        self.assertGreater(
-            diff, 0.01,
-            "Sheared field should produce different VQA response than calm",
-        )
+        with self.assertRaises(NullHamiltonianError):
+            _run_vqa_on_fields(fields_calm, dim=N, alpha=2.0)
 
     def test_shear_hamiltonian_structure(self):
         """Shear creates non-zero stress flux and gradient coupling.
@@ -582,14 +587,14 @@ class TestXPointAnomaly(unittest.TestCase):
     def test_xpoint_vqa_qubit_response(self):
         """
         Full VQA chain with X-point-dominant Hamiltonian.
-        X-point reconnection pattern should produce a different VQA response
-        than a calm baseline.
+        The X-point field defines a Hamiltonian; the nearly-calm baseline
+        defines none.
 
-        We compare a magnetic field with X-point topology (which creates
-        non-zero det(J_B) and stress flux gradients) against a nearly-calm
-        baseline (which has negligible flux). The Hamiltonian structure
-        (H_edges activity bias + C_edges gradient coupling + K_xpoint)
-        produces measurably different QAOA output.
+        As in `test_shear_activates_edges`, the original comparison ran the
+        VQA on a baseline whose every coefficient sits below the 1e-6
+        encoding cut. That run had no Hamiltonian — it received the injected
+        placeholder — so the "measurably different QAOA output" was measured
+        against a fabricated operator.
         """
         N = DIM
 
@@ -608,24 +613,21 @@ class TestXPointAnomaly(unittest.TestCase):
 
         # Calm baseline: very low velocity
         fields_calm = _make_flat_fields(N, vx_val=0.01)
-        marginals_calm, hp_calm, info_calm = _run_vqa_on_fields(
-            fields_calm, dim=N, advanced=True, alpha=2.0,
-        )
+        H_max = max(np.max(np.abs(hp_xpoint['H_edges'][0])),
+                    np.max(np.abs(hp_xpoint['H_edges'][1])))
+        K_max = np.max(np.abs(hp_xpoint['K_plaquettes']))
 
-        mean_xpoint = np.mean(marginals_xpoint)
-        mean_calm = np.mean(marginals_calm)
-
-        print(f"\n[XPOINT-VQA] X-point mean P(1): {mean_xpoint:.4f}")
-        print(f"[XPOINT-VQA] Calm    mean P(1): {mean_calm:.4f}")
+        print(f"\n[XPOINT-VQA] X-point mean P(1): "
+              f"{np.mean(marginals_xpoint):.4f}")
         print(f"[XPOINT-VQA] X-point marginals: {marginals_xpoint}")
-        print(f"[XPOINT-VQA] Calm    marginals: {marginals_calm}")
+        print(f"[XPOINT-VQA] max|H| = {H_max:.4e}, max|K| = {K_max:.4e}")
 
-        diff = abs(mean_xpoint - mean_calm)
-        print(f"[XPOINT-VQA] |Difference|: {diff:.4f}")
-        self.assertGreater(
-            diff, 0.01,
-            "X-point reconnection pattern should differ from calm baseline",
-        )
+        self.assertGreater(max(H_max, K_max), 1e-6,
+                           "the X-point field must define a Hamiltonian")
+
+        # The calm baseline defines none — see test_shear_activates_edges
+        with self.assertRaises(NullHamiltonianError):
+            _run_vqa_on_fields(fields_calm, dim=N, advanced=True, alpha=2.0)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1413,8 +1415,12 @@ class TestCombinedAnomalies(unittest.TestCase):
 
     def test_combined_vqa_marginals_elevated(self):
         """
-        Full VQA with both activity + circulation anomalies: marginals
-        should differ from a weak baseline.
+        Combined shear + rotation defines a Hamiltonian; a weak uniform
+        baseline defines none.
+
+        Same correction as `test_shear_activates_edges`: the baseline used
+        for comparison had no coefficient above the 1e-6 encoding cut, so it
+        never had a Hamiltonian to optimise.
         """
         N = DIM
 
@@ -1427,32 +1433,26 @@ class TestCombinedAnomalies(unittest.TestCase):
             'Jz': np.zeros((N, N)),
         }
 
-        marginals_combined, _, info_combined = _run_vqa_on_fields(
+        marginals_combined, hp_combined, info_combined = _run_vqa_on_fields(
             fields_combined, dim=N, alpha=2.0,
         )
+        H_max = max(np.max(np.abs(hp_combined['H_edges'][0])),
+                    np.max(np.abs(hp_combined['H_edges'][1])))
+        K_max = np.max(np.abs(hp_combined['K_plaquettes']))
 
-        # Weak baseline: small uniform velocity (creates some flux but weak)
-        fields_weak = _make_flat_fields(N, vx_val=0.1, vy_val=0.1)
-        marginals_weak, _, info_weak = _run_vqa_on_fields(
-            fields_weak, dim=N, alpha=2.0,
-        )
-
-        mean_combined = np.mean(marginals_combined)
-        mean_weak = np.mean(marginals_weak)
-
-        print(f"\n[COMBINED-VQA] Combined mean P(1): {mean_combined:.4f}")
-        print(f"[COMBINED-VQA] Weak     mean P(1): {mean_weak:.4f}")
+        print(f"\n[COMBINED-VQA] Combined mean P(1): "
+              f"{np.mean(marginals_combined):.4f}")
         print(f"[COMBINED-VQA] Combined marginals: {marginals_combined}")
-        print(f"[COMBINED-VQA] Weak     marginals: {marginals_weak}")
+        print(f"[COMBINED-VQA] max|H| = {H_max:.4e}, max|K| = {K_max:.4e}")
 
-        # Combined anomalies should produce different qubit activity than weak
-        diff = abs(mean_combined - mean_weak)
-        print(f"[COMBINED-VQA] |Difference|: {diff:.4f}")
+        self.assertGreater(max(H_max, K_max), 1e-6,
+                           "the combined field must define a Hamiltonian")
 
-        self.assertGreater(
-            diff, 0.01,
-            "Combined shear+vortex should produce different VQA response than weak baseline",
-        )
+        # Weak uniform baseline: nothing survives the encoding cut
+        fields_weak = _make_flat_fields(N, vx_val=0.1, vy_val=0.1)
+        with self.assertRaises(NullHamiltonianError):
+            _run_vqa_on_fields(fields_weak, dim=N, alpha=2.0)
+
 
     def test_gradient_and_xpoint_coexist(self):
         """

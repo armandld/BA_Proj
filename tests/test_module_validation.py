@@ -526,17 +526,31 @@ class TestCostHamiltonian:
         assert ham.num_qubits == 8, f"Expected 8 qubits for dim=2, got {ham.num_qubits}"
 
     def test_zero_coefficients_filtered(self):
-        """Coefficients below 1e-6 should be filtered out."""
+        """Coefficients below 1e-6 are filtered out — and when nothing is
+        left, that is reported instead of being replaced.
+
+        The construction used to append a ("Z", [0], 1e-3) safety term so
+        Qiskit would not choke on an empty observable. Downstream then had a
+        single-Z operator indistinguishable from a real one, 1e5 times
+        larger than the 1e-8 coefficient it stood for.
+        """
+        from VQA.cost_hamiltonian import NullHamiltonianError
+
         hp = {
             "H_edges": (np.array([[1e-8, 0.0], [0.0, 0.0]]),
                         np.array([[0.0, 0.0], [0.0, 0.0]])),
             "C_edges": (np.zeros((2, 2)), np.zeros((2, 2))),
             "K_plaquettes": np.zeros((2, 2)),
         }
+        import pytest
+
+        with pytest.raises(NullHamiltonianError):
+            create_period_hamiltonian(hp, dim=2)
+
+        # One coefficient above the cut is enough to build the operator
+        hp["H_edges"][0][0, 0] = 1e-3
         ham = create_period_hamiltonian(hp, dim=2)
-        terms = ham.to_list()
-        # Should only have the safety term (since all coeffs are < 1e-6)
-        assert len(terms) == 1, f"Expected 1 safety term, got {len(terms)}"
+        assert len(ham.to_list()) == 1
 
     def test_all_Z_terms_present(self):
         """Each cell should contribute one Z term for H and one for V."""

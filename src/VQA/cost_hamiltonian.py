@@ -10,6 +10,29 @@ import random
 
 from qiskit.quantum_info import SparsePauliOp
 
+#: Coefficients strictement inférieurs à ce seuil ne sont pas encodés.
+COEFF_MIN = 1e-6
+
+
+class NullHamiltonianError(ValueError):
+    """Aucun coefficient n'atteint COEFF_MIN : il n'y a pas d'Hamiltonien.
+
+    Le patch ne pose aucun problème d'optimisation. C'est une information,
+    pas une panne : l'appelant doit décider quoi en faire (typiquement,
+    conserver la décision classique issue de l'initialisation θ). Ce qu'il
+    ne faut pas faire, c'est renvoyer un opérateur de remplissage — il
+    serait indiscernable d'un Hamiltonien réel en aval.
+    """
+
+    def __init__(self, num_qubits, threshold=COEFF_MIN):
+        self.num_qubits = num_qubits
+        self.threshold = threshold
+        super().__init__(
+            f"aucun coefficient >= {threshold:g} sur {num_qubits} qubits : "
+            "le patch ne définit aucun Hamiltonien de coût"
+        )
+
+
 def get_expected_Z(theta):
     """Calcule <Z> = cos(theta) pour un état Ry(theta)."""
     return np.cos(theta)
@@ -209,10 +232,10 @@ def create_bounded_hamiltonian(
                             label = PAULI_Z[len(active_qubits_xp)]
                             sparse_list.append((label, active_qubits_xp, effective_kx))
 
-    # Safety: avoid empty Hamiltonian (Qiskit crashes on "Empty observable")
-    # Use 1e-3 (not 1e-6) to survive any internal simplify() calls
+    # Aucun coefficient n'a survécu au seuil : on le dit au lieu d'injecter
+    # un terme de remplissage que l'aval prendrait pour un vrai Hamiltonien.
     if not sparse_list:
-        sparse_list.append(("Z", [0], 1e-3))
+        raise NullHamiltonianError(num_qubits)
 
     # Retourne l'Opérateur ET les 4 tableaux d'angles du cœur
     return (
@@ -286,12 +309,9 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
                             idx_V(i, j)
                         ]
                         sparse_list.append(("ZZZZ", qubits_xp, kx_val))
-    # Safety: if all coefficients were below threshold, sparse_list is empty.
-    # Qiskit's EstimatorV2 crashes on a zero Hamiltonian ("Empty observable").
-    # Add a tiny identity-like term so the Hamiltonian is valid but has no
-    # physical effect (COBYLA will converge immediately on a near-flat landscape).
-    # Use 1e-3 (not 1e-6) to survive any internal simplify() calls.
+    # Aucun coefficient n'a survécu au seuil : on le dit au lieu d'injecter
+    # un terme de remplissage que l'aval prendrait pour un vrai Hamiltonien.
     if not sparse_list:
-        sparse_list.append(("Z", [0], 1e-3))
+        raise NullHamiltonianError(2 * dim * dim)
 
     return SparsePauliOp.from_sparse_list(sparse_list, num_qubits=2*dim*dim)
