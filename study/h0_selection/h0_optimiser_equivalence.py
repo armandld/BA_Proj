@@ -231,6 +231,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
                  zero_psi=False, scale_kopt=False, no_exact=False,
+                 backend='state_vector',
                  run_qaoa=True, seed=0):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from qaoa_inputs import (                      # V2, reutilise
@@ -290,7 +291,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
         ex_spins, ex_E, n_opt = exhaustive_ground_state(
             h_bias, edges, plaqs, n_q)
         certified = True
-    _record("exhaustive", ex_spins, time.time() - t0, dict(n_optima=n_opt))
+    if certified:
+        _record("exhaustive", ex_spins, time.time() - t0, dict(n_optima=n_opt))
 
     # --- simulated annealing (froid puis warm-start) -----------------
     for nm, ini in (("sa", None), ("sa_warm", init)):
@@ -317,7 +319,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
             _, dh, dv, _, _ = run_qaoa_on_snapshot(
                 data_in, hp, dim, reps=reps,
                 K_opt=(k_opt * reps if scale_kopt else k_opt),
-                shots=qaoa_shots, backend_name="state_vector",
+                shots=qaoa_shots, backend_name=backend,
                 warm_start_params=ws)
             s = np.ones(n_q, dtype=np.int8)
             s[:dim * dim] = np.where(dh.ravel(), -1, 1)
@@ -340,7 +342,12 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
 
     # --- comparaisons a l'exact --------------------------------------
     for name, r in rows.items():
-        r.update(decision_agreement(r["spins"], ex_spins, dim))
+        # Sans reference certifiee, l'accord avec le fondamental exact n'a
+        # pas de sens : on le laisse indefini plutot que de le fabriquer.
+        if certified:
+            r.update(decision_agreement(r["spins"], ex_spins, dim))
+        else:
+            r.update(dict(agree_spin=float("nan"), mask_match=float("nan")))
         # Sans optimum certifie, la reference est la meilleure energie
         # TROUVEE par le panel : l'ecart reste comparable entre solveurs,
         # mais « atteindre l'optimum » n'a plus de sens et vaut NaN.
@@ -437,6 +444,13 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", type=int, default=2,
                    help="2 = 8 qubits = regime effectif du pipeline V1")
+    p.add_argument("--backend", default="state_vector",
+                   choices=["state_vector", "matrix_product_state", "aer"],
+                   help="au-dela de ~28 qubits le statevector demande plus de "
+                        "memoire que la machine n'en a (32 qubits = 64 Go) ; "
+                        "matrix_product_state passe a l'echelle tant que "
+                        "l'intrication reste bornee, ce qui est le cas d'un "
+                        "QAOA peu profond sur un hamiltonien local 2-D.")
     p.add_argument("--no-exact", action="store_true",
                    help="ne pas exiger l'optimum certifie. H0a devient "
                         "indecidable mais H0b reste mesurable : elle ne "
@@ -502,7 +516,7 @@ def main():
                     sweeps=args.sweeps, n_restarts=args.restarts,
                     qaoa_reps=tuple(args.qaoa_reps), qaoa_shots=args.shots,
                     zero_psi=args.zero_psi, scale_kopt=args.scale_kopt,
-                    no_exact=args.no_exact,
+                    no_exact=args.no_exact, backend=args.backend,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
                     seed=args.seed)
                 diag_flags.append(out["diagonal"])
@@ -566,6 +580,7 @@ def main():
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
         + ("_zeropsi" if args.zero_psi else "")
         + ("_noexact" if args.no_exact else "")
+        + ("" if args.backend == "state_vector" else f"_{args.backend}")
         + ("_scalekopt" if args.scale_kopt else "")
         + ("" if args.mapper == "v2" else f"_{args.mapper}")
         + ".npz")
