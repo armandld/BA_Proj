@@ -267,3 +267,59 @@ class TestRefinementHandlesNullHamiltonian:
             "one patch must be recorded"
         )
         assert all('bounds' in r and 'depth' in r for r in recorded)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  E. THE CLASSICAL SCORE HAS NO ABSOLUTE ZERO
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestClassicalScoreIsRelative:
+    """`AngleMapper.classical_score` normalises each of its four indicators
+    by its own domain-wide maximum, so the score measures RELATIVE structure
+    and never how much structure there is.
+
+    A field that is uniform plus 1e-12 of noise -- as calm as a field can be
+    without being exactly constant -- scores a median of 0.237 and a maximum
+    of 0.657, identically to the same field with 1e-6 of noise. Meanwhile a
+    genuinely turbulent field (noise 1.0) scores LOWER, 0.574 at the maximum.
+
+    Two consequences carried by the study:
+      * a quiet uniform field is refined everywhere, because 0.55 > the
+        threshold 0.3 (see tests/test_qaoa_decisions.py, check
+        `quiet_no_refine`);
+      * the classical baseline is not comparable across scenarios, which is
+        why its LOSO F1 swings from 0.155 to 1.000 depending on the fold.
+
+    Same disease as the per-scenario percentile label: a rank presented as a
+    measurement.
+    """
+
+    @staticmethod
+    def _score(amp, n=32, seed=0):
+        from Simulation.PhysToAngle import AngleMapper
+        rng = np.random.default_rng(seed)
+        f = {k: np.full((n, n), 1.0) + amp * rng.normal(size=(n, n))
+             for k in ("vx", "vy", "Bx", "By")}
+        f["Jz"] = np.zeros((n, n))
+        f["dx"] = 2 * np.pi / n
+        return AngleMapper.classical_score(f)
+
+    def test_a_numerically_calm_field_scores_high(self):
+        s = self._score(1e-12)
+        assert np.median(s) > 0.15, (
+            f"a field at round-off scores {np.median(s):.4f} at the median; "
+            "if this ever drops the score has gained an absolute zero")
+        assert s.max() > 0.5
+
+    def test_the_score_is_blind_to_amplitude(self):
+        tiny, small = self._score(1e-12), self._score(1e-6)
+        assert abs(np.median(tiny) - np.median(small)) < 1e-3, (
+            f"six orders of magnitude of amplitude move the median score by "
+            f"{abs(np.median(tiny) - np.median(small)):.2e} only -- it is "
+            "normalised away")
+
+    def test_more_turbulence_does_not_raise_the_score(self):
+        calm, turbulent = self._score(1e-12), self._score(1.0)
+        assert turbulent.max() < calm.max(), (
+            f"turbulent max {turbulent.max():.4f} vs calm {calm.max():.4f}: "
+            "the score is not monotone in the amount of structure")
