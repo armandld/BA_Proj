@@ -407,11 +407,15 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", type=int, default=2,
                    help="2 = 8 qubits = regime effectif du pipeline V1")
+    p.add_argument("--qaoa-reps", nargs="+", type=int, default=[1, 2, 3],
+                   help="profondeurs p du QAOA. Balayer p=1..6 sert a tester "
+                        "si la qualite de detection DECROIT quand le circuit "
+                        "oublie son initialisation (theta, psi) pour "
+                        "converger vers le fondamental de H.")
     p.add_argument("--n-snaps", type=int, default=3,
                    help="snapshots par configuration")
     p.add_argument("--sweeps", type=int, default=500)
     p.add_argument("--restarts", type=int, default=5)
-    p.add_argument("--qaoa-reps", nargs="+", type=int, default=[1, 2, 3])
     p.add_argument("--shots", type=int, default=4096)
     p.add_argument("--k-opt", type=int, default=60)
     p.add_argument("--no-qaoa", action="store_true")
@@ -510,7 +514,6 @@ def main():
             "QAOA deviates from the certified optimum; the deviation is an "
             "approximation artefact, not a controllable advantage."))
 
-    check_expected_behaviour(summary, solvers, diag_flags)
 
     out = os.path.join(
         RESULTS_DIR,
@@ -537,6 +540,10 @@ def main():
     )
     print(f"\n  saved: {os.path.basename(out)}")
     print("\nV4 Task 11 complete.")
+
+    # Juger APRES avoir ecrit : un run exploratoire a une taille ou H0
+    # n'est pas attendue doit quand meme laisser ses donnees derriere lui.
+    check_expected_behaviour(summary, solvers, diag_flags)
 
 
 if __name__ == "__main__":
