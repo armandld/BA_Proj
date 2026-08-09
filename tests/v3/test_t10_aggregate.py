@@ -22,7 +22,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t10_aggregate import (
+from aggregate_v3 import (
     load_npz,
     make_row,
     rows_t1,

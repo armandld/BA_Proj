@@ -157,43 +157,43 @@ run_phase() {
 for phase in $PHASES; do
     case "$phase" in
         1)  # DNS sweep
-            run_phase 1 study/phase1_dns_sweep.py \
+            run_phase 1 study/dns_sweep.py \
                 --N "$N_GRID" \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         2)  # Hard-patch identification (dim=2 and dim=4)
-            run_phase 2 study/phase2_hard_patches.py \
+            run_phase 2 study/hard_patch_labels.py \
                 --N "$N_GRID" --dim $DIM_QUBIT $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         2b) # Percentile sensitivity: does the LOSO delta change sign
             # when the hard-patch percentile threshold moves?
-            run_phase 2b study/phase2b_percentile_sensitivity.py \
+            run_phase 2b study/label_percentile_sensitivity.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         3)  # Hamiltonian coefficients (v2, dim=4)
-            run_phase 3 study/phase3_coefficients.py \
+            run_phase 3 study/hamiltonian_coefficients.py \
                 --N "$N_GRID" --dim $DIM_COEFF --v2 \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 3 study/phase3_coefficients.py \
+                run_phase 3 study/hamiltonian_coefficients.py \
                     --N "$N_GRID" --dim $DIM_COEFF \
                     --scenario $SCENARIOS \
                     --re $RE_LIST
             fi
             ;;
         4)  # Exact diagonalization (v2, dim=2 = 8 qubits)
-            run_phase 4 study/phase4_exact_diag.py \
+            run_phase 4 study/exact_diagonalisation.py \
                 --N "$N_GRID" --dim $DIM_QUBIT --v2 \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 4 study/phase4_exact_diag.py \
+                run_phase 4 study/exact_diagonalisation.py \
                     --N "$N_GRID" --dim $DIM_QUBIT \
                     --scenario $SCENARIOS \
                     --re $RE_LIST
@@ -375,7 +375,7 @@ for phase in $PHASES; do
             ;;
         13) # Cross-phase aggregation: builds SUMMARY_N{N}_dim{D}.txt
             # and .csv from every available upstream .npz.
-            run_phase 13 study/phase13_aggregate.py \
+            run_phase 13 study/aggregate_v2.py \
                 --N "$N_GRID" --dim $DIM_COEFF
             ;;
     esac

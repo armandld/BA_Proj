@@ -45,8 +45,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
-from t8_dns_extension import seeded_dns_path
+from h2b_feature_selection import git_commit_hash
+from dns_extension import seeded_dns_path
 
 MAPPERS = ("v1", "v2")
 
@@ -114,7 +114,7 @@ def mean_field_state(hamilt_params, dim):
 
 def build_params(vx, vy, Bx, By, N, dim, re, mapper):
     """Hamiltonien V1 (TRAINED_*, essai #4) ou V2 (sans parametre)."""
-    from phase4_exact_diag import build_patch_hamiltonian
+    from exact_diagonalisation import build_patch_hamiltonian
     from config import (TRAINED_THRESHOLD, TRAINED_SIGMA,
                         TRAINED_BETA_CURL, TRAINED_BETA_XPOINT,
                         TRAINED_W_Z_FRAC, TRAINED_GAMMA_HYDRO,
@@ -140,7 +140,7 @@ def main():
         description="V3 Task 9: Proposition-2 strict mean-field "
                     "condition checker")
     from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
-    from t8_dns_extension import EXTRA_SCENARIOS
+    from dns_extension import EXTRA_SCENARIOS
 
     all_scenarios = SCENARIOS + EXTRA_SCENARIOS
     p.add_argument("--scenario", nargs="+", default=all_scenarios)

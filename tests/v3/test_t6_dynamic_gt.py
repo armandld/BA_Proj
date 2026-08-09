@@ -22,7 +22,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t6_dynamic_gt import (
+from h2b_dynamic_ground_truth import (
     coarsen_one_patch,
     coarsen_patch_window,
     downsample_fields,
@@ -121,7 +121,7 @@ def test_dynamic_gt_constant_patch_is_exactly_zero():
 
 def test_dynamic_gt_consistent_with_static_e():
     # argmax(d) doit coincider avec argmax(e_i) de phase 2 sur ce cas
-    from phase2_hard_patches import patch_l2_errors
+    from hard_patch_labels import patch_l2_errors
     fields = _toy_fields()
     d, _ = dynamic_gt_snapshot(fields, 16, 2, 400,
                                delta_t=0.02, cfl=0.4)

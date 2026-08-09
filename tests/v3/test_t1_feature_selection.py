@@ -24,7 +24,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 
-from t1_feature_selection import (
+from h2b_feature_selection import (
 
     classical_loso_f1,
     forward_selection,

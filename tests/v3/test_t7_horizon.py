@@ -20,7 +20,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t7_horizon import (
+from h2b_prediction_horizon import (
     blocked_pair_split,
     capture_at_budget,
     common_traj_values,

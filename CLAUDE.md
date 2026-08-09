@@ -69,7 +69,7 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 ```bash
 python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q   # V1
 python -m pytest tests/v3 tests/v4 -q                            # study
-python study/common/t16_aggregate_v4.py                          # 180 lignes,
+python study/common/aggregate_master_table.py                          # 180 lignes,
                                                                  # 0 DIFF, 0 MISSING
 ```
 

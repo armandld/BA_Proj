@@ -46,7 +46,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
+from h2b_feature_selection import git_commit_hash
 from stats_confirmatory import holm_correction, tost_equivalence
 
 ALL_FOLDS = ("ot", "kh", "rotor", "tearing")

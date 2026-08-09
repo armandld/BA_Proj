@@ -24,8 +24,8 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 
-from t1_feature_selection import loso_f1_subset
-from t1b_cone_curve import (
+from h2b_feature_selection import loso_f1_subset
+from h2b_neighbour_cone_curve import (
 
     blocked_split_indices,
     capped_model_factory,

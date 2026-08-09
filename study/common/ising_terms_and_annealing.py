@@ -48,7 +48,7 @@ from config import (
     TRAINED_GAMMA_MAG, TRAINED_KAPPA,
     V2_THRESHOLD,
 )
-from phase4_exact_diag import build_patch_hamiltonian
+from exact_diagonalisation import build_patch_hamiltonian
 
 
 # -------------------------------------------------------------------

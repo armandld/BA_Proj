@@ -58,7 +58,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
+from h2b_feature_selection import git_commit_hash
 
 # les quatre classes des folds Level-3, sous leurs noms V1 exacts
 SCENARIOS = ("init_kelvin_helmholtz", "init_orszag_tang",

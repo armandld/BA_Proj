@@ -406,7 +406,7 @@ def test_summarise_pairs_arms_and_counts_wins():
 # ------------------ agregation V4 et figure Pareto --------------------
 
 def test_t16_extractors_flag_missing_and_diff():
-    from t16_aggregate_v4 import rows_t11b, rows_t14
+    from aggregate_master_table import rows_t11b, rows_t14
     missing = rows_t11b(None)
     assert missing and all(r["status"] == "MISSING" for r in missing)
     ok = rows_t11b(dict(frac_uniform=1.0, mean_progress=0.0854,
@@ -420,7 +420,7 @@ def test_t16_extractors_flag_missing_and_diff():
 
 
 def test_t16_convergence_order_is_derived_from_the_error_pair():
-    from t16_aggregate_v4 import rows_t14
+    from aggregate_master_table import rows_t14
     d = dict(conv_err=np.array([4.0e-2, 2.0e-2]),
              split_with=np.array([[32, 1e-3, 1.12]]),
              split_without=np.array([[32, 1e-8, 4.00]]),
@@ -433,7 +433,7 @@ def test_t16_convergence_order_is_derived_from_the_error_pair():
 
 
 def test_t16_level3_rows_are_missing_until_the_fold_runs(tmp_path):
-    from t16_aggregate_v4 import rows_level3
+    from aggregate_master_table import rows_level3
     rows = rows_level3(str(tmp_path), ["ot"])
     assert rows and all(r["status"] == "MISSING" for r in rows)
     import json as _json

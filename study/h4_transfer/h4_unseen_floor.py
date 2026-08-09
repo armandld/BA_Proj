@@ -55,7 +55,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
+from h2b_feature_selection import git_commit_hash
 from closed_loop_campaign import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
 from closed_loop_divergence_audit import parse_abort

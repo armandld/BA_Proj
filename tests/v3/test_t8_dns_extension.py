@@ -21,7 +21,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t8_dns_extension import (
+from dns_extension import (
     EXTRA_SCENARIOS,
     V3_SCENARIO_CONFIG,
     _extended_init,
@@ -76,7 +76,7 @@ def test_perturbation_is_band_limited():
     # aucune energie au-dela de k_cut : compatible avec le projecteur
     # spectral (exact hors Nyquist) et avec la perturbation V1
     # grande echelle
-    from t8_dns_extension import PERT_K_CUT
+    from dns_extension import PERT_K_CUT
     N = 64
     p, _ = perturb_fields(np.zeros((N, N)), np.zeros((N, N)),
                           seed=3, amplitude=0.1)
@@ -147,7 +147,7 @@ def test_seed0_matches_plain_v1_init():
 
 
 def test_seeded_init_differs_and_velocity_stays_div_free():
-    from phase1b_dns_validation import div_B
+    from dns_validation import div_B
     sim0 = _fresh_sim()
     _extended_init(sim0, "orszag_tang", seed=0, amplitude=0.1)
     sim1 = _fresh_sim()
@@ -180,7 +180,7 @@ def _kh_like_fields(N=32, amp=0.0):
 
 
 def test_fixed_observable_removes_base_flow_exactly():
-    from t8_dns_extension import fluctuating_ke_fixed
+    from dns_extension import fluctuating_ke_fixed
     vx, vy = _kh_like_fields(amp=0.0)
     # flot de base retire (a l'epsilon machine de la moyenne pres)
     assert fluctuating_ke_fixed(vx, vy) < 1e-30
@@ -193,13 +193,13 @@ def test_phase1b_observable_is_contaminated_by_base_flow():
     # documente le bug D2 : la version 1b (moyenne sur l'axe 1) laisse
     # le profil de base dans Ep — c'est la justification de la copie
     # corrigee cote v3 (phase 1b reste intouchee)
-    from phase1b_dns_validation import fluctuating_KE
+    from dns_validation import fluctuating_KE
     vx, vy = _kh_like_fields(amp=0.0)
     assert fluctuating_KE(vx, vy) > 0.1          # ~variance du profil
 
 
 def test_check_kh_fixed_detects_growth(tmp_path):
-    from t8_dns_extension import check_kh_fixed
+    from dns_extension import check_kh_fixed
     N, n_snaps = 32, 13
     t = np.linspace(0.0, 1.2, n_snaps)
     vx = np.zeros((n_snaps, N, N), dtype=np.float32)

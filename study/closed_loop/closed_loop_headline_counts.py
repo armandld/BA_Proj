@@ -54,7 +54,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash    # v3, reutilise
+from h2b_feature_selection import git_commit_hash    # v3, reutilise
 
 RESULTS_DIR = os.path.join(_REPO_ROOT, "results")
 FOLDS = ("ot", "kh", "rotor", "tearing")

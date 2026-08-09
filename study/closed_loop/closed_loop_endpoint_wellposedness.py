@@ -57,7 +57,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
+from h2b_feature_selection import git_commit_hash
 from closed_loop_fold_synthesis import load_divergence_audit, load_fold
 
 LAMBDA_PREREG = 0.4          # T.LAMBDA_COST_SOFT, fige avant la campagne

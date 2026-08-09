@@ -44,9 +44,9 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
-from t6_dynamic_gt import downsample_fields          # v3, reutilise
-from phase1b_dns_validation import div_B, total_energy   # V2, reutilise
+from h2b_feature_selection import git_commit_hash
+from h2b_dynamic_ground_truth import downsample_fields          # v3, reutilise
+from dns_validation import div_B, total_energy   # V2, reutilise
 
 FIELDS = ("vx", "vy", "Bx", "By")
 
@@ -63,7 +63,7 @@ def evolve_to(scenario, N, re, t_end, cfl=0.4, dt0=1e-3, record=None):
     """
     from Simulation.grid import PeriodicGrid
     from Simulation.solver import MHDSolver
-    from t8_dns_extension import _extended_init        # v3, 8 scenarios
+    from dns_extension import _extended_init        # v3, 8 scenarios
 
     sim = MHDSolver(PeriodicGrid(N), dt=dt0, Re=re, Rm=re)
     _extended_init(sim, scenario, seed=0, amplitude=0.0)
@@ -131,7 +131,7 @@ def splitting_order_diagnostic(scenario="orszag_tang", N=64, re=400,
     """
     from Simulation.grid import PeriodicGrid
     from Simulation.solver import MHDSolver
-    from t8_dns_extension import _extended_init
+    from dns_extension import _extended_init
 
     def _run(n_steps, project):
         sim = MHDSolver(PeriodicGrid(N), dt=T / n_steps, Re=re, Rm=re)

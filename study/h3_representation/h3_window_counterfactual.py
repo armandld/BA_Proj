@@ -53,7 +53,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash
+from h2b_feature_selection import git_commit_hash
 from h0_optimiser_equivalence import f1_from_masks
 from h3_term_ablation import (ABLATIONS, ground_state_mask,
                                zero_hamiltonian_terms)

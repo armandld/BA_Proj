@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 from sklearn.metrics import f1_score
 
-from t4_blocked_split import (
+from h2b_blocked_split import (
 
     apply_per_config_threshold,
     per_config_thresholds,

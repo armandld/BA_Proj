@@ -99,7 +99,7 @@ def test_global_labels_let_the_prevalence_vary(dim):
 
 def test_the_variant_never_overwrites_the_original():
     """Le suffixe doit apparaitre dans le nom de sortie (defaut D9)."""
-    src = open(_study_file("t28_global_threshold_labels.py"),
+    src = open(_study_file("labels_global_threshold.py"),
                encoding="utf-8").read()
     assert 'SUFFIX = "_globalthr"' in src
     assert 'replace(".npz", f"{SUFFIX}.npz")' in src, (
@@ -114,7 +114,7 @@ def test_the_relabeller_refuses_a_degenerate_threshold():
     C'est ce qui arrive a N=64 dim=64 (patches de 1x1 cellule) dans
     phase2 : seuil 0.000000, 100 % durs, et rien ne crie.
     """
-    src = open(_study_file("t28_global_threshold_labels.py"),
+    src = open(_study_file("labels_global_threshold.py"),
                encoding="utf-8").read()
     assert "seuil global degenere" in src
     assert "thr_global <= 0.0" in src
@@ -128,7 +128,7 @@ def test_verdict_requires_confidence_intervals():
     """La fonction verdict n'a que trois sorties, et deux exigent un IC."""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "t29mod", _study_file("t29_loso_delta_ci.py"))
+        "t29mod", _study_file("h2b_loso_delta_ci.py"))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
 
@@ -154,7 +154,7 @@ def test_constant_predictors_do_not_vote():
     """
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "t29mod2", _study_file("t29_loso_delta_ci.py"))
+        "t29mod2", _study_file("h2b_loso_delta_ci.py"))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
 
@@ -176,7 +176,7 @@ def test_bootstrap_blocks_are_snapshots_not_patches():
     Rechantillonner par patch retrecirait l'intervalle d'un facteur ~dim,
     ce qui rendrait n'importe quel ecart significatif.
     """
-    src = open(_study_file("t29_loso_delta_ci.py"), encoding="utf-8").read()
+    src = open(_study_file("h2b_loso_delta_ci.py"), encoding="utf-8").read()
     assert "np.arange(len(Y)) // (dim * dim)" in src, (
         "le bloc de bootstrap doit etre l'instantane"
     )

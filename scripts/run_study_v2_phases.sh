@@ -77,16 +77,16 @@ run_phase() {
 for phase in $PHASES; do
     case "$phase" in
         1)
-            run_phase 1 study/phase1_dns_sweep.py $RE_ARGS
+            run_phase 1 study/dns_sweep.py $RE_ARGS
             ;;
         2)
-            run_phase 2 study/phase2_hard_patches.py $RE_ARGS $DIM_ARGS
+            run_phase 2 study/hard_patch_labels.py $RE_ARGS $DIM_ARGS
             ;;
         3)
-            run_phase 3 study/phase3_coefficients.py $RE_ARGS $DIM_ARGS
+            run_phase 3 study/hamiltonian_coefficients.py $RE_ARGS $DIM_ARGS
             ;;
         4)
-            run_phase 4 study/phase4_exact_diag.py $RE_ARGS $DIM_ARGS
+            run_phase 4 study/exact_diagonalisation.py $RE_ARGS $DIM_ARGS
             ;;
         5)
             run_phase 5 study/phase5_qaoa_eval.py $RE_ARGS $DIM_ARGS

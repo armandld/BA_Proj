@@ -20,7 +20,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t5_v1_psi_loso import (
+from h2b_psi_feature_loso import (
     BETA_TRIAL4,
     THR_TRIAL4,
     block_agg,

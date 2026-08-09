@@ -13,7 +13,7 @@
 #
 # Pre-requis : study/results/ contient les donnees phases 1-2
 # (dns_*.npz + patches_*.npz). La regeneration des DONNEES n'est
-# pas incluse (heures de DNS) : utiliser study/v3/t8_dns_extension.py.
+# pas incluse (heures de DNS) : utiliser study/v3/dns_extension.py.
 #
 # Usage :
 #   bash study/v3/run_study_v3.sh --all          # tout (~30-40 min)
@@ -65,7 +65,7 @@ run_step() {
 # ---- garde : donnees phases 1-2 presentes ----
 if [[ ! -f "$RESULTS_DIR/dns_orszag_tang_Re400_N${N}.npz" ]]; then
     echo "ERROR: study/results/ has no phase-1 DNS data at N=$N."
-    echo "Generate it first (hours): python study/v3/t8_dns_extension.py"
+    echo "Generate it first (hours): python study/v3/dns_extension.py"
     exit 1
 fi
 
@@ -90,7 +90,7 @@ want t7 && run_step t7 python "$ROOT_DIR/study/v3/t7_horizon.py" --N "$N" --dim 
 want t9 && run_step t9 python "$ROOT_DIR/study/v3/t9_prop2_check.py" --N "$N" --dim 2 4
 
 # ---- table maitresse auto-verifiante ----
-want t10 && run_step t10 python "$ROOT_DIR/study/v3/t10_aggregate.py" --N "$N" --dim "$DIM" --strict
+want t10 && run_step t10 python "$ROOT_DIR/study/v3/aggregate_v3.py" --N "$N" --dim "$DIM" --strict
 
 echo ""
 echo "V3 regeneration complete. Master table: study/results/v3_master_table.md"

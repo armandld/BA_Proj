@@ -65,7 +65,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from t1_feature_selection import git_commit_hash          # v3, reutilise
+from h2b_feature_selection import git_commit_hash          # v3, reutilise
 from ising_terms_and_annealing import (                          # V2, reutilise
     build_ising_terms, total_energy, delta_energy,
     _build_incidence, sa_multi_restart, spins_to_decisions,
