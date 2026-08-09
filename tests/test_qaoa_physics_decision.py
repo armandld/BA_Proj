@@ -113,7 +113,8 @@ def run_full_pipeline(fields, threshold_amr):
     nu = grid.L / RE
     eta_mhd = grid.L / RM
     phys_mapper = PhysicalMapper(cs=CS, nu=nu, eta_mhd=eta_mhd,
-                                  beta=BETA_MIC, dx=grid.dx)
+                                  beta_curl=BETA_MIC, beta_xpoint=BETA_MIC,
+                                  dx=grid.dx)
     sim = MockSolver(grid)
     angle_mapper = AngleMapper()
 
@@ -168,9 +169,15 @@ class TestQAOAvsInitialState:
     """Core test: verify QAOA output differs from trivial initial state."""
 
     def test_qaoa_modifies_probabilities_with_spatially_varying_H(self):
-        """With spatially varying Z bias, QAOA should produce different
-        marginals than sin²(θ/2). The Hamiltonian should push probabilities
-        toward the energetically favorable configuration.
+        """With spatially varying Z bias, QAOA produces different marginals
+        than sin²(θ/2): the Hamiltonian pushes probabilities toward the
+        energetically favourable configuration.
+
+        The arm is not deterministic — COBYLA is unseeded and the sampler
+        runs at args.shots = 4096, so the measured displacement varies
+        between draws (observed range ~0.07 to ~0.47 over 12 draws). A
+        single draw is therefore not a reliable statement; the assertion
+        below is on the median of REPEATS draws.
         """
         dim = 2
         # One cell is "hot" (H > 0), others are "cold" (H < 0)
@@ -189,18 +196,24 @@ class TestQAOAvsInitialState:
         psi_h = np.full((dim, dim), 0.5)  # non-zero psi for gradient
         psi_v = np.full((dim, dim), 0.5)
 
-        marginals = run_qaoa(hp, theta_h, theta_v, psi_h, psi_v)
+        REPEATS = 5
         initial = initial_state_marginals(theta_h, theta_v)
+        diffs = []
+        for _ in range(REPEATS):
+            marginals = run_qaoa(hp, theta_h, theta_v, psi_h, psi_v)
+            diffs.append(np.max(np.abs(marginals - initial)))
+        diffs = np.array(diffs)
 
-        # QAOA should change the marginals compared to initial state
-        diff = np.max(np.abs(marginals - initial))
         print(f"\n  QAOA vs Initial State:")
         print(f"  Initial (sin²(θ/2)): {['%.3f' % v for v in initial]}")
-        print(f"  QAOA output:         {['%.3f' % v for v in marginals]}")
-        print(f"  Max difference:      {diff:.4f}")
+        print(f"  QAOA output (last):  {['%.3f' % v for v in marginals]}")
+        print(f"  Max differences:     {np.round(diffs, 4)}")
+        print(f"  median = {np.median(diffs):.4f}, "
+              f"range = [{diffs.min():.4f}, {diffs.max():.4f}]")
 
-        assert diff > 0.05, (
-            f"QAOA should modify probabilities vs initial state, max diff = {diff:.4f}"
+        assert np.median(diffs) > 0.05, (
+            f"QAOA should modify probabilities vs initial state, "
+            f"median max-diff = {np.median(diffs):.4f} over {REPEATS} draws"
         )
 
     def test_qaoa_improves_discrimination(self):
@@ -464,8 +477,19 @@ class TestZZBoundaryDetection:
 class TestFullPipelineVortex:
     """Run the complete pipeline on a 16x16 grid with a localized vortex."""
 
-    def test_vortex_detected(self):
-        """A Lamb-Oseen vortex in top-left quadrant should be detected."""
+    def test_vortex_contrast_is_shot_noise(self):
+        """A Lamb-Oseen vortex in the top-left quadrant produces NO spatial
+        discrimination at the deployed size: the contrast is sampling noise.
+
+        The pipeline is sampled with args.shots = 4096, so each marginal
+        carries a standard error of ~0.008 and the contrast of a genuinely
+        flat probability map fluctuates at the ~0.015 level. A single draw
+        therefore clears |contrast| > 0.01 about half the time — which is
+        why this must be measured over repeats, not once.
+
+        Measured over REPEATS draws on identical fields: the contrast is
+        centred on zero and its SIGN is not reproducible.
+        """
         N = PHYSICS_N
         fields = make_uniform_fields(N, v_bg=0.0, B_bg=0.5)
 
@@ -480,18 +504,30 @@ class TestFullPipelineVortex:
                 fields['vx'][i, j] += -v_theta * dy / r
                 fields['vy'][i, j] += v_theta * dx / r
 
-        prob_map, raw_hp, mini_hp, (theta_h, theta_v) = run_full_pipeline(
-            fields, threshold_amr=0.2
-        )
-        contrast = get_contrast(prob_map)
+        REPEATS = 10
+        contrasts = []
+        for _ in range(REPEATS):
+            prob_map, raw_hp, mini_hp, (theta_h, theta_v) = run_full_pipeline(
+                fields, threshold_amr=0.2
+            )
+            contrasts.append(get_contrast(prob_map))
+        contrasts = np.array(contrasts)
 
         print(f"\n  [Vortex detection]")
-        print(f"  Prob map: {prob_map}")
-        print(f"  Contrast: {contrast:+.4f}")
+        print(f"  Prob map (last draw): {prob_map}")
+        print(f"  Contrasts: {np.round(contrasts, 5)}")
+        print(f"  mean = {contrasts.mean():+.5f}, std = {contrasts.std():.5f}")
         print(f"  theta_h: {theta_h}")
 
-        assert abs(contrast) > 0.01, (
-            f"Vortex should produce spatial discrimination, got |contrast| = {abs(contrast):.4f}"
+        assert abs(contrasts.mean()) < 0.02, (
+            f"the vortex contrast must average to ~0 — a stable nonzero mean "
+            f"would mean the pipeline does discriminate: "
+            f"mean = {contrasts.mean():+.4f}"
+        )
+        assert (contrasts > 0).any() and (contrasts < 0).any(), (
+            f"the contrast sign must flip across identical draws; a stable "
+            f"sign would indicate real discrimination: "
+            f"{np.round(contrasts, 5)}"
         )
 
     def test_velocity_step_detected(self):
@@ -681,19 +717,32 @@ class TestQAOAConvergence:
 class TestThresholdEffect:
     """Verify that threshold_amr controls Z bias discrimination power."""
 
-    def test_low_threshold_gives_stronger_Z_bias(self):
-        """threshold=0.2 gives much stronger negative Z bias for quiet cells
-        than threshold=0.95. This affects the Z bias dynamic range.
+    def test_z_bias_scale_is_threshold_dependent(self):
+        """The Z bias is alpha_z * (score - threshold_amr) with an alpha_z
+        that is itself a function of threshold_amr, so the bias magnitude is
+        NOT monotone in the threshold.
 
-        Requires spatially varying fields so that C_scale = median(nonzero
-        |C|, |K|) > 0; for uniform fields C_scale=0 and H_edges vanishes
-        regardless of threshold.
+        Mechanism: alpha_z is normalised by C_scale = median(nonzero |C|,
+        |K|), and |C| carries the Gaussian uncertainty window
+        exp(-((score - threshold_amr)/sigma)^2). Moving the threshold away
+        from the score support kills |C|, C_scale drops to the |K| floor,
+        and alpha_z drops with it.
+
+        On this shear layer the score takes exactly two values, 0 and 0.5:
+          threshold = 0.20  ->  max|C| ~ 1.2e+01, alpha_z ~ 8.8e-01
+          threshold = 0.95  ->  max|C| ~ 2.4e-84, alpha_z ~ 5.1e-03
+        i.e. the same field and the same score give a Z bias whose scale
+        moves by more than two orders of magnitude with the threshold alone.
+
+        Requires spatially varying fields: for uniform fields C_scale = 0
+        and H_edges vanishes regardless of threshold.
         """
         grid = PeriodicGrid(PHYSICS_N, L)
         nu = grid.L / RE
         eta_mhd = grid.L / RM
         phys_mapper = PhysicalMapper(cs=CS, nu=nu, eta_mhd=eta_mhd,
-                                      beta=BETA_MIC, dx=grid.dx)
+                                      beta_curl=BETA_MIC,
+                                      beta_xpoint=BETA_MIC, dx=grid.dx)
         sim = MockSolver(grid)
 
         # Shear layer: vx jumps at row N//2, creating non-zero C_edges
@@ -716,17 +765,46 @@ class TestThresholdEffect:
             sim, score, fields, 0.95
         )
 
-        H_low = hp_low['H_edges'][0]    # alpha_z * (score - 0.2)
-        H_high = hp_high['H_edges'][0]  # alpha_z * (score - 0.95)
+        H_low = hp_low['H_edges'][0]    # alpha_z(0.2)  * (score - 0.2)
+        H_high = hp_high['H_edges'][0]  # alpha_z(0.95) * (score - 0.95)
+
+        def alpha_of(H, thr):
+            """Recover alpha_z, and check the bias is linear in the score."""
+            d = score - thr
+            m = np.abs(d) > 1e-12
+            ratios = H[m] / d[m]
+            assert np.allclose(ratios, ratios[0], rtol=1e-9), (
+                "H_edges is not alpha_z * (score - threshold) at fixed "
+                "threshold — the linear form itself has changed"
+            )
+            return float(ratios[0])
+
+        a_low, a_high = alpha_of(H_low, 0.2), alpha_of(H_high, 0.95)
+        C_low = max(np.max(np.abs(hp_low['C_edges'][0])),
+                    np.max(np.abs(hp_low['C_edges'][1])))
+        C_high = max(np.max(np.abs(hp_high['C_edges'][0])),
+                     np.max(np.abs(hp_high['C_edges'][1])))
 
         print(f"\n  Z bias threshold effect:")
+        print(f"  score values           = {np.unique(np.round(score, 6))}")
         print(f"  H(threshold=0.2) mean  = {np.mean(H_low):.4f}")
         print(f"  H(threshold=0.95) mean = {np.mean(H_high):.4f}")
+        print(f"  alpha_z(0.2)           = {a_low:.6e}")
+        print(f"  alpha_z(0.95)          = {a_high:.6e}")
+        print(f"  max|C| at 0.2          = {C_low:.6e}")
+        print(f"  max|C| at 0.95         = {C_high:.6e}")
 
-        assert np.mean(H_low) > np.mean(H_high), (
-            f"Higher threshold should give stronger negative Z bias: "
-            f"H(0.2)={np.mean(H_low):.3f}, H(0.95)={np.mean(H_high):.3f}"
+        # 1. the Z weight is not a constant of the mapper
+        assert a_low > 50 * a_high, (
+            f"alpha_z must depend strongly on the threshold: "
+            f"alpha(0.2)={a_low:.3e}, alpha(0.95)={a_high:.3e}"
         )
+        # 2. the cause is the windowed ZZ coupling entering the Z
+        #    normalisation, not the score, which is identical in both calls
+        assert C_low > 1.0, "ZZ coupling must be alive when the threshold " \
+                            "sits near the score support"
+        assert C_high < 1e-30, "ZZ coupling must be annihilated when the " \
+                               "threshold sits far from the score support"
 
 
 # ══════════════════════════════════════════════════════════════════════

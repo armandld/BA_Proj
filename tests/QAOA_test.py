@@ -80,7 +80,8 @@ def make_mapper(grid):
     nu = grid.L / RE
     eta_mhd = grid.L / RM
     return PhysicalMapper(cs=CS, nu=nu, eta_mhd=eta_mhd,
-                          beta=BETA_MIC, dx=grid.dx)
+                          beta_curl=BETA_MIC, beta_xpoint=BETA_MIC,
+                          dx=grid.dx)
 
 
 def uniform_fields(grid, v_bg=0.1, B_bg=0.5):

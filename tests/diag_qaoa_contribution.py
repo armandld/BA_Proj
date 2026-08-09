@@ -35,7 +35,8 @@ def diagnose_scenario(scenario_name, sim, N, VQA_N=2, threshold=0.3,
 
     mapper = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
     HamiltMapper = PhysicalMapper(
-        cs=1.0, nu=nu, eta_mhd=eta, beta=beta_mic, dx=grid.dx,
+        cs=1.0, nu=nu, eta_mhd=eta, beta_curl=beta_mic,
+        beta_xpoint=beta_mic, dx=grid.dx,
         gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0, w_z_frac=w_z_frac,
     )
 

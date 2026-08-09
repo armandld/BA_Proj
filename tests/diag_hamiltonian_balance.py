@@ -51,7 +51,8 @@ print()
 # Test with different beta (threshold-contrast sensitivity) values
 for beta_mic in [0.2, 0.5, 1.0, 1.5, 2.0]:
     phys_mapper = PhysicalMapper(cs=1.0, nu=nu, eta_mhd=eta,
-                                  beta=beta_mic, dx=grid.dx)
+                                  beta_curl=beta_mic, beta_xpoint=beta_mic,
+                                  dx=grid.dx)
 
     score = phys_mapper.physical_score(fields)
 

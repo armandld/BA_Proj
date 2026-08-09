@@ -99,7 +99,7 @@ def xpoint_with_current_fields(N=8):
 
 
 def make_mapper(**kwargs):
-    defaults = dict(cs=1.0, eta_mhd=0.01, beta=1.0)
+    defaults = dict(cs=1.0, eta_mhd=0.01, beta_curl=1.0, beta_xpoint=1.0)
     defaults.update(kwargs)
     return PhysicalMapper(**defaults)
 
@@ -339,7 +339,7 @@ class TestOrszagTang:
         }
 
         hp = compute_hp(fields, N, beta_xpoint=1.0,
-                         eta_mhd=grid.L / 800, beta=1.0)
+                         eta_mhd=grid.L / 800, beta_curl=1.0)
 
         Kx = hp['K_xpoint']
         K = hp['K_plaquettes']

@@ -2246,3 +2246,174 @@ be captured at execution time rather than inferred from the value. Any
 closed-loop AMR study of this kind should record run completion status at
 execution time, because with a non-deterministic arm it cannot be recovered
 afterwards.
+
+---
+
+# THE V1 TEST SUITE, RE-ARMED
+
+Base commit `d3d8fe6`. Commands:
+
+```bash
+python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q
+python -m pytest tests/v3 tests/v4 -q
+```
+
+## Before: 44 of 175 tests were failing, and no green gate existed
+
+```
+44 failed, 131 passed in 258s
+```
+
+**42 of the 44 had a single cause**, and it was mechanical:
+
+```
+TypeError: PhysicalMapper.__init__() got an unexpected keyword argument 'beta'
+```
+
+`beta` was split into `beta_curl` / `beta_xpoint` (`src/Simulation/HamiltParams.py:63`)
+and the call sites in `tests/` were never updated. The code was not broken —
+the tests were stale. The consequence is what matters: `test_beta_xpoint.py`,
+`test_vqa_anomaly_cases.py`, `test_module_validation.py` and the four
+`test_qaoa_*` files **had verified nothing since that refactor**, i.e. the
+Hamiltonian layer — the object of the whole study — was unguarded.
+
+`run_tests.sh` is `set -e` and `run_stage` exits on the first non-zero code
+(`run_tests.sh:154`), so the default run aborted at **stage 2**
+(`test_v9_metrics.py`). There was no passing gate on V1 to regress against.
+
+Repair: `beta=X` → `beta_curl=X, beta_xpoint=X` at 18 call sites, which is
+the exact historical semantics (a shared `beta` fed both sensitivities,
+`HamiltParams.py:88-92`). No file under `src/` was touched.
+
+## After
+
+```
+175 passed          (V1 suite)
+325 passed, 15 skipped   (tests/v3 + tests/v4)
+```
+
+## The six assertions that had to be inverted, and why
+
+Two failures were not stale — they were **correct measurements of a broken
+claim**. Four more of the same kind surfaced once the 42 came back to life.
+All six assert that a coupling is present; all six measure its annihilation
+by the Gaussian uncertainty window `exp(-((score - threshold_amr)/sigma)^2)`
+that multiplies `C_edges`.
+
+The clearest of them, `test_v9_metrics.py`, carried this docstring:
+
+> *"This is the core v9 claim: the Hamiltonian adds spatial correlation
+> information BEYOND what θ init provides."*
+
+and failed by 42 orders of magnitude. Measured, on a 2x2 periodic grid with
+a sharp velocity boundary (`score` uniform at 0.5, `threshold_amr = 0`,
+`sigma = 0.05`):
+
+| quantity | value |
+|---|---|
+| `max abs(C_edges)` delivered | **1.7858e-42** |
+| same call at `threshold_amr = score` (window = 1) | **4.8005e+01** |
+| ratio | **3.7201e-44** |
+| `exp(-((0.5 - 0)/0.05)^2) = exp(-100)` | **3.7201e-44** |
+
+The ratio equals the window to full double precision. The gradient signal is
+computed correctly, at O(48), and then multiplied by ~1e-44.
+
+On Orszag-Tang (N=64, 30 steps, score spanning [0.5057, 0.8748]):
+
+| sigma | `max abs(C_edges)` | `max abs(K_plaquettes)` |
+|---|---|---|
+| 0.05 (deployed) | **1.7727e-48** | 2.3629e+01 |
+| 10 (window open) | **6.3187e+01** | 2.3629e+01 |
+
+`K_plaquettes` is bit-identical across the two, which is what makes the
+attribution airtight: `sigma` reaches ZZ and nothing else. The four cases in
+`test_vqa_anomaly_cases.py` give 1.79e-42, 1.86e-42, 1.11e-38 and 1.23e-85
+by the same mechanism.
+
+Each of the six now asserts three things instead of one: the delivered
+coupling is dead (`< 1e-30`), the same fields with the window open return an
+O(1) coupling, and — where the score is uniform enough to make it exact —
+the ratio equals the window. A test that merely recorded "it is zero" would
+not distinguish *annihilated* from *never computed*.
+
+**This is an independent corroboration of T13/T17/T18, written before this
+study existed.** V1's own unit tests contained the falsification of V1's
+central claim, in red, for the whole life of the project.
+
+## Three defects found while re-arming, none previously recorded
+
+**(a) The Z-bias scale is a function of the threshold** —
+`test_qaoa_physics_decision.py`. `H_edges` is documented as
+`alpha_z * (score - threshold_amr)`. It is linear in `score` at fixed
+threshold (the recovered ratio is constant to 1e-9), but `alpha_z` is
+normalised by `median(nonzero |C|, |K|)`, and `|C|` carries the window — so
+`alpha_z` inherits the threshold dependence. On a shear layer whose score
+takes exactly two values, 0 and 0.5:
+
+| `threshold_amr` | `max abs(C_edges)` | recovered `alpha_z` |
+|---|---|---|
+| 0.20 | 1.167e+01 | **8.7857e-01** |
+| 0.50 | 4.404e-10 | 1.4930e-03 |
+| 0.95 | 2.396e-84 | 5.0750e-03 |
+
+Same fields, same score, Z-bias scale moving by **173x** and
+non-monotonically with the threshold alone. The old test asserted
+monotonicity and was simply wrong about the model it was testing.
+
+**(b) The vortex detection test was measuring shot noise.** With
+`args.shots = 4096` each marginal carries a standard error of ~0.008. Over
+12 draws on identical fields, the Lamb-Oseen contrast was
+
+```
+[+0.0141 -0.0147 -0.0267 -0.0043 -0.0305 +0.0060
+ +0.0036 -0.0125 +0.0067 +0.0236 -0.0084 +0.0079]
+mean = -0.0029, std = 0.0156
+```
+
+centred on zero with a **sign that flips run to run**, and clearing the old
+`abs(contrast) > 0.01` bar on exactly 50% of draws. The test now runs 10
+draws and asserts the mean is null and the sign is not reproducible — which
+is the finding, and is consistent with the uniform ground state at this size.
+
+**(c) The QAOA arm's displacement is not a single-draw quantity.** The
+max-marginal displacement against `sin^2(theta/2)` ranged over
+**0.0721 to 0.4742** across 12 identical calls (mean 0.2867). The assertion
+is now on the median of 5 draws. Same root cause as D11: unseeded COBYLA
+plus a shot-based sampler.
+
+## The harness finding: 8 of the 17 default stages cannot fail
+
+Independent of the 44, and larger:
+
+| stage | assertions | wall time |
+|---|---|---|
+| `tests/test_qaoa_noise_and_early.py` (2 tests) | **0** | 14m40 + 1m38 |
+| `tests/test_qaoa_scaling_and_hparams.py` (2 tests) | **0** | 16m04 |
+| `tests/test_qaoa_advantage.py` | **0** | script |
+| `tests/test_qaoa_decisions.py` | **0** (0 test functions) | script |
+| `tests/diag_hamiltonian_balance.py` | **0** | script |
+| `tests/diag_qaoa_contribution.py` | **0** | script |
+| `tests/diagnose_convergence.py` | **0** | script |
+
+They print and return 0. `run_stage` reports `PASSED`. Over **32 minutes**
+of the default run is spent in files that contain no assertion at all — and
+what they print is not neutral:
+
+- `test_qaoa_advantage.py` ends with the winner column reading `Classical`
+  on **6 of 6** rows (rotor 2x2/3x3, KH 2x2/3x3, OT 2x2/3x3) and exits 0;
+- `diag_qaoa_contribution.py` ends with
+  `⚠ ALL Z biases negative → QAOA ground state = refine nothing` and exits 0;
+- `test_noise_robustness` averages Spearman rho values that are **NaN** on
+  some trials (`ConstantInputWarning: An input array is constant`) without
+  saying so.
+
+This is the study's own motif at the level of the harness: *a stage that
+verifies nothing is indistinguishable from a stage that passed*. The 44 red
+tests were visible; these eight were green.
+
+**Not fixed here**, because it changes the meaning of the gate and the
+acceptance criteria would have to be invented rather than measured: either
+give those stages real assertions, or move them out of the default path into
+the existing `--figures` / `--diagnose` groups so the default run is
+assertion-bearing end to end.

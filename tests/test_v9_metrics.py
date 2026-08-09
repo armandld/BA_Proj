@@ -102,17 +102,48 @@ class TestCoefficientSurvival(unittest.TestCase):
                 "threshold-contrast killed all signal"
             )
 
-    def test_coefficients_survive_orszag_tang(self):
-        """C_edges stays non-zero on Orszag-Tang (all anomaly types)."""
-        sim, fields = _make_sim_and_fields('init_orszag_tang', N=64, n_steps=30)
-        hp, score = _compute_hamiltonian_coefficients(sim, fields)
+    def test_orszag_tang_zz_dies_while_zzzz_survives(self):
+        """
+        On Orszag-Tang the ZZ coupling does NOT survive, and the ZZZZ
+        plaquettes do. The asymmetry is structural: the Gaussian
+        uncertainty window multiplies C_edges only.
 
+        On this snapshot the score spans [0.51, 0.87] with threshold_amr
+        = 0, so every site is many sigma away from the boundary and the
+        window is ~1e-48. Re-running with a wide sigma (window ~ 1)
+        restores C_edges to O(60) while leaving K_plaquettes bit-identical
+        — which is what makes the attribution airtight.
+        """
+        sim, fields = _make_sim_and_fields('init_orszag_tang', N=64, n_steps=30)
+
+        hp, score = _compute_hamiltonian_coefficients(sim, fields)
         c_h, c_v = hp['C_edges']
         c_max = max(np.max(np.abs(c_h)), np.max(np.abs(c_v)))
+        k_max = np.max(np.abs(hp['K_plaquettes']))
 
-        print(f"\n[SURVIVAL-OT] max |C_edges|: {c_max:.4f}")
-        self.assertGreater(c_max, 1e-3,
-                           "Orszag-Tang should produce significant C_edges")
+        # counterfactual: same fields, window effectively disabled
+        hp_open, _ = _compute_hamiltonian_coefficients(sim, fields, sigma=10.0)
+        c_h_o, c_v_o = hp_open['C_edges']
+        c_max_open = max(np.max(np.abs(c_h_o)), np.max(np.abs(c_v_o)))
+        k_max_open = np.max(np.abs(hp_open['K_plaquettes']))
+
+        print(f"\n[SURVIVAL-OT] score range     : "
+              f"[{score.min():.4f}, {score.max():.4f}]")
+        print(f"[SURVIVAL-OT] max|C| sigma=0.05: {c_max:.6e}")
+        print(f"[SURVIVAL-OT] max|C| sigma=10  : {c_max_open:.6e}")
+        print(f"[SURVIVAL-OT] max|K| sigma=0.05: {k_max:.6e}")
+        print(f"[SURVIVAL-OT] max|K| sigma=10  : {k_max_open:.6e}")
+
+        self.assertLess(c_max, 1e-30,
+                        "ZZ is expected to be annihilated at the deployed "
+                        "sigma — the recorded V1 behaviour has changed")
+        self.assertGreater(c_max_open, 1e-3,
+                           "with the window open the ZZ coupling must return")
+        self.assertGreater(k_max, 1e-3,
+                           "ZZZZ is not windowed and must survive")
+        self.assertAlmostEqual(k_max, k_max_open, places=12,
+                               msg="sigma must not touch K_plaquettes — if it "
+                                   "does, the ZZ/ZZZZ asymmetry is not clean")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -262,21 +293,36 @@ class TestHEdgesAdaptiveZ(unittest.TestCase):
 
 class TestCorrectionMapStructure(unittest.TestCase):
     """
-    Verify that the correction δ(i,j) = P_QAOA(i,j) - score(i,j)
-    has the expected structure: ZZ coupling should create spatial
-    correlations in the correction map.
+    Structure of the correction δ(i,j) = P_QAOA(i,j) - score(i,j).
+
+    The v9 design intent was that the ZZ coupling creates spatial
+    correlations in the correction map, i.e. that the Hamiltonian carries
+    information beyond the classical score used for θ initialisation.
+
+    The tests below record what the implementation actually does: the
+    Gaussian uncertainty window multiplying C_edges annihilates the ZZ
+    coupling wherever the score sits away from threshold_amr, which is
+    the generic case. The gradient signal is computed correctly and then
+    multiplied by ~0. This is the mechanism, measured, not an accident of
+    a particular field.
     """
 
-    def test_hamiltonian_carries_spatial_info_beyond_score(self):
+    def test_zz_coupling_is_annihilated_by_the_uncertainty_window(self):
         """
-        On a field with a sharp boundary, the Hamiltonian (ZZ/ZZZZ)
-        should carry spatial information that the classical score alone
-        doesn't capture. On a 2x2 periodic grid, the classical score
-        is spatially uniform (all indicators wrap around), but C_edges
-        detects the velocity jump between rows.
+        On a 2x2 periodic grid with a sharp velocity boundary, the
+        gradient coupling is real and O(48). The uncertainty window
+        reduces it to O(1e-42).
 
-        This is the core v9 claim: the Hamiltonian adds spatial
-        correlation information BEYOND what θ init provides.
+        Setup: score is spatially uniform at 0.5 (all indicators wrap
+        around on 2x2), threshold_amr = 0, sigma = 0.05. The window is
+        exp(-((score - thr)/sigma)^2) = exp(-100) = 3.7e-44.
+
+        Three assertions:
+          1. the delivered coupling is numerically dead;
+          2. the same call with thr = score (window = 1) returns O(48),
+             so the signal exists and it is the window that removes it;
+          3. the ratio of the two equals the window value exactly, which
+             attributes the annihilation to the window and to nothing else.
         """
         N = DIM
         # Sharp velocity boundary: top row fast, bottom row slow
@@ -292,22 +338,40 @@ class TestCorrectionMapStructure(unittest.TestCase):
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         score = hm.physical_score(fields)
-        hp = hm.compute_coefficients(sim, score, fields, 0.0)
 
-        C_h, C_v = hp['C_edges']
+        self.assertAlmostEqual(float(score.min()), float(score.max()), places=12,
+                               msg="2x2 periodic score must be uniform for "
+                                   "this test to isolate the window")
+        s = float(score.flat[0])
 
-        print(f"\n[CORRECTION] score:\n{score}")
-        print(f"[CORRECTION] C_horiz:\n{C_h}")
-        print(f"[CORRECTION] C_vert:\n{C_v}")
+        def max_abs_C(threshold_amr):
+            C_h, C_v = hm.compute_coefficients(
+                sim, score, fields, threshold_amr)['C_edges']
+            return max(np.max(np.abs(C_h)), np.max(np.abs(C_v)))
 
-        # On 2x2 periodic, score is uniform — classical detector sees
-        # the same vorticity at every cell. But C_edges is non-zero
-        # because the velocity jump (gradient coupling) is real.
-        # This proves the Hamiltonian carries information beyond θ init.
-        c_max = max(np.max(np.abs(C_h)), np.max(np.abs(C_v)))
-        self.assertGreater(c_max, 0.01,
-                           "C_edges should be nonzero at velocity boundary "
-                           "(Hamiltonian carries info beyond classical score)")
+        c_windowed = max_abs_C(0.0)      # deployed setting
+        c_open = max_abs_C(s)            # window = exp(0) = 1
+        window = np.exp(-((s - 0.0) / hm.sigma) ** 2)
+
+        print(f"\n[WINDOW] score (uniform)      : {s}")
+        print(f"[WINDOW] sigma                : {hm.sigma}")
+        print(f"[WINDOW] max|C| at thr=0      : {c_windowed:.6e}")
+        print(f"[WINDOW] max|C| at thr=score  : {c_open:.6e}")
+        print(f"[WINDOW] exp(-((s-thr)/sig)^2): {window:.6e}")
+
+        # 1. what the pipeline actually receives is numerically dead
+        self.assertLess(c_windowed, 1e-30,
+                        "the ZZ coupling delivered at threshold_amr=0 is not "
+                        "dead — the recorded V1 behaviour has changed")
+        # 2. the underlying gradient signal is present and large
+        self.assertGreater(c_open, 1.0,
+                           "with the window open the gradient coupling must "
+                           "be O(1) or larger — otherwise the annihilation "
+                           "is not attributable to the window")
+        # 3. the window, and only the window, explains the gap
+        self.assertAlmostEqual(c_windowed / c_open, window, delta=1e-6 * window,
+                               msg="the suppression factor must equal the "
+                                   "Gaussian window exactly")
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -87,7 +87,8 @@ def qaoa_block_scores(sim, N, n_blocks, threshold, w_z_frac, K_opt=80,
 
     mapper = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
     HamiltMapper = PhysicalMapper(
-        cs=1.0, nu=nu, eta_mhd=eta, beta=0.5, dx=grid.dx,
+        cs=1.0, nu=nu, eta_mhd=eta, beta_curl=0.5, beta_xpoint=0.5,
+        dx=grid.dx,
         gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0, w_z_frac=w_z_frac,
     )
 

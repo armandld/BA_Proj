@@ -246,7 +246,7 @@ class TestHamiltParams:
         nu = grid.L / 100.0
         eta_mhd = grid.L / 100.0
         mapper = PhysicalMapper(cs=1.0, nu=nu, eta_mhd=eta_mhd,
-                                beta=0.5, dx=grid.dx)
+                                beta_curl=0.5, beta_xpoint=0.5, dx=grid.dx)
         sim = MockSolver(grid)
         return grid, mapper, sim
 

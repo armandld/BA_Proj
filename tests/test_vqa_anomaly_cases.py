@@ -111,7 +111,7 @@ def _run_vqa_on_fields(fields, fields_prev=None, dim=DIM, advanced=False,
     """
     mapper = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
     # beta=2.0 (permissive Michelson) to allow signals to pass on small grids
-    hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=2.0)
+    hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0, beta_xpoint=2.0)
 
     N = fields['vx'].shape[0]
     grid = PeriodicGrid(N)
@@ -292,7 +292,7 @@ class TestShearAnomaly(unittest.TestCase):
 
         mapper = AngleMapper(v0=1.0, B0=1.0)
         # beta=2.0 (permissive Michelson) so uniform-magnitude shear passes filter
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=2.0)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0, beta_xpoint=2.0)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         Phi = mapper.compute_stress_flux(fields)
@@ -308,14 +308,32 @@ class TestShearAnomaly(unittest.TestCase):
         self.assertGreater(np.max(np.abs(full_v)), 0.01,
                            "Vertical stress flux should be nonzero for sheared fields")
 
-        # C_edges (gradient coupling) should be nonzero: shear creates large
-        # velocity jumps across cell interfaces → high cell Reynolds number
+        # Design intent: C_edges (gradient coupling) is nonzero here, since
+        # shear creates large velocity jumps across cell interfaces → high
+        # cell Reynolds number.
+        # Actual behaviour: the gradient signal is computed and then
+        # multiplied by the Gaussian uncertainty window
+        # exp(-((score - threshold_amr)/sigma)^2), which at threshold_amr=0
+        # and sigma=0.05 is ~1e-44. The counterfactual below reopens the
+        # window and recovers the signal, so the loss is attributable to the
+        # window and not to an absent gradient.
         C_h, C_v = hp['C_edges']
         C_max = max(np.max(np.abs(C_h)), np.max(np.abs(C_v)))
+        hm_open = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0,
+                                 beta_xpoint=2.0, sigma=10.0)
+        C_h_o, C_v_o = hm_open.compute_coefficients(
+            sim, score, fields, 0.0)['C_edges']
+        C_max_open = max(np.max(np.abs(C_h_o)), np.max(np.abs(C_v_o)))
         print(f"[SHEAR-HAMILT] C_edges_h:\n{C_h}")
         print(f"[SHEAR-HAMILT] C_edges_v:\n{C_v}")
-        self.assertGreater(C_max, 0.01,
-                           "C_edges should be nonzero (shear creates gradient coupling)")
+        print(f"[SHEAR-HAMILT] max|C| sigma=0.05: {C_max:.6e}")
+        print(f"[SHEAR-HAMILT] max|C| sigma=10  : {C_max_open:.6e}")
+        self.assertLess(C_max, 1e-30,
+                        "C_edges is annihilated by the uncertainty window at "
+                        "the deployed sigma — recorded V1 behaviour")
+        self.assertGreater(C_max_open, 0.01,
+                           "with the window open the shear gradient coupling "
+                           "must reappear")
 
     def test_calm_baseline_low_marginals(self):
         """A perfectly uniform field should produce a trivial Hamiltonian.
@@ -511,7 +529,7 @@ class TestXPointAnomaly(unittest.TestCase):
 
         mapper = AngleMapper(v0=1.0, B0=1.0)
         # beta=2.0 so the Michelson filter passes the signal
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=2.0)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0, beta_xpoint=2.0)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         Phi = mapper.compute_stress_flux(fields)
@@ -1166,20 +1184,30 @@ class TestCrossAnomalyIsolation(unittest.TestCase):
         # spatially uniform v_jump, so selective Michelson (beta<1) gives 0.
         # Permissive beta lets the signal through — on real grids (post-downsampling),
         # signals are non-uniform and this is not needed.
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=2.0)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0, beta_xpoint=2.0)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         Phi = mapper.compute_stress_flux(fields)
         score = hm.physical_score(fields)
         hp = hm.compute_coefficients(sim, score, fields, 0.0)
 
-        # C_edges should detect the shear (large velocity jumps)
+        # Design intent: C_edges detects the shear (large velocity jumps).
+        # Actual behaviour: the uncertainty window annihilates it. The
+        # sigma=10 counterfactual shows the jump is detected and then thrown
+        # away, and the raw circulation below confirms the physical signal
+        # independently of the Hamiltonian.
         C_h, C_v = hp['C_edges']
         C_max = max(np.max(np.abs(C_h)), np.max(np.abs(C_v)))
+        hm_open = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0,
+                                 beta_xpoint=2.0, sigma=10.0)
+        C_h_o, C_v_o = hm_open.compute_coefficients(
+            sim, score, fields, 0.0)['C_edges']
+        C_max_open = max(np.max(np.abs(C_h_o)), np.max(np.abs(C_v_o)))
 
         print(f"\n[SHEAR-VORTICITY] C_edges_h:\n{C_h}")
         print(f"[SHEAR-VORTICITY] C_edges_v:\n{C_v}")
-        print(f"[SHEAR-VORTICITY] max |C_edges|: {C_max:.4f}")
+        print(f"[SHEAR-VORTICITY] max |C_edges| sigma=0.05: {C_max:.6e}")
+        print(f"[SHEAR-VORTICITY] max |C_edges| sigma=10  : {C_max_open:.6e}")
 
         # Compute discrete circulation (curl) directly
         vx, vy = fields['vx'], fields['vy']
@@ -1187,9 +1215,15 @@ class TestCrossAnomalyIsolation(unittest.TestCase):
                       + np.roll(vy, -1, axis=1) - vy)
         print(f"[SHEAR-VORTICITY] raw circulation:\n{gamma_circ}")
 
+        self.assertLess(
+            C_max, 1e-30,
+            msg="C_edges is annihilated by the uncertainty window at the "
+                "deployed sigma — recorded V1 behaviour",
+        )
         self.assertGreater(
-            C_max, 0.1,
-            msg="Symmetric shear should produce nonzero C_edges (gradient coupling)",
+            C_max_open, 0.1,
+            msg="with the window open, symmetric shear must produce nonzero "
+                "C_edges (the gradient coupling itself is correct)",
         )
         self.assertGreater(
             np.max(np.abs(gamma_circ)), 0.1,
@@ -1275,7 +1309,7 @@ class TestCrossAnomalyIsolation(unittest.TestCase):
         }
 
         mapper = AngleMapper(v0=1.0, B0=1.0)
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=1.5)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=1.5, beta_xpoint=1.5)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         Phi = mapper.compute_stress_flux(fields)
@@ -1336,7 +1370,7 @@ class TestCombinedAnomalies(unittest.TestCase):
         }
 
         mapper = AngleMapper(v0=1.0, B0=1.0)
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=2.0)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0, beta_xpoint=2.0)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         score = hm.physical_score(fields)
@@ -1359,9 +1393,23 @@ class TestCombinedAnomalies(unittest.TestCase):
         if dominant > 0:
             self.assertLess(H_active, dominant,
                             msg="H_edges (Z) must be subordinate to max(|C|,|K|) (ZZ/ZZZZ)")
-        # C_edges should detect the velocity gradients
-        self.assertGreater(C_active, 0.01,
-                           msg="Gradient coupling should be active in combined field")
+        # Design intent: C_edges detects the velocity gradients.
+        # Actual behaviour: annihilated by the uncertainty window. Reopening
+        # the window on the same fields restores the coupling, so the
+        # gradient is detected and then discarded.
+        hm_open = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=2.0,
+                                 beta_xpoint=2.0, sigma=10.0)
+        C_h_o, C_v_o = hm_open.compute_coefficients(
+            sim, score, fields, 0.0)['C_edges']
+        C_open = max(np.max(np.abs(C_h_o)), np.max(np.abs(C_v_o)))
+        print(f"[COMBINED-HAMILT] max |C_edges| sigma=10: {C_open:.6e}")
+
+        self.assertLess(C_active, 1e-30,
+                        msg="C_edges is annihilated by the uncertainty window "
+                            "at the deployed sigma — recorded V1 behaviour")
+        self.assertGreater(C_open, 0.01,
+                           msg="with the window open the gradient coupling "
+                               "must be active in the combined field")
 
     def test_combined_vqa_marginals_elevated(self):
         """
@@ -1430,7 +1478,7 @@ class TestCombinedAnomalies(unittest.TestCase):
         }
 
         mapper = AngleMapper(v0=1.0, B0=1.0)
-        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta=1.5)
+        hm = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=1.5, beta_xpoint=1.5)
         grid = PeriodicGrid(N)
         sim = MHDSolver(grid)
         score = hm.physical_score(fields)
@@ -1447,16 +1495,37 @@ class TestCombinedAnomalies(unittest.TestCase):
             K_max = np.max(np.abs(hp['K_plaquettes']))
         dominant = max(C_max, K_max)
 
+        hm_open = PhysicalMapper(cs=1.0, eta_mhd=0.01, beta_curl=1.5,
+                                 beta_xpoint=1.5, sigma=10.0)
+        hp_open = hm_open.compute_coefficients(
+            sim, score, fields, 0.0, advanced_anomalies_enabled=True,
+        )
+        C_open = max(np.max(np.abs(hp_open['C_edges'][0])),
+                     np.max(np.abs(hp_open['C_edges'][1])))
+
         print(f"\n[TRIPLE] max |H_edges|:  {H_max:.4f} (adaptive Z)")
-        print(f"[TRIPLE] max |C_edges|:  {C_max:.4f}")
+        print(f"[TRIPLE] max |C_edges|:  {C_max:.6e}")
+        print(f"[TRIPLE] max |C_edges| sigma=10: {C_open:.6e}")
+        print(f"[TRIPLE] max |K_plaquettes|: {K_max:.4f}")
         print(f"[TRIPLE] max |K_xpoint|: {Kx_max:.4f}")
 
-        # Adaptive Z: H_edges subordinate to dominant interaction term
-        if dominant > 0:
-            self.assertLess(H_max, dominant,
-                            msg="H_edges (Z) must be subordinate to max(|C|,|K|) (ZZ/ZZZZ)")
-        self.assertGreater(C_max, 0.01,
-                           msg="Gradient coupling should remain active in combined anomaly")
+        # The subordination check is only meaningful if some coupling
+        # survives; state that explicitly rather than letting the guard
+        # skip silently.
+        self.assertGreater(dominant, 0.0,
+                           msg="no coupling survives, so the H-subordination "
+                               "check would be vacuous")
+        self.assertLess(H_max, dominant,
+                        msg="H_edges (Z) must be subordinate to max(|C|,|K|) (ZZ/ZZZZ)")
+        # Design intent: gradient coupling remains active alongside the
+        # X-point term. Actual behaviour: the window kills C_edges, and only
+        # the ZZZZ family survives to carry any many-body structure.
+        self.assertLess(C_max, 1e-30,
+                        msg="C_edges is annihilated by the uncertainty window "
+                            "at the deployed sigma — recorded V1 behaviour")
+        self.assertGreater(C_open, 0.01,
+                           msg="with the window open the gradient coupling "
+                               "must remain active in the combined anomaly")
 
 
 # ═══════════════════════════════════════════════════════════════════════
