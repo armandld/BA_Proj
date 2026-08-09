@@ -118,6 +118,40 @@ def mask_uniformity(spins):
 # Main
 # -------------------------------------------------------------------
 
+
+# ══════════════════════════════════════════════════════════════════════
+#  CRITERE D'ACCEPTATION
+# ══════════════════════════════════════════════════════════════════════
+#
+# Ce fichier produit trois nombres epingles dans la table maitresse
+# (progression moyenne, progression a reps=1, a reps=4). Il n'avait aucune
+# assertion : la lecture etait imprimee en prose et le script sortait 0 quoi
+# qu'il mesure.
+MAX_FRAC_UNDEFINED = 0.50   # au-dela, la moyenne ne decrit plus l'ensemble
+MIN_PAIRED = 1              # une pente sans paire appariee n'est pas une pente
+
+
+def check_expected_behaviour(rows, frac_undef, prog_all, paired, slope):
+    assert rows, "aucun instantane : rien a juger"
+
+    assert frac_undef <= MAX_FRAC_UNDEFINED, (
+        f"la progression est indefinie sur {frac_undef*100:.1f} % des "
+        f"instantanes (limite {MAX_FRAC_UNDEFINED*100:.0f} %). La moyenne "
+        "porterait sur une minorite selectionnee par la degenerescence "
+        "elle-meme : elle ne doit pas etre publiee en l'etat.")
+
+    assert np.isfinite(prog_all), (
+        "progression moyenne indefinie : aucun instantane exploitable")
+
+    assert len(paired) >= MIN_PAIRED and np.isfinite(slope), (
+        f"pente calculee sur {len(paired)} instantanes apparies : deux "
+        "moyennes independantes compareraient deux populations differentes")
+
+    print(f"\n  [ACCEPTANCE] progression definie sur "
+          f"{(1 - frac_undef)*100:.1f} % des instantanes, pente appariee sur "
+          f"{len(paired)} -> nombres publiables.")
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 Task 11b: variational displacement of the QAOA")
@@ -190,7 +224,9 @@ def main():
                       f"n_optima={n_opt}")
 
     if not rows:
-        print("no input."); return
+        raise SystemExit(
+            "aucun instantane traite : un balayage vide ne doit pas sortir 0, "
+            "sinon il est indiscernable d'un balayage qui a tout verifie")
 
     print("\n  " + "=" * 84)
     print(f"  {'reps':>5} {'progress':>10} {'||disp||':>10} {'||required||':>13} "
@@ -207,17 +243,37 @@ def main():
     print("  " + "-" * 84)
 
     frac_uni = float(np.mean([r["gs_uniform"] for r in rows]))
+
+    # `progress` est INDEFINIE quand le deplacement requis est nul, c'est-a-dire
+    # quand l'initialisation classique EST deja l'etat fondamental. Ces
+    # instantanes sont exactement les cas degeneres que cette tache cherche a
+    # caracteriser ; les faire disparaitre dans un `nanmean` revient a moyenner
+    # sur un sous-ensemble selectionne par la propriete etudiee.
+    n_undef = int(np.sum([not np.isfinite(r["progress"]) for r in rows]))
+    frac_undef = n_undef / len(rows)
     prog_all = np.nanmean([r["progress"] for r in rows])
-    slope = (np.nanmean([r["progress"] for r in rows
-                         if r["reps"] == max(args.reps)])
-             - np.nanmean([r["progress"] for r in rows
-                           if r["reps"] == min(args.reps)]))
+
+    # La pente doit comparer LES MEMES instantanes aux deux profondeurs.
+    # Deux `nanmean` independants comparent deux populations differentes,
+    # puisque le motif d'indefinition depend de reps.
+    p_min, p_max = min(args.reps), max(args.reps)
+    key = lambda r: (r["scenario"], r["re"], r["snap"])
+    at = {q: {key(r): r["progress"] for r in rows if r["reps"] == q}
+          for q in (p_min, p_max)}
+    paired = [k for k in at[p_min]
+              if k in at[p_max]
+              and np.isfinite(at[p_min][k]) and np.isfinite(at[p_max][k])]
+    slope = (float(np.mean([at[p_max][k] - at[p_min][k] for k in paired]))
+             if paired else float("nan"))
     print(f"\n  exact ground state is a UNIFORM mask on "
           f"{frac_uni*100:.1f}% of snapshots "
           f"(no spatial information at the optimum)")
-    print(f"  mean variational progress toward that optimum: {prog_all:.4f}")
-    print(f"  change in progress from reps={min(args.reps)} to "
-          f"{max(args.reps)}: {slope:+.4f}")
+    print(f"  mean variational progress toward that optimum: {prog_all:.4f}"
+          f"   [indefinie sur {n_undef}/{len(rows)} instantanes "
+          f"= {frac_undef*100:.1f} %, ecartes de cette moyenne]")
+    print(f"  change in progress from reps={p_min} to {p_max}: {slope:+.4f}"
+          f"   [apparie sur {len(paired)} instantanes definis aux deux "
+          f"profondeurs]")
     print("\n  READING: " + (
         "the circuit stays at the classical encoding; the deployed decision "
         "is not a minimiser of its declared cost."
@@ -243,10 +299,13 @@ def main():
         agree_gs=np.array([r["agree_gs"] for r in rows]),
         mean_marg=np.array([r["mean_marg"] for r in rows]),
         frac_uniform=frac_uni, mean_progress=float(prog_all),
+        n_undefined_progress=n_undef, frac_undefined_progress=frac_undef,
+        slope_paired=slope, n_paired=len(paired),
         seed=args.seed, git_hash=git_commit_hash(),
         cli_args=json.dumps(vars(args)),
     )
     print(f"\n  saved: {os.path.basename(out)}")
+    check_expected_behaviour(rows, frac_undef, prog_all, paired, slope)
     print("\nV4 Task 11b complete.")
 
 
