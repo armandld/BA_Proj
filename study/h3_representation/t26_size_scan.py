@@ -67,11 +67,11 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 import provenance
 from phase7_sa_baseline import build_ising_terms, spins_to_decisions
-from t11_solver_attribution import (classical_init_spins,
+from h0_optimiser_equivalence import (classical_init_spins,
                                     exhaustive_ground_state,
                                     greedy_local_search)
-from t11b_qaoa_displacement import mask_uniformity
-from t11_solver_attribution import f1_from_masks
+from h0_qaoa_displacement import mask_uniformity
+from h0_optimiser_equivalence import f1_from_masks
 from t13_term_ablation import zero_hamiltonian_terms
 from phase5_qaoa_eval import prepare_qaoa_inputs
 

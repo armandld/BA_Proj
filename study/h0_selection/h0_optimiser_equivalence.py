@@ -46,10 +46,10 @@ REGLE DE DECISION (pre-specifiee, avant execution) :
 # sans cela, relancer avec --mapper v1 ecraserait le resultat v2
 # et la comparaison entre mappeurs ne tiendrait pas dans les
 # artefacts (defaut D9, deja rencontre sur t13 et t19).
-Sortie : results/t11_solver_attribution_N{N}_dim{D}.npz (+ hash git, args CLI)
+Sortie : results/h0_optimiser_equivalence_N{N}_dim{D}.npz (+ hash git, args CLI)
 
 Usage :
-  python study/v4/t11_solver_attribution.py --N 256 --dim 2 --n-snaps 3
+  python study/v4/h0_optimiser_equivalence.py --N 256 --dim 2 --n-snaps 3
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -125,9 +125,7 @@ def exhaustive_ground_state(h_bias, edges, plaqs, n_q,
     n_states = 1 << n_q
     bit = (1 << np.arange(n_q, dtype=np.int64))
 
-    best_E, best_spins, n_opt = np.inf, None, 0
-    for start in range(0, n_states, chunk):
-        stop = min(start + chunk, n_states)
+    def _energies(start, stop):
         idx = np.arange(start, stop, dtype=np.int64)[:, None]
         # spin = +1 si bit 0, -1 si bit 1 (|1> a valeur propre Z = -1)
         S = np.where((idx & bit) > 0, -1.0, 1.0)          # (m, n_q)
@@ -137,13 +135,33 @@ def exhaustive_ground_state(h_bias, edges, plaqs, n_q,
         if len(plaq_coef):
             E = E + (S[:, plaq_idx[:, 0]] * S[:, plaq_idx[:, 1]]
                      * S[:, plaq_idx[:, 2]] * S[:, plaq_idx[:, 3]]) @ plaq_coef
+        return S, E
+
+    # Passe 1 : le minimum. Passe 2 : sa degenerescence.
+    #
+    # Compter en une seule passe est incorrect des que l'enumeration depasse
+    # un bloc : quand un meilleur minimum apparait dans le bloc k, les
+    # configurations degenerees des blocs 0..k-1 ne sont plus jamais
+    # revisitees, et celles des blocs suivants s'ajoutent par-dessus. Le
+    # compte n'etait donc juste que pour 2^n_q <= chunk, soit n_q <= 16 —
+    # correct a la taille deployee (8 qubits), faux et silencieux au-dela.
+    best_E, best_spins = np.inf, None
+    for start in range(0, n_states, chunk):
+        S, E = _energies(start, min(start + chunk, n_states))
         k = int(np.argmin(E))
         if E[k] < best_E - TOL_E:
             best_E = float(E[k])
             best_spins = S[k].astype(np.int8).copy()
-            n_opt = int(np.sum(E <= best_E + TOL_E))
-        elif abs(float(E[k]) - best_E) <= TOL_E:
-            n_opt += int(np.sum(E <= best_E + TOL_E))
+
+    n_opt = 0
+    for start in range(0, n_states, chunk):
+        _, E = _energies(start, min(start + chunk, n_states))
+        n_opt += int(np.sum(E <= best_E + TOL_E))
+
+    if best_spins is None or n_opt < 1:
+        raise RuntimeError(
+            "enumeration exhaustive sans minimum : impossible sur un "
+            "hamiltonien diagonal non vide")
     return best_spins, float(best_E), int(n_opt)
 
 
@@ -311,6 +329,74 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
 # Main
 # -------------------------------------------------------------------
 
+
+# ══════════════════════════════════════════════════════════════════════
+#  CRITERE D'ACCEPTATION — H0
+# ══════════════════════════════════════════════════════════════════════
+#
+# La regle de decision de H0 etait imprimee en prose et le script sortait 0
+# quoi qu'il mesure : il ne pouvait pas echouer. Elle est ici un critere.
+#
+# Reference (N=64 et N=256, dim=2, 8 qubits) : les huit solveurs —
+# exhaustif certifie, recuit simule, recuit a chaud, glouton, regle
+# classique seule, QAOA p=1, p=2, p=2 a 4096 tirs — atteignent l'optimum
+# certifie sur 100 % des instantanes et renvoient le MEME masque
+# (agree_spin = mask_match = 1.000, E_gap = 0).
+#
+# Ce que le critere protege : si un jour un solveur cesse d'atteindre
+# l'optimum, ou si deux solveurs divergent sur le masque, alors H0 n'est
+# plus refutee et la campagne doit s'arreter au lieu d'imprimer un tableau.
+MIN_HIT = 1.0
+MIN_MASK_MATCH = 1.0
+
+
+def check_expected_behaviour(summary, solvers, diag_flags):
+    assert diag_flags and all(diag_flags), (
+        "l'enumeration exhaustive n'est licite que si le hamiltonien de cout "
+        "est diagonal ; le controle a echoue sur au moins un instantane")
+
+    optimisers = [s for s in solvers if s != "classical_init"]
+    assert len(optimisers) >= 4, (
+        f"seulement {len(optimisers)} solveurs compares : le panel ne teste "
+        "plus l'equivalence qu'il pretend tester")
+
+    # Les solveurs DETERMINISTES doivent atteindre l'optimum a chaque fois.
+    # Le recuit simule ne l'est pas (il n'est pas amorce), et son taux
+    # mesure varie d'une execution a l'autre : 1.000 dans la campagne
+    # publiee, 0.625 en rejouant la meme commande. On le rapporte au lieu
+    # de l'exiger, et on le dit.
+    deterministic = [s for s in optimisers if not s.startswith("sa")]
+    stochastic = [s for s in optimisers if s.startswith("sa")]
+
+    missed = {s: summary[s]["hit"] for s in deterministic
+              if summary[s]["hit"] < MIN_HIT}
+    assert not missed, (
+        f"des solveurs deterministes n'atteignent plus l'optimum certifie : "
+        f"{missed}. H0 (l'echec vient de l'optimiseur) redevient plausible.")
+
+    for s in stochastic:
+        print(f"  [NOTE] {s} : optimum atteint sur {summary[s]['hit']:.3f} "
+              "des instantanes — solveur non amorce, taux variable d'une "
+              "execution a l'autre (defaut D11)")
+
+    # Le coeur de H0 : le masque du QAOA est celui de l'etat fondamental
+    # exact. C'est cette egalite, et elle seule, qui retire a l'optimiseur
+    # quantique tout role explicatif.
+    qaoa = [s for s in solvers if s.startswith("qaoa")]
+    assert qaoa, "aucun bras QAOA dans le panel : H0 n'est pas testee"
+    diverging = {s: summary[s]["match"] for s in qaoa
+                 if summary[s]["match"] < MIN_MASK_MATCH}
+    assert not diverging, (
+        f"le QAOA ne renvoie plus le masque de l'etat fondamental exact : "
+        f"{diverging}. Le choix de l'optimiseur redeviendrait une variable "
+        "explicative.")
+
+    print(f"\n  [ACCEPTANCE] {len(optimisers)} optimiseurs atteignent "
+          f"l'optimum certifie et renvoient un masque identique "
+          f"(hit >= {MIN_HIT}, mask_match >= {MIN_MASK_MATCH}) -> H0 refutee "
+          f"a cette taille.")
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 Task 11: quantum-contribution attribution")
@@ -424,9 +510,11 @@ def main():
             "QAOA deviates from the certified optimum; the deviation is an "
             "approximation artefact, not a controllable advantage."))
 
+    check_expected_behaviour(summary, solvers, diag_flags)
+
     out = os.path.join(
         RESULTS_DIR,
-        f"t11_solver_attribution_N{args.N}_dim{args.dim}"
+        f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
         + ("" if args.mapper == "v2" else f"_{args.mapper}")
         + ".npz")
     np.savez_compressed(

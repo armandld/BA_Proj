@@ -54,7 +54,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash
-from t11_solver_attribution import f1_from_masks
+from h0_optimiser_equivalence import f1_from_masks
 from t13_term_ablation import (ABLATIONS, ground_state_mask,
                                zero_hamiltonian_terms)
 

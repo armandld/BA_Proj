@@ -25,11 +25,11 @@ if _FIGURES not in sys.path:
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t11_solver_attribution import (
+from h0_optimiser_equivalence import (
     classical_init_spins, decision_agreement, exhaustive_ground_state,
     f1_from_masks, greedy_local_search,
 )
-from t11b_qaoa_displacement import (
+from h0_qaoa_displacement import (
     ground_state_marginals, mask_uniformity, theta_marginals,
     variational_progress,
 )

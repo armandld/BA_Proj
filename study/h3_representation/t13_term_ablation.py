@@ -39,8 +39,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from t1_feature_selection import git_commit_hash
 from phase7_sa_baseline import build_ising_terms, spins_to_decisions
-from t11_solver_attribution import exhaustive_ground_state, f1_from_masks
-from t11b_qaoa_displacement import mask_uniformity
+from h0_optimiser_equivalence import exhaustive_ground_state, f1_from_masks
+from h0_qaoa_displacement import mask_uniformity
 
 # Familles de termes ablatables et cle correspondante dans hamilt_params.
 TERM_KEYS = {"Z": "H_edges", "ZZ": "C_edges", "ZZZZ": "K_plaquettes"}

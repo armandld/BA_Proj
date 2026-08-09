@@ -670,9 +670,9 @@ def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
                                               "tearing")):
     rows = []
     rows += rows_t11(load_npz(os.path.join(
-        results_dir, f"t11_solver_attribution_N{N}_dim{dim}.npz")))
+        results_dir, f"h0_optimiser_equivalence_N{N}_dim{dim}.npz")))
     rows += rows_t11b(load_npz(os.path.join(
-        results_dir, f"t11b_qaoa_displacement_N{N}_dim{dim}.npz")))
+        results_dir, f"h0_qaoa_displacement_N{N}_dim{dim}.npz")))
     rows += rows_t12(load_npz(os.path.join(
         results_dir, f"t12_equivariance_N{N}_dim8.npz")), "dim8",
         dict(classical=0.0146, gs=0.4219, floor=0.3613))

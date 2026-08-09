@@ -27,7 +27,7 @@ qualitative conclusion is identical at the two resolutions. Section
 
 ## T11 — Quantum-contribution attribution (audit P0)
 
-`study/v4/t11_solver_attribution.py --N 64 --dim 2 --n-snaps 2`
+`study/v4/h0_optimiser_equivalence.py --N 64 --dim 2 --n-snaps 2`
 
 At the **deployed size** (`VQA_N = 2` → 8 qubits, periodic root scan, i.e.
 exactly the configuration `refinement.py` solves at depth 0).
@@ -59,7 +59,7 @@ itself is uniform, so the solvers agree on a trivial problem.
 
 ## T11b — Does the QAOA optimise its own Hamiltonian? (audit P0)
 
-`study/v4/t11b_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4`
+`study/v4/h0_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4`
 
 Position of three points in marginal space: `m_theta` (amplitude encoding of
 the classical score alone), `m_qaoa` (optimised circuit), `m_gs` (exact
