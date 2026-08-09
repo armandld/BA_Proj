@@ -305,13 +305,23 @@ class TestPsiDrivesGradient:
             f"Non-zero psi should modify QAOA output, max diff = {diff:.4f}"
         )
 
-    def test_spatially_varying_psi_creates_spatial_contrast(self):
-        """When cell (0,0) has large psi (growing instability) but others
-        have psi=0, the QAOA should flag cell (0,0) more strongly.
+    def test_spatially_varying_psi_lowers_the_flagged_cell(self):
+        """The 'phase boost' has the opposite sign to the one claimed.
 
-        This tests the 'phase boost' mechanism from the paper:
-        growing instabilities get preferentially detected because sin(ψ)
-        is larger, giving a stronger gradient force.
+        Design intent: cell (0,0) carries a large psi (growing instability)
+        while the others have psi = 0, so growing instabilities should be
+        detected preferentially — sin(psi) larger, stronger gradient force.
+
+        Measured, over 30 draws on identical inputs: the (0,0) minus (1,1)
+        probability difference is -0.0723 with a standard error of 0.0049
+        (t = -14.6), and only 3% of draws come out positive. The cell that
+        psi marks as growing ends up LESS likely to be refined.
+
+        `tests/test_signal_contribution.py::test_psi` measures the same sign
+        on a different construction (-0.0572, t = -8.4), so this is a
+        property of the mechanism and not of one setup. The previous
+        assertion took the absolute difference, which is why it never saw
+        the sign.
         """
         dim = 2
         # Moderate Z bias (ambiguous without psi signal)
@@ -328,25 +338,38 @@ class TestPsiDrivesGradient:
         psi_h = np.array([[1.2, 0.0], [0.0, 0.0]])
         psi_v = np.array([[1.2, 0.0], [0.0, 0.0]])
 
-        marginals = run_qaoa(hp, theta_h, theta_v, psi_h, psi_v)
-        n = dim * dim
-        prob_h = marginals[:n].reshape(dim, dim)
-        prob_v = marginals[n:].reshape(dim, dim)
+        REPEATS = 10
+        diffs = []
+        for _ in range(REPEATS):
+            marginals = run_qaoa(hp, theta_h, theta_v, psi_h, psi_v)
+            n = dim * dim
+            prob_h = marginals[:n].reshape(dim, dim)
+            prob_v = marginals[n:].reshape(dim, dim)
+            diffs.append(0.5 * (prob_h[0, 0] + prob_v[0, 0])
+                         - 0.5 * (prob_h[1, 1] + prob_v[1, 1]))
+        diffs = np.array(diffs)
 
         print(f"\n  Spatial psi contrast:")
-        print(f"  prob_h: {prob_h}")
-        print(f"  prob_v: {prob_v}")
+        print(f"  prob_h (last draw): {prob_h}")
+        print(f"  prob_v (last draw): {prob_v}")
         print(f"  Cell (0,0) psi=1.2: h={prob_h[0,0]:.3f}, v={prob_v[0,0]:.3f}")
         print(f"  Cell (1,1) psi=0.0: h={prob_h[1,1]:.3f}, v={prob_v[1,1]:.3f}")
+        frac_neg = float(np.mean(diffs < 0))
+        print(f"  (0,0) - (1,1) over {REPEATS} draws: "
+              f"{np.round(diffs, 4)}")
+        print(f"  mean = {diffs.mean():+.5f}, negative in {frac_neg:.0%}")
 
-        # Verify psi creates measurable spatial variation
-        # (without psi, all cells would have the same P(|1>))
-        p_growing = max(prob_h[0, 0], prob_v[0, 0])
-        p_stable = max(prob_h[1, 1], prob_v[1, 1])
-        diff = abs(p_growing - p_stable)
-        assert diff > 0.01, (
-            f"Spatially varying psi should create contrast: "
-            f"P(growing)={p_growing:.3f}, P(stable)={p_stable:.3f}"
+        # psi does create spatial variation — with the opposite sign. The
+        # magnitude drifts between sessions (unseeded COBYLA); the sign does
+        # not, so the assertion is on the sign.
+        assert diffs.mean() < 0.0, (
+            f"psi is expected to LOWER the cell it marks as growing "
+            f"(recorded V1 behaviour: -0.072); mean over {REPEATS} draws = "
+            f"{diffs.mean():+.5f}"
+        )
+        assert frac_neg >= 0.55, (
+            f"the difference must be negative in the large majority of "
+            f"draws; here {frac_neg:.0%} of {REPEATS}"
         )
 
 
@@ -608,22 +631,32 @@ class TestQAOAConvergence:
         psi_h = np.full((dim, dim), 0.5)
         psi_v = np.full((dim, dim), 0.5)
 
-        marginals = run_qaoa(hp, theta_h, theta_v, psi_h, psi_v, K_opt=200)
-        avg_p1 = np.mean(marginals)
+        # Unseeded COBYLA: over 10 draws the mean P(|1>) measured 0.829 with
+        # a minimum of 0.676, so a single draw clears the 0.7 bar only ~90%
+        # of the time. The statement is about convergence, not about one run.
+        REPEATS = 5
+        avgs = np.array([
+            np.mean(run_qaoa(hp, theta_h, theta_v, psi_h, psi_v, K_opt=200))
+            for _ in range(REPEATS)
+        ])
+        avg_p1 = float(np.median(avgs))
 
         initial_p1 = np.sin(0.8 / 2) ** 2  # ≈ 0.147
 
         print(f"\n  Simple Hamiltonian convergence:")
         print(f"  Initial P(|1>) = sin²(0.4) = {initial_p1:.4f}")
-        print(f"  QAOA avg P(|1>) = {avg_p1:.4f}")
+        print(f"  QAOA avg P(|1>) per draw = {np.round(avgs, 4)}")
+        print(f"  median = {avg_p1:.4f}")
         print(f"  Improvement: {avg_p1 - initial_p1:+.4f}")
 
         # QAOA should significantly increase P(|1>) from initial state
         assert avg_p1 > initial_p1 + 0.2, (
-            f"QAOA should increase P(|1>) from {initial_p1:.3f}, got {avg_p1:.3f}"
+            f"QAOA should increase P(|1>) from {initial_p1:.3f}, got "
+            f"{avg_p1:.3f} (median of {REPEATS} draws)"
         )
         assert avg_p1 > 0.7, (
-            f"QAOA should converge to high P(|1>) for all-positive Z, got {avg_p1:.3f}"
+            f"QAOA should converge to high P(|1>) for all-positive Z, got "
+            f"{avg_p1:.3f} (median of {REPEATS} draws)"
         )
 
     def test_k_opt_30_still_converges_with_psi(self):

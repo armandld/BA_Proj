@@ -18,6 +18,7 @@ For both: measure Spearman ρ and captured error fraction vs ground truth.
 """
 import sys, os
 import numpy as np
+import pytest
 from scipy.stats import spearmanr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -198,6 +199,79 @@ def captured_fraction(selection, gt_errors):
 #  TEST 1: NOISE ROBUSTNESS
 # ═════════════════════════════════════════════════════════════════════
 
+_NOISE_ROWS = []
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — noise robustness
+# ══════════════════════════════════════════════════════════════════════
+#
+# Reference run, 2 scenarios x 6 noise levels, 5 trials each, budget 2 of 9:
+#
+#   sigma   rotor: cl / qa captured        OT: cl / qa captured    winner
+#   0.00        0.6588 / 0.3350               0.3183 / 0.1976   Classical
+#   0.05        0.6588 / 0.3350               0.3183 / 0.1790   Classical
+#   0.10        0.6472 / 0.4853               0.3060 / 0.1591   Classical
+#   0.20        0.6530 / 0.5720               0.2990 / 0.2383   Classical
+#   0.30        0.2881 / 0.4384               0.2349 / 0.2524        QAOA
+#   0.50        0.1629 / 0.1629               0.2294 / 0.2294         Tie
+#
+# Three things are pinned:
+#   1. with NO noise the classical arm reaches the optimal captured
+#      fraction and the QAOA arm loses by a wide margin. This is the
+#      statement that matters — the coupling does not help when there is
+#      nothing to denoise;
+#   2. QAOA wins only in the heavily corrupted regime (sigma = 0.30), where
+#      both arms are far below optimal. At most 4 of the 12 rows may go to
+#      QAOA;
+#   3. a NaN rank correlation appears only when the score map is genuinely
+#      constant. Silently averaging a NaN is the failure mode this guards.
+MAX_QAOA_WINS_NOISE = 4
+MIN_NOISELESS_GAP = 0.10
+
+
+def check_noise_behaviour(rows):
+    assert len(rows) == 12, f"expected 12 rows, got {len(rows)}"
+
+    for r in rows:
+        for arm in ('cl', 'qa'):
+            if not np.isfinite(r[f'rho_{arm}']):
+                assert r[f'n_constant_{arm}'] > 0, (
+                    f"{r['scenario']} sigma={r['noise']}: rho_{arm} is NaN "
+                    "but no trial produced a constant score map — the NaN is "
+                    "unexplained and must not be averaged into the table"
+                )
+
+    quiet = [r for r in rows if r['noise'] == 0.0]
+    assert len(quiet) == 2
+    for r in quiet:
+        assert r['frac_cl'] == pytest.approx(r['gt_frac'], abs=1e-9), (
+            f"{r['scenario']}: without noise the classical arm is expected "
+            f"to reach the optimal captured fraction "
+            f"({r['frac_cl']:.4f} vs {r['gt_frac']:.4f})"
+        )
+        gap = r['frac_cl'] - r['frac_qa']
+        assert gap > MIN_NOISELESS_GAP, (
+            f"{r['scenario']}: without noise the QAOA arm is expected to "
+            f"lose by more than {MIN_NOISELESS_GAP} captured fraction, "
+            f"measured gap {gap:+.4f}"
+        )
+
+    wins = [(r['scenario'], r['noise']) for r in rows if r['winner'] == 'QAOA']
+    assert len(wins) <= MAX_QAOA_WINS_NOISE, (
+        f"QAOA wins {len(wins)} of {len(rows)} rows ({wins}); at most "
+        f"{MAX_QAOA_WINS_NOISE} is consistent with the recorded behaviour"
+    )
+    for _, noise in wins:
+        assert noise >= 0.20, (
+            f"QAOA is not expected to win at low noise (sigma={noise}); a win "
+            "there would contradict the noiseless result above"
+        )
+
+    print(f"\n  [ACCEPTANCE] noiseless: classical optimal, QAOA behind by "
+          f">{MIN_NOISELESS_GAP}; QAOA wins {len(wins)}/{len(rows)} rows, all "
+          f"at sigma >= 0.20 -> OK")
+
+
 def test_noise_robustness():
     print("\n" + "=" * 70)
     print("  TEST 1: NOISE ROBUSTNESS")
@@ -248,6 +322,8 @@ def test_noise_robustness():
             qa_rhos = []
             cl_fracs = []
             qa_fracs = []
+            n_constant_cl = 0
+            n_constant_qa = 0
 
             for seed in range(n_trials):
                 rng = np.random.default_rng(42 + seed)
@@ -255,6 +331,7 @@ def test_noise_robustness():
                 # Classical with noise
                 cl_scores = noisy_classical_scores(sim, N, n_blocks, noise_std, rng)
                 rho_cl, _ = spearmanr(cl_scores.ravel(), gt.ravel())
+                n_constant_cl += int(np.ptp(cl_scores) == 0.0)
                 cl_sel = select_top_k(cl_scores, budget)
                 cl_rhos.append(rho_cl)
                 cl_fracs.append(captured_fraction(cl_sel, gt))
@@ -266,6 +343,7 @@ def test_noise_robustness():
                     noise_std=noise_std, rng=rng2, Phi_prev=Phi_prev,
                 )
                 rho_qa, _ = spearmanr(qa_scores.ravel(), gt.ravel())
+                n_constant_qa += int(np.ptp(qa_scores) == 0.0)
                 qa_rhos.append(rho_qa)
                 qa_sel = select_top_k(qa_scores, budget)
                 qa_fracs.append(captured_fraction(qa_sel, gt))
@@ -277,13 +355,92 @@ def test_noise_robustness():
             winner = "QAOA" if mean_qa_frac > mean_cl_frac + 0.005 else (
                 "Classical" if mean_cl_frac > mean_qa_frac + 0.005 else "Tie")
             marker = " <--" if winner == "QAOA" else ""
+            # A NaN rho is not a number that happens to be missing: it means
+            # the score map collapsed to a constant, so the ranking question
+            # no longer exists. Say so on the line instead of printing "nan".
+            flag = ""
+            if not np.isfinite(mean_cl_rho) or not np.isfinite(mean_qa_rho):
+                flag = (f"  [rho undefined: constant score maps, "
+                        f"cl {n_constant_cl}/{n_trials}, "
+                        f"qa {n_constant_qa}/{n_trials}]")
             print(f"  {noise_std:>10.2f} {mean_cl_rho:>+13.3f} {mean_qa_rho:>+13.3f} "
-                  f"{mean_cl_frac:>13.4f} {mean_qa_frac:>13.4f} {winner:>10s}{marker}")
+                  f"{mean_cl_frac:>13.4f} {mean_qa_frac:>13.4f} "
+                  f"{winner:>10s}{marker}{flag}")
+
+            _NOISE_ROWS.append({
+                'scenario': scen_name, 'noise': noise_std, 'winner': winner,
+                'rho_cl': float(mean_cl_rho), 'rho_qa': float(mean_qa_rho),
+                'frac_cl': float(mean_cl_frac), 'frac_qa': float(mean_qa_frac),
+                'gt_frac': float(gt_frac),
+                'n_constant_cl': n_constant_cl, 'n_constant_qa': n_constant_qa,
+                'n_trials': n_trials,
+            })
+
+    check_noise_behaviour(_NOISE_ROWS)
 
 
 # ═════════════════════════════════════════════════════════════════════
 #  TEST 2: EARLY ANOMALY DETECTION
 # ═════════════════════════════════════════════════════════════════════
+
+_EARLY_ROWS = []
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — early detection
+# ══════════════════════════════════════════════════════════════════════
+#
+# Reference run, 2 scenarios x 3 early times, budget 2 of 9:
+#
+#   MHD Rotor        20 / 50 / 100 steps   cl = qa captured on all three  Tie
+#   Kelvin-Helmholtz 30 / 80 / 150 steps   Classical, Classical, QAOA
+#
+#   mean captured fraction: classical 0.4065, QAOA 0.3735
+#
+# What is pinned: predicting the LATE-time hot blocks from an EARLY state
+# is not something the coupling buys. On the rotor both arms select the
+# same blocks; on KH the classical arm is ahead on average. A QAOA win on
+# a majority of rows would be a new result and must not pass silently.
+MAX_QAOA_WINS_EARLY = 2
+MAX_QAOA_MEAN_ADVANTAGE = 0.02
+
+
+def check_early_behaviour(rows):
+    assert len(rows) == 6, f"expected 6 rows, got {len(rows)}"
+
+    bad = [(r['scenario'], r['early_steps']) for r in rows
+           if not (np.isfinite(r['rho_cl']) and np.isfinite(r['rho_qa']))]
+    assert not bad, f"undefined rank correlation for: {bad}"
+
+    for r in rows:
+        assert r['frac_cl'] <= r['gt_frac'] + 1e-9, (
+            f"{r['scenario']}@{r['early_steps']}: captured fraction "
+            f"{r['frac_cl']:.4f} exceeds the optimum {r['gt_frac']:.4f}"
+        )
+        assert r['frac_qa'] <= r['gt_frac'] + 1e-9, (
+            f"{r['scenario']}@{r['early_steps']}: QAOA captured fraction "
+            f"{r['frac_qa']:.4f} exceeds the optimum {r['gt_frac']:.4f}"
+        )
+
+    wins = [(r['scenario'], r['early_steps']) for r in rows
+            if r['winner'] == 'QAOA']
+    assert len(wins) <= MAX_QAOA_WINS_EARLY, (
+        f"QAOA wins {len(wins)} of {len(rows)} early-detection rows "
+        f"({wins}); at most {MAX_QAOA_WINS_EARLY} is consistent with the "
+        "recorded behaviour"
+    )
+
+    mean_cl = float(np.mean([r['frac_cl'] for r in rows]))
+    mean_qa = float(np.mean([r['frac_qa'] for r in rows]))
+    assert mean_qa - mean_cl <= MAX_QAOA_MEAN_ADVANTAGE, (
+        f"QAOA's mean captured fraction ({mean_qa:.4f}) exceeds the "
+        f"classical one ({mean_cl:.4f}) by more than "
+        f"{MAX_QAOA_MEAN_ADVANTAGE}"
+    )
+
+    print(f"\n  [ACCEPTANCE] QAOA wins {len(wins)}/{len(rows)} rows "
+          f"(max {MAX_QAOA_WINS_EARLY}); mean captured fraction "
+          f"classical {mean_cl:.4f} vs QAOA {mean_qa:.4f} -> OK")
+
 
 def test_early_detection():
     print("\n\n" + "=" * 70)
@@ -366,6 +523,13 @@ def test_early_detection():
             print(f"  {early_steps:>12d} {rho_cl:>+13.3f} {rho_qa:>+13.3f} "
                   f"{cl_frac:>13.4f} {qa_frac:>13.4f} {winner:>10s}{marker}")
 
+            _EARLY_ROWS.append({
+                'scenario': scen_name, 'early_steps': early_steps,
+                'winner': winner, 'rho_cl': float(rho_cl),
+                'rho_qa': float(rho_qa), 'frac_cl': float(cl_frac),
+                'frac_qa': float(qa_frac), 'gt_frac': float(gt_frac),
+            })
+
         # Also show what classical and QAOA see at earliest time
         grid_e = PeriodicGrid(resolution_N=N)
         sim_e = MHDSolver(grid_e, dt=1e-3, Re=800, Rm=800)
@@ -388,6 +552,8 @@ def test_early_detection():
         gt_e = ground_truth_errors(sim_e, N, n_blocks)
         print(f"    Early GT errors:  {np.array2string(gt_e, precision=4)}")
         print(f"    Late GT errors:   {np.array2string(gt_late, precision=4)}")
+
+    check_early_behaviour(_EARLY_ROWS)
 
 
 # ═════════════════════════════════════════════════════════════════════

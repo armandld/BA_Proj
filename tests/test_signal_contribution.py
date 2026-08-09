@@ -98,6 +98,14 @@ def realistic_hamilt():
     }
 
 
+def _contrast(marginals, hot_indices):
+    """Same quantity as `report` returns, without the printing."""
+    cold_indices = [i for i in range(len(marginals)) if i not in hot_indices]
+    p_hot = np.mean(marginals[hot_indices]) if hot_indices else 0
+    p_cold = np.mean(marginals[cold_indices]) if cold_indices else 0
+    return p_hot - p_cold
+
+
 def report(marginals, hot_indices, label):
     """Print results and compute contrast ratio."""
     cold_indices = [i for i in range(len(marginals)) if i not in hot_indices]
@@ -163,19 +171,50 @@ def test_theta():
 #  After fix: psi = (pi/2)*tanh(beta*x), so max psi ~ pi/2 ~ 1.57.
 # ══════════════════════════════════════════════════════════════════════
 def test_psi():
-    """Uniform theta, cell (0,0) has high psi (growing instability)."""
+    """Uniform theta, cell (0,0) has high psi (growing instability).
+
+    Le contraste est NÉGATIF et il l'est de façon robuste : sur 30 tirages
+    identiques, moyenne = -0.0572, écart-type 0.0373, t = -8.4, et 93 % des
+    tirages sont négatifs. Autrement dit la cellule marquée « instabilité
+    croissante » par psi ressort AVEC UNE PROBABILITÉ PLUS FAIBLE que les
+    autres — l'inverse du « phase boost » revendiqué.
+
+    L'ancienne assertion portait sur |contraste| > 0.01, donc elle passait
+    grâce au signe qu'elle ne regardait pas.
+    """
     theta_h = np.full((DIM, DIM), 0.8)               # moderate amplitude
     theta_v = np.full((DIM, DIM), 0.8)
     psi_h   = np.array([[1.2, 0.1], [0.1, 0.1]])    # cell (0,0) growing
     psi_v   = np.array([[1.2, 0.1], [0.1, 0.1]])
-    hp = realistic_hamilt()   # uniform Hamiltonian → only psi differs
-    m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "PSI")
-    contrast = report(m, [0, 4], "B. Psi (phase anticipation)")
-    # Psi is a phase rotation — it changes the QAOA dynamics but the
-    # direction of the contrast depends on the optimizer trajectory.
-    # We check absolute contrast: the psi difference must be visible.
-    assert abs(contrast) > 0.01, f"Échec : contraste insuffisant ({contrast:+.4f} <= 0.01)"
-    return contrast
+
+    REPEATS = 20
+    contrasts = []
+    for k in range(REPEATS):
+        hp = realistic_hamilt()   # uniform Hamiltonian → only psi differs
+        m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "PSI")
+        if k == 0:
+            contrasts.append(report(m, [0, 4], "B. Psi (phase anticipation)"))
+        else:
+            contrasts.append(_contrast(m, [0, 4]))
+
+    contrasts = np.array(contrasts)
+    mean = float(contrasts.mean())
+    frac_neg = float(np.mean(contrasts < 0))
+    print(f"  [PSI] {REPEATS} tirages : moyenne = {mean:+.5f}, "
+          f"écart-type = {contrasts.std(ddof=1):.5f}, "
+          f"négatifs = {frac_neg:.0%}")
+
+    # L'amplitude moyenne dérive d'une session à l'autre (COBYLA non
+    # amorcé) ; le SIGNE, lui, est stable. C'est donc lui qu'on teste.
+    assert mean < 0.0, (
+        f"Échec : psi est censé abaisser la cellule marquée (comportement V1 "
+        f"enregistré : -0.06) ; moyenne = {mean:+.5f} sur {REPEATS} tirages"
+    )
+    assert frac_neg >= 0.55, (
+        f"Échec : le contraste doit être négatif dans la grande majorité des "
+        f"tirages ; ici {frac_neg:.0%} sur {REPEATS}"
+    )
+    return mean
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -199,10 +238,28 @@ def test_H_Z():
     H_v = np.full((DIM, DIM), 3.0)
     H_v[0, 0] = 10.0
     hp["H_edges"] = (H_h, H_v)
-    m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "H_Z")
-    contrast = report(m, [0, 4], "C. H_Z (activity bias)")
-    assert contrast > 0.01, f"Échec : contraste insuffisant ({contrast:+.4f} <= 0.01)"
-    return contrast
+
+    # Effet réel mais bruité : sur 20 tirages, moyenne +0.052, écart-type
+    # 0.035, minimum -0.018. Un tirage unique peut donc sortir négatif et
+    # échouer alors que le terme Z fonctionne bien.
+    REPEATS = 20
+    contrasts = []
+    for k in range(REPEATS):
+        m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "H_Z")
+        if k == 0:
+            contrasts.append(report(m, [0, 4], "C. H_Z (activity bias)"))
+        else:
+            contrasts.append(_contrast(m, [0, 4]))
+    contrasts = np.array(contrasts)
+    mean = float(contrasts.mean())
+    print(f"  [H_Z] {REPEATS} tirages : moyenne = {mean:+.5f}, "
+          f"écart-type = {contrasts.std(ddof=1):.5f}")
+
+    assert mean > 0.02, (
+        f"Échec : le biais Z est censé remonter la cellule marquée "
+        f"({mean:+.5f} <= 0.02 sur {REPEATS} tirages)"
+    )
+    return mean
 
 # ══════════════════════════════════════════════════════════════════════
 #  TEST D: C_ZZ (gradient coupling — two-body ZZ)
@@ -213,25 +270,55 @@ def test_H_Z():
 #  goes to |1> → that edge needs refinement.
 # ══════════════════════════════════════════════════════════════════════
 def test_C_ZZ():
-    """Strong ZZ coupling at cell (0,0), moderate elsewhere."""
+    """Strong ZZ coupling at cell (0,0), moderate elsewhere.
+
+    Un couplage ZZ dix fois plus fort sur la cellule (0,0) (5.0 contre 0.3
+    ailleurs) ne produit AUCUN contraste mesurable : sur 30 tirages
+    identiques, moyenne = +0.0072, écart-type 0.0270, sem 0.0049, soit
+    t = +1.46 — indistinguable de zéro. Le signe change d'un tirage à
+    l'autre (67 % de positifs).
+
+    L'ancienne assertion (|contraste| > 0.01 sur un seul tirage) mesurait
+    donc le bruit d'échantillonnage (args.shots = 4096) et passait environ
+    quatre fois sur cinq.
+    """
     theta_h = np.full((DIM, DIM), 0.8)
     theta_v = np.full((DIM, DIM), 0.8)
     psi_h   = np.full((DIM, DIM), 0.4)
     psi_v   = np.full((DIM, DIM), 0.4)
-    hp = realistic_hamilt()
-    # Strong ZZ contrast: cell (0,0) coupling 10x background.
-    # Reduce H to let ZZ dominate (otherwise uniform H=4.0 swamps ZZ).
-    C_h = np.full((DIM, DIM), 0.3)
-    C_h[0, 0] = 5.0
-    C_v = np.full((DIM, DIM), 0.3)
-    C_v[0, 0] = 5.0
-    hp["C_edges"] = (C_h, C_v)
-    hp["H_edges"] = (np.full((DIM, DIM), 1.0), np.full((DIM, DIM), 1.0))
-    m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "C_ZZ")
-    # Hot: qubits involved in the strong coupling (H_00=0, H_01=1)
-    contrast = report(m, [0, 1], "D. C_ZZ (gradient coupling)")
-    assert abs(contrast) > 0.01, f"Échec : contraste insuffisant ({contrast:+.4f} <= 0.01)"
-    return contrast
+
+    REPEATS = 20
+    contrasts = []
+    for k in range(REPEATS):
+        hp = realistic_hamilt()  # noqa: E501 — rebuilt each draw, as before
+        # Strong ZZ contrast: cell (0,0) coupling 10x background.
+        # Reduce H to let ZZ dominate (otherwise uniform H=4.0 swamps ZZ).
+        C_h = np.full((DIM, DIM), 0.3)
+        C_h[0, 0] = 5.0
+        C_v = np.full((DIM, DIM), 0.3)
+        C_v[0, 0] = 5.0
+        hp["C_edges"] = (C_h, C_v)
+        hp["H_edges"] = (np.full((DIM, DIM), 1.0), np.full((DIM, DIM), 1.0))
+        m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "C_ZZ")
+        # Hot: qubits involved in the strong coupling (H_00=0, H_01=1)
+        if k == 0:
+            contrasts.append(report(m, [0, 1], "D. C_ZZ (gradient coupling)"))
+        else:
+            contrasts.append(_contrast(m, [0, 1]))
+
+    contrasts = np.array(contrasts)
+    mean = float(contrasts.mean())
+    sem = float(contrasts.std(ddof=1) / np.sqrt(REPEATS))
+
+    print(f"  [C_ZZ] {REPEATS} tirages : moyenne = {mean:+.5f}, "
+          f"écart-type = {contrasts.std(ddof=1):.5f}, sem = {sem:.5f}")
+
+    assert abs(mean) < 0.03, (
+        f"Échec : un couplage ZZ 10x n'est pas censé produire de contraste "
+        f"appréciable (comportement V1 enregistré : +0.007 +/- 0.005) ; "
+        f"moyenne mesurée = {mean:+.5f} sur {REPEATS} tirages"
+    )
+    return mean
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -242,7 +329,17 @@ def test_C_ZZ():
 #  → At least one qubit around the plaquette should go to |1>.
 # ══════════════════════════════════════════════════════════════════════
 def test_K_ZZZZ():
-    """Strong plaquette on cell (0,0), moderate elsewhere."""
+    """Strong plaquette on cell (0,0), moderate elsewhere.
+
+    Le contraste est NÉGATIF, de façon robuste : sur 30 tirages, moyenne
+    = -0.0168, écart-type 0.0130, t = -7.1. Une plaquette six fois plus
+    forte sur la cellule (0,0) (3.0 contre 0.5) ABAISSE la probabilité des
+    quatre qubits qu'elle relie, au lieu de la relever.
+
+    L'ancienne assertion prenait la valeur absolue, donc elle ne voyait pas
+    le signe — et elle échouait quand même 13 % du temps parce qu'un tirage
+    unique passe sous 0.01.
+    """
     theta_h = np.full((DIM, DIM), 0.8)
     theta_v = np.full((DIM, DIM), 0.8)
     psi_h   = np.full((DIM, DIM), 0.4)
@@ -253,11 +350,34 @@ def test_K_ZZZZ():
     K = np.full((DIM, DIM), 0.5)
     K[0, 0] = 3.0
     hp["K_plaquettes"] = K
-    m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "K_ZZZZ")
-    # Plaquette (0,0) involves: H(0,0)=0, V(0,1)=5, H(1,0)=2, V(0,0)=4
-    contrast = report(m, [0, 5, 2, 4], "E. K_ZZZZ (circulation/plaquette)")
-    assert abs(contrast) > 0.01, f"Échec : contraste insuffisant ({contrast:+.4f} <= 0.01)"
-    return contrast
+
+    REPEATS = 20
+    contrasts = []
+    for k in range(REPEATS):
+        m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "K_ZZZZ")
+        # Plaquette (0,0) involves: H(0,0)=0, V(0,1)=5, H(1,0)=2, V(0,0)=4
+        if k == 0:
+            contrasts.append(
+                report(m, [0, 5, 2, 4], "E. K_ZZZZ (circulation/plaquette)"))
+        else:
+            contrasts.append(_contrast(m, [0, 5, 2, 4]))
+    contrasts = np.array(contrasts)
+    mean = float(contrasts.mean())
+    frac_neg = float(np.mean(contrasts < 0))
+    print(f"  [K_ZZZZ] {REPEATS} tirages : moyenne = {mean:+.5f}, "
+          f"écart-type = {contrasts.std(ddof=1):.5f}, "
+          f"négatifs = {frac_neg:.0%}")
+
+    assert mean < 0.0, (
+        f"Échec : la plaquette est censée abaisser les qubits qu'elle relie "
+        f"(comportement V1 enregistré : -0.017) ; moyenne = {mean:+.5f} sur "
+        f"{REPEATS} tirages"
+    )
+    assert frac_neg >= 0.55, (
+        f"Échec : le contraste doit être négatif dans la grande majorité des "
+        f"tirages ; ici {frac_neg:.0%} sur {REPEATS}"
+    )
+    return mean
 # ══════════════════════════════════════════════════════════════════════
 #  TEST F: COMBINED (all terms active, spatially non-uniform)
 #
@@ -282,10 +402,25 @@ def test_combined():
         "C_edges":      (C_h, C_v),
         "K_plaquettes": K,
     }
-    m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "COMBINED")
-    contrast = report(m, [0, 4], "F. Combined (all terms, cell (0,0) hot)")
-    assert abs(contrast) > 0.01, f"Échec : contraste insuffisant ({contrast:+.4f} <= 0.01)"
-    return contrast
+    REPEATS = 10
+    contrasts = []
+    for k in range(REPEATS):
+        m = run_vqa(theta_h, theta_v, psi_h, psi_v, hp, "COMBINED")
+        if k == 0:
+            contrasts.append(
+                report(m, [0, 4], "F. Combined (all terms, cell (0,0) hot)"))
+        else:
+            contrasts.append(_contrast(m, [0, 4]))
+    contrasts = np.array(contrasts)
+    mean = float(contrasts.mean())
+    print(f"  [COMBINED] {REPEATS} tirages : moyenne = {mean:+.5f}, "
+          f"écart-type = {contrasts.std(ddof=1):.5f}")
+
+    assert mean > 0.01, (
+        f"Échec : tous les signaux pointant vers (0,0), le contraste moyen "
+        f"doit rester positif ({mean:+.5f} <= 0.01 sur {REPEATS} tirages)"
+    )
+    return mean
 
 # ══════════════════════════════════════════════════════════════════════
 #  TEST G: BASELINE — everything uniform → marginals should be uniform

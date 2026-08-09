@@ -179,6 +179,68 @@ def captured_fraction(selection, gt):
 #  TEST A: GRID RESOLUTION SCALING (clean + noisy)
 # ═════════════════════════════════════════════════════════════════════
 
+_RESOLUTION_ROWS = []
+_SWEEP_ROWS = []
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — what V1 is expected to do
+# ══════════════════════════════════════════════════════════════════════
+#
+# TEST A, clean (sigma = 0), MHD Rotor 3x3, budget 2 of 9:
+#
+#   N=32    classical captured 0.5182   QAOA 0.5182   Tie
+#   N=64    classical captured 0.6588   QAOA 0.6588   Tie
+#   N=128   classical captured 0.7669   QAOA 0.2438   Classical
+#
+# TEST B, clean, 4 w_z_frac x 3 thresholds = 12 combinations. The column
+# "vs Classical" takes exactly two values:
+#
+#   threshold = 0.3  ->  +0.0000  (all four w_z_frac)
+#   threshold = 0.2  ->  -0.4048  (all four w_z_frac)
+#   threshold = 0.5  ->  -0.4048  (all four w_z_frac)
+#
+# The statement being pinned is the ceiling: over the whole sweep, the best
+# the QAOA arm ever does on clean data is to EQUAL the classical baseline.
+# No hyperparameter setting moves the crossover. If any combination ever
+# comes out ahead, that is a new result and the stage must stop.
+MAX_CLEAN_ADVANTAGE = 1e-9
+
+
+def check_resolution_behaviour(rows):
+    assert len(rows) == 3, f"expected 3 resolutions, got {len(rows)}"
+    for r in rows:
+        assert r['qa_frac'] <= r['cl_frac'] + MAX_CLEAN_ADVANTAGE, (
+            f"N={r['N']}: on clean data the QAOA arm captured "
+            f"{r['qa_frac']:.4f} against {r['cl_frac']:.4f} for the "
+            "classical arm — it is not expected to come out ahead"
+        )
+    by_n = {r['N']: r for r in rows}
+    assert by_n[128]['cl_frac'] > by_n[32]['cl_frac'], (
+        "the classical arm is expected to improve with resolution "
+        f"({by_n[32]['cl_frac']:.4f} at N=32 vs "
+        f"{by_n[128]['cl_frac']:.4f} at N=128)"
+    )
+    print(f"\n  [ACCEPTANCE] clean data: QAOA never above classical at "
+          f"N = {sorted(by_n)}; classical improves with resolution -> OK")
+
+
+def check_sweep_behaviour(rows):
+    assert len(rows) == 12, f"expected 12 combinations, got {len(rows)}"
+    best = max(rows, key=lambda r: r['delta'])
+    assert best['delta'] <= MAX_CLEAN_ADVANTAGE, (
+        f"w_z_frac={best['w_z_frac']}, threshold={best['threshold']} beats "
+        f"the classical baseline by {best['delta']:+.4f} on clean data; the "
+        "recorded ceiling over the whole sweep is an exact tie"
+    )
+    ties = [r for r in rows if abs(r['delta']) <= MAX_CLEAN_ADVANTAGE]
+    assert ties, (
+        "no combination reaches the classical baseline at all; the recorded "
+        "behaviour has at least the threshold=0.3 column tying exactly"
+    )
+    print(f"\n  [ACCEPTANCE] best of {len(rows)} hyperparameter combinations "
+          f"= {best['delta']:+.4f} vs classical ({len(ties)} exact ties) -> OK")
+
+
 def test_resolution_scaling():
     print("\n" + "=" * 75)
     print("  TEST A: DOES GRID RESOLUTION CHANGE THE CONCLUSION?")
@@ -252,6 +314,13 @@ def test_resolution_scaling():
             marker = " <--" if winner == "QAOA" else ""
             print(f"  Noisy (σ={sigma}): Classical={mcl:.4f}, QAOA={mqa:.4f} → {winner}{marker}")
 
+        _RESOLUTION_ROWS.append({
+            'N': N, 'cl_frac': float(cl_frac), 'qa_frac': float(qa_frac),
+            'rho_cl': float(rho_cl), 'rho_qa': float(rho_qa),
+        })
+
+    check_resolution_behaviour(_RESOLUTION_ROWS)
+
 
 # ═════════════════════════════════════════════════════════════════════
 #  TEST B: HYPERPARAMETER SWEEP (w_z_frac, threshold)
@@ -302,6 +371,13 @@ def test_hyperparameter_sweep():
             marker = " *** BETTER" if delta > 0.005 else ""
             print(f"  {w_z_frac:>10.2f} {threshold:>8.1f} {rho_qa:>+10.3f} "
                   f"{qa_frac:>10.4f} {delta:>+14.4f}{marker}")
+            _SWEEP_ROWS.append({
+                'w_z_frac': w_z_frac, 'threshold': threshold,
+                'rho_qa': float(rho_qa), 'qa_frac': float(qa_frac),
+                'cl_frac': float(cl_frac_clean), 'delta': float(delta),
+            })
+
+    check_sweep_behaviour(_SWEEP_ROWS)
 
     # Noisy sweep (σ=0.3 — where we saw the crossover)
     sigma = 0.3

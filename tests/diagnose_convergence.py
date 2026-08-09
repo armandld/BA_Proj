@@ -233,3 +233,12 @@ tests = [("B1: 1-step convergence", ok1),
          ("B4: Hierarchy monotonicity", hierarchy_ok)]
 for name, ok in tests:
     print(f"  {name}: {'PASS' if ok else 'FAIL'}")
+
+# ── Acceptance: turn the printed verdicts into an exit code ──────────
+# Without this the script prints "FAIL" and still returns 0, so
+# `run_tests.sh` reports the stage as PASSED.
+_failed = [name for name, ok in tests if not ok]
+if _failed:
+    print(f"\n  [ACCEPTANCE] FAILED: {', '.join(_failed)}")
+    sys.exit(1)
+print(f"\n  [ACCEPTANCE] all {len(tests)} convergence checks hold -> OK")

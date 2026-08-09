@@ -270,6 +270,61 @@ def print_result(name, res, ground_truth_desc):
     }
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — what V1 is expected to do
+# ══════════════════════════════════════════════════════════════════════
+#
+# Five of the seven checks hold; two do NOT, and both are real V1 defects
+# rather than noise:
+#
+#   quiet_no_refine   — on a quiet uniform field `physical_score` returns
+#                       ~0.49-0.58, i.e. above threshold=0.3, so the
+#                       pipeline refines all four cells. The score is not
+#                       calibrated to the threshold it is compared against.
+#   active_z_positive — on a strong active field only 4 of the 8 Z biases
+#                       are positive, and they sit at ~1e-4.
+#
+# The expected pattern is therefore pinned as a pattern, not as "all pass".
+# The stage fails if V1 moves in EITHER direction — a repair is a change of
+# behaviour and must be noticed too.
+EXPECTED_CHECKS = {
+    'quiet_z_negative': True,
+    'quiet_no_refine': False,     # known defect: quiet field scores ~0.55
+    'active_z_positive': False,   # known defect: only 4/8 biases positive
+    'active_all_refine': True,
+    'localized_mixed': True,
+    'gradient_mixed': True,
+    'rotor_multibody': True,
+}
+
+
+def check_expected_behaviour(checks):
+    """Compare the outcome pattern against the recorded one and exit non-zero
+    on any difference.
+
+    Without this the script prints "Some checks FAILED" and returns 0, so
+    `run_tests.sh` reports the stage as PASSED.
+    """
+    missing = set(EXPECTED_CHECKS) - set(checks)
+    extra = set(checks) - set(EXPECTED_CHECKS)
+    assert not missing and not extra, (
+        f"the set of checks changed (missing={sorted(missing)}, "
+        f"extra={sorted(extra)}); update EXPECTED_CHECKS deliberately"
+    )
+
+    diffs = {k: (bool(checks[k]), EXPECTED_CHECKS[k])
+             for k in EXPECTED_CHECKS if bool(checks[k]) != EXPECTED_CHECKS[k]}
+    assert not diffs, (
+        "V1 decision behaviour departed from the recorded pattern "
+        f"(check: got, expected): {diffs}"
+    )
+
+    n_defects = sum(1 for v in EXPECTED_CHECKS.values() if not v)
+    print(f"\n  [ACCEPTANCE] outcome pattern matches the recorded one "
+          f"({len(EXPECTED_CHECKS) - n_defects} hold, {n_defects} known "
+          f"defects) -> OK")
+
+
 def main():
     N = 32
     VQA_N = 2
@@ -359,6 +414,8 @@ def main():
         print("  => QAOA has meaningful multi-body terms in non-trivial cases.")
     else:
         print("  => Some checks FAILED. Investigate the cases above.")
+
+    check_expected_behaviour(checks)
 
     # ── Threshold sensitivity analysis ──
     print(f"\n\n{'#'*65}")

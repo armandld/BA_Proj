@@ -48,6 +48,8 @@ print(f"threshold_amr={THRESHOLD}")
 print(f"avg_phi = {avg_phi:.6f}")
 print()
 
+records = []
+
 # Test with different beta (threshold-contrast sensitivity) values
 for beta_mic in [0.2, 0.5, 1.0, 1.5, 2.0]:
     phys_mapper = PhysicalMapper(cs=1.0, nu=nu, eta_mhd=eta,
@@ -119,3 +121,82 @@ for beta_mic in [0.2, 0.5, 1.0, 1.5, 2.0]:
     else:
         print(f"    ✓ Meaningful multi-body terms — quantum correlations active")
     print()
+
+    records.append({
+        'beta': beta_mic,
+        'ratio': ratio,
+        'max_H': float(max(np.max(np.abs(mH_h)), np.max(np.abs(mH_v)))),
+        'max_C': float(max(np.max(np.abs(mC_h)), np.max(np.abs(mC_v)))),
+        'max_K': float(np.max(np.abs(mK))),
+        'C_h': np.array(mC_h, dtype=float),
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — what V1 is expected to do
+# ══════════════════════════════════════════════════════════════════════
+#
+# Reference run (N=256 Orszag-Tang at t=2.0, threshold_amr=0.2, VQA 2x2):
+#
+#   beta        0.2      0.5      1.0      1.5      2.0
+#   ratio    11876.7  13527.6  16279.2  19030.7      ...
+#   max|H| ~ 9.6e-05 at every beta, max|C| ~ 1.0031 at every beta, max|K| = 0
+#
+# Three facts are pinned, and none of them is what the printed verdict
+# ("meaningful multi-body terms") suggests:
+#
+#   1. the downsampled ZZ block does not depend on beta_curl / beta_xpoint
+#      at all — those hyperparameters reach the curl and X-point channels
+#      only, so sweeping them cannot change the gradient coupling;
+#   2. no ZZZZ plaquette survives downsampling (max|K| = 0 exactly);
+#   3. the multi-body / single-body ratio is large because the Z bias is
+#      ~1e-4, not because the couplings are strong. The ratio verdict is
+#      therefore not evidence of "quantum correlations active".
+MIN_RATIO = 1e3
+MAX_Z_OVER_C = 1e-3
+
+
+def check_expected_behaviour(records):
+    """Fail the run if the measured structure departs from the recorded one.
+
+    Without this the script prints a verdict line and returns 0 whatever it
+    measured, so `run_tests.sh` reports the stage as PASSED.
+    """
+    assert len(records) == 5, f"expected 5 beta values, got {len(records)}"
+
+    ref = records[0]['C_h']
+    for r in records[1:]:
+        assert np.allclose(r['C_h'], ref, rtol=0, atol=0), (
+            f"the downsampled ZZ block changed with beta ({r['beta']}); it "
+            "must not — beta_curl/beta_xpoint do not reach the gradient "
+            "coupling"
+        )
+
+    for r in records:
+        assert r['max_K'] == 0.0, (
+            f"beta={r['beta']}: a ZZZZ plaquette survived downsampling "
+            f"(max|K| = {r['max_K']:.3e}); the recorded behaviour is exactly 0"
+        )
+        assert r['max_C'] > 0.1, (
+            f"beta={r['beta']}: the ZZ coupling vanished (max|C| = "
+            f"{r['max_C']:.3e}); at threshold_amr=0.2 part of the field sits "
+            "inside the uncertainty window and the coupling must survive"
+        )
+        z_over_c = r['max_H'] / r['max_C']
+        assert z_over_c < MAX_Z_OVER_C, (
+            f"beta={r['beta']}: Z/ZZ magnitude ratio {z_over_c:.3e} is no "
+            f"longer below {MAX_Z_OVER_C:g} — the recorded imbalance changed"
+        )
+        assert r['ratio'] > MIN_RATIO, (
+            f"beta={r['beta']}: multi/single ratio {r['ratio']:.1f} fell "
+            f"below {MIN_RATIO:g}"
+        )
+
+    print(f"{'='*70}")
+    print("  [ACCEPTANCE] ZZ block invariant under beta; no ZZZZ survives "
+          "downsampling;")
+    print(f"  Z/ZZ magnitude ratio < {MAX_Z_OVER_C:g} at every beta -> OK")
+    print(f"{'='*70}")
+
+
+check_expected_behaviour(records)

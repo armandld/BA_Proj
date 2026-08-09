@@ -188,6 +188,9 @@ def diagnose_scenario(scenario_name, sim, N, VQA_N=2, threshold=0.3,
     return {
         'flipped': flipped, 'total': total_cells,
         'ratio': ratio, 'prob_before': prob_before, 'prob_after': prob_after,
+        'scenario': scenario_name, 'threshold': threshold,
+        'w_z_frac': w_z_frac,
+        'z_all_negative': bool(all_negative), 'z_all_positive': bool(all_positive),
     }
 
 
@@ -209,6 +212,8 @@ def main():
     print("=" * 60)
     print(f"  Grid: {N}×{N}, VQA: {VQA_N}×{VQA_N}")
 
+    records = []
+
     for threshold in [0.3, 0.5]:
         for w_z_frac in [0.15, 0.10]:
             print(f"\n\n{'#'*60}")
@@ -228,8 +233,77 @@ def main():
                     sim.adapt_dt(cfl_target=0.4)
                     sim.step_full(record_stats=False)
 
-                diagnose_scenario(name, sim, N, VQA_N, threshold, w_z_frac,
-                                  Phi_prev=Phi_prev)
+                records.append(diagnose_scenario(
+                    name, sim, N, VQA_N, threshold, w_z_frac,
+                    Phi_prev=Phi_prev))
+
+    check_expected_behaviour(records)
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — what V1 is expected to do
+# ══════════════════════════════════════════════════════════════════════
+#
+# Reference run, 6 scenarios x {threshold 0.3, 0.5} x {w_z_frac 0.15, 0.10}
+# = 24 configurations at the deployed size (2x2 core, 8 qubits):
+#
+#   threshold = 0.3 : 0 cells flipped in all 12 runs (0 out of 48)
+#   threshold = 0.5 : every run has ALL Z biases negative, and the flips
+#                     that appear (0,2,0,0,1,2 per scenario) are the QAOA
+#                     following a uniformly "skip" bias away from a
+#                     classical map that still refines
+#   multi/single energy ratio: 6.4e4 at the lowest, up to 6.2e8
+#
+# What is pinned: the QAOA does not change the refinement decision at the
+# operating threshold, while the coupling energy is 4 to 8 orders of
+# magnitude above the Z energy that actually decides. Both halves matter —
+# the second is what makes the first non-trivial.
+MAX_FLIPS_AT_OPERATING_THRESHOLD = 2      # out of 48 cells; reference is 0
+MIN_MULTI_SINGLE_RATIO = 1e4              # reference minimum is 6.4e4
+
+
+def check_expected_behaviour(records):
+    """Fail the run if the measured behaviour departs from the recorded one.
+
+    Without this the script prints its warnings and returns 0 whatever it
+    measured, so `run_tests.sh` reports the stage as PASSED.
+    """
+    assert len(records) == 24, f"expected 24 configurations, got {len(records)}"
+
+    at_op = [r for r in records if r['threshold'] == 0.3]
+    flips = sum(int(r['flipped']) for r in at_op)
+    cells = sum(int(r['total']) for r in at_op)
+    assert flips <= MAX_FLIPS_AT_OPERATING_THRESHOLD, (
+        f"at threshold=0.3 the QAOA flipped {flips}/{cells} decisions; the "
+        f"recorded behaviour is 0 and the tolerance is "
+        f"{MAX_FLIPS_AT_OPERATING_THRESHOLD}"
+    )
+
+    weak = [(r['scenario'], r['threshold'], r['w_z_frac'], r['ratio'])
+            for r in records if r['ratio'] <= MIN_MULTI_SINGLE_RATIO]
+    assert not weak, (
+        f"multi/single energy ratio fell below {MIN_MULTI_SINGLE_RATIO:g} "
+        f"for: {weak}"
+    )
+
+    high = [r for r in records if r['threshold'] == 0.5]
+    not_all_neg = [(r['scenario'], r['w_z_frac']) for r in high
+                   if not r['z_all_negative']]
+    assert not not_all_neg, (
+        "at threshold=0.5 every configuration is expected to have ALL Z "
+        f"biases negative (ground state = refine nothing); exceptions: "
+        f"{not_all_neg}"
+    )
+
+    print(f"\n\n{'#'*60}")
+    print("  [ACCEPTANCE]")
+    print(f"{'#'*60}")
+    print(f"  threshold=0.3: {flips}/{cells} decisions flipped "
+          f"(max {MAX_FLIPS_AT_OPERATING_THRESHOLD})")
+    print(f"  threshold=0.5: {len(high)}/{len(high)} runs with all-negative "
+          f"Z biases")
+    print(f"  multi/single ratio > {MIN_MULTI_SINGLE_RATIO:g} in all "
+          f"{len(records)} runs -> OK")
 
 
 if __name__ == "__main__":

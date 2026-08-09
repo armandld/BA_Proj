@@ -362,6 +362,57 @@ def main():
         better = "QAOA" if res['rho_qa'] > res['rho_cl'] else "Classical"
         print(f"  {name:<40s} {res['rho_cl']:>+15.3f} {res['rho_qa']:>+15.3f} {better:>10s}")
 
+    check_expected_behaviour(all_results)
+    return all_results
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  ACCEPTANCE — what V1 is expected to do
+# ══════════════════════════════════════════════════════════════════════
+
+# Reference run (6 scenario/size pairs): QAOA loses every one of them.
+#   rho(Classical) = +0.000 +0.983 +0.800 +0.850 +0.800 +0.850  -> mean +0.714
+#   rho(QAOA)      = -0.400 +0.967 +0.400 +0.183 +0.400 -0.500  -> mean +0.175
+# The QAOA arm is stochastic (unseeded COBYLA + shot noise), so a single
+# scenario is allowed to flip; the aggregate is not.
+MAX_QAOA_WINS = 1
+MIN_MEAN_RHO_GAP = 0.15
+
+
+def check_expected_behaviour(all_results):
+    """Fail the run if the measured behaviour departs from the recorded one.
+
+    Without this the script prints "Classical" on every row and still exits
+    0, so the stage passes whatever it finds.
+    """
+    rho_cl = np.array([r['rho_cl'] for r in all_results.values()], dtype=float)
+    rho_qa = np.array([r['rho_qa'] for r in all_results.values()], dtype=float)
+    names = list(all_results.keys())
+
+    bad = [n for n, c, q in zip(names, rho_cl, rho_qa)
+           if not (np.isfinite(c) and np.isfinite(q))]
+    assert not bad, (
+        f"rank correlation is undefined (constant score map) for: {bad}. "
+        "A NaN here would be averaged into the summary without notice."
+    )
+
+    wins = [n for n, c, q in zip(names, rho_cl, rho_qa) if q > c]
+    assert len(wins) <= MAX_QAOA_WINS, (
+        f"QAOA outranks the classical baseline on {len(wins)} of "
+        f"{len(names)} scenarios ({wins}); at most {MAX_QAOA_WINS} is "
+        "consistent with the recorded behaviour of V1"
+    )
+
+    gap = float(rho_cl.mean() - rho_qa.mean())
+    assert gap > MIN_MEAN_RHO_GAP, (
+        f"mean rank-correlation gap classical - QAOA = {gap:+.3f}, expected "
+        f"> {MIN_MEAN_RHO_GAP} (reference run: +0.539)"
+    )
+
+    print(f"\n  [ACCEPTANCE] QAOA wins {len(wins)}/{len(names)} scenarios "
+          f"(max {MAX_QAOA_WINS}); mean rho gap = {gap:+.3f} "
+          f"(min {MIN_MEAN_RHO_GAP}) -> OK")
+
 
 if __name__ == "__main__":
     main()

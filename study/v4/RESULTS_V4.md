@@ -2417,3 +2417,109 @@ acceptance criteria would have to be invented rather than measured: either
 give those stages real assertions, or move them out of the default path into
 the existing `--figures` / `--diagnose` groups so the default run is
 assertion-bearing end to end.
+
+---
+
+# THE EIGHT STAGES THAT COULD NOT FAIL, AND WHAT THEY SAY NOW
+
+Base commit `fe1f6fe`. Nothing under `src/` was modified; the source
+behaviours below are pinned from the test side.
+
+## Every default stage now carries an acceptance check
+
+| stage | it now asserts | reference |
+|---|---|---|
+| `test_qaoa_advantage.py` | QAOA outranks the classical baseline on at most 1 of 6 scenario/size pairs, and the mean rank-correlation gap exceeds 0.15 | 0/6 wins, gap **+0.692** |
+| `test_qaoa_decisions.py` | the 7 internal checks match their recorded pattern exactly | **5 hold, 2 known defects** |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | without noise the classical arm reaches the optimum and QAOA loses by > 0.10 captured fraction; QAOA wins at most 4 of 12 rows, none below sigma = 0.20; a NaN rho occurs only when a score map is constant | 0.6588 vs 0.3350 and 0.3183 vs 0.1976; 2/12 wins, both at sigma = 0.30 |
+| `test_qaoa_noise_and_early.py::test_early_detection` | QAOA wins at most 2 of 6 rows and never exceeds the classical mean captured fraction by more than 0.02 | 1/6 wins; means **0.4065 vs 0.3735** |
+| `test_qaoa_scaling_and_hparams.py::test_resolution_scaling` | on clean data QAOA never exceeds the classical arm at N = 32, 64, 128, and the classical arm improves with resolution | 0.5182 / 0.6588 / 0.7669 classical, QAOA 0.5182 / 0.6588 / 0.2438 |
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | over 4 w_z_frac x 3 thresholds, the best result on clean data is an exact tie with the classical baseline | best delta = **+0.0000**; 4 exact ties at threshold 0.3, **-0.4048** everywhere else |
+| `diag_hamiltonian_balance.py` | the downsampled ZZ block does not move with beta_curl/beta_xpoint, no ZZZZ survives downsampling, and Z/ZZ magnitude stays below 1e-3 | max abs(K) = 0 exactly; max abs(H) ~ 9.6e-05 against max abs(C) ~ 1.0031 |
+| `diag_qaoa_contribution.py` | at the operating threshold the QAOA flips at most 2 of 48 decisions, every run at threshold 0.5 has all-negative Z biases, and the multi/single energy ratio exceeds 1e4 everywhere | **0/48 flipped**; 12/12 all-negative; ratio 6.4e4 to 6.2e8 |
+| `diagnose_convergence.py` | its own four printed verdicts become the exit code | B1-B4 all PASS |
+
+The most quotable line of that table is the hyperparameter sweep: **the best
+the QAOA arm ever does on clean data, over the entire sweep, is to equal the
+classical baseline exactly.** Twelve combinations, one ceiling, and it is a
+tie.
+
+`test_qaoa_advantage.py` and `diag_qaoa_contribution.py` were printing
+`Classical` on 6 of 6 rows and
+`ALL Z biases negative -> QAOA ground state = refine nothing` respectively,
+and exiting 0. Those two lines are now the acceptance criterion instead of
+decoration.
+
+## The placeholder Hamiltonian is now detectable — `tests/test_v1_guards.py`
+
+`cost_hamiltonian.py` drops every coefficient below **1e-6** and, when that
+empties the term list, appends `("Z", [0], 1e-3)` so Qiskit does not choke on
+an empty observable. Three properties are now pinned:
+
+1. **the substitute is 1e6 times the signal it replaced** — with every
+   coefficient at 1e-9, the operator delivered to the solver is a single term
+   at 1e-3;
+2. **it is not physically neutral**, contrary to the source comment. Every
+   ground state of `("Z", [0], +1e-3)` has qubit 0 excited, with
+   `E_min = -1e-3`: the placeholder is a *refine-edge-0* bias;
+3. **it escapes the null-Hamiltonian shortcut.** `execute.py:52` skips COBYLA
+   when `np.allclose(abs(coeffs), 0.0)`, whose default `atol` is 1e-8. The
+   placeholder sits at 1e-3, so a patch with no surviving coefficient runs a
+   full variational optimisation against a fabricated operator. The two
+   thresholds live in different files and nothing else connects them.
+
+`is_null_placeholder(op)` is the detector to call before interpreting any
+operator coming out of V1: a placeholder means *no Hamiltonian was built*,
+which is a different event from *the Hamiltonian is weak*.
+
+The same file pins the pruning chain — `max abs(C_edges)` is nonzero and
+below 1e-6 on a real 2x2 patch, and **zero ZZ terms** appear in the operator,
+while a coupling above the cut produces one ZZ term per site — and exercises
+the assignment that `execute.py:182-185` performs inside
+`try/except Exception: pass`, on both primitive construction paths, so that a
+silently under-sampled MPS readout fails here instead of hiding there.
+
+## Four more V1 claims that were false
+
+Re-arming the suite made these visible; each is measured over repeated draws
+because the arm is stochastic.
+
+| claim as written | measured | n |
+|---|---|---|
+| `test_signal_contribution::test_psi` — "phase anticipation": high psi marks a growing instability | contrast **-0.0572** (t = -8.4), negative in 93% of draws — psi LOWERS the cell it marks | 30 |
+| `test_qaoa_physics_decision::test_spatially_varying_psi...` — same mechanism, different construction | **-0.0723** (t = -14.6), positive in 3% of draws | 30 |
+| `test_signal_contribution::test_K_ZZZZ` — a 6x stronger plaquette should raise its four qubits | **-0.0168** (t = -7.1) — it lowers them | 30 |
+| `test_signal_contribution::test_C_ZZ` — a 10x stronger ZZ coupling should raise its edge | **+0.0072**, sem 0.0049, **t = +1.46** — indistinguishable from zero | 30 |
+
+The two psi rows are the same finding reached from two independent setups:
+**the "phase boost", which is the mechanism the early-detection story rests
+on, has the opposite sign to the one claimed.** Both old assertions took the
+absolute value of the contrast, which is exactly why the sign was never seen.
+
+The C_ZZ row belongs with T13/T18/T26: a coupling ten times the background
+moves nothing measurable at the deployed size.
+
+## Six single-draw assertions on a stochastic arm
+
+Beyond the four above, these were passing or failing by luck. All are now
+stated over repeats, and the magnitude threshold was replaced by a *sign*
+criterion wherever the mean itself drifts between sessions (unseeded COBYLA):
+one run of `test_psi` returned -0.0183 where another returned -0.0572, while
+the sign held in both.
+
+| test | old assertion | draws clearing it | now |
+|---|---|---|---|
+| `QAOA_test::test_vortex_discriminates` | single draw, abs(contrast) > 0.01 | **25%** | mean over 8 draws is not positive (recorded -0.0058 +/- 0.0064) |
+| `test_qaoa_physics_decision::test_vortex_detected` | single draw, abs(contrast) > 0.01 | **50%** | mean over 10 draws null, sign not reproducible |
+| `test_qaoa_physics_decision::test_qaoa_converges_for_simple_hamiltonian` | single draw, avg P(1) > 0.7 | **90%** | median of 5 draws (mean 0.829, min 0.676) |
+| `test_qaoa_physics_decision::test_qaoa_modifies_probabilities...` | single draw, max diff > 0.05 | ~92% | median of 5 draws (range 0.0721 to 0.4742) |
+| `test_signal_contribution::test_H_Z` | single draw, contrast > 0.01 | ~95% (min -0.018) | mean over 20 draws > 0.02 |
+| `test_signal_contribution::test_K_ZZZZ` | single draw, abs(contrast) > 0.01 | **87%** | sign over 20 draws |
+
+## Gate
+
+```
+184 V1 tests pass (175 repaired + 9 new guards), four consecutive runs
+325 v3/v4 tests pass, 15 skipped
+9 of 9 default script/pytest stages carry an acceptance check
+```
