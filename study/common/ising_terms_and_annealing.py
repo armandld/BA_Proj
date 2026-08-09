@@ -26,8 +26,8 @@ Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
 Output: results/sa_baseline_{scenario}_Re{Re}_N{N}_dim{D}{sfx}.npz
 
 Usage:
-  python study/phase7_sa_baseline.py --dim 4 --v2
-  python study/phase7_sa_baseline.py --dim 4 --v2 --sweeps 5000 --n-restarts 20
+  python study/ising_terms_and_annealing.py --dim 4 --v2
+  python study/ising_terms_and_annealing.py --dim 4 --v2 --sweeps 5000 --n-restarts 20
 """
 import argparse, os, sys, time
 import numpy as np

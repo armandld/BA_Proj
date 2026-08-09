@@ -757,7 +757,7 @@ Every call site, checked exhaustively:
 | `study/phase0_sanity_check.py:95` | study | no |
 | `study/phase3_coefficients.py:68` | study | no |
 | `study/phase4_exact_diag.py:68` | study | no |
-| `study/phase5_qaoa_eval.py:136` | study (feeds T11/T13/T18) | no |
+| `study/qaoa_inputs.py:136` | study (feeds T11/T13/T18) | no |
 | `src/compare_rotor_budget.py:110` | orphaned analysis script | **yes → dead** |
 | 6 × `tests/…` | stale tests | **yes → the D6 failures** |
 

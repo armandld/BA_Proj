@@ -55,7 +55,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash
-from phase7_sa_baseline import build_ising_terms
+from ising_terms_and_annealing import build_ising_terms
 from h0_optimiser_equivalence import exhaustive_ground_state
 
 # Groupe engendre par les reflexions d'axes et la rotation d'un quart de tour.
@@ -181,9 +181,9 @@ def decision_maps(vx, vy, Bx, By, N, dim, re, use_v2=True,
     obtenu par recuit est une solution certifiee seulement a la precision du
     recuit, ce que la tache 11 a par ailleurs valide a 8 qubits.
     """
-    from phase5_qaoa_eval import (
+    from qaoa_inputs import (
         prepare_qaoa_inputs, run_qaoa_on_snapshot, classical_warm_start_params)
-    from phase7_sa_baseline import sa_multi_restart
+    from ising_terms_and_annealing import sa_multi_restart
     from config import V2_THRESHOLD, TRAINED_THRESHOLD
 
     thr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD

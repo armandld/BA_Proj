@@ -57,7 +57,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash
-from phase7_sa_baseline import build_ising_terms
+from ising_terms_and_annealing import build_ising_terms
 from h0_optimiser_equivalence import exhaustive_ground_state
 
 
@@ -169,7 +169,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
 
-    from phase5_qaoa_eval import (
+    from qaoa_inputs import (
         prepare_qaoa_inputs, run_qaoa_on_snapshot, classical_warm_start_params)
 
     thr = V2_THRESHOLD if args.mapper == "v2" else TRAINED_THRESHOLD

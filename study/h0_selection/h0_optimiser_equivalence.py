@@ -66,7 +66,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash          # v3, reutilise
-from phase7_sa_baseline import (                          # V2, reutilise
+from ising_terms_and_annealing import (                          # V2, reutilise
     build_ising_terms, total_energy, delta_energy,
     _build_incidence, sa_multi_restart, spins_to_decisions,
 )
@@ -93,7 +93,7 @@ def classical_init_spins(score_vqa, threshold_amr, dim):
     """Configuration de spins issue de la decision classique.
 
     Convention identique a celle construite en ligne dans
-    `phase7_sa_baseline.analyze_snapshot_sa` (raffiner ssi score > seuil
+    `ising_terms_and_annealing.analyze_snapshot_sa` (raffiner ssi score > seuil
     -> spin -1, sinon +1), extraite ici en fonction pour etre partagee
     par le warm start de SA et de la descente gloutonne.
     """
@@ -233,7 +233,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  zero_psi=False, scale_kopt=False,
                  run_qaoa=True, seed=0):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
-    from phase5_qaoa_eval import (                      # V2, reutilise
+    from qaoa_inputs import (                      # V2, reutilise
         prepare_qaoa_inputs, run_qaoa_on_snapshot,
         classical_warm_start_params,
     )

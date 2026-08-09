@@ -215,7 +215,7 @@ Feeds phase 5 (QAOA eval) with the list of `promising` patches.
 
 ---
 
-## §5  Phase 5 — QAOA evaluation (`study/phase5_qaoa_eval.py`)
+## §5  Phase 5 — QAOA evaluation (`study/qaoa_inputs.py`)
 
 ### What it computes
 For each promising patch from phase 4:
@@ -251,7 +251,7 @@ Hamiltonian**.
 
 ---
 
-## §6  Phase 6 — detection-metric verify (`study/phase6_verify.py`)
+## §6  Phase 6 — detection-metric verify (`study/pipeline_verification.py`)
 
 ### What it computes
 Given the QAOA energies per patch and the classical score:
@@ -280,7 +280,7 @@ on it.
 
 ---
 
-## §7  Phase 7 — SA baseline on the v2 Hamiltonian (`study/phase7_sa_baseline.py`)
+## §7  Phase 7 — SA baseline on the v2 Hamiltonian (`study/ising_terms_and_annealing.py`)
 
 ### What it computes
 For each patch, SA run **on the same v2 Hamiltonian that QAOA

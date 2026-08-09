@@ -18,8 +18,8 @@ Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
 Output: results/qaoa_eval_{scenario}_Re{Re}_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase5_qaoa_eval.py
-  python study/phase5_qaoa_eval.py --re 800 --dim 2 --reps 2
+  python study/qaoa_inputs.py
+  python study/qaoa_inputs.py --re 800 --dim 2 --reps 2
 """
 import argparse, os, sys, time
 import numpy as np

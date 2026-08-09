@@ -66,14 +66,14 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 import provenance
-from phase7_sa_baseline import build_ising_terms, spins_to_decisions
+from ising_terms_and_annealing import build_ising_terms, spins_to_decisions
 from h0_optimiser_equivalence import (classical_init_spins,
                                     exhaustive_ground_state,
                                     greedy_local_search)
 from h0_qaoa_displacement import mask_uniformity
 from h0_optimiser_equivalence import f1_from_masks
 from t13_term_ablation import zero_hamiltonian_terms
-from phase5_qaoa_eval import prepare_qaoa_inputs
+from qaoa_inputs import prepare_qaoa_inputs
 
 # Familles ablatees. On teste separement chaque famille de couplage et les
 # deux ensemble ; `full` est le controle et doit rendre 0.

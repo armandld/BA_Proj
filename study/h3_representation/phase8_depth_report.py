@@ -36,7 +36,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
 
 from phase4_exact_diag import build_patch_hamiltonian
-from phase5_qaoa_eval import prune_hamilt_params
+from qaoa_inputs import prune_hamilt_params
 from VQA.cost_hamiltonian import create_period_hamiltonian
 
 from qiskit.circuit.library import QAOAAnsatz

@@ -73,7 +73,7 @@ SCENARIOS = ("init_kelvin_helmholtz", "init_orszag_tang",
 # Les deux sont rapportees separement. La premiere est lue du module pour
 # qu'elle ne puisse pas diverger de ce qui tourne reellement.
 def _deployed_params():
-    import phase5_qaoa_eval as p5
+    import qaoa_inputs as p5
     return dict(sigma=float(p5.TRAINED_SIGMA),
                 threshold_amr=float(p5.TRAINED_THRESHOLD))
 

@@ -38,7 +38,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash
-from phase7_sa_baseline import build_ising_terms, spins_to_decisions
+from ising_terms_and_annealing import build_ising_terms, spins_to_decisions
 from h0_optimiser_equivalence import exhaustive_ground_state, f1_from_masks
 from h0_qaoa_displacement import mask_uniformity
 
@@ -101,7 +101,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
 
-    from phase5_qaoa_eval import prepare_qaoa_inputs
+    from qaoa_inputs import prepare_qaoa_inputs
 
     print("=" * 88)
     print("  V4 Task 13: causal ablation of Hamiltonian term families")

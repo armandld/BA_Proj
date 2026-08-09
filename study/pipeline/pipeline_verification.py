@@ -19,8 +19,8 @@ For each (scenario, Re, dim) we report:
   - Same for classical score (for comparison)
 
 Usage:
-  python study/phase6_verify.py
-  python study/phase6_verify.py --dim 4 --v2
+  python study/pipeline_verification.py
+  python study/pipeline_verification.py --dim 4 --v2
 """
 import argparse, os, sys
 import numpy as np

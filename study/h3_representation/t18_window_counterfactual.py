@@ -78,7 +78,7 @@ def prepare_both_arms(vx, vy, Bx, By, N, dim, re):
     constante de module utilisee a la construction du mappeur, puis on la
     restaure inconditionnellement.
     """
-    import phase5_qaoa_eval as p5
+    import qaoa_inputs as p5
 
     _, hp_w, _ = p5.prepare_qaoa_inputs(vx, vy, Bx, By, N, dim, re,
                                         use_v2=False)

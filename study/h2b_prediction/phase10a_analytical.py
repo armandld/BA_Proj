@@ -50,7 +50,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
 
 from phase4_exact_diag import build_patch_hamiltonian
-from phase7_sa_baseline import (
+from ising_terms_and_annealing import (
     build_ising_terms, spins_to_decisions, _metrics, _build_incidence,
 )
 
