@@ -59,7 +59,7 @@ from t1_feature_selection import git_commit_hash
 from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
 from t19_arm_divergence_audit import parse_abort
-from t22_unseen_conditions import build_traces, unseen_config
+from h4_unseen_conditions import build_traces, unseen_config
 
 # Seuil de « raffiner presque tout » : borne basse deja balayee par t15b,
 # donc pas un parametre choisi pour cette tache.

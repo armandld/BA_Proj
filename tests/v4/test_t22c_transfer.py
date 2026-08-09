@@ -32,7 +32,7 @@ def _study_file(name):
             return _c
     raise FileNotFoundError(name)
 
-from t22c_transfer_summary import analyse, load, ratio_sd
+from h4_transfer_summary import analyse, load, ratio_sd
 
 
 def _rec(qc, qu, cc, cu, sqc=0.0, squ=0.0, n=5, qp=0.9, cp=0.6,
@@ -117,7 +117,7 @@ def test_no_leak_mode_is_gone_and_leak_free_is_wired(tmp_path):
     etait identique. Il doit avoir disparu, et son remplacant doit etre
     REELLEMENT branche sur le seuil."""
     src = open(_study_file(
-                            "t22_unseen_conditions.py")).read()
+                            "h4_unseen_conditions.py")).read()
     assert '"no-leak"' not in src, "the unimplemented mode is back"
     assert '"leak-free"' in src
     # le mode doit modifier le seuil, pas seulement le nom de fichier

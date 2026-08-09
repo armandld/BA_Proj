@@ -65,7 +65,7 @@ def test_no_claim_of_a_shared_operating_point():
     En mode leak-free il n'y en a pas ; l'affirmer effacait la seule
     reserve qui empeche de lire l'avortement de Q-HAS comme une
     instabilite propre au bras a budget egal."""
-    src = open(_study_file("t22_unseen_conditions.py"),
+    src = open(_study_file("h4_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "at the SAME operating point" not in src, (
         "t22 affirme un point de fonctionnement commun que le mode "
@@ -146,11 +146,11 @@ def test_partial_checkpoints_are_never_analysed():
     Cette mesure de sauvegarde INTRODUIRAIT le motif de la campagne si un
     artefact partiel etait indiscernable d'un artefact complet : ses
     moyennes portent sur les tirages faits jusque-la."""
-    src = open(_study_file("t22_unseen_conditions.py"),
+    src = open(_study_file("h4_unseen_conditions.py"),
                encoding="utf-8").read()
     assert '"partial"' in src and "partial_warning" in src, (
         "t22 ecrit des points de reprise sans les marquer")
-    for consumer in ("t24_leak_free_summary.py", "t22c_transfer_summary.py"):
+    for consumer in ("t24_leak_free_summary.py", "h4_transfer_summary.py"):
         cs = open(_study_file(consumer), encoding="utf-8").read()
         assert '== "partial"' in cs, (
             f"{consumer} ne filtre pas les artefacts partiels — il "
@@ -177,7 +177,7 @@ def test_a_partial_record_is_rejected_by_the_summary(tmp_path):
 def test_resume_reuses_only_matching_configurations():
     """Reprendre sous une AUTRE configuration melangerait des tirages
     incomparables. Le code doit refuser plutot que deviner."""
-    src = open(_study_file("t22_unseen_conditions.py"),
+    src = open(_study_file("h4_unseen_conditions.py"),
                encoding="utf-8").read()
     for guard in ('prev.get("fold") == args.fold',
                   'prev.get("mode") == args.mode',
@@ -196,14 +196,14 @@ def test_resume_is_recorded_never_silent():
     C'est sans effet statistique (bras non deterministe, tirages i.i.d.)
     mais l'invisibilite serait le motif : un artefact qui ne dit pas d'ou
     viennent ses donnees."""
-    src = open(_study_file("t22_unseen_conditions.py"),
+    src = open(_study_file("h4_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "resumed_from_checkpoint" in src and "n_runs_resumed" in src
 
 
 def test_resume_truncates_to_the_requested_count():
     """`--repeats 3` apres un point a 5 tirages ne doit pas en rendre 5."""
-    src = open(_study_file("t22_unseen_conditions.py"),
+    src = open(_study_file("h4_unseen_conditions.py"),
                encoding="utf-8").read()
     assert "return got[:n]" in src, (
         "les tirages repris ne sont pas tronques a n")
@@ -220,7 +220,7 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
     arbitraire. Une condition dont la trajectoire est identique a la
     canonique donnerait un resultat indiscernable d'un vrai test de
     robustesse — le motif de la campagne, applique au controle lui-meme."""
-    src = open(_study_file("t25_physics_robustness.py"),
+    src = open(_study_file("h4_physics_robustness.py"),
                encoding="utf-8").read()
     assert "dns_relative_shift" in src and "condition_is_weak" in src, (
         "t25 ne mesure pas le deplacement de trajectoire de ses conditions")
@@ -229,7 +229,7 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
 
 
 def test_t25_never_extrapolates_its_frontier():
-    src = open(_study_file("t25_physics_robustness.py"),
+    src = open(_study_file("h4_physics_robustness.py"),
                encoding="utf-8").read()
     assert "xs[0] <= qp <= xs[-1]" in src, (
         "t25 pourrait extrapoler hors de la frontiere balayee")
@@ -242,7 +242,7 @@ def test_t25_refuses_a_non_monotone_bracketing_interval():
     Sur `tearing_b`, raffiner de 0.625 a 0.874 fait passer l'erreur de
     0.012 a 1.289 — trente fois PIRE. `np.interp` y repondait sans
     broncher, et 1.28x avait deja ete affiche comme un resultat."""
-    from t25_physics_robustness import frontier_verdict
+    from h4_physics_robustness import frontier_verdict
     f = lambda pts: [{"patch_ratio": p, "phys_score": e, "completed": True}
                      for p, e in pts]
     # anti-monotone dans l'intervalle encadrant -> refus motive
@@ -265,7 +265,7 @@ def test_t25_can_recompute_verdicts_without_simulating():
     """Quand la regle de verdict change, les tirages restent valables :
     seule leur lecture evolue. Sans ce mode il faudrait re-simuler des
     heures pour corriger une interpretation."""
-    src = open(_study_file("t25_physics_robustness.py"),
+    src = open(_study_file("h4_physics_robustness.py"),
                encoding="utf-8").read()
     assert "--recompute" in src and "verdicts_recomputed" in src
 
@@ -273,7 +273,7 @@ def test_t25_can_recompute_verdicts_without_simulating():
 def test_t25_marks_reynolds_as_not_an_ic_variation():
     """`ot` n'a aucun parametre : son levier Reynolds n'est pas une
     variation de condition initiale et ne doit pas etre compte comme telle."""
-    src = open(_study_file("t25_physics_robustness.py"),
+    src = open(_study_file("h4_physics_robustness.py"),
                encoding="utf-8").read()
     assert 'is_ic_variation' in src
 
@@ -283,7 +283,7 @@ def test_t25_rng_override_changes_the_draw_and_restores_numpy():
     et numpy rendu intact — sinon la substitution contaminerait tout ce qui
     suit dans le meme processus."""
     import numpy as np
-    from t25_physics_robustness import rng_override
+    from h4_physics_robustness import rng_override
     base = np.random.default_rng(42).standard_normal(8)
     with rng_override(7):
         alt = np.random.default_rng(42).standard_normal(8)
