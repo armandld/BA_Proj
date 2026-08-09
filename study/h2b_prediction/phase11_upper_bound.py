@@ -247,6 +247,9 @@ def main():
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--scenario", nargs="+", default=SCENARIOS)
     p.add_argument("--dim", type=int, default=4)
+    p.add_argument("--label-suffix", default="",
+                   help="variante de label, ex. _globalthr (T28). Le suffixe est repercute dans le nom de sortie pour qu'une variante n'ecrase jamais l'autre.")
+
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30,
                    help="snapshots per (scenario, Re) included in dataset")
@@ -266,7 +269,7 @@ def main():
         for re in args.re:
             dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
             pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
+                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}{args.label_suffix}.npz")
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
             else:
@@ -409,7 +412,7 @@ def main():
         print(f"    {name:<18} drop = {base_f1 - f1p:+.3f}")
 
     # -- save --
-    out = os.path.join(RESULTS_DIR, f"upper_bound_N{args.N}_dim{args.dim}.npz")
+    out = os.path.join(RESULTS_DIR, f"upper_bound_N{args.N}_dim{args.dim}{args.label_suffix}.npz")
     np.savez_compressed(
         out,
         f1_class_val=f1_class_va,

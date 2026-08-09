@@ -87,6 +87,9 @@ def main():
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--scenario", nargs="+", default=SCENARIOS)
     p.add_argument("--dim", type=int, default=4)
+    p.add_argument("--label-suffix", default="",
+                   help="variante de label, ex. _globalthr (T28). Le suffixe est repercute dans le nom de sortie pour qu'une variante n'ecrase jamais l'autre.")
+
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
     p.add_argument("--seed", type=int, default=0)
@@ -106,7 +109,7 @@ def main():
         for re in args.re:
             dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
             pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
+                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}{args.label_suffix}.npz")
             if os.path.exists(dp) and os.path.exists(pp):
                 rows.append((re, dp, pp))
         if rows:
@@ -214,7 +217,7 @@ def main():
 
     # ---- save ----
     out = os.path.join(RESULTS_DIR,
-                       f"upper_bound_loso_N{args.N}_dim{args.dim}.npz")
+                       f"upper_bound_loso_N{args.N}_dim{args.dim}{args.label_suffix}.npz")
     np.savez_compressed(
         out,
         held=np.array([r["held"] for r in rows]),
