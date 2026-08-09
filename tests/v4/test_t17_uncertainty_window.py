@@ -25,7 +25,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t17_uncertainty_window import PARAM_SETS, SCENARIOS, uncertainty_window
+from h3_uncertainty_window import PARAM_SETS, SCENARIOS, uncertainty_window
 
 
 def test_window_is_one_at_the_threshold():

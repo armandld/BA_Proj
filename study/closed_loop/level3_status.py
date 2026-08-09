@@ -58,8 +58,11 @@ def optuna_progress(db_path):
         for name, best in cur.fetchall():
             if name in out:
                 out[name]["best"] = best
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        # Une lecture partielle ne doit pas ressembler a une lecture complete :
+        # on marque l'incident dans le resultat au lieu de le taire.
+        out["_read_error"] = str(exc)
+        print(f"  [ATTENTION] lecture Optuna incomplete ({db_path}) : {exc}")
     finally:
         con.close()
     return out

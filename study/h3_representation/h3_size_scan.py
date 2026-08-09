@@ -72,7 +72,7 @@ from h0_optimiser_equivalence import (classical_init_spins,
                                     greedy_local_search)
 from h0_qaoa_displacement import mask_uniformity
 from h0_optimiser_equivalence import f1_from_masks
-from t13_term_ablation import zero_hamiltonian_terms
+from h3_term_ablation import zero_hamiltonian_terms
 from qaoa_inputs import prepare_qaoa_inputs
 
 # Familles ablatees. On teste separement chaque famille de couplage et les

@@ -23,7 +23,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t9_prop2_check import mean_field_state, per_site_condition
+from h3_locality_proposition import mean_field_state, per_site_condition
 
 DIM = 2
 N_Q = 2 * DIM * DIM

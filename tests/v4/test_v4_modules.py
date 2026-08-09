@@ -33,11 +33,11 @@ from h0_qaoa_displacement import (
     ground_state_marginals, mask_uniformity, theta_marginals,
     variational_progress,
 )
-from t12_equivariance import (
+from h3_equivariance import (
     SYMMETRY_OPS, apply_symmetry, apply_symmetry_mask, orbit_error,
 )
-from t13_term_ablation import zero_hamiltonian_terms
-from t14_numerical_validation import observed_order, relative_l2
+from h3_term_ablation import zero_hamiltonian_terms
+from h1_solver_convergence import observed_order, relative_l2
 from stats_confirmatory import (
     holm_correction, hierarchical_bootstrap, paired_hierarchical_delta,
     tost_equivalence,

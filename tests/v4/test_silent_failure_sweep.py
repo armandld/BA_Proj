@@ -67,12 +67,12 @@ TASK_SCRIPTS = sorted({
     f
     for _d in _STUDY_DIRS
     for f in os.listdir(os.path.join(_REPO_ROOT, "study", _d))
-    if f.startswith("t") and f.endswith(".py")
+    if f.endswith(".py") and f not in ("__init__.py", "config.py")
 })
 
 # Un balayage qui ne balaie rien est exactement le motif que ce fichier
 # traque : il doit crier plutot que passer.
-assert len(TASK_SCRIPTS) >= 20, (
+assert len(TASK_SCRIPTS) >= 45, (
     f"seulement {len(TASK_SCRIPTS)} scripts balayes — la selection est "
     "cassee, pas le depot"
 )

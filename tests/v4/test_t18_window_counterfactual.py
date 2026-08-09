@@ -23,8 +23,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t13_term_ablation import ABLATIONS
-from t18_window_counterfactual import HUGE_SIGMA, _c_amplitude, ablate_all
+from h3_term_ablation import ABLATIONS
+from h3_window_counterfactual import HUGE_SIGMA, _c_amplitude, ablate_all
 
 
 def _hp(dim=2, c=0.0, k=0.0, z=None):
@@ -50,7 +50,7 @@ def test_huge_sigma_neutralises_the_gaussian():
     """La constante utilisee pour le bras `no_window` doit vraiment rendre
     la fenetre unitaire en double precision, sinon le contrefactuel
     compare deux versions attenuees."""
-    from t17_uncertainty_window import uncertainty_window
+    from h3_uncertainty_window import uncertainty_window
     score = np.random.default_rng(0).random((8, 8))
     w = uncertainty_window(score, 0.1496, HUGE_SIGMA)
     assert w.min() > 1.0 - 1e-12

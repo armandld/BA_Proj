@@ -55,7 +55,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from t1_feature_selection import git_commit_hash
 from h0_optimiser_equivalence import f1_from_masks
-from t13_term_ablation import (ABLATIONS, ground_state_mask,
+from h3_term_ablation import (ABLATIONS, ground_state_mask,
                                zero_hamiltonian_terms)
 
 # Les deux bras compares. `no_window` neutralise la gaussienne en portant
