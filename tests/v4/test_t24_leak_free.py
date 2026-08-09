@@ -39,7 +39,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 V4 = os.path.join(_REPO_ROOT, "study")
 RESULTS = os.path.join(_REPO_ROOT, "results")
 
-from t24_leak_free_summary import analyse, frontier, frontier_at
+from closed_loop_leak_free_summary import analyse, frontier, frontier_at
 
 FOLDS = ("ot", "kh", "rotor", "tearing")
 
@@ -133,7 +133,7 @@ def test_summary_script_declares_it_is_only_a_bound():
 
     Sans cette reserve, « la fuite retiree, Q-HAS empire » se lirait comme
     le test definitif, alors que le reglage n'a pas ete refait."""
-    src = open(_study_file("t24_leak_free_summary.py"),
+    src = open(_study_file("closed_loop_leak_free_summary.py"),
                encoding="utf-8").read()
     assert "BORNE" in src and "Optuna" in src
 
@@ -150,7 +150,7 @@ def test_partial_checkpoints_are_never_analysed():
                encoding="utf-8").read()
     assert '"partial"' in src and "partial_warning" in src, (
         "t22 ecrit des points de reprise sans les marquer")
-    for consumer in ("t24_leak_free_summary.py", "h4_transfer_summary.py"):
+    for consumer in ("closed_loop_leak_free_summary.py", "h4_transfer_summary.py"):
         cs = open(_study_file(consumer), encoding="utf-8").read()
         assert '== "partial"' in cs, (
             f"{consumer} ne filtre pas les artefacts partiels — il "
@@ -160,7 +160,7 @@ def test_partial_checkpoints_are_never_analysed():
 def test_a_partial_record_is_rejected_by_the_summary(tmp_path):
     """Verification fonctionnelle, pas seulement textuelle."""
     import json as _json
-    import t24_leak_free_summary as t24
+    import closed_loop_leak_free_summary as t24
     d = tmp_path / "res"
     d.mkdir()
     (d / "t22_unseen_leak-free_kh.json").write_text(_json.dumps({

@@ -465,7 +465,7 @@ def rows_t23(results_dir, folds):
     `rotor`). Le nombre le plus cite de l'etude etait le seul a n'avoir
     aucun controle de transcription. Il en a un maintenant.
     """
-    from t23_headline_counts import fold_counts, totals
+    from closed_loop_headline_counts import fold_counts, totals
     ref_fold = {
         "ot": (5, 5, 5), "kh": (5, 4, 4),
         "rotor": (3, 2, 2), "tearing": (5, 5, 5),
@@ -507,7 +507,7 @@ def rows_t24(results_dir, folds):
     Ne pose de reference que pour les folds deja publies ; les autres
     apparaissent des qu'ils existent, sans figer un chiffre d'avance.
     """
-    from t24_leak_free_summary import analyse
+    from closed_loop_leak_free_summary import analyse
     published = {
         "tearing": {"canonical": dict(phys=3.7351, ratio=2.0771),
                     "unseen": dict(phys=2.5600, ratio=1.6954)},
@@ -627,7 +627,7 @@ def rows_t15c(results_dir, folds):
     Ces lignes ne dupliquent pas celles de `rows_level3` : celles-ci
     portent sur les fold pris un a un, celles-la sur la regle de decision.
     """
-    from t15c_fold_synthesis import (load_fold, primary_analysis,
+    from closed_loop_fold_synthesis import (load_fold, primary_analysis,
                                      secondary_analysis)
 
     recs = [r for r in (load_fold(results_dir, f) for f in folds)

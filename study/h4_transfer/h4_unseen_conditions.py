@@ -74,9 +74,9 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 import provenance
-from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
+from closed_loop_campaign import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
-from t19_arm_divergence_audit import (parse_abort,
+from closed_loop_divergence_audit import (parse_abort,
                                       safe_classical_hyperparams)
 
 # La valeur fuitee : ajustee sur les quatre classes, puis figee comme seuil

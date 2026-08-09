@@ -24,7 +24,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t15c_fold_synthesis import (
+from closed_loop_fold_synthesis import (
     TOST_MARGIN_FRAC, WIN_RULE_MIN, format_table, interp_frontier, load_fold,
     primary_analysis, secondary_analysis,
 )

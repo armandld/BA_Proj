@@ -54,9 +54,9 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 import provenance
-from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
+from closed_loop_campaign import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
-from t19_arm_divergence_audit import parse_abort
+from closed_loop_divergence_audit import parse_abort
 
 METRICS = ("combined", "phys_score", "patch_ratio")
 
@@ -123,7 +123,7 @@ def main():
     # rien sauvegarder — T20 ne pouvait donc structurellement pas aboutir
     # sur ce fold. On prend le seuil budget-apparie, le meme que celui deja
     # utilise comme valeur de reference.
-    from t19_arm_divergence_audit import safe_classical_hyperparams
+    from closed_loop_divergence_audit import safe_classical_hyperparams
     hp_c, hp_c_src, _ = safe_classical_hyperparams(
         rec, RESULTS_DIR, args.fold, always_matched=True)
     print(f"  classical control runs at: {hp_c_src}", flush=True)

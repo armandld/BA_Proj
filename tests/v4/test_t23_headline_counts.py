@@ -23,7 +23,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 V4 = os.path.join(_REPO_ROOT, "study")
 RESULTS = os.path.join(_REPO_ROOT, "results")
 
-from t23_headline_counts import fold_counts, matched_reference, totals
+from closed_loop_headline_counts import fold_counts, matched_reference, totals
 
 FOLDS = ("ot", "kh", "rotor", "tearing")
 

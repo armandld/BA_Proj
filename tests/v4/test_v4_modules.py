@@ -362,7 +362,7 @@ def test_fold_scenarios_deduplicates_the_v1_scenario_list():
     deduplication, un fold LOSO garderait la classe tenue dans
     l'entrainement (fuite)."""
     from types import SimpleNamespace
-    from t15_level3_closed_loop import fold_scenarios
+    from closed_loop_campaign import fold_scenarios
     cfg = lambda name: {"scenario": name, "N": 256, "T_MAX": 1.0, "Re": 800}
     T = SimpleNamespace(SCENARIOS_ALL=[
         ("kh", cfg("kelvin_helmholtz")), ("ot", cfg("orszag_tang")),
@@ -377,7 +377,7 @@ def test_fold_scenarios_deduplicates_the_v1_scenario_list():
 
 def test_fold_scenarios_filter_by_key_or_scenario_name():
     from types import SimpleNamespace
-    from t15_level3_closed_loop import fold_scenarios
+    from closed_loop_campaign import fold_scenarios
     T = SimpleNamespace(SCENARIOS_ALL=[
         ("kh", {"scenario": "kelvin_helmholtz"}),
         ("ot", {"scenario": "orszag_tang"})])
@@ -387,7 +387,7 @@ def test_fold_scenarios_filter_by_key_or_scenario_name():
 
 
 def test_summarise_pairs_arms_and_counts_wins():
-    from t15_level3_closed_loop import summarise
+    from closed_loop_campaign import summarise
     recs = [
         dict(qhas={"combined": 0.20, "phys_score": 0.10, "patch_ratio": 0.6},
              classical={"combined": 0.25, "phys_score": 0.12,

@@ -39,7 +39,7 @@ import provenance
 # Les taches longues : celles ou un commit peut tomber pendant l'execution.
 # T20 dure ~50 min par fold, T22 ~1 h. Ce sont exactement celles qui ont
 # ete mal estampillees.
-LONG_TASKS = ("t20_qhas_run_variance.py", "h4_unseen_conditions.py")
+LONG_TASKS = ("closed_loop_run_variance.py", "h4_unseen_conditions.py")
 
 
 def test_start_then_finish_keeps_the_starting_hash():

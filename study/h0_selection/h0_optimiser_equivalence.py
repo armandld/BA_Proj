@@ -230,7 +230,7 @@ def f1_from_masks(pred, gt):
 def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
-                 zero_psi=False, scale_kopt=False,
+                 zero_psi=False, scale_kopt=False, no_exact=False,
                  run_qaoa=True, seed=0):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from qaoa_inputs import (                      # V2, reutilise
@@ -277,7 +277,19 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
 
     # --- reference exacte -------------------------------------------
     t0 = time.time()
-    ex_spins, ex_E, n_opt = exhaustive_ground_state(h_bias, edges, plaqs, n_q)
+    # H0b — « mieux atteindre l'optimum ameliore-t-il la tache ? » — ne
+    # demande PAS l'optimum exact : il suffit d'un ETALEMENT d'energies et
+    # des F1 correspondants. Au-dela de MAX_ENUM_QUBITS on prend donc la
+    # meilleure energie trouvee par le panel comme reference, ce qui rend
+    # H0b mesurable a 32 qubits et au-dela. H0a, elle, reste indecidable
+    # sans optimum certifie, et le tableau le signale.
+    if no_exact or n_q > MAX_ENUM_QUBITS:
+        ex_spins, ex_E, n_opt = None, float("nan"), -1
+        certified = False
+    else:
+        ex_spins, ex_E, n_opt = exhaustive_ground_state(
+            h_bias, edges, plaqs, n_q)
+        certified = True
     _record("exhaustive", ex_spins, time.time() - t0, dict(n_optima=n_opt))
 
     # --- simulated annealing (froid puis warm-start) -----------------
@@ -329,8 +341,14 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     # --- comparaisons a l'exact --------------------------------------
     for name, r in rows.items():
         r.update(decision_agreement(r["spins"], ex_spins, dim))
-        r["E_gap"] = float((r["E"] - ex_E) / max(abs(ex_E), 1e-12))
-        r["hit_optimum"] = bool(r["E"] <= ex_E + 1e-6 * max(abs(ex_E), 1.0))
+        # Sans optimum certifie, la reference est la meilleure energie
+        # TROUVEE par le panel : l'ecart reste comparable entre solveurs,
+        # mais « atteindre l'optimum » n'a plus de sens et vaut NaN.
+        ref_E = ex_E if certified else min(x["E"] for x in rows.values())
+        r["E_gap"] = float((r["E"] - ref_E) / max(abs(ref_E), 1e-12))
+        r["hit_optimum"] = (
+            bool(r["E"] <= ex_E + 1e-6 * max(abs(ex_E), 1.0))
+            if certified else float("nan"))
     return dict(rows=rows, diagonal=diagonal, n_optima=n_opt,
                 E_exact=ex_E, gt_refine=gt_refine,
                 f1_classical=f1_from_masks(rows["classical_init"]["refine"],
@@ -419,6 +437,11 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", type=int, default=2,
                    help="2 = 8 qubits = regime effectif du pipeline V1")
+    p.add_argument("--no-exact", action="store_true",
+                   help="ne pas exiger l'optimum certifie. H0a devient "
+                        "indecidable mais H0b reste mesurable : elle ne "
+                        "demande qu'un etalement d'energies et les F1 "
+                        "correspondants. Necessaire au-dela de 22 qubits.")
     p.add_argument("--zero-psi", action="store_true",
                    help="met psi a zero dans l'etat initial du QAOA. Isole "
                         "ce que l'encodage de phase apporte a la descente "
@@ -479,6 +502,7 @@ def main():
                     sweeps=args.sweeps, n_restarts=args.restarts,
                     qaoa_reps=tuple(args.qaoa_reps), qaoa_shots=args.shots,
                     zero_psi=args.zero_psi, scale_kopt=args.scale_kopt,
+                    no_exact=args.no_exact,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
                     seed=args.seed)
                 diag_flags.append(out["diagonal"])
@@ -541,6 +565,7 @@ def main():
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
         + ("_zeropsi" if args.zero_psi else "")
+        + ("_noexact" if args.no_exact else "")
         + ("_scalekopt" if args.scale_kopt else "")
         + ("" if args.mapper == "v2" else f"_{args.mapper}")
         + ".npz")

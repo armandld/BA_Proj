@@ -46,7 +46,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from t1_feature_selection import git_commit_hash
-from t15_level3_closed_loop import (
+from closed_loop_campaign import (
     _load_v1_training_module, fold_scenarios, run_arm,
 )
 

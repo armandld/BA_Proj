@@ -23,8 +23,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from t15c_fold_synthesis import load_divergence_audit
-from t19_arm_divergence_audit import DIVERGENCE_PENALTY, parse_abort
+from closed_loop_fold_synthesis import load_divergence_audit
+from closed_loop_divergence_audit import DIVERGENCE_PENALTY, parse_abort
 
 # Trace reelle emise par V1 sur le bras classique du fold `rotor`.
 REAL_ABORT = (

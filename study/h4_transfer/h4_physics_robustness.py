@@ -65,9 +65,9 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 import provenance
-from t15_level3_closed_loop import (_load_v1_training_module, fold_scenarios,
+from closed_loop_campaign import (_load_v1_training_module, fold_scenarios,
                                     run_arm)
-from t19_arm_divergence_audit import parse_abort, safe_classical_hyperparams
+from closed_loop_divergence_audit import parse_abort, safe_classical_hyperparams
 from h4_unseen_conditions import init_override
 
 # Conditions initiales SUPPLEMENTAIRES, distinctes de la canonique ET de
