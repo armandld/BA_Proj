@@ -461,7 +461,15 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
         if certified:
             r.update(decision_agreement(r["spins"], ex_spins, dim))
         else:
-            r.update(dict(agree_spin=float("nan"), mask_match=float("nan")))
+            # Les MEMES cles que `decision_agreement`, sinon la boucle
+            # d'enregistrement leve un KeyError apres coup — c'est-a-dire
+            # apres des heures de calcul, au moment de consigner le premier
+            # instantane. La branche ecrivait `mask_match`, que personne ne
+            # lit, et omettait `n_diff_patch` : `--no-exact` ne pouvait donc
+            # jamais aller au bout.
+            r.update(dict(agree_spin=float("nan"),
+                          exact_match=float("nan"),
+                          n_diff_patch=float("nan")))
         # Sans optimum certifie, la reference est la meilleure energie
         # TROUVEE par le panel : l'ecart reste comparable entre solveurs,
         # mais « atteindre l'optimum » n'a plus de sens et vaut NaN.
