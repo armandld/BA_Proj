@@ -17,8 +17,22 @@ soutiennent pas. Compté directement dans les SQLite
 | `q_has_v2_phase1.db` | 202 | 178 COMPLETE, 24 RUNNING | 2026-04-04 13:50 → 2026-04-05 20:14 | **30.4 h** |
 | les 8 autres bases | **0** | — | — | — |
 
-**345 essais, ~47 h de mur** — deux jours, pas une semaine. Trois faits en
-découlent, tous vérifiables dans les fichiers :
+**345 essais, ~47 h de mur.** Mais le mur n'est pas le coût : les essais ont
+tourné en parallèle (jusqu'à 9 simultanés, 3.9× en moyenne sur le bras
+classique, 5.3× sur le bras quantique). En temps processeur :
+
+| bras | essais | CPU | mur | parallélisme |
+|---|---|---|---|---|
+| classique | 125 complets | 64.6 h | 16.6 h | 3.9× |
+| quantique | 178 complets | 159.8 h | 30.4 h | 5.3× |
+| **total** | **303** | **224.4 h** | **47.0 h** | — |
+
+**224 h CPU = 9.3 jours mono-cœur.** L'annonce « environ une semaine » était
+donc juste en temps processeur, et c'est le chiffre qui compte pour estimer
+une relance. Coût médian d'un essai : **35 min** (classique), **56 min**
+(quantique).
+
+Trois faits de plus, tous vérifiables dans les fichiers :
 
 1. **Seule `phase1` a tourné.** `TrainHyperParam_v2.PHASES` déclare 600 /
    600 / 400 essais pour `phase1_composite`, `phase2_complex` et
@@ -53,12 +67,23 @@ de cette étude ne dépend de la valeur exacte des hyperparamètres, seulement
 du fait que V1 tourne avec **ceux qui ont été retenus à l'époque**, qui sont
 ici.
 
-Le coût, en revanche, n'est pas l'obstacle qu'on croyait : ~47 h de mur pour
-345 essais sur deux bras. Une réoptimisation **ciblée** — les seuls
-paramètres qui touchent le canal du rotationnel (`beta_curl`, `kappa`,
-`threshold_amr`), sur un bras, à budget réduit — est donc de l'ordre de
-quelques heures, pas d'une semaine. C'est ce qui rend la question T31
-(`docs/RESULTS_V4.md`) tranchable au lieu de rester une conjecture.
+Le coût d'une relance ciblée se calcule à partir du coût médian par essai,
+pas du temps de mur de la campagne d'origine. Un essai du bras quantique
+coûte **56 min de CPU**. Une réoptimisation limitée aux trois paramètres qui
+touchent le canal du rotationnel (`beta_curl`, `kappa`, `threshold_amr`)
+demande moins d'essais qu'un espace à 7–9 dimensions, mais chaque essai
+coûte le même prix :
+
+| budget d'essais | CPU | mur sur 4 cœurs | mur sur 32 cœurs |
+|---|---|---|---|
+| 30 | 28 h | ~7 h | ~1 h |
+| 60 | 56 h | ~14 h | ~2 h |
+| 100 | 93 h | ~23 h | ~3 h |
+
+C'est donc **une nuit sur une machine ordinaire**, ou une heure sur une
+machine louée à 32 cœurs — pas « quelques heures » comme annoncé d'abord.
+Le nombre d'essais nécessaire en dimension 3 reste une **hypothèse**, non
+mesurée : c'est la partie molle de cette estimation.
 
 ## Ce qu'il faut en dire dans le manuscrit
 

@@ -2701,16 +2701,26 @@ n'est pas une réponse.
 Trois lectures, révisées après avoir compté le coût réel :
 
 1. *Corriger et publier tel quel* — exclu : la mesure dit que c'est pire.
-2. *Documenter et ne rien réoptimiser* — c'était la recommandation
-   initiale, fondée sur « une semaine de calcul Optuna ». **Ce chiffre était
-   faux.** Les bases donnent 345 essais et ~47 h de mur, phase1 seule,
-   interrompue (`results/hyperparams/PROVENANCE.md`, vérifié par
-   `tests/v4/test_hyperparams_provenance.py`). L'argument du coût ne tient
-   donc plus.
-3. *Réoptimisation ciblée* — retenu. Seuls `beta_curl`, `kappa` et
-   `threshold_amr` touchent le canal du rotationnel ; sur un bras, à budget
-   réduit (~100 essais), c'est de l'ordre de quelques heures. C'est ce qui
-   transforme T31 d'une conjecture en une mesure.
+2. *Documenter et ne rien réoptimiser* — recommandation initiale, fondée
+   sur « une semaine de calcul Optuna ». J'ai d'abord cru la réfuter avec
+   les ~47 h de **mur** mesurées dans les bases. C'était un mauvais cadrage :
+   les essais tournaient jusqu'à 9 de front, soit **224 h de CPU = 9.3 jours
+   mono-cœur**. L'annonce d'origine était juste en temps processeur, et
+   c'est le temps processeur qui gouverne le coût d'une relance.
+3. *Réoptimisation ciblée* — retenu, mais chiffré honnêtement. Seuls
+   `beta_curl`, `kappa` et `threshold_amr` touchent le canal du rotationnel.
+   Un essai du bras quantique coûte **56 min de CPU** (médiane sur 178
+   essais). Donc :
+
+   | budget | CPU | mur sur 4 cœurs | mur sur 32 cœurs |
+   |---|---|---|---|
+   | 30 essais | 28 h | ~7 h | ~1 h |
+   | 60 essais | 56 h | ~14 h | ~2 h |
+   | 100 essais | 93 h | ~23 h | ~3 h |
+
+   C'est **une nuit sur une machine ordinaire**, pas « quelques heures ».
+   Le nombre d'essais nécessaire en dimension 3 est une **hypothèse non
+   mesurée** — c'est la partie molle de l'estimation.
 
 Tant que (3) n'est pas fait, l'énoncé publiable est le fait mesuré — les
 indicateurs sont mal nommés, et les corriger *à hyperparamètres inchangés*

@@ -83,19 +83,76 @@ def test_the_total_trial_count_matches_the_document(survey):
         "ont change, corriger le document, pas ce test.")
 
 
-def test_the_wall_time_is_about_two_days_not_a_week(survey):
-    """La phrase « environ une semaine » n'est pas soutenue par les bases.
+def _cpu_hours(path):
+    """Somme des durees d'essai : le COUT, par opposition au temps de mur."""
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        rows = con.execute(
+            "select datetime_start, datetime_complete from trials "
+            "where state='COMPLETE' and datetime_complete is not null"
+        ).fetchall()
+    finally:
+        con.close()
+    return sum((datetime.datetime.fromisoformat(b)
+                - datetime.datetime.fromisoformat(a)).total_seconds()
+               for a, b in rows) / 3600.0
 
-    16.6 h pour le bras classique, 30.4 h pour le bras quantique, soit
-    ~47 h de mur au total. C'est le nombre qui doit figurer au manuscrit,
-    parce que c'est celui qu'on peut verifier.
-    """
+
+def test_the_wall_time_is_about_two_days(survey):
+    """~47 h de mur : 16.6 h classique + 30.4 h quantique."""
     hours = {k: v[1] for k, v in survey.items() if v[0] > 0}
     total = sum(hours.values())
     assert 40.0 < total < 55.0, (
         f"duree de mur mesuree {total:.1f} h, repartie {hours}")
-    assert total < 24 * 7 * 0.5, (
-        "la campagne tient largement sous la semaine annoncee")
+
+
+def test_the_cpu_cost_is_about_nine_days_not_two():
+    """Le mur n'est PAS le cout : les essais ont tourne en parallele.
+
+    Corrige une erreur de cadrage. Le temps de mur (47 h) avait ete oppose
+    a la « semaine » annoncee pour conclure qu'une relance coutait peu. Les
+    essais tournaient jusqu'a 9 de front : 224 h de CPU, soit 9.3 jours
+    mono-coeur. L'annonce d'origine etait donc juste en temps processeur,
+    et c'est ce chiffre qui gouverne le cout d'une relance.
+    """
+    cpu = {os.path.basename(p): _cpu_hours(p) for p in _dbs()
+           if _counts(p)[0] > 0}
+    total = sum(cpu.values())
+    assert 200.0 < total < 250.0, (
+        f"cout CPU mesure {total:.1f} h, reparti {cpu}")
+
+
+def test_the_trials_really_ran_in_parallel(survey):
+    """Le rapport CPU/mur est la preuve du parallelisme."""
+    cpu = sum(_cpu_hours(p) for p in _dbs() if _counts(p)[0] > 0)
+    wall = sum(v[1] for v in survey.values() if v[0] > 0)
+    assert cpu / wall > 3.0, (
+        f"parallelisme {cpu / wall:.1f}x : si les essais devenaient "
+        "sequentiels, le mur redeviendrait une mesure du cout")
+
+
+def test_the_median_trial_cost_is_recorded():
+    """Le cout par essai est ce qui permet de chiffrer une relance ciblee."""
+    import numpy as np
+
+    for name, lo, hi in (("classical_v2_phase1.db", 1800, 2400),
+                         ("q_has_v2_phase1.db", 3000, 3700)):
+        path = os.path.join(_STUDIES, name)
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            rows = con.execute(
+                "select datetime_start, datetime_complete from trials "
+                "where state='COMPLETE' and datetime_complete is not null"
+            ).fetchall()
+        finally:
+            con.close()
+        med = float(np.median([
+            (datetime.datetime.fromisoformat(b)
+             - datetime.datetime.fromisoformat(a)).total_seconds()
+            for a, b in rows]))
+        assert lo < med < hi, (
+            f"{name} : cout median par essai {med:.0f} s, hors de "
+            f"[{lo}, {hi}] — mettre PROVENANCE.md a jour")
 
 
 def test_some_trials_were_left_running(survey):
@@ -109,12 +166,13 @@ def test_some_trials_were_left_running(survey):
 def test_the_document_states_the_measured_numbers():
     """Le document doit porter les chiffres, pas une impression."""
     doc = open(_DOC, encoding="utf-8").read()
-    for token in ("345", "16.6", "30.4", "47"):
+    for token in ("345", "16.6", "30.4", "47", "224", "9.3", "56 min"):
         assert token in doc, (
             f"PROVENANCE.md ne mentionne pas {token} ; les nombres verifies "
             "doivent figurer dans le document qu'ils decrivent")
-    assert "une semaine" not in doc or "pas une semaine" in doc, (
-        "PROVENANCE.md annonce encore « une semaine » sans la corriger")
+    assert "temps processeur" in doc, (
+        "PROVENANCE.md doit distinguer le cout CPU du temps de mur : c'est "
+        "la confusion des deux qui avait fait sous-estimer une relance")
 
 
 def test_the_published_hyperparameters_come_from_phase1_only():
