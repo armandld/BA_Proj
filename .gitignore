@@ -4,3 +4,8 @@ __pycache__/
 .DS_Store
 .venv/
 env/
+
+# Etat de reprise des campagnes : transitoire, pas un resultat.
+# Le .npz final est le livrable ; ces fichiers ne servent qu a
+# redemarrer une campagne interrompue.
+results/.checkpoints/
