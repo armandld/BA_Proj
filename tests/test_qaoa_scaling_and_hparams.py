@@ -225,20 +225,54 @@ def check_resolution_behaviour(rows):
 
 
 def check_sweep_behaviour(rows):
+    """Criteres d'acceptation du balayage d'hyperparametres.
+
+    Le bras QAOA est ECHANTILLONNE : `execute()` construit sa distribution
+    finale a partir de `sampler.run(...)`, et aucune graine n'est fixee dans
+    `src/VQA/`. Deux appels sur le MEME etat et les MEMES hyperparametres
+    donnent des scores de bloc qui different jusqu'a 9.6e-2 sur une echelle
+    [0, 1] (mesure : trois appels identiques, ecarts max 9.58e-2 et 8.70e-2).
+
+    L'assertion precedente exigeait `abs(delta) <= 1e-9` pour au moins une
+    combinaison, c'est-a-dire que QAOA selectionne EXACTEMENT les memes
+    2 blocs sur 9 que le classique. Sur un bras dont les scores bougent de
+    0.1 d'un appel a l'autre, cette egalite est un coup de des : elle a ete
+    calibree sur une execution unique et ne dit rien de reproductible.
+    C'etait la septieme assertion a tirage unique sur ce bras stochastique.
+
+    Ce qui reste verifiable, et qui porte le sens du test — « les
+    hyperparametres peuvent-ils faire passer QAOA devant le classique sur
+    donnees propres ? » — est un PLAFOND, pas une egalite.
+    """
     assert len(rows) == 12, f"expected 12 combinations, got {len(rows)}"
+
+    # 1. Le plafond : aucune combinaison ne doit battre le classique.
+    #    C'est l'enonce que le test porte, et il peut echouer.
     best = max(rows, key=lambda r: r['delta'])
     assert best['delta'] <= MAX_CLEAN_ADVANTAGE, (
         f"w_z_frac={best['w_z_frac']}, threshold={best['threshold']} beats "
-        f"the classical baseline by {best['delta']:+.4f} on clean data; the "
-        "recorded ceiling over the whole sweep is an exact tie"
+        f"the classical baseline by {best['delta']:+.4f} on clean data"
     )
+
+    # 2. Le bras tourne vraiment. Sans ceci, un QAOA qui renverrait du bruit
+    #    — ou une constante — passerait le plafond haut la main.
+    rhos = [r['rho_qa'] for r in rows]
+    assert min(rhos) > 0.0, (
+        f"correlation de rang QAOA/verite negative ({min(rhos):+.3f}) : le "
+        "bras ne classe plus rien, le plafond ci-dessus ne prouve alors rien"
+    )
+    assert max(rhos) - min(rhos) > 1e-9, (
+        f"rho identique ({rhos[0]:+.3f}) sur les 12 combinaisons : les "
+        "hyperparametres n'atteignent pas le bras, le balayage ne balaie rien"
+    )
+
+    # 3. L'ecart au classique est reporte, pas asserte : c'est la grandeur
+    #    que l'echantillonnage fait bouger.
     ties = [r for r in rows if abs(r['delta']) <= MAX_CLEAN_ADVANTAGE]
-    assert ties, (
-        "no combination reaches the classical baseline at all; the recorded "
-        "behaviour has at least the threshold=0.3 column tying exactly"
-    )
     print(f"\n  [ACCEPTANCE] best of {len(rows)} hyperparameter combinations "
-          f"= {best['delta']:+.4f} vs classical ({len(ties)} exact ties) -> OK")
+          f"= {best['delta']:+.4f} vs classical; rho in "
+          f"[{min(rhos):+.3f}, {max(rhos):+.3f}]; {len(ties)} exact ties "
+          f"(non asserte : bras echantillonne) -> OK")
 
 
 def test_resolution_scaling():
@@ -246,6 +280,9 @@ def test_resolution_scaling():
     print("  TEST A: DOES GRID RESOLUTION CHANGE THE CONCLUSION?")
     print("  Same 3×3 blocks, but N=32, 64, 128 (cells per block: 10², 21², 42²)")
     print("=" * 75)
+
+    # Meme defaut que dans le balayage : l'accumulateur doit repartir vide.
+    _RESOLUTION_ROWS.clear()
 
     n_blocks = 3
     budget = 2
@@ -336,6 +373,12 @@ def test_hyperparameter_sweep():
     N = 64
     n_blocks = 3
     budget = 2
+
+    # `_SWEEP_ROWS` est au niveau module et n'etait jamais vide : une
+    # seconde execution dans le meme processus y accumulait 24 lignes et
+    # faisait echouer `len(rows) == 12` pour une raison sans rapport avec
+    # ce que le test mesure.
+    _SWEEP_ROWS.clear()
 
     grid = PeriodicGrid(resolution_N=N)
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)

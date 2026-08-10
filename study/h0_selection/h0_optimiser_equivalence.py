@@ -51,7 +51,8 @@ Sortie : results/h0_optimiser_equivalence_N{N}_dim{D}.npz (+ hash git, args CLI)
 Usage :
   python study/v4/h0_optimiser_equivalence.py --N 256 --dim 2 --n-snaps 3
 """
-import argparse, json, os, sys, time
+import argparse
+import json, os, sys, time
 import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -226,6 +227,114 @@ def f1_from_masks(pred, gt):
 # -------------------------------------------------------------------
 # Panel de solveurs sur un snapshot
 # -------------------------------------------------------------------
+
+def _output_path(args):
+    """Chemin de l'artefact. Le point de reprise en derive, donc les deux
+    ne peuvent pas diverger.
+
+    Le scenario entre dans le nom des qu'on n'execute pas la liste complete.
+    Sans cela, quatre processus lances en parallele — un par scenario —
+    ecrivent tous dans le MEME fichier : le dernier ecrase les trois autres
+    et l'artefact restant ressemble trait pour trait a une campagne
+    complete.
+    """
+    from config import RESULTS_DIR, SCENARIOS
+    _full_sweep = set(args.scenario) == set(SCENARIOS)
+    _scen_tag = "" if _full_sweep else "_" + "-".join(sorted(args.scenario))
+    return os.path.join(
+        RESULTS_DIR,
+        f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
+        + _scen_tag
+        + ("_withpsi" if args.with_psi else "")
+        + ("_fixedcurl" if args.fixed_curl else "")
+        + ("_zeropsi" if args.zero_psi else "")
+        + ("_noexact" if args.no_exact else "")
+        + ("" if args.backend == "state_vector" else f"_{args.backend}")
+        + ("_scalekopt" if args.scale_kopt else "")
+        + ("" if args.mapper == "v2" else f"_{args.mapper}")
+        + ".npz")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Reprise apres interruption
+# ══════════════════════════════════════════════════════════════════════
+#  Une campagne complete dure des heures. Le point de reprise est un
+#  fichier JSONL, une ligne par instantane calcule.
+#
+#  Le piege a eviter : reprendre un point de reprise produit sous D'AUTRES
+#  reglages. Les enregistrements se melangeraient sans laisser de trace, et
+#  l'artefact final serait un panachage de deux campagnes, impossible a
+#  distinguer d'une campagne coherente. La signature ci-dessous couvre donc
+#  TOUT ce qui change un resultat ; si elle differe, la reprise est refusee.
+
+#  Arguments qui ne changent pas les nombres produits (ils ne pilotent que
+#  la reprise elle-meme) et sont donc exclus de la signature.
+_CKPT_IGNORED = frozenset({"resume", "no_resume", "scenario"})
+
+
+def _run_signature(args):
+    """Empreinte des reglages qui influent sur les nombres calcules."""
+    d = {k: v for k, v in sorted(vars(args).items())
+         if k not in _CKPT_IGNORED}
+    d["qaoa_reps"] = sorted(d.get("qaoa_reps") or [])
+    d["re"] = sorted(d.get("re") or [])
+    return json.dumps(d, sort_keys=True, default=str)
+
+
+def _checkpoint_path(args):
+    from config import RESULTS_DIR
+    d = os.path.join(RESULTS_DIR, ".checkpoints")
+    os.makedirs(d, exist_ok=True)
+    stem = os.path.basename(_output_path(args))[:-len(".npz")]
+    return os.path.join(d, stem + ".jsonl")
+
+
+def _load_checkpoint(path, args):
+    """(records, diag_flags, instantanes deja faits) ; vide si pas de reprise."""
+    if getattr(args, "no_resume", False) or not os.path.exists(path):
+        return [], [], set()
+
+    records, diags, done = [], [], set()
+    sig = _run_signature(args)
+    with open(path, encoding="utf-8") as fh:
+        for lineno, line in enumerate(fh, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                # Derniere ligne tronquee par une mort brutale : on la jette,
+                # l'instantane sera simplement recalcule.
+                if lineno == sum(1 for _ in open(path, encoding="utf-8")):
+                    break
+                raise
+            if obj.get("signature") != sig:
+                raise SystemExit(
+                    f"le point de reprise {path} vient d'une campagne aux "
+                    "reglages differents. Reprendre melangerait deux "
+                    "campagnes dans un seul artefact, sans que rien ne le "
+                    "signale. Relancer avec --no-resume, ou effacer ce "
+                    "fichier.")
+            records.extend(obj["records"])
+            diags.append(obj["diagonal"])
+            done.add((obj["scenario"], obj["re"], obj["snap"]))
+    return records, diags, done
+
+
+def _append_checkpoint(path, args, sc, re_, si, snap_records, diagonal):
+    """Consigne un instantane. fsync : une mort brutale ne doit pas tronquer
+    une ligne deja annoncee comme ecrite."""
+    line = json.dumps({
+        "signature": _run_signature(args),
+        "scenario": sc, "re": re_, "snap": si,
+        "records": snap_records, "diagonal": bool(diagonal),
+    }, default=str)
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
 
 def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
@@ -471,6 +580,11 @@ def main():
                    help="met psi a zero dans l'etat initial du QAOA. Isole "
                         "ce que l'encodage de phase apporte a la descente "
                         "vers le fondamental et a la detection.")
+    p.add_argument("--no-resume", action="store_true",
+                   help="ignore le point de reprise et recalcule tout. Par "
+                        "defaut une relance identique repart de l'instantane "
+                        "ou elle s'etait arretee ; un point de reprise issu "
+                        "d'autres reglages est refuse, jamais melange.")
     p.add_argument("--fixed-curl", action="store_true",
                    help="applique la convention d'axes AXIS_X/AXIS_Y declaree "
                         "par grid.py au rotationnel et a la divergence des "
@@ -510,7 +624,17 @@ def main():
     print("=" * 88)
     print()
 
-    records, diag_flags = [], []
+    # ── reprise apres interruption ────────────────────────────────────
+    # Une campagne complete dure des heures et le processus peut mourir
+    # (conteneur recycle, machine eteinte). Sans point de reprise, tout est
+    # a refaire. Chaque instantane est donc consigne des qu'il est calcule,
+    # et une relance identique repart d'ou elle s'etait arretee.
+    ckpt_path = _checkpoint_path(args)
+    records, diag_flags, done = _load_checkpoint(ckpt_path, args)
+    if done:
+        print(f"  reprise : {len(done)} instantanes deja calcules "
+              f"({ckpt_path})")
+
     for sc in args.scenario:
         for re in args.re:
             dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
@@ -528,6 +652,8 @@ def main():
             sel = sorted(set(int(round(i)) for i in
                              np.linspace(0, n_dns - 1, args.n_snaps + 1)[1:]))
             for si in sel:
+                if (sc, re, si) in done:
+                    continue
                 t0 = time.time()
                 # psi est une derivee temporelle : elle exige l'instantane
                 # PRECEDENT. si=0 n'en a pas, et la selection commence a 1,
@@ -552,13 +678,17 @@ def main():
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
                     seed=args.seed, fixed_curl=args.fixed_curl)
                 diag_flags.append(out["diagonal"])
-                for name, r in out["rows"].items():
-                    records.append(dict(
-                        scenario=sc, re=re, snap=si, solver=name,
-                        E=r["E"], E_gap=r["E_gap"],
-                        hit=r["hit_optimum"], agree=r["agree_spin"],
-                        match=r["exact_match"], n_diff=r["n_diff_patch"],
-                        f1=r["f1"], wall=r["wall_s"]))
+                snap_records = [
+                    dict(scenario=sc, re=re, snap=si, solver=name,
+                         E=r["E"], E_gap=r["E_gap"],
+                         hit=r["hit_optimum"], agree=r["agree_spin"],
+                         match=r["exact_match"], n_diff=r["n_diff_patch"],
+                         f1=r["f1"], wall=r["wall_s"])
+                    for name, r in out["rows"].items()]
+                records.extend(snap_records)
+                done.add((sc, re, si))
+                _append_checkpoint(ckpt_path, args, sc, re, si,
+                                   snap_records, out["diagonal"])
                 print(f"  {sc:<18} Re={re} snap={si:<3} "
                       f"n_optima={out['n_optima']:<3} "
                       f"E*={out['E_exact']:+.4f}  [{time.time()-t0:.1f}s]")
@@ -613,26 +743,7 @@ def main():
             "approximation artefact, not a controllable advantage."))
 
 
-    # Le scenario doit entrer dans le nom des qu'on n'execute pas la liste
-    # complete. Sans cela, quatre processus lances en parallele — un par
-    # scenario — ecrivent tous dans le MEME fichier : le dernier ecrase les
-    # trois autres et l'artefact restant ressemble trait pour trait a une
-    # campagne complete.
-    _full_sweep = set(args.scenario) == set(SCENARIOS)
-    _scen_tag = "" if _full_sweep else "_" + "-".join(sorted(args.scenario))
-
-    out = os.path.join(
-        RESULTS_DIR,
-        f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
-        + _scen_tag
-        + ("_withpsi" if args.with_psi else "")
-        + ("_fixedcurl" if args.fixed_curl else "")
-        + ("_zeropsi" if args.zero_psi else "")
-        + ("_noexact" if args.no_exact else "")
-        + ("" if args.backend == "state_vector" else f"_{args.backend}")
-        + ("_scalekopt" if args.scale_kopt else "")
-        + ("" if args.mapper == "v2" else f"_{args.mapper}")
-        + ".npz")
+    out = _output_path(args)
     np.savez_compressed(
         out,
         scenario=np.array([r["scenario"] for r in records]),
