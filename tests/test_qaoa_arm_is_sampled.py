@@ -44,14 +44,18 @@ N_BLOCKS = 3
 #  presque entierement du tirage.
 N_REPEATS = 5
 
-#  Mesure de reference, 6 appels identiques -> 15 paires (mhd_rotor, Re=800,
-#  N=64, 3x3 blocs, w_z_frac=0.10, threshold=0.3) :
+#  Mesure de reference, 10 appels identiques -> 45 paires (mhd_rotor,
+#  Re=800, N=64, 3x3 blocs, w_z_frac=0.10, threshold=0.3) :
 #
-#    auto-correlation de rang : min 0.550  med 0.883  moy 0.822  max 1.000
-#    dispersion des scores    : min 8.9e-3 med 1.50e-1 max 2.15e-1
-#    correlation au classique : 0.550 a 0.983
+#    auto-correlation de rang : min 0.350  med 0.933  max 1.000
+#    dispersion par appel     : ptp de 1.79e-1 a 3.61e-1, 9 valeurs
+#                               distinctes a chaque fois (jamais constant)
+#    appels degeneres         : 0 / 10
 #
-#  Les seuils ci-dessous sont poses SOUS ces valeurs mesurees, avec marge.
+#  Un premier sondage a 6 appels (15 paires) donnait min 0.550 : la queue
+#  descend plus bas que ce que 15 paires laissaient voir. C'est le chiffre
+#  a 45 paires qui fait foi, et les seuils ci-dessous portent sur la
+#  MEDIANE, jamais sur le minimum.
 
 
 @pytest.fixture(scope="module")
@@ -80,9 +84,29 @@ def repeated_scores(rotor_state):
     from tests.test_qaoa_scaling_and_hparams import qaoa_block_scores
 
     sim, phi_prev = rotor_state
+    #  `.ravel()` est indispensable : les scores sortent en (3, 3), et
+    #  `spearmanr` sur des entrees 2-D traite les COLONNES comme des
+    #  variables et renvoie une matrice de correlation, pas un scalaire.
+    #  Sans aplatissement, `float(...)` leve un TypeError — et deux tests
+    #  qui tombent sur une exception ressemblent a deux assertions fausses.
     return [np.asarray(qaoa_block_scores(sim, N, N_BLOCKS, 0.3, 0.10,
-                                         Phi_prev=phi_prev), dtype=float)
+                                         Phi_prev=phi_prev),
+                       dtype=float).ravel()
             for _ in range(N_REPEATS)]
+
+
+def test_the_fixture_hands_over_flat_vectors(repeated_scores):
+    """Garde de forme, appris a mes depens.
+
+    `qaoa_block_scores` rend un (3, 3). Passe tel quel a `spearmanr`, celui-ci
+    traite les COLONNES comme des variables et renvoie une matrice : `float()`
+    leve alors un TypeError. Deux tests qui tombent sur une exception se
+    lisent comme deux assertions fausses, et l'on se met a chercher une
+    explication dans les donnees plutot que dans la forme des tableaux.
+    """
+    for i, s in enumerate(repeated_scores):
+        assert s.ndim == 1, f"appel {i} : forme {s.shape}, attendu un vecteur"
+        assert s.size == N_BLOCKS * N_BLOCKS
 
 
 def test_identical_inputs_give_different_outputs(repeated_scores):
