@@ -232,7 +232,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
                  zero_psi=False, scale_kopt=False, no_exact=False,
                  backend='state_vector', prev_fields=None, with_psi=False,
-                 run_qaoa=True, seed=0):
+                 run_qaoa=True, seed=0, fixed_curl=False):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from qaoa_inputs import (                      # V2, reutilise
         prepare_qaoa_inputs, run_qaoa_on_snapshot,
@@ -248,7 +248,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     # hyperparametres ont ete optimises.
     data_in, hp, score_vqa = prepare_qaoa_inputs(
         vx, vy, Bx, By, N, dim, re, use_v2=use_v2,
-        prev_fields=prev_fields, with_psi=with_psi)
+        prev_fields=prev_fields, with_psi=with_psi, fixed_curl=fixed_curl)
 
     # Ablation psi : psi porte une derivee temporelle du flux qui n'existe
     # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
@@ -471,6 +471,14 @@ def main():
                    help="met psi a zero dans l'etat initial du QAOA. Isole "
                         "ce que l'encodage de phase apporte a la descente "
                         "vers le fondamental et a la detection.")
+    p.add_argument("--fixed-curl", action="store_true",
+                   help="applique la convention d'axes AXIS_X/AXIS_Y declaree "
+                        "par grid.py au rotationnel et a la divergence des "
+                        "mappeurs. Par defaut ceux-ci utilisent la convention "
+                        "indexing='xy', sous laquelle leur « vorticite » vaut "
+                        "dv_y/dy - dv_x/dx et ne voit pas la rotation solide. "
+                        "Les artefacts portent alors le suffixe _fixedcurl ; "
+                        "le chemin par defaut reste inchange.")
     p.add_argument("--scale-kopt", action="store_true",
                    help="budget COBYLA proportionnel a p (k_opt * reps). Sans "
                         "ce drapeau, p=6 optimise 12 parametres avec le meme "
@@ -542,7 +550,7 @@ def main():
                     no_exact=args.no_exact, backend=args.backend,
                     prev_fields=prev, with_psi=args.with_psi,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
-                    seed=args.seed)
+                    seed=args.seed, fixed_curl=args.fixed_curl)
                 diag_flags.append(out["diagonal"])
                 for name, r in out["rows"].items():
                     records.append(dict(
@@ -603,6 +611,7 @@ def main():
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
         + ("_withpsi" if args.with_psi else "")
+        + ("_fixedcurl" if args.fixed_curl else "")
         + ("_zeropsi" if args.zero_psi else "")
         + ("_noexact" if args.no_exact else "")
         + ("" if args.backend == "state_vector" else f"_{args.backend}")

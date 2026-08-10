@@ -18,8 +18,11 @@ Architecture:
     K_xp = -w_ZZZZ * max(0, -det(nabla B)) / (|det(nabla B)|_max + eps)
 
   Z (bias):
-    h_i = -c * median(|C|, |K|) * (s_i - thr)
+    h_i = +c * median(|C|, |K|) * (s_i - thr)
     where c = 0.1 fixed
+    Le signe est POSITIF (cf. ligne du calcul de z_bias) : au-dessus du
+    seuil le biais pousse vers |1> (raffiner). Cette ligne portait un
+    signe negatif, contraire au code ; seule la documentation etait fausse.
 
 Fixed weights: w_ZZ = 2, w_ZZZZ = 1. Negative signs = ferromagnetic.
 
@@ -41,6 +44,8 @@ Differences from v1 (HamiltParams.py):
 
 import numpy as np
 
+from Simulation.grid import curl_z
+
 
 class PhysicalMapperV2:
     """
@@ -56,7 +61,8 @@ class PhysicalMapperV2:
     C_BIAS = 0.1     # Z bias scale: fraction of median(|C|,|K|). Default.
     EPS = 1e-10       # division-by-zero guard
 
-    def __init__(self, dx=1.0, c_bias=None, w_zz=None, w_zzzz=None):
+    def __init__(self, dx=1.0, c_bias=None, w_zz=None, w_zzzz=None,
+                 fixed_curl=False):
         """
         Parameters
         ----------
@@ -72,6 +78,9 @@ class PhysicalMapperV2:
             Override ZZ / ZZZZ coupling weights (rarely needed).
         """
         self.dx = dx
+        # Voir Simulation.grid : False reproduit bit-a-bit le chemin
+        # historique, True applique la convention AXIS_X/AXIS_Y du depot.
+        self.fixed_curl = bool(fixed_curl)
         self.c_bias = self.C_BIAS if c_bias is None else float(c_bias)
         self.w_zz = self.W_ZZ if w_zz is None else float(w_zz)
         self.w_zzzz = self.W_ZZZZ if w_zzzz is None else float(w_zzzz)
@@ -142,16 +151,10 @@ class PhysicalMapperV2:
         # ==============================================================
 
         # discrete vorticity: omega_z = dvy/dx - dvx/dy
-        omega_z = (
-            (np.roll(vy, -1, axis=1) - vy)
-            - (np.roll(vx, -1, axis=0) - vx)
-        )
+        omega_z = curl_z(vx, vy, self.fixed_curl)
 
         # discrete current density: J_z = dBy/dx - dBx/dy
-        Jz_curl = (
-            (np.roll(By, -1, axis=1) - By)
-            - (np.roll(Bx, -1, axis=0) - Bx)
-        )
+        Jz_curl = curl_z(Bx, By, self.fixed_curl)
 
         # domain-max normalisation
         max_omega = np.max(np.abs(omega_z))

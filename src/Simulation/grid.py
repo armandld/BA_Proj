@@ -13,6 +13,78 @@ AXIS_X = 0
 AXIS_Y = 1
 
 
+# =====================================================================
+# OPERATEURS DISCRETS EN DIFFERENCES AVANT
+# =====================================================================
+# Les mappeurs (HamiltParams, HamiltParams_v2, PhysToAngle) forment un
+# rotationnel et une divergence par differences avant non divisees par dx.
+# Deux ecritures coexistent dans le depot et ne different que par le role
+# des deux axes :
+#
+#   - `forward_curl_z` / `forward_divergence` respectent AXIS_X / AXIS_Y
+#     declares ci-dessus (convention indexing='ij'). Ce sont celles de
+#     `grad`, `div`, `_compute_q_criterion` et `MHDSolver.get_fluxes`.
+#
+#   - `legacy_forward_curl_z` / `legacy_forward_divergence` sont les
+#     formules historiques des mappeurs. Elles sont correctes sous la
+#     convention indexing='xy' (axis 0 = Y, axis 1 = X), qui n'est pas
+#     celle du depot. Sous AXIS_X=0 / AXIS_Y=1 elles valent en realite
+#         legacy_curl = df_y/dy - df_x/dx      (difference de deformations
+#                                               normales)
+#         legacy_div  = df_x/dy + df_y/dx      (deformation de cisaillement)
+#     c'est-a-dire deux composantes du tenseur des deformations, aveugles
+#     a la rotation solide et a la compression isotrope.
+#
+# Les deux formes sont conservees pour que la variante `fixed_curl` des
+# mappeurs soit un choix explicite et mesurable, et non une reecriture
+# silencieuse du chemin par defaut.
+# =====================================================================
+
+def forward_curl_z(fx, fy):
+    """omega_z = df_y/dx - df_x/dy, differences avant, convention AXIS_X/AXIS_Y.
+
+    Non divise par dx : les mappeurs normalisent eux-memes.
+    """
+    return ((np.roll(fy, -1, axis=AXIS_X) - fy)
+            - (np.roll(fx, -1, axis=AXIS_Y) - fx))
+
+
+def forward_divergence(fx, fy):
+    """div f = df_x/dx + df_y/dy, differences avant, convention AXIS_X/AXIS_Y."""
+    return ((np.roll(fx, -1, axis=AXIS_X) - fx)
+            + (np.roll(fy, -1, axis=AXIS_Y) - fy))
+
+
+def legacy_forward_curl_z(fx, fy):
+    """Forme historique des mappeurs (correcte sous indexing='xy' seulement).
+
+    Sous la convention du depot elle vaut df_y/dy - df_x/dx.
+    """
+    return ((np.roll(fy, -1, axis=AXIS_Y) - fy)
+            - (np.roll(fx, -1, axis=AXIS_X) - fx))
+
+
+def legacy_forward_divergence(fx, fy):
+    """Forme historique des mappeurs (correcte sous indexing='xy' seulement).
+
+    Sous la convention du depot elle vaut df_x/dy + df_y/dx.
+    """
+    return ((np.roll(fx, -1, axis=AXIS_Y) - fx)
+            + (np.roll(fy, -1, axis=AXIS_X) - fy))
+
+
+def curl_z(fx, fy, fixed_curl=False):
+    """Rotationnel discret : forme historique par defaut, forme 'ij' si demande."""
+    return (forward_curl_z(fx, fy) if fixed_curl
+            else legacy_forward_curl_z(fx, fy))
+
+
+def divergence(fx, fy, fixed_curl=False):
+    """Divergence discrete : forme historique par defaut, forme 'ij' si demande."""
+    return (forward_divergence(fx, fy) if fixed_curl
+            else legacy_forward_divergence(fx, fy))
+
+
 class PeriodicGrid:
     """
     Représente une grille spatiale 2D périodique [0, L] x [0, L].

@@ -125,7 +125,7 @@ def classical_warm_start_params(score_vqa, threshold_amr, reps):
 
 
 def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
-                       HamiltMapper, threshold_amr, beta):
+                       HamiltMapper, threshold_amr, beta, fixed_curl=False):
     """Angles (theta, psi) tels que les calcule le pipeline DEPLOYE.
 
     On ne recalcule rien : on appelle `refinement._prepare_vqa_input`, qui
@@ -158,7 +158,8 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
     average_phi_dev = 0.5 * (np.mean(np.abs(full_h - prev_h))
                              + np.mean(np.abs(full_v - prev_v)))
 
-    full_score = AngleMapper.classical_score(physics_state)
+    full_score = AngleMapper.classical_score(physics_state,
+                                             fixed_curl=fixed_curl)
 
     prep = _prepare_vqa_input(
         full_h, full_v, prev_h, prev_v, full_score,
@@ -177,7 +178,7 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
 
 def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
                         use_v2=False, prev_fields=None,
-                        with_psi=False, beta=1.0):
+                        with_psi=False, beta=1.0, fixed_curl=False):
     """
     Prepare all inputs needed for QAOA on one snapshot.
 
@@ -194,6 +195,16 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     avec lui actif. Passer prev_fields (l'instantane precedent) et
     with_psi=True rebranche cet encodage, en DELEGUANT a l'encodeur du
     pipeline plutot qu'en le reimplementant.
+
+    fixed_curl
+    ----------
+    Les mappeurs forment leur rotationnel et leur divergence sous la
+    convention indexing='xy' alors que `grid.py` declare indexing='ij'. Sous
+    la convention du depot, leur « vorticite » vaut dv_y/dy - dv_x/dx : elle
+    est aveugle a la rotation solide (voir `tests/test_analytic_fields.py`).
+    fixed_curl=True applique la convention declaree. Le defaut reste False,
+    bit-a-bit identique au chemin sur lequel les hyperparametres ont ete
+    optimises.
     """
     dx = 2 * np.pi / N
     nu = 1.0 / Re
@@ -201,14 +212,14 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     patch_size = N // n_patches
 
     if use_v2:
-        mapper = PhysicalMapperV2(dx=dx)
+        mapper = PhysicalMapperV2(dx=dx, fixed_curl=fixed_curl)
     else:
         mapper = PhysicalMapper(
             cs=1.0, nu=nu, eta_mhd=eta, dx=dx,
             gamma_hydro=TRAINED_GAMMA_HYDRO, gamma_mag=TRAINED_GAMMA_MAG,
             kappa=TRAINED_KAPPA, sigma=TRAINED_SIGMA,
             beta_curl=TRAINED_BETA_CURL, beta_xpoint=TRAINED_BETA_XPOINT,
-            w_z_frac=TRAINED_W_Z_FRAC,
+            w_z_frac=TRAINED_W_Z_FRAC, fixed_curl=fixed_curl,
         )
 
     # compute Jz at full resolution for classical score
@@ -219,7 +230,8 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     # full-resolution classical score (needs Jz)
     physics_state = {"vx": vx, "vy": vy, "Bx": Bx, "By": By,
                      "Jz": Jz_full, "dx": dx}
-    full_score = AngleMapper.classical_score(physics_state)
+    full_score = AngleMapper.classical_score(physics_state,
+                                             fixed_curl=fixed_curl)
 
     # downsample to VQA resolution
     def block_avg(f):
@@ -268,7 +280,7 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
                 "indiscernable du vrai.")
         theta_h, theta_v, psi_h, psi_v = _psi_from_pipeline(
             vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
-            mapper, threshold_amr, beta,
+            mapper, threshold_amr, beta, fixed_curl=fixed_curl,
         )
 
     data_in = {

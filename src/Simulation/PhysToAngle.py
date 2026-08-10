@@ -1,5 +1,7 @@
 import numpy as np
 
+from Simulation.grid import curl_z, divergence
+
 
 def _lohner_estimator(f):
     """
@@ -119,7 +121,7 @@ class AngleMapper:
     # ── Classical multi-indicator score → θ ────────────────────────────
 
     @staticmethod
-    def classical_score(physics_state):
+    def classical_score(physics_state, fixed_curl=False):
         """
         Compute the multi-indicator instability score on the full domain.
 
@@ -140,14 +142,10 @@ class AngleMapper:
         Jz = physics_state['Jz']
 
         # Indicator 1: Vorticity |ωz|
-        vorticity = np.abs(
-            (np.roll(vy, -1, axis=1) - vy) - (np.roll(vx, -1, axis=0) - vx)
-        )
+        vorticity = np.abs(curl_z(vx, vy, fixed_curl))
 
         # Indicator 2: Velocity divergence |∇·v|
-        div_v = np.abs(
-            (np.roll(vx, -1, axis=1) - vx) + (np.roll(vy, -1, axis=0) - vy)
-        )
+        div_v = np.abs(divergence(vx, vy, fixed_curl))
 
         # Indicator 3: Current density |Jz|
         abs_Jz = np.abs(Jz)

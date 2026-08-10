@@ -2581,3 +2581,137 @@ suffit à construire l'opérateur.
 325 tests v3/v4, 15 skipped
 diag_qaoa_contribution.py : 0/48 décisions changées, exit 0
 ```
+
+---
+
+# La convention d'axes des mappeurs — T31
+
+## Le fait, plus précis que « la vorticité est fausse »
+
+`grid.py:4-13` déclare la convention `indexing='ij'` : `AXIS_X = 0`,
+`AXIS_Y = 1`. Le solveur la respecte (`grid.grad`, `grid.div`,
+`grid._compute_q_criterion`, `MHDSolver.get_fluxes`). Les trois mappeurs ne
+la respectent pas : `HamiltParams.py`, `HamiltParams_v2.py` et
+`PhysToAngle.py` forment leur rotationnel et leur divergence avec les axes
+échangés.
+
+Ce n'est pas une faute de frappe sur un signe, c'est une **convention
+différente appliquée de façon cohérente** : les formules des mappeurs sont
+exactement celles qu'on écrit sous `indexing='xy'`. Sous la convention que le
+dépôt déclare, elles valent
+
+| nom dans le code | ce qui est réellement calculé |
+|---|---|
+| `vorticity`, `omega_z` | ∂v_y/∂y − ∂v_x/∂x — différence des déformations normales |
+| `div_v` | ∂v_x/∂y + ∂v_y/∂x — déformation de cisaillement (2·S₁₂) |
+| `Jz_curl` | ∂B_y/∂y − ∂B_x/∂x |
+
+Autrement dit les deux indicateurs nommés « vorticité » et « divergence »
+sont deux composantes du tenseur des déformations.
+
+## Mesuré sur des champs à réponse analytique
+
+`tests/test_analytic_fields.py`, champs linéaires, exact à 1e-12 sur
+l'intérieur du domaine (le raccord périodique fausse une cellule par bord) :
+
+| champ | ω_z attendu | ω_z mappeurs | ∇·v attendu | ∇·v mappeurs |
+|---|---|---|---|---|
+| rotation solide `vx=−y, vy=x` | +2 | **0** | 0 | 0 |
+| cisaillement pur `vx=y, vy=0` | −1 | **0** | 0 | **+1** |
+| expansion pure `vx=x, vy=y` | 0 | 0 | +2 | **0** |
+| déformation pure `vx=x, vy=−y` | 0 | **−2** | 0 | 0 |
+
+L'indicateur de vorticité est **exactement nul sur une rotation solide** et
+vaut −2 sur un champ de vorticité nulle. L'indicateur de divergence est
+exactement nul sur une compression isotrope et vaut +1 sur un champ de
+divergence nulle.
+
+## Deux défauts de plus, dans le critère Q — celui-là sur les bons axes
+
+`grid._compute_q_criterion` utilise `AXIS_X`/`AXIS_Y` correctement, mais
+pondère la déformation de moitié : `strain_sq = S₁₁² + S₂₂² + 2·S₁₂²` vaut
+(S_n² + S_s²)/2, alors que la forme d'Okubo-Weiss demande S_n² + S_s².
+Conséquences, exactes elles aussi :
+
+| champ | Okubo-Weiss standard | `_compute_q_criterion` |
+|---|---|---|
+| cisaillement pur | 0 (frontière rotation/déformation) | **+0.25** → lu « dominé par la rotation » |
+| expansion pure | 0 (ni rotation ni déformation déviatorique) | **−1** → lu « dominé par la déformation » |
+
+Le second vient de ce que `S₁₁² + S₂₂²` retient la partie isotrope du
+tenseur. Les deux sont épinglés par un test dédié.
+
+## Ce que la correction changerait : la variante `--fixed-curl`
+
+Le chemin par défaut n'est pas touché. `fixed_curl=False` est le défaut des
+trois mappeurs et de `prepare_qaoa_inputs` ; sa sortie est **bit-à-bit** celle
+d'avant, vérifié sur 64 tableaux (score classique, score physique,
+coefficients V1 et V2) × 4 scénarios à N=64. Une seule association
+arithmétique a dû être conservée telle quelle : réécrire
+`vx − roll(vx) + roll(vy) − vy` sous une forme algébriquement identique
+déplaçait le dernier bit (écart 8.0e-15 sur `K_plaquettes`, mhd_rotor).
+
+`--fixed-curl` applique la convention déclarée et suffixe ses artefacts
+`_fixedcurl`, donc les deux variantes ne peuvent pas s'écraser.
+
+## Le résultat, avec ses intervalles
+
+```
+python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 8  --n-snaps 6 --seed 0
+python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 16 --n-snaps 6 --seed 0
+```
+git 8ee5c8a — 4 scénarios × 6 instantanés = 24 lignes, IC95 rééchantillonné
+**par scénario** (le bloc est la trajectoire, pas l'instantané).
+
+La décision au seuil entraîné est inexploitable : à 0.1496 le score de patch
+sature et les deux bras dégénèrent en « tout raffiner » (9/24 lignes
+dégénérées à dim=8). La comparaison porte donc sur le **classement**, à
+budget apparié — les deux bras raffinent le même nombre de patches et ne
+diffèrent que par lesquels.
+
+| dim | métrique | historique | corrigé | Δ | IC95 | verdict |
+|---|---|---|---|---|---|---|
+| 8 | Spearman vs dureté | +0.7266 | +0.7237 | −0.0029 | [−0.0222, +0.0164] | indécidable |
+| 8 | F1 budget apparié | 0.7396 | 0.7786 | +0.0391 | [−0.0156, +0.0938] | indécidable |
+| 16 | Spearman vs dureté | +0.7896 | +0.7231 | −0.0665 | [−0.1328, −0.0146] | **dégrade** |
+| 16 | F1 budget apparié | 0.8522 | 0.8223 | −0.0299 | [−0.0651, +0.0052] | indécidable |
+
+Écart maximal sur le score : 0.318 (dim 8), 0.397 (dim 16) ; accord des
+décisions 0.921 dans les deux cas. La convention change donc réellement les
+entrées — mais pas dans le bon sens.
+
+## Ce qu'il faut en conclure
+
+**Corriger la convention d'axes n'améliore pas la tâche, et à dim=16 la
+dégrade avec un intervalle qui exclut zéro.** L'explication tient en une
+phrase : les hyperparamètres (`beta_curl`, `kappa`, `gamma_*`,
+`threshold_amr`) ont été réglés par Optuna **sur l'opérateur historique**.
+Appliquer le bon opérateur avec des coefficients calibrés pour un autre
+revient à changer la grandeur mesurée sans retoucher l'instrument.
+
+Trois lectures possibles, une seule tenable :
+
+1. *Corriger et publier tel quel* — exclu : la mesure dit que c'est pire.
+2. *Corriger et réoptimiser* — une semaine de calcul Optuna
+   (`results/hyperparams/PROVENANCE.md`), pour une hypothèse non testée.
+3. *Documenter, garder la variante, ne rien réoptimiser* — retenu.
+
+Le manuscrit doit donc dire que les indicateurs nommés « vorticité » et
+« divergence » de V1 sont en réalité deux composantes du tenseur des
+déformations, que ce fait est mesuré et non supposé, et que le corriger sans
+réoptimiser ne restaure pas de performance. La bonne question pour la suite
+n'est pas « la vorticité est-elle juste ? » mais **« le critère a-t-il jamais
+eu besoin de la vorticité ? »** — le canal courant de `K_plaquettes` donnait
+déjà r = +0.000 avec la vraie densité de courant.
+
+## Tests
+
+| fichier | tests | ce qu'ils verrouillent |
+|---|---|---|
+| `tests/test_analytic_fields.py` | 36 | les cinq grandeurs nommées contre des champs à réponse connue ; l'invariance bit-à-bit du chemin par défaut |
+| `tests/v4/test_fixed_curl_variant.py` | 7 | le drapeau change vraiment quelque chose, atteint θ à travers l'encodeur ψ, et suffixe son artefact |
+| `tests/v4/test_curl_convention_gap.py` | 14 | budget apparié, Spearman, bootstrap par scénario, verdict sans IC interdit |
+
+Les trois mutations essayées sur `tests/test_analytic_fields.py` (axes
+échangés dans `forward_curl_z`, `curl_z` ignorant son drapeau, `fixed_curl`
+passé à `True` par défaut) sont toutes détectées.

@@ -22,7 +22,8 @@ study/
   h0_selection/         l'échec vient-il de l'optimiseur variationnel ?
                         (t11, t11b, phase5–phase7)          → RÉFUTÉ
   h1_solver/            les défauts numériques sont-ils secondaires ?
-                        (t14)                                → NON TESTÉ
+                        (h1_solver_convergence,
+                         h1_curl_convention_gap)             → PARTIEL
   h2b_prediction/       un modèle ML libre s'en sortirait-il ?
                         (phase10–phase12, t1, t1b, t4–t7)    → RÉFUTÉ
   h3_representation/    l'information des voisins est-elle inutile ?

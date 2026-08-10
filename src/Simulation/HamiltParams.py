@@ -1,5 +1,6 @@
 import numpy as np
 from Simulation.PhysToAngle import _lohner_estimator
+from Simulation.grid import curl_z, divergence, forward_curl_z
 
 class PhysicalMapper:
     """
@@ -62,11 +63,15 @@ class PhysicalMapper:
                  gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0,
                  sigma=0.05, beta_curl=None, beta_xpoint=None,
                  w_z_frac=0.15,
-                 beta_grad=None):
+                 beta_grad=None, fixed_curl=False):
         self.cs = cs
         self.nu = nu
         self.eta_mhd = eta_mhd
         self.dx = dx
+        # Rotationnel/divergence discrets : voir Simulation.grid. False
+        # reproduit bit-a-bit le chemin historique (convention indexing='xy'),
+        # True applique la convention AXIS_X/AXIS_Y declaree par le depot.
+        self.fixed_curl = bool(fixed_curl)
         # ── Uncertainty width for ZZ coupling ──
         # sigma controls how far from the decision boundary (threshold_amr)
         # the ZZ coupling remains active. Gaussian: exp(-((score-thr)/σ)²)
@@ -267,12 +272,8 @@ class PhysicalMapper:
         jz_crit = self.RM_CRIT * self.eta_mhd / (self.dx ** 2)
 
         # ── Raw indicators (same discrete operators as classical_score) ──
-        vorticity = np.abs(
-            (np.roll(vy, -1, axis=1) - vy) - (np.roll(vx, -1, axis=0) - vx)
-        )
-        div_v = np.abs(
-            (np.roll(vx, -1, axis=1) - vx) + (np.roll(vy, -1, axis=0) - vy)
-        )
+        vorticity = np.abs(curl_z(vx, vy, self.fixed_curl))
+        div_v = np.abs(divergence(vx, vy, self.fixed_curl))
         abs_Jz = np.abs(Jz)
         B_mag = np.sqrt(Bx**2 + By**2)
         lohner_B = _lohner_estimator(B_mag)
@@ -340,10 +341,19 @@ class PhysicalMapper:
         B0 = max(np.mean(np.abs(Bx)), np.mean(np.abs(By)), 1e-10)
 
         # Discrete vorticity and current density (for plaquette)
-        omega_z = (vx - np.roll(vx, -1, axis=0)
-                   + np.roll(vy, -1, axis=1) - vy)
-        Jz_curl = (Bx - np.roll(Bx, -1, axis=0)
-                   + np.roll(By, -1, axis=1) - By)
+        if self.fixed_curl:
+            omega_z = forward_curl_z(vx, vy)
+            Jz_curl = forward_curl_z(Bx, By)
+        else:
+            # Associations historiques conservees telles quelles. Les
+            # reecrire, meme sous une forme algebriquement identique,
+            # deplace le dernier bit : ecart mesure 8.0e-15 sur
+            # K_plaquettes (mhd_rotor, N=64). Le chemin par defaut doit
+            # rester bit-a-bit celui de la campagne d'hyperparametres.
+            omega_z = (vx - np.roll(vx, -1, axis=0)
+                       + np.roll(vy, -1, axis=1) - vy)
+            Jz_curl = (Bx - np.roll(Bx, -1, axis=0)
+                       + np.roll(By, -1, axis=1) - By)
 
         # ── 0. ACTIVITY BIAS (1-body Z) ── ADAPTIVE WEIGHT ─────────
         # Z bias breaks the degenerate ground state of ferromagnetic ZZ/ZZZZ.
