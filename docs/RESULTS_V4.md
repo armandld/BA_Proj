@@ -2751,20 +2751,26 @@ et les mêmes hyperparamètres ne donnent donc pas le même résultat.
 
 ## La mesure
 
-Six appels **strictement identiques** à `qaoa_block_scores` (mhd_rotor,
-Re=800, N=64, 3×3 blocs, `w_z_frac`=0.10, `threshold`=0.3), soit 15 paires :
+Dix appels **strictement identiques** à `qaoa_block_scores` (mhd_rotor,
+Re=800, N=64, 3×3 blocs, `w_z_frac`=0.10, `threshold`=0.3), soit 45 paires :
 
-| grandeur | min | médiane | moyenne | max |
-|---|---|---|---|---|
-| dispersion des scores de bloc | 8.9e-3 | **1.50e-1** | — | **2.15e-1** |
-| auto-corrélation de rang | 0.550 | **0.883** | 0.822 | 1.000 |
-| corrélation au score classique | 0.550 | — | — | 0.983 |
+| grandeur | min | médiane | max |
+|---|---|---|---|
+| dispersion des scores de bloc (ptp par appel) | 1.79e-1 | — | **3.61e-1** |
+| auto-corrélation de rang | **0.350** | **0.933** | 1.000 |
+| appels dégénérés (score constant sur les 9 blocs) | — | **0 / 10** | — |
+
+Un premier sondage à 6 appels (15 paires) donnait un minimum de 0.550 et une
+médiane de 0.883 : la queue descend plus bas que 15 paires ne le laissaient
+voir. C'est l'échantillon à 45 paires qui fait foi, et c'est la raison pour
+laquelle les seuils des tests portent sur la **médiane**, jamais sur le
+minimum.
 
 Deux lectures, opposées, et toutes deux importantes :
 
 1. **Les valeurs bougent beaucoup.** Plus d'un cinquième de l'échelle [0,1]
    entre deux exécutions identiques, au pire.
-2. **Le classement, lui, tient.** Auto-corrélation de rang médiane 0.883 :
+2. **Le classement, lui, tient.** Auto-corrélation de rang médiane 0.933 :
    le bras ordonne les blocs de façon reproductible, même si les valeurs
    qu'il leur attribue ne le sont pas. Les conclusions de cette étude qui
    reposent sur un **ordre** (budget apparié, top-k) sont donc robustes ;
@@ -2796,10 +2802,20 @@ Consignées parce qu'elles sont du genre même que l'étude traque.
    est la statistique la plus instable disponible, et 0.5 était une
    intuition. La mesure donne min 0.550 : le seuil tombait dans la queue de
    la distribution. Corrigé en médiane sur 10 paires, seuil à 0.6.
-2. **Un chiffre publié sous-estimé.** La dispersion annoncée d'abord
-   (9.58e-2, 8.70e-2) venait de trois appels ; à 15 paires la médiane est
-   1.50e-1 et le maximum 2.15e-1. Les valeurs étaient exactes pour leur
-   tirage, mais trop peu de paires pour en voir la queue.
+2. **Un chiffre publié sous-estimé, deux fois.** La dispersion annoncée
+   d'abord (9.58e-2, 8.70e-2) venait de trois appels ; puis 1.50e-1 / 2.15e-1
+   de quinze paires ; la mesure à 45 paires donne un ptp par appel allant
+   jusqu'à 3.61e-1. Chaque valeur était exacte pour son tirage, et chacune
+   sous-estimait la suivante. Un échantillon trop petit ne se signale pas
+   comme tel.
+3. **Un diagnostic construit sur une prémisse non vérifiée.** Deux tests de
+   rang échouant simultanément, j'en ai conclu — `médiane > 0.6` et
+   `min < 1.0` étant complémentaires — qu'il y avait des NaN, donc des
+   appels rendant un score constant. La sonde le réfute : 0 appel dégénéré
+   sur 10. La déduction était valide, sa prémisse implicite (que c'étaient
+   des échecs d'assertion) ne l'était pas : les deux tests tombaient sur un
+   `TypeError`, `spearmanr` recevant des tableaux (3, 3) non aplatis et
+   renvoyant une matrice. Un garde de forme l'empêche désormais.
 
 ## Défaut annexe
 
