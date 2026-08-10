@@ -123,8 +123,61 @@ def classical_warm_start_params(score_vqa, threshold_amr, reps):
 # Build QAOA inputs for a snapshot
 # -------------------------------------------------------------------
 
+
+def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
+                       HamiltMapper, threshold_amr, beta):
+    """Angles (theta, psi) tels que les calcule le pipeline DEPLOYE.
+
+    On ne recalcule rien : on appelle `refinement._prepare_vqa_input`, qui
+    est l'encodeur reellement utilise par V1. Reimplementer donnerait un psi
+    qui RESSEMBLE au vrai sans l'etre — et un psi vraisemblable mais faux
+    serait indiscernable du bon, ce qui est precisement le defaut que cette
+    etude traque.
+
+    Le scan de profondeur 0 est periodique et couvre tout le domaine, donc
+    bounds = (0, N, 0, N) et depth = 0.
+    """
+    from types import SimpleNamespace
+
+    from Simulation.PhysToAngle import AngleMapper
+    from Simulation.refinement import _prepare_vqa_input
+
+    grid = PeriodicGrid(N)
+    sim = MHDSolver(grid, dt=1e-4, Re=Re, Rm=Re)
+    sim.vx, sim.vy, sim.Bx, sim.By = vx, vy, Bx, By
+    physics_state = sim.get_fluxes()
+
+    mapper = AngleMapper()
+    Phi = mapper.compute_stress_flux(physics_state)
+    Phi_prev = mapper.compute_stress_flux(prev_fields)
+
+    full_h, full_v = Phi["phi_horizontal"], Phi["phi_vertical"]
+    prev_h, prev_v = Phi_prev["phi_horizontal"], Phi_prev["phi_vertical"]
+
+    # Meme definition que refinement.py:602-603.
+    average_phi_dev = 0.5 * (np.mean(np.abs(full_h - prev_h))
+                             + np.mean(np.abs(full_v - prev_v)))
+
+    full_score = AngleMapper.classical_score(physics_state)
+
+    prep = _prepare_vqa_input(
+        full_h, full_v, prev_h, prev_v, full_score,
+        physics_state, (0, N, 0, N), 0, mapper,
+        SimpleNamespace(AdvAnomaliesEnable=False),
+        average_phi_dev, beta, n_patches,
+        HamiltMapper=HamiltMapper, sim=sim, threshold_amr=threshold_amr,
+    )
+    if prep is None:
+        raise RuntimeError(
+            "l'encodeur du pipeline a refuse ce patch ; psi ne peut pas etre "
+            "reconstruit et il ne sera pas fabrique")
+    angles, _mini_hp, _mini_score = prep
+    return angles
+
+
 def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
-                        use_v2=False):
+                        use_v2=False, prev_fields=None,
+                        with_psi=False, beta=1.0):
     """
     Prepare all inputs needed for QAOA on one snapshot.
 
@@ -132,6 +185,15 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
       data_in: dict with theta_h, theta_v, psi_h, psi_v
       hamilt_params: dict for Hamiltonian construction
       score_vqa: (n_patches, n_patches) classical score
+
+    prev_fields / with_psi
+    ----------------------
+    psi encode la DERIVEE TEMPORELLE du flux de contrainte. Il vaut zero par
+    defaut ici (voir plus bas), alors que le pipeline deploye le calcule
+    (refinement.py:181) et que la campagne Optuna a regle les hyperparametres
+    avec lui actif. Passer prev_fields (l'instantane precedent) et
+    with_psi=True rebranche cet encodage, en DELEGUANT a l'encodeur du
+    pipeline plutot qu'en le reimplementant.
     """
     dx = 2 * np.pi / N
     nu = 1.0 / Re
@@ -196,6 +258,18 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     theta_v = 2.0 * np.arcsin(np.sqrt(np.clip(score_v, 0, 1)))
     psi_h = np.zeros_like(theta_h)
     psi_v = np.zeros_like(theta_v)
+
+    if with_psi:
+        if prev_fields is None:
+            raise ValueError(
+                "with_psi=True exige prev_fields : psi est une derivee "
+                "temporelle, il ne peut pas etre calcule sur un instantane "
+                "isole. Un psi fabrique sans instantane precedent serait "
+                "indiscernable du vrai.")
+        theta_h, theta_v, psi_h, psi_v = _psi_from_pipeline(
+            vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
+            mapper, threshold_amr, beta,
+        )
 
     data_in = {
         "theta_h": theta_h,
