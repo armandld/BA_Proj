@@ -2736,3 +2736,84 @@ déjà r = +0.000 avec la vraie densité de courant.
 Les trois mutations essayées sur `tests/test_analytic_fields.py` (axes
 échangés dans `forward_curl_z`, `curl_z` ignorant son drapeau, `fixed_curl`
 passé à `True` par défaut) sont toutes détectées.
+
+---
+
+# Le bras QAOA est échantillonné, et de combien
+
+## Le fait
+
+`src/VQA/execute.py` construit sa distribution finale par
+`final_distribution = counts / total_shots` à partir de `sampler.run(...)`.
+**Aucune graine n'est fixée dans tout `src/VQA/`** — ni `seed_simulator`, ni
+`np.random.seed`, ni graine passée au sampler. Deux appels sur le même état
+et les mêmes hyperparamètres ne donnent donc pas le même résultat.
+
+## La mesure
+
+Six appels **strictement identiques** à `qaoa_block_scores` (mhd_rotor,
+Re=800, N=64, 3×3 blocs, `w_z_frac`=0.10, `threshold`=0.3), soit 15 paires :
+
+| grandeur | min | médiane | moyenne | max |
+|---|---|---|---|---|
+| dispersion des scores de bloc | 8.9e-3 | **1.50e-1** | — | **2.15e-1** |
+| auto-corrélation de rang | 0.550 | **0.883** | 0.822 | 1.000 |
+| corrélation au score classique | 0.550 | — | — | 0.983 |
+
+Deux lectures, opposées, et toutes deux importantes :
+
+1. **Les valeurs bougent beaucoup.** Plus d'un cinquième de l'échelle [0,1]
+   entre deux exécutions identiques, au pire.
+2. **Le classement, lui, tient.** Auto-corrélation de rang médiane 0.883 :
+   le bras ordonne les blocs de façon reproductible, même si les valeurs
+   qu'il leur attribue ne le sont pas. Les conclusions de cette étude qui
+   reposent sur un **ordre** (budget apparié, top-k) sont donc robustes ;
+   celles qui reposeraient sur une **valeur** ne le seraient pas.
+
+## Ce que cela a cassé
+
+`check_sweep_behaviour` exigeait `abs(delta) <= 1e-9` pour au moins une des
+douze combinaisons d'hyperparamètres — c'est-à-dire que QAOA sélectionne
+*exactement* les mêmes 2 blocs sur 9 que le classique. C'est huit ordres de
+grandeur sous le bruit du bras. L'assertion avait été calibrée sur une
+exécution unique, dans le commit `32d124a` qui prétendait précisément donner
+des critères d'acceptation aux étapes qui n'en avaient pas. **Septième
+assertion à tirage unique sur ce bras.**
+
+Le plafond est conservé — aucun réglage ne doit faire passer QAOA devant le
+classique sur données propres, et cela peut échouer. Deux critères manquants
+sont ajoutés : ρ doit rester positif (sinon le bras ne classe plus rien et
+le plafond ne prouve rien) et ρ doit **varier** entre combinaisons (sinon
+les hyperparamètres n'atteignent pas le bras). L'égalité exacte est
+désormais rapportée, pas assertée.
+
+## Deux erreurs de méthode commises en écrivant ce test
+
+Consignées parce qu'elles sont du genre même que l'étude traque.
+
+1. **Un seuil posé sans mesure.** `test_the_ranking_survives_the_sampling`
+   assertait `min(rhos) > 0.5` sur trois paires. Le minimum sur trois tirages
+   est la statistique la plus instable disponible, et 0.5 était une
+   intuition. La mesure donne min 0.550 : le seuil tombait dans la queue de
+   la distribution. Corrigé en médiane sur 10 paires, seuil à 0.6.
+2. **Un chiffre publié sous-estimé.** La dispersion annoncée d'abord
+   (9.58e-2, 8.70e-2) venait de trois appels ; à 15 paires la médiane est
+   1.50e-1 et le maximum 2.15e-1. Les valeurs étaient exactes pour leur
+   tirage, mais trop peu de paires pour en voir la queue.
+
+## Défaut annexe
+
+`_SWEEP_ROWS` et `_RESOLUTION_ROWS` sont des listes au niveau module qui
+n'étaient jamais vidées : deux exécutions dans le même processus donnaient
+24 lignes et faisaient échouer `len(rows) == 12` pour une raison étrangère à
+ce que le test mesure.
+
+## Tests
+
+| fichier | ce qu'il verrouille |
+|---|---|
+| `tests/test_qaoa_arm_is_sampled.py` | le bras varie ; la dispersion écrase la tolérance ; le classement tient (médiane) ; il bouge quand même (au moins une paire) ; aucune graine dans `src/VQA/` ; l'assertion d'égalité exacte n'est pas réintroduite |
+
+Si une graine est fixée un jour dans `src/VQA/`, le premier de ces tests
+tombe : c'est voulu. Il faudra alors rétablir les assertions exactes et le
+consigner ici.
