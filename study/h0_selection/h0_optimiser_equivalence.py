@@ -231,7 +231,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
                  zero_psi=False, scale_kopt=False, no_exact=False,
-                 backend='state_vector',
+                 backend='state_vector', prev_fields=None, with_psi=False,
                  run_qaoa=True, seed=0):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from qaoa_inputs import (                      # V2, reutilise
@@ -242,8 +242,13 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     from config import V2_THRESHOLD, TRAINED_THRESHOLD
 
     thr_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
+    # psi encode la derivee temporelle du flux. Sans prev_fields il reste
+    # nul, ce qui est le comportement historique de l'etude ; avec, on
+    # retrouve l'encodage du pipeline deploye, celui contre lequel les
+    # hyperparametres ont ete optimises.
     data_in, hp, score_vqa = prepare_qaoa_inputs(
-        vx, vy, Bx, By, N, dim, re, use_v2=use_v2)
+        vx, vy, Bx, By, N, dim, re, use_v2=use_v2,
+        prev_fields=prev_fields, with_psi=with_psi)
 
     # Ablation psi : psi porte une derivee temporelle du flux qui n'existe
     # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
@@ -456,6 +461,12 @@ def main():
                         "indecidable mais H0b reste mesurable : elle ne "
                         "demande qu'un etalement d'energies et les F1 "
                         "correspondants. Necessaire au-dela de 22 qubits.")
+    p.add_argument("--with-psi", action="store_true",
+                   help="rebranche l'encodage de phase psi en utilisant "
+                        "l'instantane PRECEDENT, comme le fait le pipeline "
+                        "deploye. Sans ce drapeau psi vaut zero, ce qui est "
+                        "le comportement historique de l'etude et NON celui "
+                        "contre lequel les hyperparametres ont ete regles.")
     p.add_argument("--zero-psi", action="store_true",
                    help="met psi a zero dans l'etat initial du QAOA. Isole "
                         "ce que l'encodage de phase apporte a la descente "
@@ -510,6 +521,18 @@ def main():
                              np.linspace(0, n_dns - 1, args.n_snaps + 1)[1:]))
             for si in sel:
                 t0 = time.time()
+                # psi est une derivee temporelle : elle exige l'instantane
+                # PRECEDENT. si=0 n'en a pas, et la selection commence a 1,
+                # mais on garde la garde explicite.
+                prev = None
+                if args.with_psi:
+                    if si == 0:
+                        raise SystemExit(
+                            "--with-psi exige un instantane precedent ; "
+                            "l'instantane 0 n'en a pas")
+                    prev = {"vx": vx[si - 1], "vy": vy[si - 1],
+                            "Bx": Bx[si - 1], "By": By[si - 1],
+                            "Jz": np.zeros_like(vx[si - 1])}
                 out = solver_panel(
                     vx[si], vy[si], Bx[si], By[si], args.N, args.dim, re,
                     l2[si], thr, use_v2=(args.mapper == "v2"),
@@ -517,6 +540,7 @@ def main():
                     qaoa_reps=tuple(args.qaoa_reps), qaoa_shots=args.shots,
                     zero_psi=args.zero_psi, scale_kopt=args.scale_kopt,
                     no_exact=args.no_exact, backend=args.backend,
+                    prev_fields=prev, with_psi=args.with_psi,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
                     seed=args.seed)
                 diag_flags.append(out["diagonal"])
@@ -578,6 +602,7 @@ def main():
     out = os.path.join(
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
+        + ("_withpsi" if args.with_psi else "")
         + ("_zeropsi" if args.zero_psi else "")
         + ("_noexact" if args.no_exact else "")
         + ("" if args.backend == "state_vector" else f"_{args.backend}")
