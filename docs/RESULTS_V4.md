@@ -2689,12 +2689,33 @@ phrase : les hyperparamètres (`beta_curl`, `kappa`, `gamma_*`,
 Appliquer le bon opérateur avec des coefficients calibrés pour un autre
 revient à changer la grandeur mesurée sans retoucher l'instrument.
 
-Trois lectures possibles, une seule tenable :
+**Ce que la mesure n'établit PAS.** Elle ne dit pas que corriger *puis*
+réoptimiser serait inutile. La comparaison est confondue par construction :
+le bras corrigé tourne avec des coefficients calibrés pour l'autre opérateur,
+donc il est désavantagé exprès. On ne peut pas conclure « la correction ne
+sert à rien » d'une expérience où le bras corrigé part handicapé. C'est
+précisément la question qu'un référé posera — *« Q-HAS a-t-il échoué parce
+que son entrée physique était cassée ? »* — et « on n'a pas réoptimisé »
+n'est pas une réponse.
+
+Trois lectures, révisées après avoir compté le coût réel :
 
 1. *Corriger et publier tel quel* — exclu : la mesure dit que c'est pire.
-2. *Corriger et réoptimiser* — une semaine de calcul Optuna
-   (`results/hyperparams/PROVENANCE.md`), pour une hypothèse non testée.
-3. *Documenter, garder la variante, ne rien réoptimiser* — retenu.
+2. *Documenter et ne rien réoptimiser* — c'était la recommandation
+   initiale, fondée sur « une semaine de calcul Optuna ». **Ce chiffre était
+   faux.** Les bases donnent 345 essais et ~47 h de mur, phase1 seule,
+   interrompue (`results/hyperparams/PROVENANCE.md`, vérifié par
+   `tests/v4/test_hyperparams_provenance.py`). L'argument du coût ne tient
+   donc plus.
+3. *Réoptimisation ciblée* — retenu. Seuls `beta_curl`, `kappa` et
+   `threshold_amr` touchent le canal du rotationnel ; sur un bras, à budget
+   réduit (~100 essais), c'est de l'ordre de quelques heures. C'est ce qui
+   transforme T31 d'une conjecture en une mesure.
+
+Tant que (3) n'est pas fait, l'énoncé publiable est le fait mesuré — les
+indicateurs sont mal nommés, et les corriger *à hyperparamètres inchangés*
+ne restaure pas de performance — et **pas** la conclusion plus forte que la
+convention serait sans importance.
 
 Le manuscrit doit donc dire que les indicateurs nommés « vorticité » et
 « divergence » de V1 sont en réalité deux composantes du tenseur des

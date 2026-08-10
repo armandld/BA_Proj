@@ -2,8 +2,36 @@
 
 `best_hyperparams.json` et `optuna_studies/` sont des **entrées gelées** de
 cette étude, pas des résultats qu'elle produit. Ils viennent d'une campagne
-Optuna d'environ une semaine sur la machine de l'auteur, antérieure au
-travail de falsification.
+Optuna antérieure au travail de falsification, menée sur la machine de
+l'auteur.
+
+## Ce que les bases contiennent réellement
+
+Ce document annonçait « environ une semaine » de calcul. Les bases ne le
+soutiennent pas. Compté directement dans les SQLite
+(`tests/v4/test_hyperparams_provenance.py` refait le calcul) :
+
+| base | essais | états | début → fin | mur |
+|---|---|---|---|---|
+| `classical_v2_phase1.db` | 143 | 125 COMPLETE, 18 RUNNING | 2026-04-03 20:13 → 2026-04-04 12:51 | **16.6 h** |
+| `q_has_v2_phase1.db` | 202 | 178 COMPLETE, 24 RUNNING | 2026-04-04 13:50 → 2026-04-05 20:14 | **30.4 h** |
+| les 8 autres bases | **0** | — | — | — |
+
+**345 essais, ~47 h de mur** — deux jours, pas une semaine. Trois faits en
+découlent, tous vérifiables dans les fichiers :
+
+1. **Seule `phase1` a tourné.** `TrainHyperParam_v2.PHASES` déclare 600 /
+   600 / 400 essais pour `phase1_composite`, `phase2_complex` et
+   `phase3_validation` ; les bases phase2 et phase3 sont vides.
+   `best_hyperparams.json` le confirme : `best_per_phase` ne contient que
+   `phase1` pour les deux bras.
+2. **Aucune phase n'a atteint son quota.** 143 et 202 essais contre 600
+   déclarés.
+3. **Les deux campagnes ont été interrompues**, pas menées à terme : 18 et
+   24 essais restent à l'état `RUNNING`.
+
+Les hyperparamètres publiés viennent donc d'**une seule phase, incomplète**.
+C'est ce qu'il faut écrire, parce que c'est ce qu'on peut vérifier.
 
 ## Ce qu'ils sont
 
@@ -19,12 +47,18 @@ Les scripts d'entraînement correspondants sont `src/TrainHyperParam_v1.py`
 
 ## Pourquoi ils ne sont pas régénérés ici
 
-Relancer la campagne coûte environ une semaine de calcul et, l'optimiseur
-étant stochastique, elle ne redonnerait pas les mêmes valeurs — seulement,
-au mieux, des valeurs équivalentes. Le coût est sans rapport avec ce que la
-vérification apporterait : aucune conclusion de cette étude ne dépend de la
-valeur exacte des hyperparamètres, seulement du fait que V1 tourne avec
-**ceux qui ont été retenus à l'époque**, qui sont ici.
+L'optimiseur étant stochastique, une relance ne redonnerait pas les mêmes
+valeurs — seulement, au mieux, des valeurs équivalentes. Et aucune conclusion
+de cette étude ne dépend de la valeur exacte des hyperparamètres, seulement
+du fait que V1 tourne avec **ceux qui ont été retenus à l'époque**, qui sont
+ici.
+
+Le coût, en revanche, n'est pas l'obstacle qu'on croyait : ~47 h de mur pour
+345 essais sur deux bras. Une réoptimisation **ciblée** — les seuls
+paramètres qui touchent le canal du rotationnel (`beta_curl`, `kappa`,
+`threshold_amr`), sur un bras, à budget réduit — est donc de l'ordre de
+quelques heures, pas d'une semaine. C'est ce qui rend la question T31
+(`docs/RESULTS_V4.md`) tranchable au lieu de rester une conjecture.
 
 ## Ce qu'il faut en dire dans le manuscrit
 
