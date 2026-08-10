@@ -38,7 +38,20 @@ for _p in (os.path.join(_REPO_ROOT, "src"), _REPO_ROOT):
 
 N = 64
 N_BLOCKS = 3
-N_REPEATS = 3
+#  Cinq appels -> dix paires. Trois appels n'en donnent que trois, ce qui
+#  ne suffit pas a estimer une mediane : la premiere version de ce fichier
+#  assertait le MINIMUM sur trois paires, statistique dont la valeur depend
+#  presque entierement du tirage.
+N_REPEATS = 5
+
+#  Mesure de reference, 6 appels identiques -> 15 paires (mhd_rotor, Re=800,
+#  N=64, 3x3 blocs, w_z_frac=0.10, threshold=0.3) :
+#
+#    auto-correlation de rang : min 0.550  med 0.883  moy 0.822  max 1.000
+#    dispersion des scores    : min 8.9e-3 med 1.50e-1 max 2.15e-1
+#    correlation au classique : 0.550 a 0.983
+#
+#  Les seuils ci-dessous sont poses SOUS ces valeurs mesurees, avec marge.
 
 
 @pytest.fixture(scope="module")
@@ -85,13 +98,20 @@ def test_identical_inputs_give_different_outputs(repeated_scores):
 def test_the_spread_dwarfs_the_exact_tie_tolerance(repeated_scores):
     """L'amplitude mesuree, confrontee au seuil qui exigeait une egalite.
 
-    Mesure : ecarts max de 9.58e-2 et 8.70e-2 entre appels identiques, sur
-    des scores dans [0, 1]. Le seuil `MAX_CLEAN_ADVANTAGE` vaut 1e-9.
+    Sur 15 paires : dispersion mediane 1.50e-1, maximum 2.15e-1, sur des
+    scores dans [0, 1]. Le seuil `MAX_CLEAN_ADVANTAGE` vaut 1e-9.
+
+    Un premier sondage a trois appels avait donne 9.58e-2 et 8.70e-2 ; ces
+    valeurs sont exactes pour ce tirage mais SOUS-ESTIMENT la dispersion,
+    trois paires ne suffisant pas a en voir la queue. C'est le chiffre a
+    15 paires qui fait foi.
     """
+    import itertools
+
     from tests.test_qaoa_scaling_and_hparams import MAX_CLEAN_ADVANTAGE
 
-    a = repeated_scores[0]
-    spread = max(float(np.max(np.abs(a - b))) for b in repeated_scores[1:])
+    spread = max(float(np.max(np.abs(a - b)))
+                 for a, b in itertools.combinations(repeated_scores, 2))
     assert spread > 1e-3, (
         f"dispersion mesuree {spread:.3e} : plus faible qu'attendu, "
         "verifier si le bras a change")
@@ -104,16 +124,45 @@ def test_the_ranking_survives_the_sampling(repeated_scores):
     """La dispersion ne doit pas non plus tout emporter.
 
     Si le classement des blocs changeait completement d'un appel a l'autre,
-    le bras ne mesurerait rien du tout et le plafond du balayage ne
-    prouverait rien. On verifie qu'il reste fortement correle a lui-meme.
+    le bras ne mesurerait rien et le plafond du balayage ne prouverait rien.
+
+    On asserte la MEDIANE sur toutes les paires, pas le minimum. La mesure
+    de reference donne min 0.550 et mediane 0.883 sur 15 paires : un seuil
+    pose sur le minimum tombe exactement dans la queue de la distribution
+    et echoue au hasard des tirages — ce qu'a fait la premiere version de
+    ce test, qui assertait `min > 0.5` sur trois paires seulement.
     """
+    import itertools
+
+    import numpy as np
     from scipy.stats import spearmanr
 
-    a = repeated_scores[0]
-    rhos = [float(spearmanr(a, b).statistic) for b in repeated_scores[1:]]
-    assert min(rhos) > 0.5, (
-        f"auto-correlation de rang {rhos} : le bras ne classe pas de facon "
-        "stable, ses sorties ne portent alors aucune information")
+    rhos = [float(spearmanr(a, b).statistic)
+            for a, b in itertools.combinations(repeated_scores, 2)]
+    med = float(np.median(rhos))
+    assert med > 0.6, (
+        f"auto-correlation de rang mediane {med:.3f} sur {len(rhos)} paires "
+        f"(mesure de reference 0.883) : le bras ne classe plus de facon "
+        f"stable, ses sorties ne portent alors aucune information. "
+        f"Valeurs : {np.round(rhos, 3).tolist()}")
+
+
+def test_the_ranking_is_nonetheless_visibly_perturbed(repeated_scores):
+    """L'autre bord : le classement doit VRAIMENT bouger quelque part.
+
+    Sans cette borne, un bras devenu deterministe passerait le test
+    precedent haut la main et la dispersion mesuree plus haut n'aurait plus
+    de traduction sur les decisions.
+    """
+    import itertools
+
+    from scipy.stats import spearmanr
+
+    rhos = [float(spearmanr(a, b).statistic)
+            for a, b in itertools.combinations(repeated_scores, 2)]
+    assert min(rhos) < 1.0, (
+        "toutes les paires ont un classement identique : le bras est "
+        "devenu reproductible, reevaluer les assertions relachees")
 
 
 def test_no_seed_is_fixed_anywhere_in_the_vqa_stack():
