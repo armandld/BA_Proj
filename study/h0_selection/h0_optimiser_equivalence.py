@@ -564,7 +564,13 @@ def main():
                       f"E*={out['E_exact']:+.4f}  [{time.time()-t0:.1f}s]")
 
     if not records:
-        print("no input."); return
+        raise RuntimeError(
+            f"balayage vide : aucun des scenarios {args.scenario} n'a "
+            f"d'artefacts d'entree a N={args.N} dim={args.dim} "
+            f"(dns_*_N{args.N}.npz et patches_*_N{args.N}_dim{args.dim}.npz "
+            f"dans {RESULTS_DIR}). Le panel sortait ici avec le code 0, "
+            "donc une campagne qui n'avait rien mesure etait indiscernable "
+            "d'une campagne reussie.")
 
     solvers = list(dict.fromkeys(r["solver"] for r in records))
     print(f"\n  cost Hamiltonian diagonal (Z/ZZ/ZZZZ only) on all "
@@ -607,9 +613,18 @@ def main():
             "approximation artefact, not a controllable advantage."))
 
 
+    # Le scenario doit entrer dans le nom des qu'on n'execute pas la liste
+    # complete. Sans cela, quatre processus lances en parallele — un par
+    # scenario — ecrivent tous dans le MEME fichier : le dernier ecrase les
+    # trois autres et l'artefact restant ressemble trait pour trait a une
+    # campagne complete.
+    _full_sweep = set(args.scenario) == set(SCENARIOS)
+    _scen_tag = "" if _full_sweep else "_" + "-".join(sorted(args.scenario))
+
     out = os.path.join(
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
+        + _scen_tag
         + ("_withpsi" if args.with_psi else "")
         + ("_fixedcurl" if args.fixed_curl else "")
         + ("_zeropsi" if args.zero_psi else "")
