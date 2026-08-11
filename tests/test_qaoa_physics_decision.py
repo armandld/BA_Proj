@@ -500,18 +500,42 @@ class TestZZBoundaryDetection:
 class TestFullPipelineVortex:
     """Run the complete pipeline on a 16x16 grid with a localized vortex."""
 
-    def test_vortex_contrast_is_shot_noise(self):
-        """A Lamb-Oseen vortex in the top-left quadrant produces NO spatial
-        discrimination at the deployed size: the contrast is sampling noise.
+    def test_a_vortex_now_gains_positive_spatial_contrast(self):
+        """A Lamb-Oseen vortex in the top-left quadrant DOES produce positive
+        spatial contrast.
 
-        The pipeline is sampled with args.shots = 4096, so each marginal
-        carries a standard error of ~0.008 and the contrast of a genuinely
-        flat probability map fluctuates at the ~0.015 level. A single draw
-        therefore clears |contrast| > 0.01 about half the time — which is
-        why this must be measured over repeats, not once.
+        Ce test affirmait l'inverse, et il avait raison de le faire : sur le
+        code de l'epoque le contraste valait -0.0058 +/- 0.0064, soit du
+        bruit de tirage legerement negatif.
 
-        Measured over REPEATS draws on identical fields: the contrast is
-        centred on zero and its SIGN is not reproducible.
+        Ce n'etait pas une propriete du QAOA. C'etait la consequence du
+        defaut D-1 : le rotationnel des mappeurs etait ecrit sous la
+        convention `indexing='xy'` alors que la grille construit ses champs
+        en `indexing='ij'`, si bien qu'une rotation solide rendait
+        exactement 0. Le terme ZZZZ de plaquette — dont la RAISON D'ETRE est
+        de detecter une circulation — etait donc numeriquement mort sur un
+        vortex pur.
+
+        Attribution mesuree sur ce meme vortex, 16 tirages par ligne, tout
+        le reste egal :
+
+          | fixed_curl | fixed_flux | contraste | ecart-type | max|K| |
+          |------------|------------|-----------|------------|--------|
+          | False      | False      |  -0.00725 |    0.00859 | 0.0553 |
+          | False      | True       |  -0.00852 |    0.00896 | 0.0553 |
+          | True       | False      |  +0.05672 |    0.03976 | 1.2545 |
+          | True       | True       |  +0.07292 |    0.04429 | 1.2545 |
+
+        La ligne (False, False) reproduit la valeur historique. Le
+        coefficient de plaquette passe de 0.055 a 1.255 — vingt-trois fois
+        plus grand — des que le rotationnel voit la rotation.
+
+        Le sens de lecture change donc : ce n'est pas que le QAOA ne
+        discrimine pas un vortex, c'est qu'on lui donnait un Hamiltonien
+        aveugle aux vortex.
+
+        Le tirage reste bruite (args.shots = 4096, erreur type ~0.008 par
+        marginale), d'ou la moyenne sur REPEATS.
         """
         N = PHYSICS_N
         fields = make_uniform_fields(N, v_bg=0.0, B_bg=0.5)
@@ -542,16 +566,20 @@ class TestFullPipelineVortex:
         print(f"  mean = {contrasts.mean():+.5f}, std = {contrasts.std():.5f}")
         print(f"  theta_h: {theta_h}")
 
-        assert abs(contrasts.mean()) < 0.02, (
-            f"the vortex contrast must average to ~0 — a stable nonzero mean "
-            f"would mean the pipeline does discriminate: "
-            f"mean = {contrasts.mean():+.4f}"
-        )
-        assert (contrasts > 0).any() and (contrasts < 0).any(), (
-            f"the contrast sign must flip across identical draws; a stable "
-            f"sign would indicate real discrimination: "
-            f"{np.round(contrasts, 5)}"
-        )
+        sem = contrasts.std() / np.sqrt(len(contrasts))
+        assert contrasts.mean() > 2.0 * sem, (
+            f"le contraste du vortex doit etre positif et distinct de zero a "
+            f"plus de deux erreurs types ; mesure {contrasts.mean():+.4f} "
+            f"+/- {sem:.4f} sur {len(contrasts)} tirages. S'il retombe dans "
+            f"le bruit, c'est que le terme de plaquette a cesse de voir la "
+            f"circulation — verifier fixed_curl.")
+        assert (contrasts > 0).mean() >= 0.7, (
+            f"le signe doit etre stable d'un tirage a l'autre ; seulement "
+            f"{(contrasts > 0).mean():.0%} des tirages sont positifs : "
+            f"{np.round(contrasts, 5)}")
+        assert contrasts.mean() < 0.5, (
+            f"un contraste de {contrasts.mean():+.4f} depasse ce que le "
+            f"mixeur borne peut produire : verifier la borne beta")
 
     def test_velocity_step_detected(self):
         """A sharp velocity step should be detected."""

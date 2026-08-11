@@ -297,21 +297,38 @@ class TestZZGradient:
 #  TEST D: ZZZZ PLAQUETTE -- Lamb-Oseen vortex in top-left
 # ==============================================================================
 class TestZZZZPlaquette:
-    def test_vortex_contrast_is_not_positive(self):
-        """A Lamb-Oseen vortex in the top-left does NOT produce positive
-        spatial contrast at the deployed size.
+    def test_the_vortex_gains_positive_contrast_once_the_curl_sees_it(self):
+        """A Lamb-Oseen vortex in the top-left DOES produce positive spatial
+        contrast.
 
-        Two things make a single draw meaningless here:
-          - theta_h[0,0] = pi, so the classical initialisation already puts
-            cell (0,0) at P(|1>) = 1 and there is no headroom left to
-            discriminate;
-          - the readout is sampled at args.shots = 4096, and the QAOA
-            contrast fluctuates at the ~0.006 level.
-        Over 12 draws on identical fields the contrast measured
-        -0.0058 +/- 0.0064, i.e. slightly NEGATIVE: the QAOA pulls the hot
-        cell down relative to its neighbours. Only 25% of single draws clear
-        the old |contrast| > 0.01 bar, which is why it used to pass
-        intermittently.
+        Ce test affirmait le contraire — « -0.0058 +/- 0.0064 sur 12
+        tirages, le QAOA tire meme la cellule chaude vers le bas » — et il
+        mesurait bien ce qui se passait alors. Mais la cause n'etait pas le
+        QAOA : c'etait le defaut D-1. Le rotationnel des mappeurs etait
+        ecrit sous la convention `indexing='xy'` alors que la grille
+        construit ses champs en `indexing='ij'` ; une rotation solide
+        rendait donc exactement 0, et le terme ZZZZ de plaquette — dont la
+        seule raison d'etre est de detecter une circulation — etait
+        numeriquement mort sur un vortex pur.
+
+        Attribution mesuree sur ce meme vortex, 16 tirages par ligne, tout
+        le reste egal :
+
+          | fixed_curl | fixed_flux | contraste | ecart-type |  sigma | max|K| |
+          |------------|------------|-----------|------------|--------|--------|
+          | False      | False      |  -0.00725 |    0.00859 |  -3.4  | 0.0553 |
+          | False      | True       |  -0.00852 |    0.00896 |  -3.8  | 0.0553 |
+          | True       | False      |  +0.05672 |    0.03976 |  +5.7  | 1.2545 |
+          | True       | True       |  +0.07292 |    0.04429 |  +6.6  | 1.2545 |
+
+        La ligne (False, False) reproduit la valeur historique a l'ecart-type
+        pres. Le coefficient de plaquette passe de 0.055 a 1.255 — vingt-trois
+        fois plus grand — des que le rotationnel voit la rotation.
+
+        Reste vrai : theta_h[0,0] = pi, la cellule (0,0) part deja a
+        P(|1>) = 1 et n'a plus de marge ; et le tirage a 4096 coups bruite
+        chaque marginale a ~0.008. La moyenne sur REPEATS reste donc
+        indispensable — un tirage isole ne prouve rien.
         """
         grid = make_grid()
         mapper = make_mapper(grid)
@@ -351,15 +368,16 @@ class TestZZZZPlaquette:
         for i in range(VQA_N):
             print(f"    {['%.4f' % prob_map[i,j] for j in range(VQA_N)]}")
 
-        assert contrasts.mean() < 0.01, (
-            f"the vortex is not expected to gain positive spatial contrast "
-            f"from the QAOA; mean over {REPEATS} draws = "
-            f"{contrasts.mean():+.5f}"
-        )
-        assert abs(contrasts.mean()) < 0.03, (
-            f"the contrast is expected to stay within shot noise of zero; "
-            f"mean over {REPEATS} draws = {contrasts.mean():+.5f}"
-        )
+        sem = contrasts.std() / np.sqrt(REPEATS)
+        assert contrasts.mean() > 2.0 * sem, (
+            f"le vortex doit gagner un contraste positif distinct du bruit ; "
+            f"mesure {contrasts.mean():+.5f} +/- {sem:.5f} sur {REPEATS} "
+            f"tirages. S'il retombe a zero, le terme de plaquette a cesse de "
+            f"voir la circulation — verifier fixed_curl.")
+        assert (contrasts > 0).mean() >= 0.7, (
+            f"le signe doit etre stable ; seulement "
+            f"{(contrasts > 0).mean():.0%} des tirages sont positifs : "
+            f"{np.array2string(contrasts, precision=5)}")
 
 
 # ==============================================================================

@@ -142,34 +142,53 @@ def test_each_cell_maps_to_its_own_qubit():
 #  2. Post-traitement des distributions
 # ═══════════════════════════════════════════════════════════════════════
 
+# `postprocess` prend une DISTRIBUTION normalisee, pas des comptes. Les
+# cinq tests ci-dessous passaient des comptes bruts : ils figeaient une
+# tolerance qui rendait indetectable le cas ou l'amont oublierait de
+# diviser par le nombre de tirs. Voir tests/test_vqa_chain_contracts.py
+# pour l'audit complet et D-15 dans docs/RESULTS_V4.md.
+
 def test_postprocess_reads_the_bitstring_right_to_left():
     """Convention : le bit le PLUS A DROITE est le qubit 0.
 
     Une lecture inversee ferait raffiner l'image miroir de la grille.
     """
-    assert postprocess({"0001": 10}, 4, False) == [10, 0, 0, 0]
-    assert postprocess({"1000": 10}, 4, False) == [0, 0, 0, 10]
+    assert postprocess({"0001": 1.0}, 4, False) == [1.0, 0.0, 0.0, 0.0]
+    assert postprocess({"1000": 1.0}, 4, False) == [0.0, 0.0, 0.0, 1.0]
 
 
-def test_postprocess_sums_the_counts():
-    got = postprocess({"01": 3, "11": 7}, 2, False)
-    assert got == [10, 7]
+def test_postprocess_sums_the_probabilities():
+    got = postprocess({"01": 0.3, "11": 0.7}, 2, False)
+    assert got == pytest.approx([1.0, 0.7])
 
 
-def test_postprocess_returns_zero_on_an_empty_distribution():
-    assert postprocess({}, 3, False) == [0, 0, 0]
+def test_postprocess_refuses_an_empty_distribution():
+    """Rendre des zeros ferait passer une lecture manquante pour un patch
+    calme : les deux sont indiscernables en aval."""
+    with pytest.raises(ValueError, match="vide"):
+        postprocess({}, 3, False)
 
 
-def test_postprocess_ignores_bits_beyond_the_register():
-    """Une chaine plus longue que le registre ne doit pas deborder."""
-    assert postprocess({"111111": 5}, 2, False) == [5, 5]
+def test_postprocess_refuses_a_bitstring_longer_than_the_register():
+    """L'ancien comportement tronquait en silence. Une chaine trop longue
+    signale que le nombre de qubits transmis n'est pas celui du circuit —
+    les marginales seraient lues au mauvais indice."""
+    with pytest.raises(ValueError, match="longueur"):
+        postprocess({"111111": 1.0}, 2, False)
 
 
-def test_postprocess_never_exceeds_the_total_count():
-    d = {"00": 1, "01": 2, "10": 3, "11": 4}
+def test_postprocess_never_exceeds_one():
+    d = {"00": 0.1, "01": 0.2, "10": 0.3, "11": 0.4}
     got = postprocess(d, 2, False)
-    assert max(got) <= sum(d.values())
-    assert got == [2 + 4, 3 + 4]
+    assert max(got) <= 1.0
+    assert got == pytest.approx([0.2 + 0.4, 0.3 + 0.4])
+
+
+def test_postprocess_refuses_raw_counts():
+    """Des comptes bruts donneraient des marginales de l'ordre du millier,
+    que la comparaison au seuil de raffinement declarerait toutes actives."""
+    with pytest.raises(ValueError, match="normalisee"):
+        postprocess({"01": 3, "11": 7}, 2, False)
 
 
 # ═══════════════════════════════════════════════════════════════════════

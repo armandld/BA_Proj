@@ -244,11 +244,29 @@ def check_noise_behaviour(rows):
     quiet = [r for r in rows if r['noise'] == 0.0]
     assert len(quiet) == 2
     for r in quiet:
-        assert r['frac_cl'] == pytest.approx(r['gt_frac'], abs=1e-9), (
-            f"{r['scenario']}: without noise the classical arm is expected "
-            f"to reach the optimal captured fraction "
-            f"({r['frac_cl']:.4f} vs {r['gt_frac']:.4f})"
-        )
+        # L'egalite EXACTE n'etait pas un invariant, c'etait une
+        # coincidence. `gt_frac` classe les blocs par une erreur de
+        # troncature (derivee seconde) et `frac_cl` par le score classique :
+        # deux quantites differentes, dont les k premiers blocs se
+        # trouvaient coincider. La correction du rotationnel (D-1) a change
+        # le classement du score sur Orszag-Tang, et l'egalite est tombee.
+        #
+        # Mesure apres correction, sans bruit :
+        #   MHD Rotor    frac_cl / gt_frac = 1.0000  (coincide encore)
+        #   Orszag-Tang  0.3151 / 0.3245   = 0.9709
+        #
+        # Ce qui reste un vrai invariant : le bras classique ne peut pas
+        # DEPASSER l'optimum (verifie plus bas ligne par ligne), et il doit
+        # en rester proche. On borne donc l'ecart relatif au lieu de le
+        # nier.
+        assert r['frac_cl'] <= r['gt_frac'] + 1e-9, (
+            f"{r['scenario']}: le bras classique depasse l'optimum "
+            f"({r['frac_cl']:.4f} > {r['gt_frac']:.4f}), ce qui est "
+            "impossible : la selection ou l'optimum est mal calcule")
+        assert r['frac_cl'] >= 0.95 * r['gt_frac'], (
+            f"{r['scenario']}: sans bruit le bras classique doit rester a "
+            f"moins de 5 % de l'optimum, mesure {r['frac_cl']:.4f} contre "
+            f"{r['gt_frac']:.4f} soit {r['frac_cl'] / r['gt_frac']:.4f}")
         gap = r['frac_cl'] - r['frac_qa']
         assert gap > MIN_NOISELESS_GAP, (
             f"{r['scenario']}: without noise the QAOA arm is expected to "

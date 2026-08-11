@@ -3249,3 +3249,105 @@ fonction du seuil ; chaque bord reconnu pour lui-même par
 uniformément calme (le faux positif généralisé qui déclenchait le doublon).
 Deux tests structurels vérifient que les deux bras gardent la même forme de
 sondage et que le seuil journalisé est celui appliqué.
+
+---
+
+# Verdict de la suite QAOA — et ce qu'il révèle
+
+`python -m pytest tests/test_qaoa_advantage.py tests/test_qaoa_noise_and_early.py
+tests/test_qaoa_scaling_and_hparams.py tests/test_qaoa_decisions.py
+tests/test_qaoa_physics_decision.py tests/test_qaoa_arm_is_sampled.py
+tests/QAOA_test.py -q`
+
+**3 échecs, 27 succès, 1 h 21 min.** Les trois échecs sont des **valeurs qui
+ont bougé**, pas des casses — et l'un d'eux renverse une lecture publiée.
+
+## Le terme ZZZZ était numériquement mort sur un vortex
+
+Deux des trois échecs sont le même fait, mesuré par deux harnais différents :
+un vortex de Lamb-Oseen **gagne désormais un contraste spatial positif**, là
+où les tests affirmaient qu'il n'en gagnait pas.
+
+Ces tests ne se trompaient pas : sur le code de l'époque le contraste valait
+`−0.0058 ± 0.0064`, soit du bruit de tirage légèrement négatif. Mais ce
+n'était pas une propriété du QAOA.
+
+Attribution, mesurée sur le même vortex, 16 tirages par ligne, tout le reste
+égal :
+
+| `fixed_curl` | `fixed_flux` | contraste | écart-type | σ | max\|K\| |
+|---|---|---|---|---|---|
+| False | False | **−0.00725** | 0.00859 | −3.4 | **0.0553** |
+| False | True | −0.00852 | 0.00896 | −3.8 | 0.0553 |
+| **True** | False | **+0.05672** | 0.03976 | **+5.7** | **1.2545** |
+| True | True | +0.07292 | 0.04429 | +6.6 | 1.2545 |
+
+La ligne `(False, False)` reproduit la valeur historique à l'écart-type près.
+
+La cause est **D-1** : le rotationnel des mappeurs était écrit sous la
+convention `indexing='xy'` alors que la grille construit ses champs en
+`indexing='ij'`, si bien qu'une rotation solide rendait exactement 0. Le
+terme ZZZZ de plaquette — **dont la seule raison d'être est de détecter une
+circulation** — était donc aveugle aux vortex. Son coefficient passe de
+0.055 à 1.255, **vingt-trois fois plus grand**, dès que le rotationnel voit
+la rotation.
+
+Le sens de lecture change : ce n'est pas que le QAOA ne discrimine pas un
+vortex, c'est qu'on lui donnait un Hamiltonien qui ne pouvait pas en voir.
+
+`fixed_flux` (D-11) amplifie l'effet mais ne le crée pas : il était déjà
+positif à `(True, False)`.
+
+## Ce que cela ne dit PAS
+
+Ces deux tests utilisent le harnais **v1** — `PhysicalMapper`,
+`physical_score`, θ construit à partir du flux. Le mappeur **déployé** est le
+v2, qui normalise `K` par `max|ω| + max|J|`. Sur le v2, l'effet est une
+**redistribution**, pas une amplification uniforme :
+
+| champ | \|K\| médian (legacy) | \|K\| médian (corrigé) | rapport |
+|---|---|---|---|
+| rotation solide | **0.000000** | 0.015873 | ∞ |
+| vortex Lamb-Oseen | 0.018998 | 0.000149 | 0.008× |
+| DNS orszag_tang | 0.082185 | 0.180390 | 2.2× |
+| DNS mhd_rotor | 0.000717 | 0.000124 | 0.17× |
+
+Sur une rotation solide le `K` legacy est **exactement nul** dans les deux
+mappeurs — le défaut est bien commun. Mais sur des champs réalistes le v2
+redistribue, dans un sens ou dans l'autre selon le champ, parce que sa
+normalisation par le maximum du domaine change en même temps que le
+numérateur.
+
+**Conclusion honnête** : le fait établi est que la lecture publiée « le
+contraste d'un vortex est du bruit de tirage » a été mesurée sur un
+Hamiltonien dont le terme de circulation était numériquement mort. Savoir si
+la conclusion du chemin **déployé** bascule demande de relancer la campagne,
+et ne peut pas se déduire de ces quatre lignes.
+
+## Le troisième échec : une coïncidence prise pour un invariant
+
+`test_noise_robustness` exigeait `frac_cl == gt_frac` à 1e−9 — « sans bruit,
+le bras classique atteint la fraction capturée optimale ». Mesuré : 0.3151
+contre 0.3245 sur Orszag-Tang (0.9709), et 1.0000 sur le rotor.
+
+Ce n'était pas un invariant. `gt_frac` classe les blocs par une **erreur de
+troncature** (dérivée seconde) et `frac_cl` par le **score classique** : deux
+quantités différentes, dont les *k* premiers blocs se trouvaient coïncider.
+La correction du rotationnel a changé le classement du score sur
+Orszag-Tang, et la coïncidence est tombée.
+
+Le vrai invariant — le bras classique ne peut pas **dépasser** l'optimum — est
+déjà vérifié ligne par ligne plus bas. L'assertion borne désormais l'écart
+relatif à 5 % au lieu de nier son existence.
+
+## Trois tests V1 mis à jour au même titre
+
+Cinq tests de `tests/test_vqa_stack_analytic.py` passaient des **comptes
+bruts** à `postprocess`, dont deux figeaient explicitement les deux pièges
+que D-15 ferme : rendre des zéros sur une distribution vide (une lecture
+manquante devenait un patch calme), et tronquer en silence une chaîne plus
+longue que le registre. Ils affirment désormais que les deux cas sont
+refusés.
+
+**V1 non-QAOA après toutes les corrections : 844 succès, 4 ignorés** (15 min
+46 s), une fois ces cinq tests mis en accord avec le nouveau contrat.
