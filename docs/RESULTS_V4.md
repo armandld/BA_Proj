@@ -3187,3 +3187,65 @@ l'inverse ; c'est le code qui a raison), `P(|1⟩) = sin²(θ/2) = score` à
 par ligne du circuit coïncide avec `idx_H(i,j) = i·dim + j` de
 l'Hamiltonien, et `params = 0` reproduit exactement θ-init (la porte de
 sortie du raccourci « Hamiltonien nul »).
+
+---
+
+# D-16 — la liste de patchs se recouvrait elle-même
+
+`src/Simulation/refinement.py` — `_run_level` et `_run_level_classical`.
+
+L'invariant le plus élémentaire d'un AMR — chaque cellule appartient à
+exactement une feuille — n'était vérifié nulle part. Une liste qui recouvre
+deux fois la même région reste parfaitement plausible : bornes valides,
+profondeurs cohérentes, scores dans [0, 1]. Seule une somme de couverture la
+distingue d'une liste juste.
+
+Le **sondage de bord** (« l'anomalie touche le bord dans cette direction, on
+descend même si le signal est marginal ») était un bloc **séparé**, exécuté
+après la ventilation. Quand il se déclenchait, le sous-patch avait déjà été
+enregistré comme feuille non raffinée par la branche `else`, et il était en
+plus poussé au niveau suivant. La même région était comptée **deux fois** :
+une fois comme feuille grossière, une fois redécoupée.
+
+Mesure sur les quatre scénarios (N=256, `dim=2`, `max_depth=3`, 6 instantanés
+chacun, soit 24 configurations) :
+
+| seuil | configurations avec recouvrement | pire cas |
+|---|---|---|
+| **0.1496 (déployé)** | **2 / 24** | **25.0 %** du domaine |
+| 0.20 | 3 / 24 | 17.2 % |
+| 0.25 | 4 / 24 | 12.5 % |
+| 0.30 | 6 / 24 | 25.0 % |
+| 0.40 | 9 / 24 | 28.1 % |
+| 0.50 | 12 / 24 | 20.3 % |
+
+Jusqu'à **trois patchs** sur une même cellule. Toute métrique de budget ou de
+couverture lue sur la liste finale surcomptait d'autant — et le balayage de
+seuils de la **frontière de Pareto** passe exactement dans la zone où le
+défaut est le plus fréquent.
+
+Les deux bras portaient le défaut à l'identique, donc leur comparaison
+mutuelle n'était pas biaisée ; le coût absolu, si.
+
+Corrigé en fondant le sondage dans le même `if/elif/else` : un sous-patch est
+soit raffiné, soit feuille, jamais les deux. Après correction, sur les six
+seuils de 0.1496 à 0.65 : **0/24 recouvrement, 0 % de trou** — la liste pave
+exactement le domaine.
+
+**Corrigé au passage** : le journal `verbose` affichait
+`threshold_amr + (1−threshold_amr)·depth/max_depth`, une rampe en profondeur
+que le code n'applique plus (`effective_threshold = threshold_amr`, la rampe
+est commentée). Le journal annonçait donc un seuil, et le code en appliquait
+un autre ; toute lecture des décisions dans les journaux était fausse.
+
+## Tests
+
+`tests/test_amr_tiling_contracts.py`, 44 tests : pavage exact sur les quatre
+scénarios × trois seuils, sur tout le domaine de seuils de la frontière de
+Pareto, à chaque taille de patch et chaque profondeur ; aire couverte égale à
+l'aire du domaine ; aucune borne dupliquée ; monotonie du nombre de patchs en
+fonction du seuil ; chaque bord reconnu pour lui-même par
+`_boundary_activation`, et aucun drapeau sur un patch uniformément actif ou
+uniformément calme (le faux positif généralisé qui déclenchait le doublon).
+Deux tests structurels vérifient que les deux bras gardent la même forme de
+sondage et que le seuil journalisé est celui appliqué.

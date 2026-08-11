@@ -328,7 +328,12 @@ def _run_level(
         boundary_flags = _boundary_activation(prob_map, target_dim)
 
         if verbose:
-            effective_thr = threshold_amr + (1.0 - threshold_amr) * depth / max_depth
+            # Le seuil AFFICHE doit etre celui APPLIQUE. Cette ligne
+            # recalculait une rampe en profondeur qui n'est plus utilisee
+            # (voir `effective_threshold` plus bas, ou elle est commentee) :
+            # le journal annonçait donc un seuil, et le code en appliquait un
+            # autre. Toute lecture des decisions dans le journal etait fausse.
+            effective_thr = threshold_amr
             print(f"\n  ┌─ Depth {depth} | Patch {bounds} | eff_threshold={effective_thr:.3f}")
             print(f"  │  θ-only  (before QAOA): {np.array2string(prob_map_avant_qaoa, precision=3, suppress_small=True)}")
             print(f"  │  QAOA    (after  QAOA): {np.array2string(prob_map, precision=3, suppress_small=True)}")
@@ -362,6 +367,27 @@ def _run_level(
                            and ttl_key in ttl_map
                            and ttl_map[ttl_key] > 0)
 
+                # Sondage de bord : signal marginal ET anomalie qui touche
+                # le bord dans cette direction -> on descend quand meme.
+                #
+                # La decision est prise AVANT la ventilation, en un seul
+                # if/elif/else. Auparavant le sondage etait un bloc separe
+                # qui rajoutait le sous-patch dans `next_level` APRES que la
+                # branche `else` l'eut deja enregistre comme feuille : la
+                # meme region etait alors comptee comme feuille non raffinee
+                # ET redecoupee au niveau suivant. Les patchs se recouvraient
+                # donc, et toute metrique de budget ou de couverture lue sur
+                # la liste finale surcomptait — jusqu'a 25 % du domaine au
+                # seuil deploye 0.1496, davantage a seuil plus eleve.
+                should_probe = (
+                    local_prob < effective_threshold
+                    and local_prob >= effective_threshold * 0.5
+                    and ((i == 0 and 'top' in boundary_flags)
+                         or (i == target_dim - 1 and 'bottom' in boundary_flags)
+                         or (j == 0 and 'left' in boundary_flags)
+                         or (j == target_dim - 1 and 'right' in boundary_flags))
+                )
+
                 if local_prob >= effective_threshold:
                     next_level.append(sub_bounds)
                     # Reset TTL on fresh detection
@@ -373,29 +399,15 @@ def _run_level(
                     ttl_map[ttl_key] -= 1
                     if verbose:
                         print(f"  │  TTL keep: {sub_bounds} (ttl={ttl_map[ttl_key]})")
+                elif should_probe:
+                    next_level.append(sub_bounds)
+                    if verbose:
+                        print(f"  │  Boundary probe: {sub_bounds} (prob={local_prob:.3f})")
                 else:
                     active_patches.append({
                         'bounds': sub_bounds, 'depth': depth + _offset,
                         'score': local_prob, 'type': 'coarse_leaf',
                     })
-
-                # Boundary-aware probing: if anomaly touches the boundary
-                # toward this sub-cell, force refinement even if prob is marginal
-                if not has_ttl and local_prob < effective_threshold:
-                    should_probe = False
-                    if i == 0 and 'top' in boundary_flags:
-                        should_probe = True
-                    if i == target_dim - 1 and 'bottom' in boundary_flags:
-                        should_probe = True
-                    if j == 0 and 'left' in boundary_flags:
-                        should_probe = True
-                    if j == target_dim - 1 and 'right' in boundary_flags:
-                        should_probe = True
-                    if should_probe and local_prob >= effective_threshold * 0.5:
-                        # Marginal signal + boundary activation → probe deeper
-                        next_level.append(sub_bounds)
-                        if verbose:
-                            print(f"  │  Boundary probe: {sub_bounds} (prob={local_prob:.3f})")
 
     return next_level
 
@@ -480,6 +492,20 @@ def _run_level_classical(
                            and ttl_key in ttl_map
                            and ttl_map[ttl_key] > 0)
 
+                # Sondage de bord : meme logique que le chemin VQA, y compris
+                # la correction du double enregistrement (voir `_run_level`).
+                # Les deux bras doivent rester structurellement identiques,
+                # sans quoi leur comparaison mesure la difference de code
+                # autant que celle du critere.
+                should_probe = (
+                    local_score < effective_threshold
+                    and local_score >= effective_threshold * 0.5
+                    and ((i == 0 and 'top' in boundary_flags)
+                         or (i == target_dim - 1 and 'bottom' in boundary_flags)
+                         or (j == 0 and 'left' in boundary_flags)
+                         or (j == target_dim - 1 and 'right' in boundary_flags))
+                )
+
                 if local_score >= effective_threshold:
                     next_level.append(sub_bounds)
                     # Reset TTL on fresh detection
@@ -491,27 +517,16 @@ def _run_level_classical(
                     ttl_map[ttl_key] -= 1
                     if verbose:
                         print(f"  │  TTL keep (classical): {sub_bounds} (ttl={ttl_map[ttl_key]})")
+                elif should_probe:
+                    next_level.append(sub_bounds)
+                    if verbose:
+                        print(f"  │  Boundary probe (classical): {sub_bounds} "
+                              f"(score={local_score:.3f})")
                 else:
                     active_patches.append({
                         'bounds': sub_bounds, 'depth': depth + _offset,
                         'score': local_score, 'type': 'coarse_leaf',
                     })
-
-                # Boundary-aware probing (same logic as VQA path)
-                if not has_ttl and local_score < effective_threshold:
-                    should_probe = False
-                    if i == 0 and 'top' in boundary_flags:
-                        should_probe = True
-                    if i == target_dim - 1 and 'bottom' in boundary_flags:
-                        should_probe = True
-                    if j == 0 and 'left' in boundary_flags:
-                        should_probe = True
-                    if j == target_dim - 1 and 'right' in boundary_flags:
-                        should_probe = True
-                    if should_probe and local_score >= effective_threshold * 0.5:
-                        next_level.append(sub_bounds)
-                        if verbose:
-                            print(f"  │  Boundary probe (classical): {sub_bounds} (score={local_score:.3f})")
 
     return next_level
 
