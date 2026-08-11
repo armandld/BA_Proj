@@ -126,11 +126,111 @@ Neuf défauts, chacun mesuré avant et après correction :
 | D-7 | la projection ignore le mode de Nyquist : elle n'est ni exacte ni idempotente sur champ bruité | 0,378 | **1,1e−14** |
 | D-8 | le hamiltonien borné encode des coefficients exactement nuls sans lever | non détecté | **lève** |
 | — | le critère Q pondère la déformation de moitié et compte sa partie isotrope | cisaillement +0,25 | **0** |
+| D-9 | l'ablation ψ mesure la fenêtre sur `physical_score` là où le pipeline fournit `classical_score` | « annihilation sur 42 ordres » | **ZZ domine K de 1,5 à 8,2×** |
+| D-11 | la diode de choc s'applique au **cisaillement** : les rôles normal/tangentiel sont échangés | rapport compression/cisaillement **0,500** ; diode inerte | **2,0** ; diode vivante |
+| D-12 | `PhysicalMapperV2` annonce que ν, η et dx influencent sa sortie | trois des quatre sans effet | docstring alignée |
+| D-13 | les bords gauche et haut de l'hamiltonien lisent l'arête **intérieure** | asymétrie de 1,2 à 7,0 % sur patch symétrique | **symétrique** |
+| D-14 | la réduction des champs tronque là où celle du score couvre tout | 94,1 % de couverture à la profondeur 3 | **100 %** |
+| D-15 | `postprocess` accepte des comptes bruts pour des probabilités | marginales ~1000, tout au-dessus du seuil | **refusé** |
+| D-16 | la liste de patchs AMR **se recouvre elle-même** | jusqu'à 25 % du domaine compté deux fois | **0 %, sans trou** |
+| D-17 | trois sites hors de `src/` gardent la convention pré-D-1 | enstrophie tracée = **0 %** de sa valeur | **0,02 %** d'écart |
+| D-19 | un backend inconnu construit un `VQARuntime` mort sans erreur | panne à des dizaines de lignes de sa cause | **lève** |
+| D-20 | le cache d'ansatz confond deux hamiltoniens | même objet pour des coefficients disjoints | **séparés** |
+| D-21 | le flux descend par un lissage puis un échantillonnage bilinéaire | pic conservé à **38 %** (orszag_tang) | **100 %** |
 
 **D-3 est le plus lourd pour l'interprétation.** Les 345 essais Optuna ont
 été jugés par une fonction objectif dont la pondération était aveugle à
 toute rotation solide. Aucun résultat de performance antérieur n'est donc
 attribuable au modèle seul.
+
+`[M-14]` **La table passe de neuf à vingt et un défauts.** Les douze
+nouveaux viennent d'un **audit de contrat** : au lieu de vérifier des
+valeurs, on demande à chaque fonction ce qu'elle prétend faire, si elle
+consomme les entrées que sa signature annonce, si elle rend la forme et le
+domaine promis, et si deux chemins censés coïncider coïncident encore.
+
+Cette dernière question a produit la moitié des trouvailles — D-11 (la diode
+contre sa propre docstring), D-13 (le bord gauche contre le bord droit),
+D-14 et D-21 (la réduction des champs contre celle du score). Aucun test de
+valeur ne pouvait les voir : **tous rendent un résultat plausible**.
+
+`[M-15]` **Deux d'entre eux renversent une lecture publiée.**
+
+**D-9** — le mécanisme annoncé (« la fenêtre gaussienne annihile le
+couplage ZZ, donc l'ablater ne change rien ») est **faux**. Il avait été
+mesuré sur le mauvais score. Le vrai mécanisme, lu sur le chemin correct :
+l'état fondamental est **uniforme sur 100 %** des instantanés, `no_ZZ`
+change la décision de 0,000 et `no_Z` de 0,750. Un couplage ferromagnétique
+est trivialement satisfait par un état uniforme : **le problème ne contient
+aucune frustration à la taille déployée**, il n'y a rien de combinatoire à
+résoudre. C'est un argument *plus fort* que l'annihilation, et il renforce
+H0b.
+
+**D-1 rendait le terme ZZZZ aveugle aux vortex.** Deux tests QAOA
+affirmaient qu'un vortex de Lamb-Oseen ne gagne aucun contraste spatial. Ils
+mesuraient juste, mais la cause n'était pas le QAOA. Attribution sur le même
+vortex, 16 tirages par ligne, tout le reste égal :
+
+| `fixed_curl` | contraste | σ | max\|K\| |
+|---|---|---|---|
+| False (historique) | −0,00725 | −3,4 | 0,0553 |
+| **True** | **+0,05672** | **+5,7** | **1,2545** |
+
+Le coefficient de plaquette est **23× plus grand** dès que le rotationnel
+voit la rotation. Le terme dont la seule raison d'être est de détecter une
+circulation était numériquement mort sur un vortex pur. Réserve : mesuré sur
+le harnais **v1** ; sur le v2 l'effet est une redistribution, pas une
+amplification uniforme.
+
+### Quel mappeur a produit le nombre ? `[M-16]`
+
+*(section nouvelle — cette distinction n'apparaissait nulle part, et elle
+change la portée de plusieurs verdicts)*
+
+Le dépôt contient **deux** mappeurs d'hamiltonien, et ils ne sont pas
+interchangeables :
+
+| | `PhysicalMapper` (v1) | `PhysicalMapperV2` |
+|---|---|---|
+| utilisé par | **`src/pipeline.py`** — la boucle fermée, niveau 3, Pareto | les scripts de `study/` |
+| hyperparamètres | σ, β_curl, γ_hydro, γ_mag, κ, w_z_frac — **entraînés** | aucun (poids fixes) |
+| ν, η, dx | entrent via `Re_h = v_jump·dx/ν` | **n'entrent pas du tout** |
+| échelle des champs | agit | **sans effet** (×10 → sortie identique) |
+
+Le v2 est **adimensionnel** : mesuré, dx de 1,0 à 0,001 laisse `C`, `K` et
+`H` bit-à-bit identiques, et ν et η sont absents du fichier. Deux
+conséquences pour la lecture :
+
+- **H4 (transfert)** — un transfert entre nombres de Reynolds est
+  *trivialement* satisfait par les coefficients du v2, puisque Re n'y entre
+  pas. Toute dépendance en Re ne peut venir que du score externe.
+- Chaque verdict doit dire **lequel des deux** l'a produit. Un résultat v2
+  ne se transporte pas tel quel à la boucle fermée, qui tourne sur le v1.
+
+### Ce que le circuit peut déplacer, et par quel canal `[M-17]`
+
+*(section nouvelle — c'est le contrôle qui manque à H0b)*
+
+La couche de coût `exp(−iγH)` est **diagonale** : elle n'ajoute que des
+phases et ne peut déplacer **aucune** probabilité de mesure. Mesuré en
+balayant γ de 0 à 2π : écart maximal **4,4e−16**. Seul le mixeur
+`exp(−iβ ΣXᵢ)` déplace `P(|1⟩)`, et β est borné par construction à
+`π/(4·reps) = 0,393 rad`.
+
+Tout ce que l'hamiltonien apporte à la décision passe donc par son
+interaction avec le mixeur. En balayant toute la grille admissible — ce
+qu'un optimiseur *parfait* atteindrait, pas ce que COBYLA trouve :
+
+| | médiane sur 5 patchs réels |
+|---|---|
+| mixeur seul | 0,254 |
+| mixeur + hamiltonien | 0,490 |
+| **apport de l'hamiltonien** | **0,236** |
+
+L'hamiltonien n'est pas inerte. Mais **le témoin correct pour mesurer son
+apport est le mixeur seul, pas le score classique** — et aucune campagne du
+dépôt n'utilise ce témoin. « Le QAOA déplace-t-il la décision ? » ne
+distingue pas « le mixeur la déplace » de « la physique la déplace ».
 
 ### Les hypothèses
 
@@ -176,6 +276,23 @@ présupposé.
   la correction du label, et aucune conclusion positive n'est établie.
 
 **H3 — l'information des voisins.**
+
+`[M-18]` *Réserve structurelle sur toute ablation ZZ / ZZZZ.* Les deux
+portes qui pilotent ces termes, `g_strain` et `g_rot`, somment à **1
+exactement** pour tout Q — c'est une identité algébrique,
+`1/(1+e^x) + 1/(1+e^−x) = 1`. Elles ne peuvent jamais être actives
+ensemble, ni inactives ensemble.
+
+Le ZZ et le ZZZZ sont donc une **partition d'un unique scalaire
+d'Okubo-Weiss**, pas deux détecteurs indépendants. Retirer le ZZ ne retire
+pas une source d'information distincte du ZZZZ : cela déplace le poids d'un
+côté à l'autre du même signal. Toute phrase du papier les présentant comme
+deux apports séparables est à réécrire.
+
+Même famille, mesuré au passage : dans la branche hydrodynamique, `f_Re` et
+`mic_v` sont deux reparamétrages **monotones du même scalaire** (égaux à
+1e−12 près). Le coefficient affiche deux facteurs physiques là où il n'y a
+qu'une variable.
 
 - **H3a** *(confirmée, en distribution seulement)* — le gain apporté par un
   cône de 45 features sur les 9 features locales est faible et **décroît**
@@ -291,6 +408,25 @@ résultats, sans exposer la méthode, qui est pourtant une contribution)*
   où l'instance est souvent triviale.
 - **Les hyperparamètres viennent d'une campagne incomplète** : phase1
   seulement, 345 essais, interrompue, jugée par l'objectif défectueux D-3.
+- `[M-19]` **Les hyperparamètres optimisent un problème qui n'existe plus.**
+  Ils ont été ajustés contre un pipeline portant D-1, D-11, D-13, D-14, D-16
+  et D-21 actifs. Trois de ces défauts touchent directement ce que le
+  mappeur v1 consomme : D-1 change `Q_OW`, `ω_z` et `J_z`, donc les **trois
+  portes** que κ pilote ; D-14 et D-21 changent les champs et le flux
+  grossiers qu'il reçoit ; D-16 change la liste de patchs, donc le coût
+  contre lequel λ arbitre. Les valeurs de σ, β_curl, κ et θ_amr sont des
+  optima **d'un autre problème**.
+
+  Une réoptimisation ciblée s'impose donc avant toute reprise des chiffres
+  de performance. Réserve : `g_strain + g_rot ≡ 1` signifie que κ ne
+  contrôle **qu'un seul** degré de liberté ; l'espace à réoptimiser est plus
+  petit qu'il n'en a l'air.
+- `[M-20]` **Seize des cent quatre-vingts nombres publiés ne se recalculent
+  plus depuis leurs artefacts.** L'agrégateur reste à 0 manquant, mais seize
+  lignes diffèrent de leur référence — ce sont exactement les nombres que
+  les corrections ont déplacés (t17, t11b). Ils doivent être **republiés ou
+  justifiés ligne par ligne** avant soumission ; les laisser en écart
+  reviendrait à publier des valeurs qu'aucun artefact ne produit.
 
 ---
 
@@ -326,3 +462,34 @@ résultats, sans exposer la méthode, qui est pourtant une contribution)*
 | M-11 | correction de la contradiction sur H3 | le plan concluait « les voisins sont inutiles » alors que H3b est réfutée |
 | M-12 | H0b mis en avant devant H3 | H0b ferme l'approche plus directement |
 | M-13 | chiffres de non-déterminisme QAOA harmonisés | valeurs mesurées sur 45 paires, avec la distinction valeur/classement |
+| M-14 | table des défauts portée de 9 à **21** | douze défauts trouvés par audit de contrat ; la moitié par la question « deux chemins censés coïncider coïncident-ils ? », qu'aucun test de valeur ne pose |
+| M-15 | **deux lectures publiées renversées** | D-9 : le mécanisme n'est pas l'annihilation du ZZ mais l'**absence de frustration** — argument plus fort, qui renforce H0b. D-1 : le terme ZZZZ était **numériquement mort sur un vortex**, coefficient 23× plus petit |
+| M-16 | section « quel mappeur a produit le nombre ? » | le dépôt en a **deux** et ils ne sont pas interchangeables : la boucle fermée tourne sur v1 (entraîné, dimensionnel), `study/` sur v2 (sans paramètre, **adimensionnel**). H4 s'en trouve affaiblie |
+| M-17 | section « ce que le circuit peut déplacer » | γ seul ne déplace **rien** (4,4e−16) ; seul le mixeur agit, borné à 0,393 rad. Le témoin correct pour H0b est **le mixeur seul**, et aucune campagne ne l'utilise |
+| M-18 | réserve structurelle sur toute ablation ZZ / ZZZZ | `g_strain + g_rot ≡ 1` : ce sont deux faces d'un **unique** scalaire, pas deux détecteurs. Une ablation déplace le poids, elle ne retire pas une source |
+| M-19 | la réoptimisation devient un préalable, pas une option | les hyperparamètres optimisent un problème que six corrections ont modifié |
+| M-20 | les 16 écarts de la table maître deviennent une dette explicite | publier une valeur qu'aucun artefact ne recalcule est exactement ce que le dépôt s'interdit |
+
+---
+
+## Ce qu'il reste à faire, dans l'ordre `[M-19]` `[M-20]`
+
+Trois des sections ci-dessus décrivent un état qui n'existe pas encore : les
+campagnes n'ont pas été relancées depuis les corrections. L'ordre contraint
+est le suivant, chaque étape conditionnant la suivante :
+
+1. **Réoptimisation ciblée** de `beta_curl`, `kappa`, `threshold_amr`
+   (~60 essais). Sans elle, tout chiffre de performance mesure un réglage
+   ajusté pour un pipeline différent.
+2. **Relance des campagnes** sur le code corrigé — c'est la seule façon de
+   savoir si les verdicts de H0b, H3 et H4 tiennent. En particulier : le
+   terme ZZZZ n'était pas visible du côté v1 ; sa remise en état peut
+   déplacer H3.
+3. **Republication ou justification** des seize lignes en écart.
+4. **Ajout du témoin « mixeur seul »** aux campagnes H0b — sans lui, l'apport
+   de l'hamiltonien n'est pas séparable d'une rotation de mixeur.
+
+Aucune des conclusions actuelles n'est invalidée par ces étapes ; elles sont
+**en attente de confirmation** sur le code corrigé, ce qui n'est pas la même
+chose. Le papier peut d'ores et déjà défendre la **méthode** et les
+**vingt et un défauts mesurés**, qui ne dépendent d'aucune de ces relances.
