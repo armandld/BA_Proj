@@ -2843,3 +2843,95 @@ ce que le test mesure.
 Si une graine est fixée un jour dans `src/VQA/`, le premier de ces tests
 tombe : c'est voulu. Il faudra alors rétablir les assertions exactes et le
 consigner ici.
+
+---
+
+# La prolongation globale de l'AMR est fausse — D-2
+
+## Deux écarts de convention qui se composent
+
+`MHDSolver._upsample_global` prolonge le champ grossier vers la grille fine
+dans le chemin AMR (`step_layered`, correction tau). Elle cumule deux
+erreurs, aucune des deux ne produisant de plantage :
+
+1. **Convention d'échantillonnage.** Elle vise `(j+0.5)/f − 0.5`, c'est-à-dire
+   le **centre** des cellules, alors que `PeriodicGrid` place ses points aux
+   **nœuds** (`linspace(0, L, N, endpoint=False)`). D'où un décalage constant
+   de **−0.375 cellule grossière** à facteur 4.
+2. **Mode d'enroulement.** Elle passe `mode='wrap'` à `map_coordinates`.
+   Depuis scipy 1.6, ce mode n'est **pas** l'enroulement périodique : c'est
+   `'grid-wrap'` qui l'est. `'wrap'` traite le tableau comme si le premier et
+   le dernier échantillon coïncidaient.
+
+Le docstring annonce « respecte la topologie torique du domaine ».
+
+## Mesure
+
+`sin(x)·cos(y)`, 32 → 128, scipy 1.17.1 :
+
+| convention | mode | erreur max |
+|---|---|---|
+| centre (code actuel) | `wrap` | **2.49e−1** |
+| centre | `grid-wrap` | 7.35e−2 |
+| nœud | `wrap` | 1.79e−1 |
+| **nœud** | **`grid-wrap`** | **7.74e−6** |
+
+**Quatre ordres de grandeur** séparent le code de ce que la même
+interpolation cubique atteint avec les bonnes conventions.
+
+## Ce que ça coûte au chemin AMR — et où
+
+Orszag-Tang, N=64, 15 pas, `max_depth=2` (donc `cf=4`), écart entre le code
+et la variante corrigée :
+
+| couverture par les patchs | écart relatif |
+|---|---|
+| totale | **2.7e−15** (arrondi) |
+| un quart du domaine | **1.67 %** |
+| aucun patch | **1.79 %** |
+
+**Sous un patch actif, l'erreur s'annule exactement.** C'est le principe de
+la correction tau : la phase 1 ajoute le delta grossier prolongé, la phase 2
+le retranche et lui substitue le delta fin — la prolongation disparaît de la
+différence. Elle ne survit que sur le **fond non raffiné**.
+
+Vérifié aussi : à `max_depth=0`, `step_layered` est **bit-à-bit identique** à
+`step_full` (écart exactement 0.0). La garantie annoncée ligne 561 tient.
+
+## Pourquoi cela compte pour le manuscrit
+
+`src/pipeline.py:480,485` : les **deux** bras — `sim_quantum` et
+`sim_classical` — avancent par `step_layered`. L'erreur leur est donc
+**commune** et ne biaise pas leur comparaison mutuelle. Mais le témoin
+avance par `step_full` (ligne 478), qui n'a pas le défaut.
+
+Conséquence : l'erreur de champ de chaque bras **contre la référence** porte
+une composante systématique qui ne doit rien au critère de raffinement. Elle
+comprime la plage dans laquelle un meilleur critère pourrait se distinguer,
+et pousse les deux bras vers le bas ensemble.
+
+**Cela pèse directement sur la décision de réoptimiser.** Réoptimiser les
+hyperparamètres contre une métrique qui porte un plancher de ~1.7 %
+d'origine numérique, c'est optimiser en partie contre ce défaut. La
+correction de `_upsample_global` devrait donc précéder toute réoptimisation,
+pas la suivre.
+
+## Décision requise
+
+Corriger `_upsample_global` change **tout nombre publié passant par
+`step_layered`** — soit la campagne de boucle fermée entière. Ce n'est pas
+une correction « au passage » : elle demande une décision explicite et une
+re-exécution. Le défaut est donc mesuré, testé et consigné ici, mais
+`src/` n'est **pas** modifié.
+
+## Tests
+
+`tests/test_amr_resampling_analytic.py`, 30 tests :
+
+| ce qui est verrouillé | |
+|---|---|
+| restriction | moyenne préservée exactement, moyenne de bloc cellule par cellule, dilution d'un pic (contraste voulu avec le max-abs de `RescaleArrays`) |
+| prolongation | champ uniforme préservé, identité à facteur 1, absence de couture, **l'écart aux conventions correctes** et le **biais de décalage** |
+| champs physiques | toutes les clés à la bonne taille, moyenne préservée, halo, enroulement torique |
+| détection de bord | chaque bord reconnu pour lui-même, anomalie intérieure ignorée, patch uniformément actif silencieux |
+| impact AMR | annulation sous patch, survie sur le fond, `max_depth=0` identique à `step_full` |
