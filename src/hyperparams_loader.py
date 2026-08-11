@@ -113,13 +113,17 @@ def _load_new_format(data, method, scenario, combo, phase, lambda_cost, rank):
     default = data.get('default', {})
     entry = default.get(method)
     if entry is None:
-        # Fallback: try the other method
-        for m in ['quantum', 'classical']:
-            if m in default:
-                entry = default[m]
-                break
-    if entry is None:
-        raise KeyError(f"No default {method} params found in JSON")
+        # Ce bloc renvoyait AUTREFOIS les parametres de l'autre bras quand
+        # celui demande manquait. Demander 'quantum' et recevoir 'classical'
+        # sans le savoir rend la comparaison des deux bras vide de sens : les
+        # deux tourneraient avec le meme reglage, et rien ne le signalerait.
+        # On leve.
+        available = sorted(k for k in default if isinstance(default[k], dict))
+        raise KeyError(
+            f"No default '{method}' params in the hyperparameter file. "
+            f"Available arms: {available}. Refusing to substitute another "
+            f"arm's parameters: '{method}' and the substitute would be "
+            f"indistinguishable downstream.")
     return dict(entry['params'])
 
 
@@ -136,8 +140,16 @@ def _load_from_training_phases(data, method, phase, lambda_cost, rank):
 
     lambdas = method_phases[phase]
     if lambda_cost is None:
-        # Pick first available lambda
-        lambda_cost = sorted(lambdas.keys())[0]
+        # Choisir le premier lambda par ordre alphabetique est arbitraire des
+        # qu'il y en a plusieurs : l'appelant recevrait un jeu de parametres
+        # sans savoir lequel. Tant qu'il n'y en a qu'un, le choix est force
+        # et donc licite.
+        if len(lambdas) != 1:
+            raise KeyError(
+                f"Phase '{phase}' ({method}) holds {len(lambdas)} cost "
+                f"weights {sorted(lambdas)}; pass lambda_cost explicitly "
+                f"rather than receiving an arbitrary one.")
+        lambda_cost = next(iter(lambdas))
     if lambda_cost not in lambdas:
         available = list(lambdas.keys())
         raise KeyError(f"Lambda '{lambda_cost}' not in {phase}. Available: {available}")
