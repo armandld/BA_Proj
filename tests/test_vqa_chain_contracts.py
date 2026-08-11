@@ -241,3 +241,130 @@ def test_an_unknown_backend_is_refused_instead_of_silently_defaulting():
     from VQA.optimize import optimize
     with pytest.raises(ValueError, match="Unsupported backend"):
         optimize(QuantumCircuit(1), "un backend qui n'existe pas", 0, False)
+
+
+# ======================================================================
+#  5. Ce que le circuit PEUT deplacer, et par quel canal
+# ======================================================================
+#
+# La couche de cout exp(-i gamma H) est DIAGONALE : elle n'ajoute que des
+# phases, elle ne peut changer aucune probabilite de mesure. Seul le mixeur
+# exp(-i beta sum X) deplace P(|1>). Et beta est borne a pi/(4 reps).
+#
+# Consequence structurelle : tout ce que l'Hamiltonien apporte a la DECISION
+# passe par son interaction avec le mixeur. Ces tests le figent, et bornent
+# de combien.
+
+_REPS = 2
+_BETA_MAX = np.pi / (4 * _REPS)
+
+
+def _deployed_circuit(reps=_REPS, dim=2, seed=0):
+    from Simulation.HamiltParams_v2 import PhysicalMapperV2
+    from Simulation.PhysToAngle import AngleMapper
+    from Simulation.grid import curl_z
+    from VQA.mapping import mapping
+
+    p = dim + 2
+    rng = np.random.default_rng(seed)
+    f = {k: rng.normal(size=(p, p)) for k in ("vx", "vy", "Bx", "By")}
+    f["Jz"] = curl_z(f["Bx"], f["By"], True)
+    sc = AngleMapper.classical_score(f)
+    params = PhysicalMapperV2(dx=0.02).compute_coefficients(None, sc, f, 0.1496)
+    th = 2.0 * np.arcsin(np.sqrt(np.clip(sc, 0.0, 1.0)))
+    z = np.zeros((p, p))
+    qc, _ = mapping({"theta_h": th, "theta_v": th.copy(),
+                     "psi_h": z, "psi_v": z.copy()},
+                    params, False, period_bound=False, reps=reps)
+    return qc, sc
+
+
+def _marg_of(qc, x):
+    return np.array(postprocess(
+        Statevector.from_instruction(qc.assign_parameters(x)).probabilities_dict(),
+        qc.num_qubits, False))
+
+
+def test_the_qaoa_parameter_order_is_all_betas_then_all_gammas():
+    """Contrat inter-bibliotheque : `execute` construit x0 comme
+    [zeros(reps), rampe_gamma]. Si une version de Qiskit reordonnait les
+    parametres de QAOAAnsatz, la rampe s'appliquerait au MIXEUR et la borne
+    beta au terme de cout — sans la moindre erreur."""
+    for reps in (1, 2, 3):
+        qc, _ = _deployed_circuit(reps=reps)
+        names = [q.name for q in qc.parameters]
+        assert names == [f"β[{i}]" for i in range(reps)] + \
+                        [f"γ[{i}]" for i in range(reps)], names
+
+
+def test_zero_parameters_reproduce_the_classical_initialisation_exactly():
+    """C'est la porte de sortie du raccourci « Hamiltonien nul » : rendre
+    les marginales de theta-init. Elle doit etre exacte, pas approchee."""
+    qc, sc = _deployed_circuit()
+    m = _marg_of(qc, np.zeros(2 * _REPS))
+    assert np.allclose(m[:4], sc[1:-1, 1:-1].ravel(), atol=1e-12)
+
+
+@pytest.mark.parametrize("gamma", [0.3, 1.0, 3.0, 10.0, 2 * np.pi])
+def test_gamma_alone_moves_no_probability_at_all(gamma):
+    """L'Hamiltonien est diagonal : sa couche n'ajoute que des phases."""
+    qc, _ = _deployed_circuit()
+    base = _marg_of(qc, np.zeros(2 * _REPS))
+    x = np.concatenate([np.zeros(_REPS), np.full(_REPS, gamma)])
+    assert np.max(np.abs(_marg_of(qc, x) - base)) < 1e-12, (
+        "gamma a deplace une probabilite : la couche de cout ne serait plus "
+        "diagonale, et l'enumeration exhaustive de l'etat fondamental — sur "
+        "laquelle repose toute la campagne — cesserait d'etre valide")
+
+
+def test_the_mixer_is_the_only_channel_that_moves_the_decision():
+    """Meme constat, formule dans l'autre sens : a beta fixe, balayer gamma
+    de 0 a 2 pi ne bouge rien tant que beta vaut zero."""
+    qc, _ = _deployed_circuit(seed=3)
+    base = _marg_of(qc, np.zeros(2 * _REPS))
+    worst = max(
+        np.max(np.abs(_marg_of(qc, np.concatenate(
+            [np.zeros(_REPS), np.full(_REPS, g)])) - base))
+        for g in np.linspace(0.0, 2 * np.pi, 25))
+    assert worst < 1e-12
+
+
+def test_beta_is_bounded_and_the_bound_is_the_documented_one():
+    import inspect
+
+    from VQA import execute as ex
+    src = inspect.getsource(ex.execute)
+    assert "beta_max = np.pi / (4 * reps)" in src
+    assert np.pi / (4 * 2) == pytest.approx(0.3927, abs=1e-4)
+
+
+def test_the_hamiltonian_can_only_act_through_the_mixer_and_by_how_much():
+    """Borne superieure de ce que le circuit peut deplacer, et part
+    attribuable a l'Hamiltonien.
+
+    On balaie toute la grille admissible (beta borne, gamma libre) — c'est
+    donc ce qu'un optimiseur PARFAIT atteindrait, pas ce que COBYLA trouve.
+
+    Trois quantites : le mixeur seul (gamma=0), le mixeur avec
+    l'Hamiltonien, et la difference. Si la difference tombait a zero,
+    l'Hamiltonien serait inerte et la campagne mesurerait une rotation de
+    mixeur.
+    """
+    qc, _ = _deployed_circuit(seed=5)
+    base = _marg_of(qc, np.zeros(2 * _REPS))
+    betas = np.linspace(-_BETA_MAX, _BETA_MAX, 13)
+    gammas = np.linspace(0.0, 2 * np.pi, 17)
+    mixer_only = max(
+        np.max(np.abs(_marg_of(qc, np.concatenate(
+            [np.full(_REPS, b), np.zeros(_REPS)])) - base)) for b in betas)
+    both = 0.0
+    for b in betas:
+        for g in gammas:
+            both = max(both, np.max(np.abs(_marg_of(qc, np.concatenate(
+                [np.full(_REPS, b), np.full(_REPS, g)])) - base)))
+    assert both >= mixer_only - 1e-12
+    assert mixer_only > 0.01, "le mixeur borne ne deplace rien du tout"
+    assert both - mixer_only > 0.01, (
+        "l'Hamiltonien n'apporte rien au-dela d'une rotation de mixeur : "
+        "le circuit mesurerait alors le mixeur, pas la physique")
+    assert both < 1.0, "le deplacement ne peut pas exceder une probabilite"

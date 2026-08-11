@@ -3118,3 +3118,72 @@ qu'aucun test antérieur ne posait :
 - D-14 : la réduction des champs contre celle du score.
 
 C'est la classe de test à étendre en priorité, pas le nombre d'assertions.
+
+---
+
+# Ce que le circuit peut déplacer, et par quel canal
+
+Ce n'est pas un défaut : c'est une propriété structurelle du circuit
+déployé, mesurée parce que l'audit de contrat posait la question « à quoi
+sert ce paramètre ? ». Elle borne par le haut ce que H0b et H2 peuvent
+espérer mesurer.
+
+La couche de coût `exp(−iγH)` est **diagonale** : elle n'ajoute que des
+phases et ne peut changer aucune probabilité de mesure. Seul le mixeur
+`exp(−iβ ΣXᵢ)` déplace `P(|1⟩)`. Mesuré sur les coefficients v2 réels
+(Orszag-Tang N=256, seuil 0.1496, `reps=2`), en balayant γ de 0 à 2π :
+
+| canal | déplacement max d'une probabilité |
+|---|---|
+| γ seul, β = 0 | **4.4e−16** — rien, aux erreurs d'arrondi près |
+
+Et β est borné par construction à `π/(4·reps) = 0.393 rad`
+(`execute.py:112`, pour empêcher COBYLA de partir à β=1 et d'écraser tout
+le raffinement).
+
+**Conséquence : tout ce que l'Hamiltonien apporte à la décision passe par
+son interaction avec le mixeur.** En balayant toute la grille admissible —
+donc ce qu'un optimiseur *parfait* atteindrait, pas ce que COBYLA trouve :
+
+| patch | mixeur seul | mixeur + H | apport de H |
+|---|---|---|---|
+| (100,100) | 0.3776 | 0.5359 | 0.1583 |
+| (40,180) | 0.2667 | 0.4267 | 0.1600 |
+| (200,60) | 0.2541 | 0.4897 | 0.2357 |
+| (128,128) | 0.1028 | 0.4400 | 0.3372 |
+| (10,10) | 0.2238 | 0.5052 | 0.2814 |
+| **médiane** | **0.254** | **0.490** | **0.236** |
+
+Lecture : sur un patch typique, un optimiseur parfait peut déplacer une
+marginale de 0.49 au plus ; environ la moitié de ce déplacement (0.254) est
+une simple rotation de mixeur, indépendante de toute physique. L'Hamiltonien
+n'est donc **pas** inerte — il apporte 0.236 de médiane — mais il ne peut
+agir qu'à travers un canal borné à 0.393 rad, et le témoin correct pour
+mesurer son apport est **le mixeur seul**, pas le score classique.
+
+Aucune campagne du dépôt n'utilise ce témoin. C'est le contrôle qui manque à
+H0b : « le QAOA déplace-t-il la décision ? » ne distingue pas « le mixeur la
+déplace » de « la physique la déplace ».
+
+Vérifié au passage, et fixé par un test parce que c'est un contrat
+inter-bibliothèque qui peut casser sur une mise à jour sans erreur :
+`QAOAAnsatz` ordonne ses paramètres `[β…, γ…]`, ce qui est bien l'ordre que
+`execute` suppose en construisant `x0 = [zeros(reps), rampe_γ]`. Un
+réordonnancement appliquerait la rampe au mixeur et la borne β au terme de
+coût, en silence.
+
+## Tests
+
+`tests/test_vqa_chain_contracts.py`, 41 tests. La trace de bout en bout —
+score (i,j) → qubit k → terme de Pauli → caractère de la chaîne Qiskit →
+marginale — est posée en forçant un qubit connu et en vérifiant qu'il
+ressort à sa place. Une seule convention retournée rendrait la carte de
+décision **spatialement miroir** : même taille, mêmes valeurs, même fraction
+raffinée, indiscernable d'une carte juste par tout test de valeur.
+
+Conforme : ordre des bits petit-boutiste (le commentaire du code annonçait
+l'inverse ; c'est le code qui a raison), `P(|1⟩) = sin²(θ/2) = score` à
+2.4e−15, ψ déplace la phase et jamais la probabilité, l'aplatissement ligne
+par ligne du circuit coïncide avec `idx_H(i,j) = i·dim + j` de
+l'Hamiltonien, et `params = 0` reproduit exactement θ-init (la porte de
+sortie du raccourci « Hamiltonien nul »).
