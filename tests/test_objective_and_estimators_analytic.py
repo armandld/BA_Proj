@@ -490,3 +490,72 @@ def test_second_order_jump_reacts_to_curvature():
     flat = g._get_second_order_jump(g.X, zero, AXIS_X)[3:-3, 3:-3].max()
     bent = g._get_second_order_jump(curved, zero, AXIS_X)[3:-3, 3:-3].max()
     assert bent > flat + 1e-9
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  5. Le chemin de divergence de pipeline()
+# ═══════════════════════════════════════════════════════════════════════
+
+_PIPELINE_SRC = open(os.path.join(_SRC, "pipeline.py"), encoding="utf-8").read()
+
+
+def test_the_divergence_path_scores_with_a_different_formula():
+    """D-5 : deux formules rendues sous la meme cle `combined`.
+
+    Le chemin normal (`score`) pondere l'erreur par la carte d'instabilite.
+    Le chemin de divergence (pipeline.py ~528-539) calcule une L2 NON
+    ponderee : `sqrt(mean((q-r)^2)) / (sqrt(mean(r^2)) + 1e-10)`.
+
+    Les deux nombres partent vers Optuna sous le meme nom. Sur un champ
+    portant une nappe de courant, l'ecart mesure est de 1.8 % — assez pour
+    deplacer un classement d'essais, pas assez pour se voir.
+    """
+    assert "rel_err = np.sqrt(np.mean((arr_q - arr_r)**2)) / (ref_rms + 1e-10)" \
+        in _PIPELINE_SRC, "le chemin de divergence a change de formule"
+    assert "weighted_rmse = np.sqrt(weighted_mse)" in _PIPELINE_SRC
+
+    rng = np.random.default_rng(0)
+    n = 32
+    t = {k: rng.standard_normal((n, n)) * 0.1 for k in FIELDS}
+    t["Jz"][14:18, :] = 5.0                       # nappe de courant
+    q = {k: v + rng.standard_normal((n, n)) * 0.05 for k, v in t.items()}
+
+    weighted = score(q, t, 0.0, n * n, 1, n * n)["phys_score"]
+    plain = float(np.mean([
+        np.sqrt(np.mean((q[v] - t[v]) ** 2))
+        / (np.sqrt(np.mean(t[v] ** 2)) + 1e-10) for v in FIELDS]))
+
+    assert abs(weighted - plain) / weighted > 1e-3, (
+        f"les deux formules coincident ({weighted:.6f} vs {plain:.6f}) : "
+        "si elles ont ete unifiees, mettre a jour ce test")
+
+
+def test_the_divergence_penalty_is_consistent_everywhere():
+    """`DIVERGENCE_PENALTY = 10.0` est redefini QUATRE fois.
+
+    Un seul de ces quatre est au niveau module ; les trois autres le
+    masquent localement. Changer la constante du haut n'aurait donc
+    d'effet que dans un cas sur quatre. Tant que les quatre coincident, le
+    comportement est correct — ce test le verifie plutot que de l'esperer.
+    """
+    import re
+    values = re.findall(r"DIVERGENCE_PENALTY\s*=\s*([0-9.]+)", _PIPELINE_SRC)
+    assert len(values) >= 4, f"{len(values)} definitions trouvees"
+    assert len(set(values)) == 1, (
+        f"les definitions divergent : {values}. Le comportement depend "
+        "desormais de l'endroit du code ou la penalite est lue")
+
+
+def test_a_bug_in_scoring_would_be_reported_as_a_divergence():
+    """`except Exception` avale tout et rend la penalite de divergence.
+
+    Une erreur de programmation dans le calcul du score serait donc
+    rapportee comme « la physique a diverge », et l'essai serait penalise
+    au lieu d'echouer. On epingle la structure : la clause ne filtre aucun
+    type d'exception.
+    """
+    idx = _PIPELINE_SRC.index("            except Exception:")
+    tail = _PIPELINE_SRC[idx:idx + 400]
+    assert "DIVERGENCE_PENALTY" in tail
+    assert "except Exception as" not in tail, (
+        "l'exception est desormais nommee — verifier si elle est journalisee")
