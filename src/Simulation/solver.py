@@ -77,8 +77,27 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        self.Bx = B0 * np.cos(alpha)
-        self.By = B0 * np.sin(alpha)
+        # B = (B0 cos alpha(y), B_guide) — solénoïdal PAR CONSTRUCTION :
+        # Bx ne dépend pas de x et By est constant, donc div B = 0 exactement.
+        #
+        # La version précédente posait B = (B0 cos alpha, B0 sin alpha). Ce
+        # champ a div B = alpha'(y) cos(alpha) != 0 — mesuré 2.62 — et toute
+        # la composante By y était un pur gradient. `enforce_incompressibility`
+        # l'annulait donc intégralement : |By| tombait de 0.707 à 1.6e-6, et
+        # la direction du champ ne tournait plus du tout (amplitude d'angle
+        # 6.4e-7 au lieu de pi/2). Le scénario ne posait aucune torsion.
+        #
+        # En 2-D, un champ solénoïdal dont la direction tourne exige que la
+        # composante parallèle à la variation reste constante : c'est ce que
+        # fait le champ guide B_guide ci-dessous.
+        # La composante VARIABLE doit changer de signe pour que la direction
+        # balaie réellement `twist_angle` : avec Bx = B0 sin(alpha) et alpha
+        # parcourant [-twist/2, +twist/2], l'angle va de
+        # atan2(guide, -B0 sin(twist/2)) à atan2(guide, +B0 sin(twist/2)),
+        # soit exactement `twist_angle` pour guide = B0 cos(twist/2).
+        b_guide = B0 * np.cos(twist_angle / 2.0)
+        self.Bx = B0 * np.sin(alpha)
+        self.By = np.full_like(X, b_guide)
         # Pas de vitesse initiale — la tension magnétique drive la dynamique
         self.vx = np.zeros_like(X)
         self.vy = perturbation * np.sin(X) * (

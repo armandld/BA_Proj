@@ -502,3 +502,89 @@ def test_is_diverged_catches_nan_inf_and_blowup():
         s.vx, s.vy, s.Bx, s.By = tuple(np.array(a) for a in _fields(X, Y))
         s.vx[0, 0] = bad
         assert s.is_diverged(), f"{bad} non detecte"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  6. D-7 — le mode de Nyquist dans la projection
+# ═══════════════════════════════════════════════════════════════════════
+
+def _spectral_div_nyq(fx, fy, dx, zero_nyquist=True):
+    n = fx.shape[0]
+    k = np.fft.fftfreq(n, d=dx) * 2 * np.pi
+    KX, KY = np.meshgrid(k, k, indexing="ij")
+    KX, KY = KX.copy(), KY.copy()
+    if zero_nyquist:
+        KX[n // 2, :] = 0.0
+        KY[:, n // 2] = 0.0
+    return np.real(np.fft.ifft2(1j * KX * np.fft.fft2(fx)
+                                + 1j * KY * np.fft.fft2(fy)))
+
+
+def test_the_projection_is_exact_on_a_noisy_field():
+    """D-7 : le bruit excite le mode de Nyquist, que la projection ignorait.
+
+    Pour un champ REEL de taille paire, +N/2 et -N/2 sont indiscernables et
+    le coefficient de Fourier y est reel ; le multiplier par i*k le rend
+    imaginaire pur, et le `np.real(ifft2(...))` final le jette. La
+    divergence portee par ce mode traversait donc la projection intacte.
+
+    Mesure avant correction : 6.5 % de l'energie de divergence y vivait, et
+    projeter trois fois de suite donnait 5.05 -> 0.378 -> 0.270 -> 0.213 au
+    lieu de zero.
+    """
+    g, X, Y, dx = _mesh(64)
+    rng = np.random.default_rng(42)
+    bx = 1.0 + 0.05 * rng.standard_normal((64, 64))
+    by = 0.05 * rng.standard_normal((64, 64))
+    before = float(np.max(np.abs(_spectral_div_nyq(bx, by, dx))))
+    assert before > 1.0, "le champ test doit avoir une divergence franche"
+    px, py = g.project_divergence_free(bx, by)
+    after = float(np.max(np.abs(_spectral_div_nyq(px, py, dx))))
+    assert after < 1e-12, f"divergence residuelle {after:.3e} sur champ bruite"
+
+
+def test_the_projection_is_idempotent_on_a_noisy_field():
+    """P(P(x)) = P(x) : c'est la definition d'une projection.
+
+    Elle ne tenait pas avant D-7 — chaque application reduisait la
+    divergence d'un facteur ~1.3 sans jamais l'annuler.
+    """
+    g, X, Y, dx = _mesh(64)
+    rng = np.random.default_rng(7)
+    bx = 1.0 + 0.05 * rng.standard_normal((64, 64))
+    by = 0.05 * rng.standard_normal((64, 64))
+    once = g.project_divergence_free(bx, by)
+    twice = g.project_divergence_free(*once)
+    np.testing.assert_allclose(twice[0], once[0], rtol=0, atol=1e-13)
+    np.testing.assert_allclose(twice[1], once[1], rtol=0, atol=1e-13)
+
+
+def test_the_projection_still_preserves_the_mean_on_a_noisy_field():
+    """La correction du Nyquist ne doit pas toucher au mode k=0."""
+    g, X, Y, dx = _mesh(64)
+    rng = np.random.default_rng(3)
+    bx = 1.3 + 0.05 * rng.standard_normal((64, 64))
+    by = -0.4 + 0.05 * rng.standard_normal((64, 64))
+    px, py = g.project_divergence_free(bx, by)
+    assert abs(px.mean() - bx.mean()) < 1e-12
+    assert abs(py.mean() - by.mean()) < 1e-12
+
+
+def test_the_projection_leaves_a_pure_nyquist_field_alone():
+    """Un champ porte par le seul mode de Nyquist n'a pas de divergence
+    representable : la projection ne doit pas le detruire."""
+    n = 64
+    g, X, Y, dx = _mesh(n)
+    checker = np.indices((n, n)).sum(axis=0) % 2 * 2.0 - 1.0   # (-1)^(i+j)
+    px, py = g.project_divergence_free(checker, np.zeros_like(checker))
+    assert float(np.max(np.abs(px - checker))) < 1e-10, (
+        "le mode de Nyquist a ete altere par la projection")
+
+
+def test_the_projection_stays_exact_on_smooth_fields():
+    """Non-regression : la correction ne casse pas le cas lisse."""
+    g, X, Y, dx = _mesh(64)
+    vx = np.sin(X) * np.cos(Y) + 0.5 * np.sin(X)
+    vy = np.cos(X) * np.sin(Y)
+    px, py = g.project_divergence_free(vx, vy)
+    assert float(np.max(np.abs(_spectral_div_nyq(px, py, dx)))) < 1e-12

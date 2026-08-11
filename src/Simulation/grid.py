@@ -179,11 +179,37 @@ class PeriodicGrid:
         # Grille des fréquences (Attention à l'ordre 'ij' comme dans __init__)
         KX, KY = np.meshgrid(kx, ky, indexing='ij')
 
+        # ── Mode de Nyquist ──
+        # Pour un champ RÉEL de taille paire, le mode k = N/2 est ambigu :
+        # +N/2 et -N/2 y sont indiscernables, et son coefficient de Fourier
+        # est réel. Multiplier par i·k le rend imaginaire pur, et le
+        # `np.real(ifft2(...))` final le jette. La divergence portée par ce
+        # mode traversait donc la projection intacte.
+        #
+        # Mesuré sur un champ bruité (noisy_uniform) : le mode de Nyquist
+        # portait 6.5 % de l'énergie de divergence, et projeter trois fois
+        # de suite donnait 5.05 → 0.378 → 0.270 → 0.213 au lieu de zéro.
+        # La projection n'était donc ni exacte ni idempotente dès qu'un
+        # champ avait du contenu à l'échelle de la maille — bruit, mais
+        # aussi les tapers raides du rotor et de Lamb-Oseen.
+        #
+        # La convention standard est d'annuler la dérivée au Nyquist.
+        nyq = self.N // 2
+        if self.N % 2 == 0:
+            KX = KX.copy()
+            KY = KY.copy()
+            KX[nyq, :] = 0.0
+            KY[:, nyq] = 0.0
+
         # 3. Calcul du carré de la norme du vecteur d'onde |k|^2
         K2 = KX**2 + KY**2
         
         # Gestion de la singularité à k=0 (la composante moyenne / DC)
         # On évite la division par 0. La moyenne du flux n'est pas modifiée par la projection.
+        # Annuler la dérivée au Nyquist crée d'autres K2 nuls (le coin
+        # (nyq, nyq) notamment) : la correction y est nulle de toute façon,
+        # puisque KX et KY y valent zéro. On remplace donc tous les zéros.
+        K2 = np.where(K2 == 0.0, 1.0, K2)
         K2[0, 0] = 1.0 
 
         # 4. Calcul de la correction (Projection)
