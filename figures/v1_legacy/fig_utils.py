@@ -482,9 +482,14 @@ def compute_magnetic_energy(sim):
 
 def compute_enstrophy(sim):
     """Omega = integral(omega_z^2) dA  where omega_z = dvy/dx - dvx/dy"""
+    # Convention du depot : axis=0 est x, axis=1 est y (indexing='ij').
+    # Les deux lignes lisaient l'inverse, si bien qu'omega_z valait en fait
+    # dvy/dy - dvx/dx — une combinaison de deformation, nulle sur une
+    # rotation solide. L'« enstrophie » tracee ne mesurait donc pas une
+    # enstrophie. Le carre ne rattrape rien : ce n'est pas un signe oppose.
     dx = sim.grid.dx
-    dvydx = (np.roll(sim.vy, -1, axis=1) - np.roll(sim.vy, 1, axis=1)) / (2 * dx)
-    dvxdy = (np.roll(sim.vx, -1, axis=0) - np.roll(sim.vx, 1, axis=0)) / (2 * dx)
+    dvydx = (np.roll(sim.vy, -1, axis=0) - np.roll(sim.vy, 1, axis=0)) / (2 * dx)
+    dvxdy = (np.roll(sim.vx, -1, axis=1) - np.roll(sim.vx, 1, axis=1)) / (2 * dx)
     omega_z = dvydx - dvxdy
     return np.sum(omega_z**2) * dx**2
 

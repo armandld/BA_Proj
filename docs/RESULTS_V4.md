@@ -3351,3 +3351,99 @@ refusés.
 
 **V1 non-QAOA après toutes les corrections : 844 succès, 4 ignorés** (15 min
 46 s), une fois ces cinq tests mis en accord avec le nouveau contrat.
+
+---
+
+# D-17 / D-18 — le balayage de D-1 s'était arrêté à `src/`
+
+L'audit de contrat appliqué à `study/` et `figures/` a trouvé quatre sites
+qui réimplémentaient encore leur propre opérateur sous la convention
+inverse. La correction D-1 n'avait touché que `src/Simulation/`.
+
+## Ce que l'opérateur « legacy » calcule réellement
+
+```
+correct : (roll(fy,-1,AXIS_X) - fy) - (roll(fx,-1,AXIS_Y) - fx) = ∂fy/∂x - ∂fx/∂y
+legacy  : (roll(fy,-1,AXIS_Y) - fy) - (roll(fx,-1,AXIS_X) - fx) = ∂fy/∂y - ∂fx/∂x
+```
+
+Ce n'est **pas** un rotationnel de signe opposé — auquel cas `abs` ou le
+carré auraient tout rattrapé. C'est son **complémentaire** : une combinaison
+de déformation, nulle là où le rotationnel est maximal, maximale là où il
+s'annule.
+
+| champ | rotationnel | opérateur legacy |
+|---|---|---|
+| rotation solide | +0.392699 | **0.000000** |
+| cisaillement pur | −0.196350 | **0.000000** |
+| compression pure | 0.000000 | −0.392699 |
+
+## D-17 — trois sites, trois quantités mal nommées
+
+| fichier | fonction | conséquence |
+|---|---|---|
+| `study/h2b_prediction/h2b_v1_hamiltonian_loso.py` | `jz_from_b` | rendait 0 sur une rotation solide ; appelle désormais `forward_curl_z` |
+| `study/h2b_prediction/h2b_ceiling_random_split.py` | `omega_z`, `J_z` (features ML) | deux des neuf features de H2b mesuraient la déformation |
+| `figures/v1_legacy/fig_utils.py` | `compute_enstrophy` | l'enstrophie tracée n'était pas une enstrophie |
+
+Validation analytique de `compute_enstrophy`, cisaillement pur périodique
+`vx = sin y`, enstrophie exacte `2π² = 19.7392` :
+
+| version | valeur | écart |
+|---|---|---|
+| corrigée | 19.7352 | 0.02 % (erreur de la différence centrée) |
+| ancienne | **0.0000** | **100 %** |
+
+**Piège de validation à retenir** : sur Taylor-Green les deux conventions
+rendent la **même** intégrale, par symétrie de leurs carrés. Un test écrit
+sur ce champ aurait passé sans rien vérifier. Le fichier de test le fige
+explicitement.
+
+`study/pipeline/hard_patch_labels.py` et `study/common/qaoa_inputs.py`
+étaient signalés par le balayage mais **vérifiés corrects** — ils gardent des
+axes numériques nus pour rester bit-à-bit identiques aux artefacts publiés,
+et figurent dans une liste d'exceptions explicitement documentée.
+
+## D-18 — la moyenne de base était prise en travers de la couche
+
+`study/pipeline/dns_validation.py`, deux défauts dans le même fichier.
+
+**`mean_sq_current`** portait la même inversion d'axes : `⟨J²⟩` valait
+`⟨(∂By/∂y − ∂Bx/∂x)²⟩`.
+
+**`fluctuating_KE`** est plus grave. Elle retranche une moyenne pour ne
+garder que la perturbation ; la moyenne doit donc être prise le long de la
+direction **homogène**. `init_kelvin_helmholtz` construit son profil à
+partir de `grid.Y`, et `meshgrid(x, y, indexing='ij')` fait varier Y le long
+de l'**axe 1** — la direction homogène est l'axe 0. Le code moyennait sur
+l'axe 1, **à travers la couche de cisaillement**, et ne soustrayait donc
+rien. Le commentaire disait « KH shear is in x », l'inverse de ce que le
+solveur initialise.
+
+Mesure sur le profil de base **sans aucune perturbation**, où la réponse
+attendue est zéro :
+
+| moyenne prise sur | valeur | part de l'énergie cinétique totale |
+|---|---|---|
+| axe 1 (ancien) | 3.411e−01 | **73 %** |
+| axe 0 (correct) | 1.323e−30 | 0 % |
+
+Et en allumant la perturbation nominale (amplitude 0.1) :
+
+| | base seule | avec perturbation | rapport |
+|---|---|---|---|
+| ancien | 0.34115 | 0.34120 | **1.0002** |
+| correct | 1.3e−30 | 2.5e−04 | 1.9e+26 |
+
+**La grandeur était à 99.98 % de l'écoulement de base**, donc pratiquement
+aveugle à la perturbation qu'elle existe pour mesurer. Un taux de croissance
+KH lu sur cette courbe mesurait le fond, pas l'instabilité.
+
+## Tests
+
+`tests/v4/test_no_private_curl_survives.py`, 21 tests. Le dernier est un
+**balayage** : tout rotationnel écrit à la main avec un `axis=0`/`axis=1`
+nu, hors de la liste d'exceptions vérifiées, fait échouer la suite. Un
+opérateur écrit à la main est indiscernable d'un opérateur juste tant qu'on
+ne l'évalue pas sur une rotation solide ; exiger `AXIS_X`/`AXIS_Y` rend
+l'erreur visible à la lecture.

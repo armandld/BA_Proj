@@ -77,6 +77,7 @@ from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
 
 from Simulation.PhysToAngle import AngleMapper
 from sklearn.metrics import f1_score
+from Simulation.grid import forward_curl_z
 
 from h2b_ceiling_random_split import (
     extract_features_2d, N_FEATS, best_threshold_f1,
@@ -102,8 +103,19 @@ def _block_avg(f, patch_size, dim):
 
 
 def jz_from_b(Bx, By):
-    """Jz = dBy/dx - dBx/dy (curl B, z-component, periodic)."""
-    return (np.roll(By, -1, axis=1) - By) - (np.roll(Bx, -1, axis=0) - Bx)
+    """Jz = dBy/dx - dBx/dy (curl B, z-component, periodic).
+
+    Cette fonction reimplementait le rotationnel sous la convention inverse
+    de celle du depot (axis=1 lu comme x). Elle calculait donc en realite
+    dBy/dy - dBx/dx : une combinaison de DEFORMATION. Ce n'est pas un
+    rotationnel de signe oppose, c'est son complementaire — sur une rotation
+    solide elle rend exactement 0, et sur une compression pure elle rend ce
+    que le rotationnel ne voit pas.
+
+    On appelle desormais l'operateur partage de `Simulation.grid` au lieu de
+    le recrire : c'est la divergence des copies privees qui a produit D-1.
+    """
+    return forward_curl_z(Bx, By)
 
 
 def v1_state(vx, vy, Bx, By):

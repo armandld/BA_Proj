@@ -72,6 +72,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import f1_score, roc_auc_score
+from Simulation.grid import AXIS_X, AXIS_Y  # convention d'axes du depot
 
 
 FEATURE_NAMES = [
@@ -100,14 +101,21 @@ def extract_features_2d(vx, vy, Bx, By, N, dim, Re):
     vx_d = _block_avg(vx, ps, dim); vy_d = _block_avg(vy, ps, dim)
     Bx_d = _block_avg(Bx, ps, dim); By_d = _block_avg(By, ps, dim)
 
-    dxvy = np.roll(vy_d, -1, axis=1) - vy_d
-    dyvx = np.roll(vx_d, -1, axis=0) - vx_d
-    dxBy = np.roll(By_d, -1, axis=1) - By_d
-    dyBx = np.roll(Bx_d, -1, axis=0) - Bx_d
-    dxvx = np.roll(vx_d, -1, axis=1) - vx_d
-    dyvy = np.roll(vy_d, -1, axis=0) - vy_d
-    dxBx = np.roll(Bx_d, -1, axis=1) - Bx_d
-    dyBy = np.roll(By_d, -1, axis=0) - By_d
+    # Convention du depot : `grid.AXIS_X = 0`, `AXIS_Y = 1` (indexing='ij').
+    # Les huit lignes precedentes lisaient axis=1 comme x et axis=0 comme y,
+    # soit l'inverse. `omega_z = dxvy - dyvx` valait donc en fait
+    # dvy/dy - dvx/dx : une combinaison de DEFORMATION, pas un rotationnel.
+    # Ce n'est pas un rotationnel de signe oppose — c'est son complementaire :
+    # sur une rotation solide elle rend exactement 0, et sur une compression
+    # pure elle rend ce que le rotationnel ne voit pas. Meme chose pour J_z.
+    dxvy = np.roll(vy_d, -1, axis=AXIS_X) - vy_d
+    dyvx = np.roll(vx_d, -1, axis=AXIS_Y) - vx_d
+    dxBy = np.roll(By_d, -1, axis=AXIS_X) - By_d
+    dyBx = np.roll(Bx_d, -1, axis=AXIS_Y) - Bx_d
+    dxvx = np.roll(vx_d, -1, axis=AXIS_X) - vx_d
+    dyvy = np.roll(vy_d, -1, axis=AXIS_Y) - vy_d
+    dxBx = np.roll(Bx_d, -1, axis=AXIS_X) - Bx_d
+    dyBy = np.roll(By_d, -1, axis=AXIS_Y) - By_d
 
     omega_z = dxvy - dyvx
     J_z     = dxBy - dyBx

@@ -59,6 +59,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+from Simulation.grid import AXIS_X, AXIS_Y
 
 
 # -- reference literature values for OT --
@@ -102,17 +103,49 @@ def div_B(Bx, By, dx):
 
 
 def mean_sq_current(Bx, By):
-    """<J_z^2> with J_z = d_x B_y - d_y B_x, centred differences."""
-    dxBy = (np.roll(By, -1, axis=1) - np.roll(By, 1, axis=1)) * 0.5
-    dyBx = (np.roll(Bx, -1, axis=0) - np.roll(Bx, 1, axis=0)) * 0.5
+    """<J_z^2> with J_z = d_x B_y - d_y B_x, centred differences.
+
+    Convention du depot : `grid.AXIS_X = 0`, `AXIS_Y = 1` (indexing='ij').
+    Les deux differences etaient prises sur l'axe oppose, si bien que la
+    grandeur calculee valait dBy/dy - dBx/dx : une combinaison de
+    DEFORMATION, pas un courant. Ce n'est pas un courant de signe oppose —
+    le carre n'aurait rien rattrape — c'est son complementaire, nul la ou
+    le courant est maximal.
+    """
+    dxBy = (np.roll(By, -1, axis=AXIS_X) - np.roll(By, 1, axis=AXIS_X)) * 0.5
+    dyBx = (np.roll(Bx, -1, axis=AXIS_Y) - np.roll(Bx, 1, axis=AXIS_Y)) * 0.5
     J = dxBy - dyBx
     return (J**2).mean()
 
 
 def fluctuating_KE(vx, vy):
-    """<|v - <v>|^2> / 2 -- perturbation KE for shear-flow checks."""
-    vx_mean = vx.mean(axis=1, keepdims=True)   # row-mean (KH shear is in x)
-    vy_mean = vy.mean(axis=1, keepdims=True)
+    """<|v - <v>|^2> / 2 -- perturbation KE for shear-flow checks.
+
+    La moyenne doit etre prise le long de la direction HOMOGENE, celle dont
+    l'ecoulement de base ne depend pas : c'est la seule facon de soustraire
+    ce fond et de ne garder que la perturbation.
+
+    `init_kelvin_helmholtz` construit son profil a partir de `grid.Y`, et
+    `grid.X, grid.Y = np.meshgrid(x, y, indexing='ij')` fait varier Y le long
+    de l'AXE 1. La direction homogene est donc l'axe 0, pas l'axe 1 — et le
+    commentaire « KH shear is in x » disait l'inverse de ce que le solveur
+    initialise.
+
+    En moyennant sur l'axe 1 le code retranchait une moyenne prise A TRAVERS
+    la couche de cisaillement, ce qui ne soustrait rien. Mesure sur le
+    profil de base SANS aucune perturbation, ou la reponse attendue est
+    zero :
+
+      moyenne sur axis=1 (ancien) : 3.411e-01  — 73 % de l'energie totale
+      moyenne sur axis=0 (correct): 1.323e-30
+
+    Et avec la perturbation nominale (amplitude 0.1), l'ancien chemin passe
+    de 0.34115 a 0.34120, soit un rapport de 1.0002 : la grandeur etait a
+    99.98 % de l'ecoulement de base et pratiquement aveugle a la
+    perturbation qu'elle existe pour mesurer.
+    """
+    vx_mean = vx.mean(axis=AXIS_X, keepdims=True)
+    vy_mean = vy.mean(axis=AXIS_X, keepdims=True)
     return 0.5 * ((vx - vx_mean)**2 + (vy - vy_mean)**2).mean()
 
 
