@@ -75,12 +75,31 @@ Les performances mesurées ne sont pas bonnes. On veut comprendre pourquoi.
 - Le solveur complet converge à l'ordre ~1,2.
 - `grid.py` emploie l'ordre 2 là où `solver.py` emploie l'ordre 4.
 
-**Attribution retirée.** Le plan initial attribuait la chute d'ordre à la
-projection d'incompressibilité. Cette attribution **n'est pas établie** :
-l'hypothèse d'une erreur de splitting temporel a été testée et réfutée
-(`dt ∝ dx²` donne le même ordre que `dt ∝ dx`), et la sonde utilisée n'était
-elle-même pas valide pour mesurer un ordre asymptotique. **Le mécanisme
-reste inconnu**, et le papier doit le dire ainsi.
+**Attribution CONFIRMÉE** `[M-6b]` — *correction d'une correction.* La
+chute d'ordre vient bien de la projection d'incompressibilité, et le
+mécanisme est un **splitting de Lie d'ordre 1** : `step_full` applique RK4
+puis projette. Mesuré à grille **fixe** (N=128), en ne raffinant que le pas
+de temps :
+
+| | erreur à 128 pas | ordre observé |
+|---|---|---|
+| avec projection | 3,27e−4 | **1,12** |
+| sans projection | 9,17e−11 | **4,00** |
+
+Sept ordres de grandeur d'écart. C'est l'expérience discriminante propre :
+à grille fixe, seule l'erreur temporelle varie.
+
+*Note d'honnêteté.* Cette attribution avait été retirée du plan sur la foi
+d'une sonde que j'avais écrite et qui était invalide — Orszag-Tang à N=16,
+très sous-résolu, avec une référence trop proche, et un raffinement
+simultané en espace et en temps. Elle ne mesurait aucun ordre asymptotique.
+Le dépôt contenait déjà la bonne mesure, en section `[D]` de
+`h1_solver_convergence.py`. Le plan initial avait raison.
+
+**Conséquence pour le papier.** Le facteur limitant du solveur est
+identifié et corrigeable : un splitting de Strang (demi-pas, projection,
+demi-pas) rendrait l'ordre 2, et une formulation à pression rendrait
+l'ordre du schéma. Ce n'est pas une limite de principe.
 
 **Candidat non testé.** La projection est spectrale alors que le second
 membre est aux différences finies d'ordre 4 : deux opérateurs de divergence
@@ -298,7 +317,8 @@ résultats, sans exposer la méthode, qui est pourtant une contribution)*
 | M-3 | ajout de « limites et menaces à la validité » | indispensable à un papier de falsification |
 | M-4 | ajout de « reproductibilité » | atout réel du dépôt, non exposé |
 | M-5 | préalable méthodologique dans l'objectif | les résultats antérieurs aux corrections ne sont pas ceux du modèle corrigé |
-| M-6 | « défauts connus » réécrite | l'attribution de la chute d'ordre à la projection n'est pas établie |
+| M-6 | « défauts connus » réécrite en trois catégories | séparer le mesuré, l'attribué et le non testé |
+| M-6b | **attribution de la chute d'ordre CONFIRMÉE** | splitting de Lie mesuré à grille fixe : ordre 1,12 avec projection contre 4,00 sans. J'avais retiré cette attribution sur la foi d'une sonde invalide ; le plan initial avait raison |
 | M-7 | section « défauts trouvés pendant l'étude » | neuf défauts mesurés, absents du plan |
 | M-8 | ajout de **H5** (spécification de la tâche) | l'objectif la mentionnait sans hypothèse pour la porter |
 | M-9 | H1 passe de « non testée » à « mise en difficulté » | les mesures penchent contre |
