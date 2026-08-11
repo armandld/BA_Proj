@@ -3447,3 +3447,50 @@ nu, hors de la liste d'exceptions vérifiées, fait échouer la suite. Un
 opérateur écrit à la main est indiscernable d'un opérateur juste tant qu'on
 ne l'évalue pas sur une rotation solide ; exiger `AXIS_X`/`AXIS_Y` rend
 l'erreur visible à la lecture.
+
+---
+
+# D-19 / D-20 — deux pièges dans le contexte d'exécution partagé
+
+`src/VQA/runtime.py`. `VQARuntime` est construit une fois par run et passé à
+chaque appel VQA. Les deux défauts sont de la même famille : **une valeur
+inutilisable qui se laisse produire sans bruit**.
+
+## D-19 — un backend inconnu construisait un objet mort
+
+`_init_backend` n'avait pas de branche `else`. Un `backend_name` inconnu
+laissait `_backend`, `_estimator` et `_sampler` à `None`, et le constructeur
+**rendait la main sans erreur**. La panne ne surgissait que bien plus loin,
+dans `execute`, sous la forme d'un `AttributeError` sur `NoneType` — à des
+dizaines de lignes de sa cause.
+
+`execute.py` et `optimize.py` lèvent tous deux `ValueError("Unsupported
+backend")` pour exactement la même valeur. Les trois sites disaient trois
+choses différentes ; ils disent désormais la même.
+
+## D-20 — le cache d'ansatz confondait deux Hamiltoniens
+
+Le cache était indexé sur `(num_qubits, period_bound, reps)`. Or l'ansatz
+QAOA encode `exp(−iγH)` : il dépend de l'Hamiltonien **terme par terme**,
+pas seulement de la topologie.
+
+Vérifié : deux Hamiltoniens sans aucun coefficient commun, à même nombre de
+qubits et même `reps`, recevaient **le même objet**. Le second patch aurait
+donc été optimisé contre la physique du premier — sans le moindre signal.
+
+`get_ansatz` n'est appelé par aucun code du dépôt. C'était un **piège armé**,
+prêt à se déclencher au premier branchement — précisément ce qu'un audit de
+couverture ne voit pas et qu'un audit de contrat trouve.
+
+La clé inclut désormais une empreinte des coefficients, arrondie à 12
+décimales : un dernier bit ne fait pas exploser le cache, un écart de 1e−9
+le sépare.
+
+## Tests
+
+`tests/test_runtime_contracts.py`, 20 tests : refus d'un backend inconnu et
+message qui énumère les valides, aucun backend valide ne laisse une
+primitive à `None`, deux Hamiltoniens différents ne partagent jamais un
+ansatz, le même le retrouve, un seul coefficient suffit à manquer le cache,
+l'empreinte est indépendante de l'ordre des termes mais sépare un
+changement de signe.

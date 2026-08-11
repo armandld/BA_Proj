@@ -9,6 +9,19 @@ import numpy as np
 from qiskit.circuit.library import QAOAAnsatz
 
 
+def _hamiltonian_fingerprint(op):
+    """Empreinte hachable d'un SparsePauliOp : etiquettes ET coefficients.
+
+    Les coefficients sont arrondis a 12 decimales pour qu'une difference de
+    dernier bit ne fasse pas exploser le cache, sans jamais confondre deux
+    Hamiltoniens physiquement distincts.
+    """
+    return tuple(sorted(
+        (str(p), round(complex(c).real, 12), round(complex(c).imag, 12))
+        for p, c in zip(op.paulis, op.coeffs)
+    ))
+
+
 class VQARuntime:
     """Reusable VQA execution context.
 
@@ -64,6 +77,18 @@ class VQARuntime:
             from qiskit_ibm_runtime.fake_provider import FakeFez
             self._backend = FakeFez()
             self._init_aer_primitives()
+        else:
+            # Sans ce refus, un nom inconnu laissait _backend, _estimator et
+            # _sampler a None et le constructeur rendait la main sans erreur.
+            # La panne ne surgissait que bien plus loin, dans `execute`, sous
+            # la forme d'un AttributeError sur NoneType — a des dizaines de
+            # lignes de sa cause. `execute` et `optimize` levent tous deux
+            # ValueError pour la meme valeur ; les trois sites doivent dire
+            # la meme chose.
+            raise ValueError(
+                f"Unsupported backend: {self.backend_name!r}. Attendu l'un de "
+                "'state_vector', 'matrix_product_state', 'aer', 'estimator'."
+            )
 
     def _init_aer_primitives(self):
         from qiskit_ibm_runtime import EstimatorV2 as Estimator, SamplerV2 as Sampler
@@ -84,8 +109,21 @@ class VQARuntime:
     #  Ansatz cache
     # ------------------------------------------------------------------
     def get_ansatz(self, cost_hamiltonian, reps, num_qubits, period_bound):
-        """Return a cached QAOAAnsatz for this topology, or build + cache it."""
-        key = (num_qubits, period_bound, reps)
+        """Return a cached QAOAAnsatz for this topology, or build + cache it.
+
+        La cle inclut une empreinte des COEFFICIENTS, pas seulement la
+        topologie. L'ansatz QAOA encode `exp(-i gamma H)` : il depend de
+        l'Hamiltonien terme par terme, pas seulement du nombre de qubits.
+
+        La cle precedente `(num_qubits, period_bound, reps)` faisait
+        collisionner deux patchs de meme taille aux coefficients differents :
+        le second recevait l'ansatz construit pour le PREMIER, et se voyait
+        donc optimise contre la physique d'un autre patch. Aucun appelant
+        n'utilise cette methode aujourd'hui — c'etait un piege arme, pret a
+        se declencher au premier branchement.
+        """
+        key = (num_qubits, period_bound, reps,
+               _hamiltonian_fingerprint(cost_hamiltonian))
         if key not in self._ansatz_cache:
             ansatz = QAOAAnsatz(cost_operator=cost_hamiltonian, reps=reps)
             self._ansatz_cache[key] = ansatz
