@@ -3666,3 +3666,91 @@ désormais l'inverse, et que le flux suit **exactement** la réduction du
 score.
 
 `tests/test_padded_rescale_contracts.py` passe de 37 à 45 tests.
+
+---
+
+# D-22 — les hyperparamètres déployés n'ont aucune provenance reproductible
+
+`results/hyperparams/` est déclaré **entrée gelée** de l'étude. Il contient
+deux choses qui devraient être d'accord :
+
+- `optuna_studies/*.db` — les bases de la campagne, 345 essais
+- `best_hyperparams.json` — ce que `src/hyperparams_loader.py` charge
+
+**Elles ne le sont pas.** Vérifié directement dans les fichiers.
+
+## Ce que les bases ont échantillonné, et ce que le JSON déploie
+
+| étude | paramètres échantillonnés |
+|---|---|
+| `q_has_v2_phase1.db` (202 essais) | `beta`, `beta_curl`, `beta_xpoint`, **`sigma`**, `w_z_frac` |
+| `classical_v2_phase1.db` (143) | `threshold_amr` |
+
+| paramètre déployé | origine |
+|---|---|
+| `beta`, `beta_curl`, `beta_xpoint`, `w_z_frac` | échantillonnés (étude quantique) |
+| `threshold_amr` | échantillonné dans l'étude **classique** seulement |
+| `gamma_hydro`, `gamma_mag`, `kappa` | **aucune base ne les a jamais échantillonnés** |
+| `sigma` | échantillonné, **absent du JSON** |
+
+## Trois écarts
+
+**1. Trois valeurs sur huit n'ont aucune origine dans le dépôt.**
+`gamma_hydro = 2.127`, `gamma_mag = 2.361`, `kappa = 14.332` ne figurent
+dans aucune base.
+
+**2. `sigma` est optimisé puis jeté.** La campagne l'échantillonne et son
+meilleur essai trouve **0.0230** ; le JSON ne le contient pas, donc
+`pipeline.py` retombe sur `_defaults.get('sigma', 0.05)` — une constante
+codée en dur. σ est la largeur de la fenêtre gaussienne, le paramètre au
+cœur de D-9.
+
+**3. L'essai déclaré ne correspond pas.** Le JSON annonce l'essai 85 avec
+une perte de 0.2215. L'essai 85 existe, sa perte vaut **0.3213**, et **aucun**
+de ses quatre paramètres communs ne coïncide :
+
+| paramètre | base | JSON |
+|---|---|---|
+| `beta` | 6.034464 | 0.549537 |
+| `beta_curl` | 1.318670 | 0.819924 |
+| `beta_xpoint` | 2.341306 | 0.425647 |
+| `w_z_frac` | 39.599016 | 0.101338 |
+
+## Le code d'entraînement, lui, est cohérent
+
+`TrainHyperParam_v2` code en dur `threshold_amr = 0.14959824837662078` avec
+le commentaire « le meilleur classique ». C'est **exactement** la valeur du
+meilleur essai classique (#42, perte 0.2148). Le code et les bases sont
+d'accord ; **c'est le JSON qui est orphelin**.
+
+Conséquence : le bras quantique est déployé à `threshold_amr = 0.3044`, une
+valeur qui ne figure pas parmi les 125 essayées, et à laquelle il n'a jamais
+été entraîné — l'objectif l'a toujours fixé à 0.1496.
+
+## Ce que cela change pour la suite
+
+Une réoptimisation n'est pas une amélioration : **c'est la seule façon
+d'avoir des hyperparamètres qui existent.** Aucun résultat de performance ne
+peut être attribué à un réglage dont on ne sait pas d'où il vient.
+
+Corollaire pour le périmètre : `gamma_hydro`, `gamma_mag` et `kappa` n'ont
+jamais été optimisés par la campagne gelée. Les inclure dans la
+réoptimisation n'est donc pas une *re*-optimisation, c'est une première.
+
+## Autres constats sur `TrainHyperParam_v2`
+
+`make_composite_objective` présente quatre paramètres comme conditionnels
+(`if "x" not in frozen:`) alors qu'ils sont des **constantes** :
+`threshold_amr`, `gamma_hydro = 2.0`, `gamma_mag = 0.5`, `kappa = 10.0`.
+L'espace de recherche réel est donc de cinq paramètres, pas neuf — et les
+trois constantes de l'objectif ne valent pas non plus ce que le JSON
+déploie.
+
+## Tests
+
+`tests/test_hyperparams_provenance_break.py`, 16 tests. Ils **épinglent**
+l'écart plutôt que de le masquer, et chacun dit dans sa docstring ce qui
+devra être vrai après réoptimisation. Le dernier,
+`test_every_deployed_hyperparameter_should_one_day_be_traceable`, est le
+**critère d'acceptation** : il est en `xfail` aujourd'hui et passera sans
+modification le jour où chaque valeur déployée sera traçable à un essai.
