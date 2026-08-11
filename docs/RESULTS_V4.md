@@ -3524,3 +3524,63 @@ primitive à `None`, deux Hamiltoniens différents ne partagent jamais un
 ansatz, le même le retrouve, un seul coefficient suffit à manquer le cache,
 l'empreinte est indépendante de l'ordre des termes mais sépare un
 changement de signe.
+
+---
+
+# Audit de contrat des portes physiques — aucun défaut, deux constats
+
+`src/Simulation/HamiltParams.py`. Cinq fonctions statiques portent tout le
+raisonnement physique du mappeur v1 : `_f_gate` (Reynolds),
+`_threshold_contrast` (contraste au seuil), `_g_strain` / `_g_rot`
+(interrupteurs d'Okubo-Weiss) et `_g_mag` (activité magnétique). Leurs
+docstrings énoncent des contrats précis — continuité, bornes, sens
+d'activation.
+
+**Les cinq honorent ce qu'elles annoncent.** Continuité de `_f_gate` au
+raccord vérifiée à 1e−8 pour quatre valeurs de γ, monotonie sur cinq
+décades, bornes respectées, aucun débordement sur `±1e300` ni sur `inf`.
+`_threshold_contrast` rend **exactement** zéro au seuil et sous le seuil, et
+garde bien un signal sur un domaine uniformément actif — la différence
+revendiquée avec Michelson.
+
+Deux constats structurels méritaient d'être écrits.
+
+## Constat 1 — `g_strain` et `g_rot` ne sont pas deux interrupteurs
+
+Elles somment à **1 exactement**, pour tout Q :
+
+`1/(1+e^x) + 1/(1+e^−x) = 1`
+
+| Q | `g_strain` | `g_rot` | somme |
+|---|---|---|---|
+| −10 | 1.000000 | 0.000000 | 1.0 |
+| 0 | 0.500000 | 0.500000 | 1.0 |
+| +10 | 0.000000 | 1.000000 | 1.0 |
+
+Elles ne peuvent donc **jamais être actives ensemble, ni inactives
+ensemble**. Le terme ZZ (porté par `g_strain`) et le terme ZZZZ (porté par
+`g_rot`) sont une **partition d'un unique scalaire d'Okubo-Weiss**, pas deux
+détecteurs indépendants.
+
+Cela change la lecture d'une ablation : retirer le ZZ ne retire pas une
+source d'information distincte du ZZZZ — cela déplace le poids d'un côté à
+l'autre du même signal. C'est à rapprocher du résultat déjà consigné sur le
+canal du circuit : l'architecture présente plus de degrés de liberté qu'elle
+n'en a.
+
+Un troisième cas de la même famille est mesuré au passage : dans la branche
+hydrodynamique, `f_Re` et `mic_v` sont deux **reparamétrages monotones du
+même scalaire** — `Re_h = v_jump·dx/ν` et `v_jump/v_jump_crit = Re_h/RE_CRIT`
+sont égaux à 1e−12 près. Le coefficient présente deux facteurs physiques là
+où il n'y a qu'une variable.
+
+## Constat 2 — l'exemple de la docstring de `_f_gate` est inatteignable
+
+Elle illustre la croissance logarithmique par « Re=3000, x_crit=10, γ=2 →
+f ≈ 12 (not ∞) ». La formule rend bien **12.4076**, mais `f_max = 10.0` par
+défaut la ramène à **10.0000** : la valeur citée ne peut jamais sortir de la
+fonction telle qu'elle est appelée.
+
+## Tests
+
+`tests/test_gate_contracts.py`, 42 tests.
