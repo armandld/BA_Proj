@@ -3000,8 +3000,18 @@ Corrigé derrière `AngleMapper(fixed_flux=True)`, par défaut **True**, même
 traitement que `fixed_curl`. `fixed_flux=False` reproduit le chemin
 historique bit à bit.
 
-## D-12 — le mappeur déployé est aveugle à trois des quatre grandeurs
+## D-12 — `PhysicalMapperV2` est aveugle à trois des quatre grandeurs
 ## que sa docstring nomme
+
+**Rectification de portée.** J'avais écrit « le mappeur déployé ». C'est
+faux : `src/pipeline.py` n'importe **jamais** `HamiltParams_v2`. La boucle
+fermée — celle qui produit les résultats de niveau 3 et la frontière de
+Pareto — instancie `PhysicalMapper` (v1) avec ses hyperparamètres entraînés
+(σ, β_curl, γ_hydro, γ_mag, κ, w_z_frac). Le v2 n'est utilisé que par les
+scripts de `study/`.
+
+Ce qui suit vaut donc pour les **analyses de `study/`**, pas pour la boucle
+déployée.
 
 `src/Simulation/HamiltParams_v2.py` — `PhysicalMapperV2`.
 
@@ -3019,13 +3029,18 @@ Le v2 est **adimensionnel** : chaque terme est divisé par une norme prise sur
 le même champ. `det(∇B) ∝ 1/dx²` est divisé par `max|det| ∝ 1/dx²` ; `dx` se
 simplifie exactement.
 
-Ce n'est pas un bug de calcul, mais cela change la lecture de deux
-hypothèses. **H4 (transfert)** : le mappeur ne peut pas distinguer un
+Ce n'est pas un bug de calcul, mais cela change la lecture des analyses
+**qui utilisent le v2**. **H4 (transfert)** : le v2 ne peut pas distinguer un
 écoulement visqueux d'un écoulement inertiel, donc un transfert entre nombres
-de Reynolds est trivialement satisfait par les coefficients — toute
+de Reynolds est trivialement satisfait par ses coefficients — toute
 dépendance en Re ne peut venir que du score externe. **H3
 (représentation)** : le v2 ne voit que la *forme relative* des champs, jamais
 leur échelle.
+
+La boucle fermée, elle, tourne sur le v1, où ν, η et dx entrent bel et bien
+(via `Re_h = v_jump·dx/ν`, `RE_CRIT`, `v_jump_crit`). Les deux mappeurs ne
+sont donc pas interchangeables pour lire une hypothèse : il faut dire lequel
+a produit le nombre.
 
 Aucun code modifié : la docstring a été réécrite pour dire ce que le code
 fait. Deux autres mensonges de documentation corrigés dans le même fichier :
