@@ -145,7 +145,9 @@ def create_bounded_hamiltonian(
                     sparse_list.append(("ZZ", [q_curr, q_next], c_h))
                 else:
                     # Bord Droit: centered halo contraction
-                    sparse_list.append(("Z", [q_curr], c_h * z_halo_right[i]))
+                    _halo_term = c_h * z_halo_right[i]
+                    if abs(_halo_term) > COEFF_MIN:
+                        sparse_list.append(("Z", [q_curr], _halo_term))
 
             # --- Vertical (V_i,j <-> V_i+1,j) ---
             c_v = hamilt_params['C_edges'][1][ci, cj]
@@ -157,20 +159,26 @@ def create_bounded_hamiltonian(
                     sparse_list.append(("ZZ", [q_curr, q_next], c_v))
                 else:
                     # Bord Bas: centered halo contraction
-                    sparse_list.append(("Z", [q_curr], c_v * z_halo_bottom[j]))
+                    _halo_term = c_v * z_halo_bottom[j]
+                    if abs(_halo_term) > COEFF_MIN:
+                        sparse_list.append(("Z", [q_curr], _halo_term))
 
             # --- Bords Gauche et Haut (Champs manquants) ---
             if j == 0:
                 # Bord Gauche: centered halo contraction
                 val_halo = z_halo_left[i]
                 c_left = hamilt_params['C_edges'][0][ci, 1]
-                sparse_list.append(("Z", [idx_H(i, 0)], c_left * val_halo))
+                _halo_term = c_left * val_halo
+                if abs(_halo_term) > COEFF_MIN:
+                    sparse_list.append(("Z", [idx_H(i, 0)], _halo_term))
 
             if i == 0:
                 # Bord Haut: centered halo contraction
                 val_halo = z_halo_top[j]
                 c_top = hamilt_params['C_edges'][1][1, cj]
-                sparse_list.append(("Z", [idx_V(0, j)], c_top * val_halo))
+                _halo_term = c_top * val_halo
+                if abs(_halo_term) > COEFF_MIN:
+                    sparse_list.append(("Z", [idx_V(0, j)], _halo_term))
 
             # -----------------------------
             # 2. VORTICITY (Plaquette)
@@ -234,6 +242,12 @@ def create_bounded_hamiltonian(
 
     # Aucun coefficient n'a survécu au seuil : on le dit au lieu d'injecter
     # un terme de remplissage que l'aval prendrait pour un vrai Hamiltonien.
+    #
+    # Les quatre termes de contraction du halo n'étaient PAS élagués : avec
+    # des coefficients tous nuls, ils remplissaient `sparse_list` de termes
+    # de valeur exactement 0.0, la liste n'était donc pas vide, et
+    # l'opérateur nul repartait vers l'aval comme s'il était réel — le
+    # défaut même que cette exception devait empêcher.
     if not sparse_list:
         raise NullHamiltonianError(num_qubits)
 
