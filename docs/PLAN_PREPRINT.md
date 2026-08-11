@@ -76,9 +76,20 @@ Les performances mesurées ne sont pas bonnes. On veut comprendre pourquoi.
 | sans projection | 9,17e−11 | **4,00** |
 
 Sept ordres de grandeur : à grille fixe, seule l'erreur temporelle varie,
-l'expérience est discriminante. Le facteur limitant est donc identifié et
-**corrigeable** — un splitting de Strang rendrait l'ordre 2, une formulation
-à pression rendrait l'ordre du schéma. Ce n'est pas une limite de principe.
+l'expérience est discriminante.
+
+**La correction n'est pas un splitting de Strang.** Un splitting symétrique
+suppose deux *flots* qu'on peut découper en demi-pas ; la projection n'en est
+pas un, c'est un **projecteur idempotent**, et « P^(1/2) » n'a pas de sens.
+Vérifié : `P ∘ RK4 ∘ P` rend des erreurs **identiques** à `P ∘ RK4` — après
+le premier pas l'état est déjà dans le sous-espace, donc la projection
+initiale est l'identité.
+
+Le système est **différentiel-algébrique** : l'ordre chute parce que la
+contrainte est imposée *après* un pas RK4 non contraint. Les deux corrections
+qui tiennent sont de projeter le **second membre** à chaque étage — le champ
+intégré est alors à divergence nulle par construction — ou de passer à une
+formulation à pression.
 
 Candidat non testé : la projection est spectrale alors que le second membre
 est aux différences finies d'ordre 4 — deux opérateurs de divergence

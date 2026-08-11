@@ -3754,3 +3754,35 @@ devra être vrai après réoptimisation. Le dernier,
 `test_every_deployed_hyperparameter_should_one_day_be_traceable`, est le
 **critère d'acceptation** : il est en `xfail` aujourd'hui et passera sans
 modification le jour où chaque valeur déployée sera traçable à un essai.
+
+---
+
+# Correction d'une affirmation : le splitting de Strang ne s'applique pas ici
+
+J'ai écrit à plusieurs reprises, dans `docs/RESULTS_V4.md` et dans le plan,
+qu'« un splitting de Strang rendrait l'ordre 2 ». **C'est faux, et la mesure
+le montre.**
+
+Un splitting symétrique suppose deux **flots** qu'on peut découper en
+demi-pas. La projection d'incompressibilité n'en est pas un : c'est un
+**projecteur idempotent**, et `P^(1/2)` n'a pas de sens.
+
+Mesuré, N=128, Orszag-Tang, grille fixe, quatre résolutions temporelles :
+
+| schéma | 64 pas | 128 | 256 | 512 | ordre |
+|---|---|---|---|---|---|
+| `P ∘ RK4` (actuel) | 8.4138e−6 | 4.0713e−6 | 1.8999e−6 | 8.1426e−7 | 1.05 → 1.22 |
+| `P ∘ RK4 ∘ P` | 8.4138e−6 | 4.0713e−6 | 1.8999e−6 | 8.1426e−7 | 1.05 → 1.22 |
+
+**Identiques à la dernière décimale.** L'explication est immédiate : après le
+premier pas l'état est déjà dans le sous-espace à divergence nulle, donc la
+projection initiale est l'identité. Le « Strang » que j'avais écrit *est*
+le schéma de Lie.
+
+Le bon cadre est celui d'un système **différentiel-algébrique** : l'ordre
+chute parce que la contrainte est imposée *après* un pas RK4 non contraint.
+Deux corrections tiennent — projeter le **second membre** à chaque étage, ce
+qui rend le champ intégré à divergence nulle par construction, ou passer à
+une formulation à pression.
+
+Le plan a été corrigé en conséquence.
