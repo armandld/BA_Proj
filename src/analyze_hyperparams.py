@@ -25,6 +25,7 @@ Usage:
 
 import argparse
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")           # non-interactive backend (safe on servers / Colab)
@@ -349,8 +350,13 @@ def plot_2d_landscapes(completed, param_names, output_dir):
                 Zi = griddata((x, y), scores, (Xi, Yi), method="cubic")
                 cf = ax.contourf(Xi, Yi, Zi, levels=25, cmap="viridis_r", alpha=0.85)
                 fig.colorbar(cf, ax=ax, label="Combined Score")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Le contour interpolé peut échouer (points colinéaires,
+                # trop peu d'essais). On garde le nuage de points, mais on
+                # le DIT : une figure amputée de sa surface ressemble
+                # sinon à une figure normale.
+                print(f"[FIGURE] contour interpole indisponible : "
+                      f"{type(exc).__name__}: {exc}", file=sys.stderr)
 
             # Actual points
             ax.scatter(x, y, c=scores, cmap="viridis_r", s=25,

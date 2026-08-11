@@ -44,7 +44,17 @@ MAX_DEPTH = 4           # Hierarchical depth (decisions happen at depth 2+)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 data_dir = os.path.join(project_root, "Train_results")
-os.makedirs(data_dir, exist_ok=True)
+
+
+def _ensure_data_dir():
+    """Cree le repertoire de sortie, a l'usage et non a l'import.
+
+    `os.makedirs` etait appele au niveau module : importer ce pilote —
+    ce que fait la campagne de boucle fermee pour reutiliser ses objectifs —
+    creait un repertoire en effet de bord.
+    """
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
 
 # Distributed support
 OPTUNA_STORAGE = os.environ.get("OPTUNA_STORAGE", None)
@@ -114,7 +124,7 @@ def _get_storage(study_name):
         lock = optuna.storages.JournalFileOpenLock(path)
         return optuna.storages.JournalStorage(
             optuna.storages.JournalFileBackend(path, lock_obj=lock))
-    return f"sqlite:///{os.path.join(data_dir, study_name + '.db')}"
+    return f"sqlite:///{os.path.join(_ensure_data_dir(), study_name + '.db')}"
 
 
 def _precompute(scenario_key):
