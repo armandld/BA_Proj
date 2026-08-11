@@ -64,23 +64,39 @@ def test_the_panel_never_returns_silently_on_no_records():
 
 # ── D-2 : le scenario doit entrer dans le nom ─────────────────────────
 
-def _out_name(**kw):
-    """Reconstruit le nom de sortie du panel pour un jeu d'arguments."""
-    src = open(_PANEL, encoding="utf-8").read()
-    start = src.index("    _full_sweep = set(args.scenario)")
-    end = src.index('+ ".npz")', start) + len('+ ".npz")')
-    snippet = textwrap.dedent(src[start:end])
+_PANEL_MOD = None
 
+
+def _panel():
+    """Charge le module du panel une fois, avec les chemins du depot."""
+    global _PANEL_MOD
+    if _PANEL_MOD is None:
+        import importlib.util
+        for _d in ("src", "study/pipeline", "study/common", "study/h0_selection",
+                   "study/h2b_prediction"):
+            _p = os.path.join(_REPO_ROOT, *_d.split("/"))
+            if _p not in sys.path:
+                sys.path.insert(0, _p)
+        spec = importlib.util.spec_from_file_location("h0panel", _PANEL)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        _PANEL_MOD = m
+    return _PANEL_MOD
+
+
+def _out_name(**kw):
+    """Nom de sortie du panel, via la VRAIE fonction `_output_path`.
+
+    L'ancienne version rejouait un extrait de source ; elle a cesse de
+    fonctionner des que la logique a ete factorisee en fonction. Appeler
+    le code reel teste ce qui tourne, pas une copie.
+    """
     class A:
         pass
     args = A()
     for k, v in kw.items():
         setattr(args, k, v)
-    ns = {"args": args, "os": os, "RESULTS_DIR": "",
-          "SCENARIOS": ("orszag_tang", "kelvin_helmholtz",
-                        "mhd_rotor", "harris_tearing")}
-    exec(compile(ast.parse(snippet), "<panel>", "exec"), ns)
-    return os.path.basename(ns["out"])
+    return os.path.basename(_panel()._output_path(args))
 
 
 _BASE = dict(N=96, dim=3, with_psi=False, fixed_curl=False, zero_psi=False,
