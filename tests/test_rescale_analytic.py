@@ -16,10 +16,10 @@ D-1  TRONCATURE SILENCIEUSE. `_maxabs_pool_2d` et `_maxabs_pool_1d` coupent
      l'anomalie que le pooling existe pour préserver. Mesuré : un pic de
      100.0 en (9,9) ressort à 0.0.
 
-     Le chemin déployé n'y est pas exposé : N et target_dim y sont des
-     puissances de deux (256 → 2, 4, 8), donc la division tombe juste. Le
-     défaut est armé, pas déclenché — et rien dans le code ne dit qu'il
-     dépend de cette coïncidence.
+     Le chemin déployé n'y était pas exposé — 256 est divisible par 2, 4
+     et 8 — donc le défaut était armé sans être déclenché. Les bornes de
+     blocs sont désormais réparties sur toute l'étendue ; la sortie reste
+     bit-à-bit identique quand la division tombe juste.
 """
 
 import os
@@ -109,22 +109,35 @@ def test_every_input_cell_can_reach_the_output_when_divisible(n, t):
 
 # ── D-1 : la troncature ───────────────────────────────────────────────
 
-@pytest.mark.parametrize("n,t,n_lost", [(10, 3, 19), (10, 4, 36), (7, 2, 13)])
-def test_non_divisible_shapes_drop_the_trailing_cells(n, t, n_lost):
-    """Le defaut, epingle avec son compte exact.
+@pytest.mark.parametrize("n,t", [(10, 3), (10, 4), (7, 2), (13, 5), (100, 7)])
+def test_no_cell_is_dropped_even_when_the_shape_is_not_divisible(n, t):
+    """D-1 corrige : plus aucune cellule inatteignable.
 
-    `arr[:target*bs]` jette le reste. Pour 10 -> 3, bs = 3, le tableau est
-    tronque a 9x9 : la ligne 9 et la colonne 9 disparaissent, soit 19
-    cellules sur 100.
+    Les bornes de blocs sont desormais reparties sur toute l'etendue
+    (`np.linspace(0, h, target+1)`) au lieu de tronquer le reste de la
+    division. Pour 10 -> 3, les 19 cellules des ligne et colonne 9 qui
+    disparaissaient sont de nouveau atteignables.
     """
     lost = [(i, j) for i in range(n) for j in range(n)
-            if _maxabs_pool_2d(np.eye(1, 1) * 0 + _spike(n, i, j), t, t).max() != 1.0]
-    assert len(lost) == n_lost, (
-        f"{len(lost)} cellules perdues pour {n}->{t}, attendu {n_lost} ; "
-        "si ce nombre change, la troncature a ete modifiee")
-    #  toutes les pertes sont dans la queue, pas dispersees
-    keep = t * (n // t)
-    assert all(i >= keep or j >= keep for i, j in lost)
+            if _maxabs_pool_2d(_spike(n, i, j), t, t).max() != 1.0]
+    assert not lost, f"{len(lost)} cellules perdues pour {n}->{t}, ex. {lost[:5]}"
+
+
+@pytest.mark.parametrize("n,t", [(256, 2), (256, 4), (256, 8), (16, 4), (8, 2)])
+def test_the_fix_is_bit_identical_on_divisible_shapes(n, t):
+    """La correction ne doit RIEN changer la ou la division tombe juste.
+
+    C'est le cas du chemin deploye (256 vers 2, 4, 8). On reconstruit
+    l'ancienne implementation et on exige l'egalite exacte.
+    """
+    rng = np.random.default_rng(0)
+    a = rng.standard_normal((n, n))
+    bh = n // t
+    blocks = a[:t * bh, :t * bh].reshape(t, bh, t, bh)
+    blocks = blocks.transpose(0, 2, 1, 3).reshape(t, t, -1)
+    idx = np.argmax(np.abs(blocks), axis=-1)
+    old = np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+    np.testing.assert_array_equal(_maxabs_pool_2d(a, t, t), old)
 
 
 def _spike(n, i, j):
@@ -159,11 +172,25 @@ def test_one_d_pooling_matches_the_two_d_behaviour():
     assert np.count_nonzero(out) == 1
 
 
-def test_one_d_pooling_also_truncates():
+def test_one_d_pooling_no_longer_truncates():
+    """Meme correction en 1D : le pic de la derniere cellule ressort."""
     b = np.zeros(10)
     b[9] = 100.0
-    assert _maxabs_pool_1d(b, 3).max() == 0.0, (
-        "si la troncature 1D a ete corrigee, mettre a jour ce fichier")
+    assert _maxabs_pool_1d(b, 3).max() == 100.0
+    lost = [i for i in range(10)
+            if _maxabs_pool_1d(np.where(np.arange(10) == i, 1.0, 0.0), 3).max() != 1.0]
+    assert not lost, f"cellules 1D perdues : {lost}"
+
+
+@pytest.mark.parametrize("n,t", [(256, 8), (12, 3), (8, 2)])
+def test_one_d_fix_is_bit_identical_on_divisible_shapes(n, t):
+    rng = np.random.default_rng(0)
+    a = rng.standard_normal(n)
+    bs = n // t
+    blocks = a[:t * bs].reshape(t, bs)
+    idx = np.argmax(np.abs(blocks), axis=-1)
+    old = np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+    np.testing.assert_array_equal(_maxabs_pool_1d(a, t), old)
 
 
 def test_pooling_upward_falls_back_to_interpolation():

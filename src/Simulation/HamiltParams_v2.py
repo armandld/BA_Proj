@@ -62,7 +62,7 @@ class PhysicalMapperV2:
     EPS = 1e-10       # division-by-zero guard
 
     def __init__(self, dx=1.0, c_bias=None, w_zz=None, w_zzzz=None,
-                 fixed_curl=False):
+                 fixed_curl=True):
         """
         Parameters
         ----------

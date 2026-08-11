@@ -118,77 +118,53 @@ def test_global_upsampling_has_no_seam_at_the_periodic_join():
         f"interieur {interior:.3e}")
 
 
-def test_global_upsampling_is_far_from_the_accuracy_it_could_reach():
-    """D-2 : la prolongation globale perd quatre ordres de grandeur.
+def test_global_upsampling_reaches_cubic_accuracy():
+    """D-2 corrige : la prolongation atteint enfin la precision de l'ordre 3.
 
-    `_upsample_global` cumule deux ecarts de convention :
+    Deux conventions ont ete alignees sur celles de `PeriodicGrid` :
+    echantillonnage aux NOEUDS (`j / factor`, et non `(j+0.5)/factor - 0.5`)
+    et `mode='grid-wrap'`, le seul enroulement reellement periodique depuis
+    scipy 1.6.
 
-      1. elle echantillonne au CENTRE des cellules — `(j+0.5)/f - 0.5` —
-         alors que `PeriodicGrid` place ses points aux NOEUDS
-         (`linspace(0, L, N, endpoint=False)`). D'ou un decalage constant
-         de -0.375 cellule grossiere a facteur 4 ;
-      2. elle passe `mode='wrap'` a `map_coordinates`. Depuis scipy 1.6,
-         ce mode n'est PAS l'enroulement periodique : c'est `'grid-wrap'`
-         qui l'est. `'wrap'` traite le tableau comme si premier et dernier
-         echantillons coincidaient.
-
-    Mesure sur sin(x)cos(y), 32 -> 128 (scipy 1.17.1) :
-
-        convention        mode         erreur max
-        centre (code)     wrap         2.49e-1
-        centre            grid-wrap    7.35e-2
-        noeud             wrap         1.79e-1
-        noeud             grid-wrap    7.74e-6
-
-    Le docstring annonce « respecte la topologie torique du domaine ». Ce
-    test mesure l'ecart entre cette annonce et le resultat, sans corriger
-    `src/` : la correction est une decision scientifique, pas un
-    ajustement de test.
+    Mesure sur sin(x)cos(y), 32 -> 128 : 7.74e-6, contre 2.49e-1 avant.
     """
-    from scipy.ndimage import map_coordinates
-
     Nc, factor = 32, 4
     g_c = PeriodicGrid(Nc)
     g_f = PeriodicGrid(Nc * factor)
     coarse = np.sin(g_c.X) * np.cos(g_c.Y)
     exact = np.sin(g_f.X) * np.cos(g_f.Y)
-
-    err_code = float(np.max(np.abs(
+    err = float(np.max(np.abs(
         MHDSolver._upsample_global(coarse, factor) - exact)))
-
-    idx = np.arange(Nc * factor) / factor          # convention noeud
-    A, B = np.meshgrid(idx, idx, indexing="ij")
-    err_fixed = float(np.max(np.abs(
-        map_coordinates(coarse, [A, B], order=3, mode="grid-wrap") - exact)))
-
-    assert err_fixed < 1e-4, (
-        f"la variante corrigee devrait etre exacte, mesure {err_fixed:.3e}")
-    assert err_code > 1e-2, (
-        f"l'erreur du code est tombee a {err_code:.3e} : si "
-        "`_upsample_global` a ete corrige, mettre a jour ce test et "
-        "docs/RESULTS_V4.md")
-    assert err_code > 1000 * err_fixed, (
-        f"ecart reduit : code {err_code:.3e}, corrige {err_fixed:.3e}")
+    assert err < 1e-4, f"erreur {err:.3e}, attendu < 1e-4"
 
 
-def test_the_global_prolongation_shifts_the_field():
-    """Le decalage, isole du reste.
+def test_global_upsampling_converges_at_third_order_or_better():
+    """L'ordre annonce par `order=3` doit se voir dans les chiffres."""
+    errs = []
+    for Nc in (16, 32, 64):
+        g_c = PeriodicGrid(Nc)
+        coarse = np.sin(g_c.X) * np.cos(g_c.Y)
+        fine = MHDSolver._upsample_global(coarse, 2)
+        g_f = PeriodicGrid(2 * Nc)
+        errs.append(float(np.max(np.abs(
+            fine - np.sin(g_f.X) * np.cos(g_f.Y)))))
+    orders = [np.log2(errs[i] / errs[i + 1]) for i in range(len(errs) - 1)]
+    assert all(o > 2.5 for o in orders), (
+        f"ordre {orders} (erreurs {errs}), attendu > 2.5")
 
-    Sur un champ lineaire en x, une prolongation exacte redonne le meme
-    champ. Un decalage constant se lit directement comme un biais.
+
+def test_the_global_prolongation_no_longer_shifts_the_field():
+    """Le decalage de -0.375 cellule grossiere a disparu.
+
+    Un decalage residuel se lit comme une correlation entre l'erreur et la
+    DERIVEE du champ.
     """
     Nc, factor = 32, 4
     g_c = PeriodicGrid(Nc)
-    #  rampe lisse et periodique : sin d'une seule harmonique
-    coarse = np.sin(g_c.X)
-    fine = MHDSolver._upsample_global(coarse, factor)
     g_f = PeriodicGrid(Nc * factor)
-    exact = np.sin(g_f.X)
-    #  un decalage pur se voit comme une correlation avec la DERIVEE
-    bias = float(np.mean((fine - exact) * np.cos(g_f.X)))
-    assert abs(bias) > 1e-3, (
-        f"biais de decalage {bias:.3e} : si le decalage a disparu, "
-        "`_upsample_global` a ete corrige")
+    fine = MHDSolver._upsample_global(np.sin(g_c.X), factor)
+    bias = float(np.mean((fine - np.sin(g_f.X)) * np.cos(g_f.X)))
+    assert abs(bias) < 1e-6, f"biais de decalage residuel {bias:.3e}"
 
 
 def test_restriction_after_prolongation_recovers_a_uniform_field():
@@ -199,19 +175,89 @@ def test_restriction_after_prolongation_recovers_a_uniform_field():
     np.testing.assert_allclose(back, coarse, rtol=0, atol=1e-9)
 
 
-def test_restriction_after_prolongation_nearly_recovers_a_smooth_field():
+def test_restriction_and_prolongation_are_not_adjoint_and_that_is_expected():
+    """R o P n'est PAS l'identite sur un champ lisse — et ne peut pas l'etre.
+
+    Les deux operateurs ne parlent pas de la meme chose :
+
+      - `_downsample_local` fait une MOYENNE DE BLOC, semantique
+        volume-fini (valeur moyenne sur la cellule) ;
+      - `_upsample_global` interpole aux NOEUDS, semantique valeur
+        ponctuelle — celle du solveur, dont les champs sont des valeurs
+        aux points `PeriodicGrid.X`.
+
+    Moyenner les 4 points fins qui suivent un noeud grossier ne redonne pas
+    la valeur en ce noeud : cela la decale d'environ 3h/8 et la lisse.
+    L'ecart mesure est de 0.149 sur un champ d'amplitude 1 a facteur 4.
+
+    L'ancienne prolongation, elle, echantillonnait au centre des cellules,
+    donc APPARIEE a la moyenne de bloc : son aller-retour revenait mieux.
+    Mais elle etait desaccordee avec la grille du solveur, et la mesure
+    tranche en faveur de la convention noeud — voir
+    `test_the_corrected_prolongation_tracks_the_reference_better`.
+    """
     g = PeriodicGrid(16)
     coarse = np.sin(g.X) * np.cos(g.Y)
     back = MHDSolver._downsample_local(
         MHDSolver._upsample_global(coarse, 4), 4)
     err = float(np.max(np.abs(back - coarse)))
-    #  Consequence directe de D-2 : l'aller-retour ne revient pas. Mesure
-    #  0.204 sur un champ d'amplitude 1. On epingle l'ampleur au lieu de
-    #  pretendre que le module est exact.
-    assert err > 0.05, (
-        f"aller-retour a {err:.3e} : si `_upsample_global` a ete corrige, "
-        "mettre a jour ce test")
-    assert err < 0.5, f"degradation aggravee : {err:.3e}"
+    assert 0.05 < err < 0.5, (
+        f"aller-retour a {err:.3e} : si les deux operateurs ont ete "
+        "reaccordes, mettre a jour ce test")
+
+
+def test_the_corrected_prolongation_tracks_the_reference_better():
+    """La mesure qui justifie D-2 : le chemin AMR suit mieux `step_full`.
+
+    C'est le seul juge valable — l'aller-retour R o P favorise la
+    convention centre-cellule, mais ce n'est pas ce que le solveur demande.
+    Ecart relatif a `step_full` apres 15 pas, N=64, max_depth=2 :
+
+        couverture      ancienne prolongation   corrigee
+        aucun patch     1.1896 %                1.1465 %
+        un quart        1.3879 %                1.1197 %
+
+    Le residu ~1.1 % est l'erreur intrinseque de la resolution grossiere,
+    que la prolongation ne peut pas retirer.
+    """
+    from scipy.ndimage import map_coordinates
+
+    def old_upsample(field, factor):
+        if factor == 1:
+            return field
+        Nc = field.shape[0]
+        pos = (np.arange(Nc * factor) + 0.5) / factor - 0.5
+        A, B = np.meshgrid(pos, pos, indexing="ij")
+        return map_coordinates(field, [A, B], order=3, mode="wrap")
+
+    N = 64
+    patches = [{"bounds": (0, N // 2, 0, N // 2), "depth": 2}]
+
+    def run(kind):
+        g = PeriodicGrid(N)
+        s = MHDSolver(g, dt=1e-3, Re=400, Rm=400)
+        s.init_orszag_tang()
+        for _ in range(20):
+            s.adapt_dt(cfl_target=0.4)
+            s.step_full(record_stats=False)
+        if kind == "old":
+            s._upsample_global = old_upsample
+        s.dt = 1e-3
+        for _ in range(15):
+            if kind == "full":
+                s.step_full(record_stats=False)
+            else:
+                s.step_layered(active_patches=patches, max_depth=2,
+                               target_dim=2)
+        return np.array([s.vx, s.vy, s.Bx, s.By])
+
+    ref = run("full")
+    amp = np.max(np.abs(ref))
+    err_old = float(np.max(np.abs(run("old") - ref)) / amp)
+    err_new = float(np.max(np.abs(run("new") - ref)) / amp)
+    assert err_new < err_old, (
+        f"la prolongation corrigee ({err_new:.4%}) ne fait pas mieux que "
+        f"l'ancienne ({err_old:.4%})")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -391,16 +437,13 @@ def test_the_tau_correction_cancels_the_prolongation_error_under_patches():
 
 
 @pytest.mark.parametrize("patches,label", [([], "aucun patch"), (None, "quart")])
-def test_the_prolongation_error_survives_where_no_patch_refines(patches, label):
-    """D-2, mesure de l'impact : ~1.7 % apres 15 pas sur le fond grossier.
+def test_the_prolongation_no_longer_biases_the_unrefined_background(patches, label):
+    """D-2 corrige : le fond non raffine ne porte plus l'erreur.
 
-    La ou aucun patch ne raffine, le delta grossier prolonge reste tel
-    quel, decalage et couture compris. Les DEUX bras du pipeline
-    (`sim_quantum` et `sim_classical`, cf. `src/pipeline.py:480,485`)
-    passent par `step_layered` : l'erreur leur est commune et ne biaise pas
-    leur comparaison. Mais le temoin, lui, avance par `step_full` — donc
-    l'erreur de chaque bras CONTRE la reference porte cette composante, qui
-    ne doit rien au critere de raffinement.
+    Avant correction, l'ecart entre le code et la variante aux bonnes
+    conventions valait 1.79 % sans patch et 1.67 % au quart de couverture,
+    apres 15 pas. Il doit maintenant etre negligeable, puisque le code EST
+    la variante corrigee.
     """
     N = 64
     if patches is None:
@@ -408,8 +451,34 @@ def test_the_prolongation_error_survives_where_no_patch_refines(patches, label):
     a = _march(False, patches, 2, N=N)
     b = _march(True, patches, 2, N=N)
     rel = float(np.max(np.abs(a - b)) / np.max(np.abs(a)))
-    assert rel > 5e-3, (
-        f"{label} : ecart relatif {rel:.4%}. S'il est tombe, "
-        "`_upsample_global` a ete corrige — mettre a jour ce test et "
-        "docs/RESULTS_V4.md")
-    assert rel < 0.10, f"{label} : degradation aggravee ({rel:.2%})"
+    assert rel < 1e-12, (
+        f"{label} : ecart relatif {rel:.3e} — `_upsample_global` ne coincide "
+        "plus avec la reference corrigee")
+
+
+def test_the_amr_background_now_tracks_the_reference_solver():
+    """Consequence physique de D-2 : le fond grossier suit mieux step_full.
+
+    Sans patch actif, `step_layered` applique la correction grossiere
+    prolongee sur tout le domaine. Elle ne peut pas egaler `step_full` — la
+    resolution grossiere perd de l'information — mais l'ecart ne doit plus
+    porter la composante de prolongation.
+    """
+    N = 64
+    def run(layered):
+        g = PeriodicGrid(N)
+        s = MHDSolver(g, dt=1e-3, Re=400, Rm=400)
+        s.init_orszag_tang()
+        for _ in range(20):
+            s.adapt_dt(cfl_target=0.4)
+            s.step_full(record_stats=False)
+        s.dt = 1e-3
+        for _ in range(10):
+            if layered:
+                s.step_layered(active_patches=[], max_depth=2, target_dim=2)
+            else:
+                s.step_full(record_stats=False)
+        return np.array([s.vx, s.vy, s.Bx, s.By])
+    gap = float(np.max(np.abs(run(True) - run(False))))
+    assert np.isfinite(gap)
+    assert gap < 0.5, f"le fond AMR diverge de la reference : {gap:.3e}"

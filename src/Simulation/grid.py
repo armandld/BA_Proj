@@ -73,13 +73,13 @@ def legacy_forward_divergence(fx, fy):
             + (np.roll(fy, -1, axis=AXIS_X) - fy))
 
 
-def curl_z(fx, fy, fixed_curl=False):
+def curl_z(fx, fy, fixed_curl=True):
     """Rotationnel discret : forme historique par defaut, forme 'ij' si demande."""
     return (forward_curl_z(fx, fy) if fixed_curl
             else legacy_forward_curl_z(fx, fy))
 
 
-def divergence(fx, fy, fixed_curl=False):
+def divergence(fx, fy, fixed_curl=True):
     """Divergence discrete : forme historique par defaut, forme 'ij' si demande."""
     return (forward_divergence(fx, fy) if fixed_curl
             else legacy_forward_divergence(fx, fy))
@@ -231,14 +231,28 @@ class PeriodicGrid:
         dvy_dy = 0.5 * (np.roll(vy, -1, axis=AXIS_Y) - np.roll(vy, 1, axis=AXIS_Y)) / _dx
 
         omega = dvy_dx - dvx_dy
-        S_11 = dvx_dx
-        S_22 = dvy_dy
-        S_12 = 0.5 * (dvx_dy + dvy_dx)
-        
-        strain_sq = S_11**2 + S_22**2 + 2 * S_12**2
-        
-        # Q = 0.5 * (Omega^2 - 2 * Strain^2) based on 2D decomposition
-        # simplified here to relative magnitude
+
+        # Déformations DÉVIATORIQUES, au sens d'Okubo-Weiss :
+        #   S_n = dvx/dx - dvy/dy   (normale)
+        #   S_s = dvy/dx + dvx/dy   (cisaillement)
+        #
+        # La version précédente retenait S_11² + S_22² + 2·S_12², soit
+        # (S_n² + S_s²)/2 pour un champ incompressible. Deux conséquences,
+        # toutes deux mesurées :
+        #   - la déformation pesait moitié moins que la rotation, si bien
+        #     qu'un cisaillement pur — exactement neutre au sens
+        #     d'Okubo-Weiss — sortait à Q = +0.25 et se lisait « dominé
+        #     par la rotation » ;
+        #   - S_11² + S_22² retient la partie ISOTROPE du tenseur, si bien
+        #     qu'une expansion pure, sans rotation ni déformation
+        #     déviatorique, sortait à Q = -1.
+        #
+        # Le préfacteur 0.5 est conservé : une rotation solide donne
+        # toujours Q = 2, donc Q_CRIT = 2.0 garde sa calibration.
+        S_n = dvx_dx - dvy_dy
+        S_s = dvy_dx + dvx_dy
+        strain_sq = S_n**2 + S_s**2
+
         Q_OW = 0.5 * (omega**2 - strain_sq)
         return Q_OW
     

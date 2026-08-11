@@ -6,7 +6,7 @@ from math import log
 import numpy as np
 from types import SimpleNamespace
 
-from Simulation.grid import PeriodicGrid
+from Simulation.grid import AXIS_X, AXIS_Y, PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
 from Simulation.HamiltParams import PhysicalMapper
@@ -19,6 +19,9 @@ from hyperparams_loader import load_hyperparams
 
 FREQUENCY = 1  # Fréquence d'affichage (en nombre de pas de temps)
 DIVERGENCE_PENALTY = 10.0  # Finite penalty for diverged trials (replaces inf)
+# Cette constante etait redefinie trois fois de plus, dans des portees
+# locales qui masquaient celle-ci : changer la valeur ici n'aurait eu
+# d'effet que dans un cas sur quatre. Definition unique desormais.
 
 def main():
     sys.stdout.reconfigure(line_buffering=True) # Pour un affichage immédiat des print() à enlever pour une meilleure perf
@@ -504,7 +507,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             # contains NaN/inf we assign DIVERGENCE_PENALTY for that field
             # only; otherwise we keep the real (partial) error.  This lets
             # Optuna learn from the *valid* part of the simulation.
-            DIVERGENCE_PENALTY = 10.0
+            scoring_error = None
             try:
                 q_fluxes = sim_quantum.get_fluxes()
                 # Pick the best available reference
@@ -520,20 +523,33 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                         raise RuntimeError("No reference available")
                 else:
                     ref_fluxes = sim_temoin.get_fluxes()
-                # Score each field individually — keep valid ones
+                # Score each field individually — keep valid ones.
+                #
+                # Ce bloc calculait auparavant une L2 NON pondérée, alors que
+                # `score()` pondère par la carte d'instabilité. Deux formules
+                # partaient donc vers Optuna sous la même clé `combined`,
+                # avec un écart mesuré de 1.8 % sur un champ à nappe de
+                # courant. Les deux chemins partagent désormais
+                # `instability_weight_map` et `weighted_relative_error`.
                 variables = ['vx', 'vy', 'Bx', 'By', 'Jz']
                 field_errors = {}
                 n_diverged = 0
+                _ref_finite = all(np.all(np.isfinite(ref_fluxes[v]))
+                                  for v in variables)
+                if _ref_finite:
+                    _w = instability_weight_map(ref_fluxes).flatten()
+                    _w_sum = np.sum(_w)
                 for var in variables:
                     arr_q = q_fluxes[var]
                     arr_r = ref_fluxes[var]
-                    if np.any(~np.isfinite(arr_q)) or np.any(~np.isfinite(arr_r)):
+                    if (not _ref_finite
+                            or np.any(~np.isfinite(arr_q))
+                            or np.any(~np.isfinite(arr_r))):
                         field_errors[var] = DIVERGENCE_PENALTY
                         n_diverged += 1
                     else:
-                        ref_rms = np.sqrt(np.mean(arr_r**2))
-                        rel_err = np.sqrt(np.mean((arr_q - arr_r)**2)) / (ref_rms + 1e-10)
-                        field_errors[var] = float(rel_err)
+                        field_errors[var] = weighted_relative_error(
+                            arr_q, arr_r, _w, _w_sum)
                 phys_score = np.mean(list(field_errors.values()))
                 patch_ratio = total_pixel_used / (step_simulated * N**2) if step_simulated > 0 else 1.0
                 combined = (phys_score + lambda_cost * patch_ratio) / (1 + lambda_cost)
@@ -546,14 +562,28 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 if verbose:
                     print(f"[DIVERGE] Partial score: combined={combined:.4f}, "
                           f"diverged_fields={n_diverged}/{len(variables)}")
-            except Exception:
+            except Exception as exc:
+                # Ce filet attrapait TOUTE exception sans la nommer : une
+                # erreur de programmation dans le calcul du score etait
+                # rapportee comme une divergence physique, et l'essai
+                # penalise au lieu d'echouer. On garde le filet — un essai
+                # Optuna ne doit pas faire tomber la campagne — mais la
+                # cause est desormais journalisee et rendue avec le
+                # resultat, donc distinguable d'une vraie divergence.
+                import traceback
+                print(f"[SCORING-ERROR] {type(exc).__name__}: {exc}",
+                      file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
                 combined = DIVERGENCE_PENALTY
                 phys_score = DIVERGENCE_PENALTY
                 patch_ratio = 1.0
                 field_errors = {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}
+                scoring_error = f"{type(exc).__name__}: {exc}"
             if return_details:
-                return {'combined': combined, 'phys_score': phys_score,
+                _out = {'combined': combined, 'phys_score': phys_score,
                         'patch_ratio': patch_ratio, 'field_errors': field_errors}
+                _out['scoring_error'] = scoring_error
+                return _out
             return combined
 
         # --- Intermediate scoring for Optuna pruning ---
@@ -589,7 +619,6 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         while last_step >= 0 and 'fluxes' not in dns_trace.get(last_step, {}):
             last_step -= 1
         if last_step < 0:
-            DIVERGENCE_PENALTY = 10.0
             if return_details:
                 return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
                         'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
@@ -608,7 +637,6 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
 
     final_score = score_result['combined']
     if np.isnan(final_score) or np.isinf(final_score):
-        DIVERGENCE_PENALTY = 10.0
         if return_details:
             return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
                     'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
@@ -661,6 +689,46 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     return final_score
 
 
+def instability_weight_map(ref_fluxes):
+    """Carte de poids asymétrique, construite sur la référence.
+
+    w = 1 + 0.25 × (|Jz|/⟨|Jz|⟩ + |ωz|/⟨|ωz|⟩)
+
+    Les régions à fort courant OU forte vorticité pèsent davantage : rater
+    une instabilité coûte plus cher que raffiner une région calme.
+
+    Extraite de `score` pour que le chemin de divergence emploie EXACTEMENT
+    la même pondération. Les deux calculaient auparavant des erreurs
+    différentes — l'une pondérée, l'autre non — et les renvoyaient sous la
+    même clé `combined`.
+    """
+    Jz_abs = np.abs(ref_fluxes['Jz'])
+    Jz_mean = np.mean(Jz_abs) + 1e-10
+
+    vx_ref, vy_ref = ref_fluxes['vx'], ref_fluxes['vy']
+    omega_z = np.abs(
+        (np.roll(vy_ref, -1, axis=AXIS_X) - vy_ref)
+        - (np.roll(vx_ref, -1, axis=AXIS_Y) - vx_ref)
+    )
+    omega_mean = np.mean(omega_z) + 1e-10
+
+    instability_weight = 0.5
+    return 1.0 + instability_weight * (
+        Jz_abs / Jz_mean + omega_z / omega_mean
+    ) * 0.5
+
+
+def weighted_relative_error(arr_q, arr_r, weight_flat, weight_sum):
+    """Erreur L2 relative pondérée d'un champ contre sa référence.
+
+    Vaut 0 sur une reconstruction exacte et 1 quand le bras rend zéro.
+    """
+    diff_sq = (arr_q.flatten() - arr_r.flatten()) ** 2
+    weighted_rmse = np.sqrt(np.sum(weight_flat * diff_sq) / weight_sum)
+    ref_rms = np.sqrt(np.sum(weight_flat * arr_r.flatten() ** 2) / weight_sum)
+    return float(weighted_rmse / (ref_rms + 1e-10))
+
+
 def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, total_steps, N_square, verbose=False):
     """
     Computes a multi-variable physical fidelity score with asymmetric weighting.
@@ -679,27 +747,9 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
     variables = ['vx', 'vy', 'Bx', 'By', 'Jz']
 
     # ── Asymmetric weight map ──
-    # Combine |Jz| (current sheets) AND |ωz| (vorticity) for weighting.
-    # This catches instabilities where either B or v is active.
-    Jz_ref = sim_temoin_fluxes['Jz']
-    vx_ref = sim_temoin_fluxes['vx']
-    vy_ref = sim_temoin_fluxes['vy']
-
-    Jz_abs = np.abs(Jz_ref)
-    Jz_mean = np.mean(Jz_abs) + 1e-10
-
-    # Discrete vorticity |ωz| ≈ |∂vy/∂x − ∂vx/∂y|
-    omega_z = np.abs(
-        (np.roll(vy_ref, -1, axis=1) - vy_ref)
-        - (np.roll(vx_ref, -1, axis=0) - vx_ref)
-    )
-    omega_mean = np.mean(omega_z) + 1e-10
-
-    # w = 1 + 0.5*(|Jz|/mean + |ωz|/mean) — weights instability regions
-    instability_weight = 0.5
-    weight_map = 1.0 + instability_weight * (
-        Jz_abs / Jz_mean + omega_z / omega_mean
-    ) * 0.5
+    # Extraite dans `instability_weight_map` pour que le chemin de
+    # divergence de `pipeline()` emploie EXACTEMENT la meme ponderation.
+    weight_map = instability_weight_map(sim_temoin_fluxes)
     weight_flat = weight_map.flatten()
     weight_sum = np.sum(weight_flat)
 
@@ -707,18 +757,9 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
     detailed_errors = {}
 
     for var in variables:
-        arr_q = sim_quantum_fluxes[var].flatten()
-        arr_t = sim_temoin_fluxes[var].flatten()
-
-        # Weighted L2: sum(w * (q-t)^2) / sum(w), then sqrt for norm-like behavior
-        diff_sq = (arr_q - arr_t) ** 2
-        weighted_mse = np.sum(weight_flat * diff_sq) / weight_sum
-        weighted_rmse = np.sqrt(weighted_mse)
-
-        ref_rms = np.sqrt(np.sum(weight_flat * arr_t ** 2) / weight_sum)
-        epsilon_security = 1e-10
-        rel_err = weighted_rmse / (ref_rms + epsilon_security)
-
+        rel_err = weighted_relative_error(
+            sim_quantum_fluxes[var], sim_temoin_fluxes[var],
+            weight_flat, weight_sum)
         detailed_errors[var] = rel_err
         total_error += rel_err
 

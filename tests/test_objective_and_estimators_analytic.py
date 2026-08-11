@@ -5,15 +5,18 @@ des 345 essais Optuna a été jugé par elle. Elle n'avait aucun test.
 
 Deux écarts trouvés en la relisant, tous deux vérifiés ici :
 
-  D-3  Sa carte de poids construit une « vorticité » avec la convention
+  D-3  Sa carte de poids construisait une « vorticité » avec la convention
        d'axes inversée — le même défaut que dans les mappeurs, ici au cœur
-       de l'objectif. Sur une rotation solide elle vaut 0 au lieu de 2 : les
-       régions en rotation pure ne reçoivent aucun sur-poids, alors que
-       c'est précisément ce que la pondération prétend faire.
+       de l'objectif. Sur une rotation solide elle valait 0 au lieu de 2 :
+       les tourbillons ne recevaient aucun sur-poids, alors que c'est la
+       raison d'être de la pondération. CORRIGÉ.
 
-  D-4  Le docstring annonce `w = 1 + 0.5*(|Jz|/mean + |ω|/mean)` ; le code
-       calcule `1 + 0.5*(...)*0.5`, soit un coefficient deux fois plus
-       petit. Le code fait autorité, mais l'écart doit être visible.
+  D-4  Le commentaire annonçait `w = 1 + 0.5*(...)` là où le code applique
+       `1 + 0.25*(...)`. CORRIGÉ (commentaire aligné sur le calcul).
+
+  D-5  Le chemin de divergence notait avec une formule NON pondérée, sous
+       la même clé `combined`. CORRIGÉ : les deux chemins partagent
+       `instability_weight_map` et `weighted_relative_error`.
 """
 
 import os
@@ -196,8 +199,8 @@ def _weight_map(t):
     """Reproduit la ponderation de `score` pour l'inspecter."""
     Jz_abs = np.abs(t["Jz"])
     Jz_mean = np.mean(Jz_abs) + 1e-10
-    omega = np.abs((np.roll(t["vy"], -1, axis=1) - t["vy"])
-                   - (np.roll(t["vx"], -1, axis=0) - t["vx"]))
+    omega = np.abs((np.roll(t["vy"], -1, axis=AXIS_X) - t["vy"])
+                   - (np.roll(t["vx"], -1, axis=AXIS_Y) - t["vx"]))
     omega_mean = np.mean(omega) + 1e-10
     return 1.0 + 0.5 * (Jz_abs / Jz_mean + omega / omega_mean) * 0.5
 
@@ -239,39 +242,59 @@ def test_the_weight_map_actually_changes_the_score():
 
 # ── D-3 et D-4 ───────────────────────────────────────────────────────
 
-def test_the_objective_weight_map_is_blind_to_solid_rotation():
-    """D-3 : la « vorticite » de l'objectif vaut 0 sur une rotation solide.
+def test_the_objective_weight_map_now_sees_solid_rotation():
+    """D-3 corrige : la ponderation sur-pondere enfin les tourbillons.
 
-    Troisieme site du meme defaut de convention, apres HamiltParams et
-    PhysToAngle — mais celui-ci est dans la fonction que les 345 essais
-    Optuna ont minimisee. La ponderation ne sur-pondere donc PAS les
-    tourbillons, contrairement a ce que son docstring annonce.
+    Elle formait auparavant dv_y/dy - dv_x/dx, exactement nulle sur une
+    rotation solide : les tourbillons ne recevaient aucun sur-poids, alors
+    que c'est la raison d'etre de la carte.
     """
     g = PeriodicGrid(64)
     vx, vy = -g.Y, g.X                       # rotation solide, omega = 2
     inner = (slice(0, -1), slice(0, -1))
+    om = np.abs((np.roll(vy, -1, axis=AXIS_X) - vy)
+                - (np.roll(vx, -1, axis=AXIS_Y) - vx))[inner] / g.dx
+    assert np.mean(om) == pytest.approx(2.0, rel=1e-9)
 
-    obj = np.abs((np.roll(vy, -1, axis=1) - vy)
-                 - (np.roll(vx, -1, axis=0) - vx))[inner] / g.dx
-    true = np.abs((np.roll(vy, -1, axis=AXIS_X) - vy)
-                  - (np.roll(vx, -1, axis=AXIS_Y) - vx))[inner] / g.dx
+    #  et la carte reelle, sur un tourbillon localise, doit sur-ponderer
+    n = 32
+    gg = PeriodicGrid(n)
+    r2 = (gg.X - np.pi) ** 2 + (gg.Y - np.pi) ** 2
+    swirl = np.exp(-r2 / 0.3)
+    t = {k: np.zeros((n, n)) for k in FIELDS}
+    t["vx"] = -(gg.Y - np.pi) * swirl
+    t["vy"] = (gg.X - np.pi) * swirl
+    from pipeline import instability_weight_map
+    w = instability_weight_map(t)
+    centre = w[n // 2, n // 2]
+    corner = w[0, 0]
+    assert centre > 1.5 * corner, (
+        f"le tourbillon ne recoit pas de sur-poids : centre {centre:.3f}, "
+        f"coin {corner:.3f}")
 
-    assert np.max(obj) < 1e-9, (
-        f"la vorticite de l'objectif vaut {np.max(obj):.3e} sur une "
-        "rotation solide ; si elle est devenue correcte, mettre a jour "
-        "docs/RESULTS_V4.md")
-    assert np.mean(true) == pytest.approx(2.0, rel=1e-9)
 
+def test_the_weight_formula_matches_its_documentation():
+    """D-4 corrige : le commentaire annonce desormais 0.25, comme le code.
 
-def test_the_weight_formula_differs_from_its_docstring_by_a_factor_two():
-    """D-4 : docstring `1 + 0.5*(...)`, code `1 + 0.5*(...)*0.5`."""
+    Il annoncait `1 + 0.5*(...)` alors que le code applique
+    `1 + 0.5*(...)*0.5`, soit un coefficient deux fois plus petit.
+    """
     src = open(os.path.join(_SRC, "pipeline.py"), encoding="utf-8").read()
-    assert "w = 1 + 0.5*(|Jz|/mean + |ωz|/mean)" in src
-    assert "Jz_abs / Jz_mean + omega_z / omega_mean\n    ) * 0.5" in src, (
-        "le facteur 0.5 supplementaire a disparu : docstring et code sont "
-        "peut-etre reconcilies, verifier")
+    assert "w = 1 + 0.25 × (|Jz|/⟨|Jz|⟩ + |ωz|/⟨|ωz|⟩)" in src, (
+        "la documentation n'annonce plus le facteur effectif 0.25")
+    assert "1 + 0.5*(|Jz|" not in src, (
+        "l'ancienne annonce a 0.5 est revenue")
     t = {k: np.ones((N, N)) for k in FIELDS}
-    assert _weight_map(t)[0, 0] == pytest.approx(1.25)   # et non 1.5
+    from pipeline import instability_weight_map
+    assert instability_weight_map(t)[0, 0] == pytest.approx(1.25)
+
+
+def test_the_weight_map_helper_matches_the_score_it_feeds():
+    """La carte extraite doit etre celle que `score` applique reellement."""
+    from pipeline import instability_weight_map
+    t = _flux(21)
+    np.testing.assert_allclose(instability_weight_map(t), _weight_map(t),
+                               rtol=0, atol=1e-15)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -499,63 +522,57 @@ def test_second_order_jump_reacts_to_curvature():
 _PIPELINE_SRC = open(os.path.join(_SRC, "pipeline.py"), encoding="utf-8").read()
 
 
-def test_the_divergence_path_scores_with_a_different_formula():
-    """D-5 : deux formules rendues sous la meme cle `combined`.
+def test_both_scoring_paths_now_use_the_same_formula():
+    """D-5 corrige : une seule definition de l'erreur, partagee.
 
-    Le chemin normal (`score`) pondere l'erreur par la carte d'instabilite.
-    Le chemin de divergence (pipeline.py ~528-539) calcule une L2 NON
-    ponderee : `sqrt(mean((q-r)^2)) / (sqrt(mean(r^2)) + 1e-10)`.
-
-    Les deux nombres partent vers Optuna sous le meme nom. Sur un champ
-    portant une nappe de courant, l'ecart mesure est de 1.8 % — assez pour
-    deplacer un classement d'essais, pas assez pour se voir.
+    Le chemin de divergence calculait une L2 NON ponderee la ou `score`
+    pondere ; les deux partaient vers Optuna sous la meme cle `combined`,
+    avec un ecart de 1.8 % sur un champ a nappe de courant. Ils partagent
+    desormais `instability_weight_map` et `weighted_relative_error`.
     """
-    assert "rel_err = np.sqrt(np.mean((arr_q - arr_r)**2)) / (ref_rms + 1e-10)" \
-        in _PIPELINE_SRC, "le chemin de divergence a change de formule"
-    assert "weighted_rmse = np.sqrt(weighted_mse)" in _PIPELINE_SRC
+    from pipeline import instability_weight_map, weighted_relative_error
+
+    assert "field_errors[var] = weighted_relative_error(" in _PIPELINE_SRC, (
+        "le chemin de divergence n'utilise plus le calcul partage")
+    assert "rel_err = np.sqrt(np.mean((arr_q - arr_r)**2))" not in _PIPELINE_SRC
 
     rng = np.random.default_rng(0)
     n = 32
     t = {k: rng.standard_normal((n, n)) * 0.1 for k in FIELDS}
-    t["Jz"][14:18, :] = 5.0                       # nappe de courant
+    t["Jz"][14:18, :] = 5.0
     q = {k: v + rng.standard_normal((n, n)) * 0.05 for k, v in t.items()}
 
-    weighted = score(q, t, 0.0, n * n, 1, n * n)["phys_score"]
-    plain = float(np.mean([
-        np.sqrt(np.mean((q[v] - t[v]) ** 2))
-        / (np.sqrt(np.mean(t[v] ** 2)) + 1e-10) for v in FIELDS]))
+    w = instability_weight_map(t).flatten()
+    w_sum = w.sum()
+    via_helper = float(np.mean([
+        weighted_relative_error(q[v], t[v], w, w_sum) for v in FIELDS]))
+    via_score = score(q, t, 0.0, n * n, 1, n * n)["phys_score"]
+    assert via_score == pytest.approx(via_helper, rel=1e-15), (
+        f"les deux chemins divergent encore : {via_score} vs {via_helper}")
 
-    assert abs(weighted - plain) / weighted > 1e-3, (
-        f"les deux formules coincident ({weighted:.6f} vs {plain:.6f}) : "
-        "si elles ont ete unifiees, mettre a jour ce test")
 
-
-def test_the_divergence_penalty_is_consistent_everywhere():
-    """`DIVERGENCE_PENALTY = 10.0` est redefini QUATRE fois.
-
-    Un seul de ces quatre est au niveau module ; les trois autres le
-    masquent localement. Changer la constante du haut n'aurait donc
-    d'effet que dans un cas sur quatre. Tant que les quatre coincident, le
-    comportement est correct — ce test le verifie plutot que de l'esperer.
-    """
+def test_the_divergence_penalty_has_a_single_definition():
+    """Elle etait redefinie quatre fois, dont trois masquaient la constante
+    de module : changer la valeur en tete n'aurait eu d'effet qu'une fois
+    sur quatre."""
     import re
     values = re.findall(r"DIVERGENCE_PENALTY\s*=\s*([0-9.]+)", _PIPELINE_SRC)
-    assert len(values) >= 4, f"{len(values)} definitions trouvees"
-    assert len(set(values)) == 1, (
-        f"les definitions divergent : {values}. Le comportement depend "
-        "desormais de l'endroit du code ou la penalite est lue")
+    assert len(values) == 1, (
+        f"{len(values)} definitions : {values}. Le comportement redeviendrait "
+        "dependant de l'endroit du code ou la penalite est lue")
+    assert values[0] == "10.0"
 
 
-def test_a_bug_in_scoring_would_be_reported_as_a_divergence():
-    """`except Exception` avale tout et rend la penalite de divergence.
+def test_a_scoring_bug_is_now_distinguishable_from_a_divergence():
+    """`except Exception` avalait tout sans le nommer.
 
-    Une erreur de programmation dans le calcul du score serait donc
-    rapportee comme « la physique a diverge », et l'essai serait penalise
-    au lieu d'echouer. On epingle la structure : la clause ne filtre aucun
-    type d'exception.
+    Le filet est conserve — un essai Optuna ne doit pas faire tomber la
+    campagne — mais la cause est journalisee et rendue sous la cle
+    `scoring_error`, donc distinguable d'une divergence physique.
     """
-    idx = _PIPELINE_SRC.index("            except Exception:")
-    tail = _PIPELINE_SRC[idx:idx + 400]
-    assert "DIVERGENCE_PENALTY" in tail
-    assert "except Exception as" not in tail, (
-        "l'exception est desormais nommee — verifier si elle est journalisee")
+    assert "except Exception as exc:" in _PIPELINE_SRC
+    assert "[SCORING-ERROR]" in _PIPELINE_SRC
+    assert "traceback.print_exc" in _PIPELINE_SRC
+    assert "_out['scoring_error'] = scoring_error" in _PIPELINE_SRC
+    assert "scoring_error = None" in _PIPELINE_SRC, (
+        "la cle doit valoir None quand tout s'est bien passe")

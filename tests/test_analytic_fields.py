@@ -293,33 +293,43 @@ def test_q_criterion_is_positive_on_solid_rotation(grid):
 
 
 def test_q_criterion_is_negative_on_pure_deformation(grid):
-    """Deformation pure : omega = 0, S_11 = 1, S_22 = -1 -> Q = -1."""
-    _uniform(grid._compute_q_criterion(grid.X, -grid.Y)[INNER_CTR], -1.0, tol=1e-9)
+    """Deformation pure : omega = 0, S_n = 2, S_s = 0 -> Q = -2."""
+    _uniform(grid._compute_q_criterion(grid.X, -grid.Y)[INNER_CTR], -2.0, tol=1e-9)
 
 
-def test_q_criterion_weighs_strain_half_against_rotation(grid):
-    """D-b : le cisaillement pur, neutre au sens d'Okubo-Weiss, sort positif.
+def test_pure_shear_is_exactly_neutral(grid):
+    """Le cisaillement pur est la frontiere entre rotation et deformation.
 
-    Pour vx = y, vy = 0 : omega = -1, S_n = 0, S_s = 1, donc la forme
-    standard vaut exactement 0 — le cisaillement est la frontiere entre
-    rotation et deformation. Le critere du depot y renvoie +0.25 et le
-    classe donc du cote « domine par la rotation ».
+    Pour vx = y, vy = 0 : omega = -1, S_n = 0, S_s = 1, donc Q = 0
+    exactement. Le critere retenait auparavant S_11^2 + S_22^2 + 2 S_12^2,
+    soit la moitie de la deformation deviatorique, et rendait +0.25 : le
+    cisaillement se lisait « domine par la rotation ».
     """
     vx, vy = grid.Y, np.zeros_like(grid.X)
     _uniform(_okubo_weiss(grid, vx, vy), 0.0, tol=1e-9)
-    _uniform(grid._compute_q_criterion(vx, vy)[INNER_CTR], 0.25, tol=1e-9)
+    _uniform(grid._compute_q_criterion(vx, vy)[INNER_CTR], 0.0, tol=1e-9)
 
 
-def test_q_criterion_counts_isotropic_expansion_as_strain(grid):
-    """D-c : une expansion pure, sans rotation ni deformation deviatorique.
+def test_isotropic_expansion_is_not_counted_as_strain(grid):
+    """Une expansion pure n'a ni rotation ni deformation deviatorique.
 
-    Pour vx = x, vy = y : omega = 0, S_n = 0, S_s = 0, la forme standard
-    vaut 0. Le critere du depot renvoie -1 parce que son terme de
-    deformation retient S_11^2 + S_22^2, partie isotrope comprise.
+    Pour vx = x, vy = y : omega = 0, S_n = 0, S_s = 0, donc Q = 0. Le
+    terme S_11^2 + S_22^2 retenait la partie ISOTROPE du tenseur et
+    rendait -1.
     """
     vx, vy = grid.X, grid.Y
     _uniform(_okubo_weiss(grid, vx, vy), 0.0, tol=1e-9)
-    _uniform(grid._compute_q_criterion(vx, vy)[INNER_CTR], -1.0, tol=1e-9)
+    _uniform(grid._compute_q_criterion(vx, vy)[INNER_CTR], 0.0, tol=1e-9)
+
+
+def test_the_q_criterion_is_half_the_standard_okubo_weiss(grid):
+    """Le prefacteur 0.5 est conserve, donc Q_CRIT = 2.0 garde sa
+    calibration : une rotation solide vaut toujours Q = 2."""
+    for vx, vy in ((-grid.Y, grid.X), (grid.X, -grid.Y),
+                   (grid.Y, np.zeros_like(grid.X)), (grid.X, grid.Y)):
+        q = grid._compute_q_criterion(vx, vy)[INNER_CTR]
+        ow = _okubo_weiss(grid, vx, vy)
+        np.testing.assert_allclose(q, 0.5 * ow, rtol=0, atol=1e-9)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -343,12 +353,11 @@ def turbulent():
     return g, sim, sim.get_fluxes()
 
 
-def test_default_path_is_the_legacy_operator_bit_for_bit(turbulent):
-    """Le chemin sans drapeau doit rester celui de la campagne Optuna.
+def test_the_default_path_now_uses_the_declared_convention(turbulent):
+    """Le defaut a bascule : les mappeurs suivent AXIS_X / AXIS_Y.
 
-    On reconstruit le score a la main avec l'operateur historique et on
-    exige l'egalite exacte : une correction faite « au passage » dans les
-    mappeurs ferait tomber ce test.
+    On reconstruit le score a la main avec l'operateur CORRIGE et on exige
+    l'egalite exacte. Un retour a la forme historique ferait tomber ce test.
     """
     from Simulation.PhysToAngle import AngleMapper, _lohner_estimator
 
@@ -359,8 +368,8 @@ def test_default_path_is_the_legacy_operator_bit_for_bit(turbulent):
         mx = np.max(arr)
         return arr / mx if mx > 1e-12 else arr
 
-    s_vort = _norm(np.abs(legacy_forward_curl_z(vx, vy)))
-    s_div = _norm(np.abs(legacy_forward_divergence(vx, vy)))
+    s_vort = _norm(np.abs(forward_curl_z(vx, vy)))
+    s_div = _norm(np.abs(forward_divergence(vx, vy)))
     s_jz = _norm(np.abs(ps["Jz"]))
     s_loh = _norm(_lohner_estimator(np.sqrt(Bx ** 2 + By ** 2)))
     expected = np.sqrt((s_vort ** 2 + s_div ** 2 + s_jz ** 2 + s_loh ** 2) / 4.0)
@@ -368,58 +377,55 @@ def test_default_path_is_the_legacy_operator_bit_for_bit(turbulent):
     np.testing.assert_array_equal(AngleMapper.classical_score(ps), expected)
 
 
-def test_fixed_curl_actually_changes_the_classical_score(turbulent):
-    """Un drapeau accepte puis ignore serait indiscernable de son absence."""
+def test_the_legacy_operator_is_still_reachable_and_still_differs(turbulent):
+    """La forme historique reste accessible pour comparer les deux
+    conventions — c'est ce que mesure `h1_curl_convention_gap`."""
     from Simulation.PhysToAngle import AngleMapper
 
     _g, _sim, ps = turbulent
-    base = AngleMapper.classical_score(ps)
-    fixed = AngleMapper.classical_score(ps, fixed_curl=True)
-    assert not np.array_equal(base, fixed)
-    assert np.max(np.abs(base - fixed)) > 1e-3, (
-        f"ecart max {np.max(np.abs(base - fixed)):.3e} : le drapeau ne "
-        "change pratiquement rien, donc il ne branche rien")
+    fixed = AngleMapper.classical_score(ps)
+    legacy = AngleMapper.classical_score(ps, fixed_curl=False)
+    assert not np.array_equal(fixed, legacy)
+    assert np.max(np.abs(fixed - legacy)) > 1e-3
 
 
-def test_fixed_curl_actually_changes_the_physical_score(turbulent):
+def test_the_flag_still_reaches_the_physical_score(turbulent):
     from Simulation.HamiltParams import PhysicalMapper
 
     g, _sim, ps = turbulent
     kw = dict(cs=1.0, nu=1 / 400.0, eta_mhd=1 / 400.0, dx=g.dx)
-    base = PhysicalMapper(**kw).physical_score(ps)
-    fixed = PhysicalMapper(fixed_curl=True, **kw).physical_score(ps)
-    assert not np.array_equal(base, fixed)
+    fixed = PhysicalMapper(**kw).physical_score(ps)
+    legacy = PhysicalMapper(fixed_curl=False, **kw).physical_score(ps)
+    assert not np.array_equal(fixed, legacy)
 
 
-def test_fixed_curl_reaches_the_v1_plaquette_coefficients(turbulent):
-    """K_plaquettes est le canal ou passe le rotationnel : il doit bouger."""
+def test_the_flag_still_reaches_the_v1_plaquette_coefficients(turbulent):
     from Simulation.HamiltParams import PhysicalMapper
     from Simulation.PhysToAngle import AngleMapper
 
     g, sim, ps = turbulent
-    score = AngleMapper.classical_score(ps)
+    sc = AngleMapper.classical_score(ps)
     kw = dict(cs=1.0, nu=1 / 400.0, eta_mhd=1 / 400.0, dx=g.dx)
-    base = PhysicalMapper(**kw).compute_coefficients(sim, score, ps, 0.35)
-    fixed = PhysicalMapper(fixed_curl=True, **kw).compute_coefficients(
-        sim, score, ps, 0.35)
-    kb = np.asarray(base["K_plaquettes"], dtype=float)
-    kf = np.asarray(fixed["K_plaquettes"], dtype=float)
-    assert kb.shape == kf.shape and kb.size > 0
-    assert not np.array_equal(kb, kf)
+    a = PhysicalMapper(**kw).compute_coefficients(sim, sc, ps, 0.35)
+    b = PhysicalMapper(fixed_curl=False, **kw).compute_coefficients(
+        sim, sc, ps, 0.35)
+    ka = np.asarray(a["K_plaquettes"], dtype=float)
+    kb = np.asarray(b["K_plaquettes"], dtype=float)
+    assert ka.shape == kb.shape and ka.size > 0
+    assert not np.array_equal(ka, kb)
 
 
-def test_fixed_curl_reaches_the_v2_plaquette_coefficients(turbulent):
+def test_the_flag_still_reaches_the_v2_plaquette_coefficients(turbulent):
     from Simulation.HamiltParams_v2 import PhysicalMapperV2
     from Simulation.PhysToAngle import AngleMapper
 
     g, sim, ps = turbulent
-    score = AngleMapper.classical_score(ps)
-    base = PhysicalMapperV2(dx=g.dx).compute_coefficients(sim, score, ps, 0.35)
-    fixed = PhysicalMapperV2(dx=g.dx, fixed_curl=True).compute_coefficients(
-        sim, score, ps, 0.35)
-    kb = np.asarray(base["K_plaquettes"], dtype=float)
-    kf = np.asarray(fixed["K_plaquettes"], dtype=float)
-    assert not np.array_equal(kb, kf)
+    sc = AngleMapper.classical_score(ps)
+    a = PhysicalMapperV2(dx=g.dx).compute_coefficients(sim, sc, ps, 0.35)
+    b = PhysicalMapperV2(dx=g.dx, fixed_curl=False).compute_coefficients(
+        sim, sc, ps, 0.35)
+    assert not np.array_equal(np.asarray(a["K_plaquettes"], dtype=float),
+                              np.asarray(b["K_plaquettes"], dtype=float))
 
 
 def test_the_mapper_selectors_dispatch_on_the_flag(turbulent):
@@ -434,4 +440,8 @@ def test_the_mapper_selectors_dispatch_on_the_flag(turbulent):
     np.testing.assert_array_equal(divergence(vx, vy, False),
                                   legacy_forward_divergence(vx, vy))
     np.testing.assert_array_equal(divergence(vx, vy, True),
+                                  forward_divergence(vx, vy))
+    #  Le DEFAUT vaut desormais la convention declaree.
+    np.testing.assert_array_equal(curl_z(vx, vy), forward_curl_z(vx, vy))
+    np.testing.assert_array_equal(divergence(vx, vy),
                                   forward_divergence(vx, vy))

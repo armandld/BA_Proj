@@ -121,7 +121,7 @@ class AngleMapper:
     # ── Classical multi-indicator score → θ ────────────────────────────
 
     @staticmethod
-    def classical_score(physics_state, fixed_curl=False):
+    def classical_score(physics_state, fixed_curl=True):
         """
         Compute the multi-indicator instability score on the full domain.
 

@@ -18,12 +18,27 @@ def _maxabs_pool_2d(arr, target_h, target_w):
     bw = w // target_w
     if bh < 1 or bw < 1:
         return zoom(arr, (target_h / h, target_w / w), order=1)
-    arr_c = arr[:target_h * bh, :target_w * bw]
-    # (target_h, bh, target_w, bw) → (target_h, target_w, bh*bw)
-    blocks = arr_c.reshape(target_h, bh, target_w, bw)
-    blocks = blocks.transpose(0, 2, 1, 3).reshape(target_h, target_w, -1)
-    idx = np.argmax(np.abs(blocks), axis=-1)
-    return np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+
+    # Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue.
+    #
+    # La version precedente decoupait `arr[:target_h*bh, :target_w*bw]` :
+    # le reste de la division etait purement jete. Pour 10x10 -> 3x3, les
+    # lignes et colonnes 9 disparaissaient, soit 19 cellules sur 100, et un
+    # pic isole qui s'y trouvait s'evanouissait sans trace — exactement
+    # l'anomalie que ce pooling existe pour preserver.
+    #
+    # Quand h % target_h == 0 (le cas du chemin deploye, 256 vers 2/4/8),
+    # les bornes retombent sur les memes blocs qu'avant : la sortie est
+    # alors bit-a-bit identique.
+    ii = np.linspace(0, h, target_h + 1).astype(int)
+    jj = np.linspace(0, w, target_w + 1).astype(int)
+    out = np.empty((target_h, target_w), dtype=float)
+    for a in range(target_h):
+        for b in range(target_w):
+            block = arr[ii[a]:ii[a + 1], jj[b]:jj[b + 1]]
+            flat = block.reshape(-1)
+            out[a, b] = flat[np.argmax(np.abs(flat))]
+    return out
 
 
 def _maxabs_pool_1d(arr, target_len):
@@ -32,10 +47,15 @@ def _maxabs_pool_1d(arr, target_len):
     bs = n // target_len
     if bs < 1:
         return zoom(arr, (target_len / n,), order=1)
-    arr_c = arr[:target_len * bs]
-    blocks = arr_c.reshape(target_len, bs)
-    idx = np.argmax(np.abs(blocks), axis=-1)
-    return np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+    # Meme correction qu'en 2D : les bornes couvrent toute l'etendue au lieu
+    # de tronquer le reste de la division, qui faisait disparaitre les
+    # dernieres cellules. Sortie inchangee quand n % target_len == 0.
+    kk = np.linspace(0, n, target_len + 1).astype(int)
+    out = np.empty(target_len, dtype=float)
+    for a in range(target_len):
+        seg = np.asarray(arr[kk[a]:kk[a + 1]]).reshape(-1)
+        out[a] = seg[np.argmax(np.abs(seg))]
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
