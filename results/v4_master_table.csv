@@ -1,4 +1,4 @@
-# git_hash=25cb77b50346dff4aaec4162dee0afdfc088e161
+# git_hash=50ca5a05ead7c3048316a35a07b1f39bcf4b20e2
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -33,10 +33,10 @@ t13/v2,no_Z n_optima,8.000000,8.000000,OK
 t13/v2,no_ZZ n_optima,1.000000,1.000000,OK
 t13/v2,no_ZZZZ n_optima,1.000000,1.000000,OK
 t13/v2,Z_only n_optima,1.000000,1.000000,OK
-t17,spearman C/w (init_kelvin_helmholtz),-0.489402,-0.372500,DIFF
-t17,spearman C/w (init_orszag_tang),0.043436,-0.008400,DIFF
-t17,spearman C/w (init_mhd_rotor),-0.461789,-0.459500,OK
-t17,spearman C/w (init_harris_tearing),-0.516456,-0.502100,DIFF
+t17,spearman C/w (init_kelvin_helmholtz),-0.334283,-0.372500,DIFF
+t17,spearman C/w (init_orszag_tang),-0.281716,-0.008400,DIFF
+t17,spearman C/w (init_mhd_rotor),0.305718,-0.459500,DIFF
+t17,spearman C/w (init_harris_tearing),0.139991,-0.502100,DIFF
 t14,self-convergence order,0.999212,1.000000,OK
 t14,temporal order with projection,1.119385,1.120000,OK
 t14,temporal order without projection,3.997801,4.000000,OK
@@ -71,14 +71,14 @@ t15c,folds where Q-HAS better (combined),2.000000,2.000000,OK
 t15c,budget-matched folds,4.000000,4.000000,OK
 t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,4.000000,OK
 t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,0.061200,OK
-t17,ZZ mass kept (kelvin_helmholtz; level3_trained),0.020621,0.114200,DIFF
-t17,ZZ mass kept (harris_tearing; level3_trained),0.000868,0.001990,DIFF
-t17,ZZ mass kept (mhd_rotor; level3_trained),0.000232,0.000395,DIFF
-t17,ZZ mass kept (orszag_tang; level3_trained),0.000080,0.000097,DIFF
-t17,ZZ mass kept (kelvin_helmholtz; deployed_openloop),0.000023,0.013190,DIFF
-t17,ZZ mass kept (harris_tearing; deployed_openloop),0.000000,0.000000,DIFF
-t17,ZZ mass kept (mhd_rotor; deployed_openloop),0.000000,0.000000,DIFF
-t17,ZZ mass kept (orszag_tang; deployed_openloop),0.000000,0.000000,DIFF
+t17,ZZ mass kept (kelvin_helmholtz; level3_trained),0.435660,0.114200,DIFF
+t17,ZZ mass kept (harris_tearing; level3_trained),0.337923,0.001990,DIFF
+t17,ZZ mass kept (mhd_rotor; level3_trained),0.594049,0.000395,DIFF
+t17,ZZ mass kept (orszag_tang; level3_trained),0.453017,0.000097,DIFF
+t17,ZZ mass kept (kelvin_helmholtz; deployed_openloop),0.120684,0.013190,DIFF
+t17,ZZ mass kept (harris_tearing; deployed_openloop),0.062389,0.000000,DIFF
+t17,ZZ mass kept (mhd_rotor; deployed_openloop),0.033214,0.000000,DIFF
+t17,ZZ mass kept (orszag_tang; deployed_openloop),0.049630,0.000000,DIFF
 t18,no_ZZ changed (windowed),0.000000,0.000000,OK
 t18,no_ZZ changed (no window),0.000000,0.000000,OK
 t18,no_ZZZZ changed (no window),0.000000,0.000000,OK

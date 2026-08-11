@@ -116,6 +116,7 @@ def evolve(scenario, N, steps, Re=400, Rm=400, dt=1e-3, cfl=0.4):
 def probe(scenario, N, steps, param_sets=PARAM_SETS):
     """Une mesure par (scenario, jeu de parametres)."""
     from Simulation.HamiltParams import PhysicalMapper
+    from Simulation.PhysToAngle import AngleMapper
 
     sim, fields = evolve(scenario, N, steps)
     if sim is None:
@@ -131,7 +132,21 @@ def probe(scenario, N, steps, param_sets=PARAM_SETS):
     for name, ps in param_sets.items():
         hm = PhysicalMapper(cs=1.0, eta_mhd=0.01)
         hm.sigma = ps["sigma"]
-        score = hm.physical_score(fields)
+        # D-9. Ce script mesurait la fenetre sur `physical_score`, alors
+        # que le chemin DEPLOYE applique la fenetre a `classical_score`
+        # (`refinement.py:506,611` et `qaoa_inputs.py:161,233`). Les deux
+        # scores ont des supports tres differents : sur kelvin_helmholtz,
+        # physical_score vit dans [0.155, 0.647] de moyenne 0.516, tandis
+        # que classical_score vit dans [0.005, 0.832] de moyenne 0.273.
+        #
+        # Le seuil etant gele a 0.1496 et sigma a 0.023, la fenetre ne
+        # couvre que le bas de la distribution. Avec physical_score, dont
+        # le plancher est AU-DESSUS du seuil, elle se ferme entierement et
+        # produit les 1e-134 qui ont ete publies comme « annihilation sur
+        # 42 ordres de grandeur ». Avec le score reellement utilise, elle
+        # laisse passer 39 % des aretes et le couplage ZZ vaut 1.5 a 8.2
+        # fois le terme de plaquette.
+        score = AngleMapper.classical_score(fields)
         thr = ps["threshold_amr"]
         w_h = uncertainty_window(score, thr, hm.sigma, axis=1)
         w_v = uncertainty_window(score, thr, hm.sigma, axis=0)
