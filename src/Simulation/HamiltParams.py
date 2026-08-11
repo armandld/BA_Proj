@@ -115,9 +115,12 @@ class PhysicalMapper:
         Critical regime (x > x_crit): f = 1 + γ × ln(x/x_crit)  (logarithmic growth)
 
         Continuous at x = x_crit (both sides = 1.0).
-        Logarithmic form bounds growth: Re=3000, x_crit=10, γ=2 → f ≈ 12 (not ∞).
-        Clamped to f_max to prevent extreme Hamiltonian coefficients from
-        destabilising the solver during training.
+        Logarithmic form bounds growth: Re=3000, x_crit=10, γ=2 → f ≈ 12.4
+        au lieu de diverger. Cette valeur illustre la FORMULE ; elle ne sort
+        pas de la fonction telle qu'elle est appelee, car f_max=10.0 par
+        defaut la ramene a 10.0. Le clamp existe pour empecher des
+        coefficients extremes de destabiliser le solveur pendant
+        l'entrainement.
         """
         r = x / (x_crit + 1e-10)
         f = np.where(r <= 1.0, r, 1.0 + gamma * np.log(np.maximum(r, 1.0)))

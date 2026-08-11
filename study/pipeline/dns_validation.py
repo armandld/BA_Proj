@@ -59,6 +59,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+from dns_extension import fluctuating_ke_fixed, mean_sq_current_fixed
 
 
 # -- reference literature values for OT --
@@ -168,8 +169,20 @@ def analyse_one(path):
     E   = np.array([total_energy(vx[i], vy[i], Bx[i], By[i]) for i in range(n)])
     Ek  = np.array([kinetic_energy(vx[i], vy[i])               for i in range(n)])
     Em  = np.array([magnetic_energy(Bx[i], By[i])              for i in range(n)])
-    J2  = np.array([mean_sq_current(Bx[i], By[i])              for i in range(n)])
-    Ep  = np.array([fluctuating_KE(vx[i], vy[i])               for i in range(n)])
+    # L'ANALYSE utilise les observables CORRIGEES ; les deux versions
+    # d'origine restent au-dessus, inchangees, pour reproduire a l'identique
+    # les artefacts deja publies de phase 1b (deviations D2 et D3).
+    #
+    # J2  : `mean_sq_current` prend ses differences sur l'axe oppose a la
+    #       convention du depot et calcule dBy/dy - dBx/dx, une combinaison
+    #       de deformation. Sur un cisaillement magnetique pur elle rend 0.
+    # Ep  : `fluctuating_KE` moyenne A TRAVERS la couche de cisaillement au
+    #       lieu de la direction homogene. Sur le profil de base seul, ou la
+    #       reponse attendue est zero, elle rend 73 % de l'energie cinetique
+    #       totale, et n'evolue que de 0.02 % quand on allume la
+    #       perturbation qu'elle existe pour mesurer.
+    J2  = np.array([mean_sq_current_fixed(Bx[i], By[i])        for i in range(n)])
+    Ep  = np.array([fluctuating_ke_fixed(vx[i], vy[i])         for i in range(n)])
 
     # divergence-free constraint: spectral divergence (matches solver)
     # should be O(eps_machine) when the FFT projection is applied.

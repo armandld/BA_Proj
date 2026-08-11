@@ -17,29 +17,29 @@ ecrits nulle part :
    coins par construction. Verifie ici en les rendant extremes : l'operateur
    ne bouge pas d'un coefficient.
 
-2. Le flux est reduit par `zoom(..., order=1)`, justifie dans la docstring
-   par « smooth physical fields ». Mais Phi n'est PAS lisse : c'est un
-   indicateur d'anomalie, construit sur des differences de champ, qui pique
-   aux chocs et aux nappes de courant — le score, lui, est max-poole dans le
-   MEME fichier pour exactement cette raison.
+2. Le flux etait reduit par un lissage 3x3 suivi de `zoom(..., order=1)`,
+   justifie dans la docstring par « smooth physical fields ». Mais Phi n'est
+   PAS lisse : c'est un indicateur d'anomalie, construit sur des differences
+   de champ, qui pique aux chocs et aux nappes de courant — le score, lui,
+   est max-poole dans le MEME fichier pour exactement cette raison, et porte
+   meme un « No smoothing! » explicite.
 
    Un zoom bilineaire echantillonne, il ne moyenne pas. Un pic isole place a
-   256 positions differentes dans un patch 128 -> 4 ne survit qu'a UNE
-   d'entre elles ; au centre il rend exactement 0.0000 quand le max-pooling
-   rend 1000 et la moyenne de bloc 0.98.
+   256 positions differentes dans un patch 128 -> 4 ne survivait qu'a UNE
+   d'entre elles ; au centre il rendait exactement 0.0000 quand le
+   max-pooling rend 1000 et la moyenne de bloc 0.98.
 
    Sur champs DNS reels, part du pic de Phi conservee apres reduction
-   128 -> 4 :
+   128 -> 4, AVANT correction :
 
      orszag_tang       38.0 %
      mhd_rotor         69.8 %
      kelvin_helmholtz 100.0 %
      harris_tearing   100.0 %
 
-   Le comportement n'est PAS modifie : bilineaire contre max-pool est un
-   choix de modelisation defendable des deux cotes — Phi alimente psi, qui
-   encode une derivee temporelle, et pour une derivee un interpolant lisse
-   se defend. Ce fichier mesure l'ecart au lieu de le laisser implicite.
+   CORRIGE : les trois chemins qui descendent vers le VQA — score,
+   coefficients, flux — appliquent desormais la meme reduction. Le pic de
+   Phi est conserve a 100 % sur les quatre scenarios.
 """
 
 import os
@@ -359,3 +359,118 @@ def test_no_hamiltonian_params_returns_an_empty_dict_not_a_crash():
     out = get_adaptive_flux(h, v, None, None, score, None,
                             target_dim=t, type_filter=True)
     assert out[2] == {}
+
+
+# ======================================================================
+#  6. Les trois chemins descendent maintenant par la meme reduction
+# ======================================================================
+#
+# Score, coefficients d'Hamiltonien et flux de contrainte sont les trois
+# quantites qui descendent du domaine plein vers la resolution du VQA. Les
+# trois sont des indicateurs d'ANOMALIE : leur raison d'etre est qu'un
+# signal fort et isole survive a la reduction. Le flux passait pourtant par
+# un lissage puis une interpolation bilineaire, qui font exactement
+# l'inverse.
+
+def _peaked(n=64, at=(17, 41), value=1000.0):
+    a = np.zeros((n, n))
+    a[at] = value
+    return a
+
+
+def test_the_flux_now_survives_the_reduction_like_the_score():
+    """Un pic isole doit ressortir a l'identique des trois chemins."""
+    a = _peaked()
+    score = np.zeros((64, 64))
+    hp = {"K_plaquettes": a.copy(), "threshold_amr": 0.15}
+    mini_h, mini_v, mini_hp, _ = get_adaptive_flux(
+        a, a.copy(), None, None, score, hp, target_dim=4, type_filter=True)
+    assert np.max(np.abs(mini_h)) == 1000.0, "le flux horizontal a perdu le pic"
+    assert np.max(np.abs(mini_v)) == 1000.0, "le flux vertical a perdu le pic"
+    assert np.max(np.abs(mini_hp["K_plaquettes"])) == 1000.0
+
+
+def test_the_flux_and_the_score_now_agree_cell_by_cell():
+    """Meme entree, meme reduction : les deux cartes doivent coincider."""
+    rng = np.random.default_rng(7)
+    a = rng.normal(size=(64, 64))
+    mini_h, _, _, mini_score = get_adaptive_flux(
+        a, a.copy(), None, None, a.copy(), None,
+        target_dim=4, type_filter=True)
+    assert np.array_equal(mini_h, mini_score), (
+        "le flux et le score ne descendent plus par le meme chemin")
+
+
+def test_the_flux_keeps_the_sign_of_its_extremum():
+    a = np.zeros((64, 64))
+    a[10, 10] = -7.0
+    mini_h, _, _, _ = get_adaptive_flux(a, a.copy(), None, None,
+                                        np.zeros((64, 64)), None,
+                                        target_dim=4, type_filter=True)
+    assert np.min(mini_h) == -7.0
+
+
+def test_the_flux_is_no_longer_smoothed_before_reduction():
+    """Un lissage prealable diluait le pic AVANT de l'echantillonner ;
+    `_process_score` porte « No smoothing! » pour cette raison."""
+    import inspect
+
+    from Simulation import RescaleArrays as RA
+    src = inspect.getsource(RA.get_adaptive_flux)
+    block = src[src.index("def _process_flux"):src.index("def _process_hamilt")]
+    assert "uniform_filter" not in block
+    assert "zoom(" not in block
+    assert "_maxabs_pool_2d" in block and "_resize_padded_maxpool" in block
+
+
+@pytest.mark.parametrize("depth0", [True, False])
+def test_the_flux_takes_the_same_branch_structure_as_the_score(depth0):
+    """Profondeur 0 : sans halo. Profondeur > 0 : coeur + halo."""
+    n = 64 if depth0 else 66
+    t = 4
+    a = np.zeros((n, n))
+    a[n // 2, n // 2] = 5.0
+    mini_h, _, _, _ = get_adaptive_flux(a, a.copy(), None, None,
+                                        np.zeros((n, n)), None,
+                                        target_dim=t, type_filter=depth0)
+    assert mini_h.shape == ((t, t) if depth0 else (t + 2, t + 2))
+    assert np.max(np.abs(mini_h)) == 5.0
+
+
+def test_a_peak_in_the_halo_of_the_flux_is_kept_too():
+    """Le halo porte l'information de voisinage que H3 evalue : la perdre
+    reviendrait a repondre non a H3 par construction."""
+    a = np.zeros((66, 66))
+    a[0, 33] = 9.0
+    mini_h, _, _, _ = get_adaptive_flux(a, a.copy(), None, None,
+                                        np.zeros((66, 66)), None,
+                                        target_dim=4, type_filter=False)
+    assert np.max(np.abs(mini_h[0, 1:-1])) == 9.0
+
+
+def test_a_flux_smooth_AT_THE_BLOCK_SCALE_is_barely_moved():
+    """La bascule ne casse pas le cas qui justifiait l'ancien choix.
+
+    « Lisse » n'a de sens que RELATIVEMENT a la taille du bloc. A 64 -> 4
+    chaque bloc couvre un quart du domaine et une sinusoide y varie de toute
+    son amplitude : max-pool et bilineaire y different forcement de ~1, ce
+    qui ne dit rien sur la douceur du champ. On reduit donc 64 -> 16, ou un
+    bloc fait 4x4 cellules et ou le champ varie peu.
+
+    L'ecart tolere est la variation du champ SUR UN BLOC, pas une constante
+    choisie a la main.
+    """
+    n, t = 64, 16
+    c = np.linspace(0, 2 * np.pi, n)
+    X, Y = np.meshgrid(c, c, indexing="ij")
+    a = np.sin(X) * np.cos(Y) + 2.0
+    mini_h, _, _, _ = get_adaptive_flux(a, a.copy(), None, None,
+                                        np.zeros((n, n)), None,
+                                        target_dim=t, type_filter=True)
+    block = n // t
+    var_per_block = np.max(np.abs(np.diff(a, axis=0))) * block
+    gap = np.max(np.abs(mini_h - zoom(a, (t / n, t / n), order=1)))
+    assert gap <= var_per_block, (
+        f"ecart {gap:.4f} superieur a la variation du champ sur un bloc "
+        f"({var_per_block:.4f}) : les deux reductions divergent au-dela de "
+        "ce que la douceur du champ explique")

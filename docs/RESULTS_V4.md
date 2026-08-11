@@ -3599,3 +3599,70 @@ fonction telle qu'elle est appelée.
 ## Tests
 
 `tests/test_gate_contracts.py`, 42 tests.
+
+---
+
+# D-21 — le flux descendait par un chemin qui efface ce qu'il mesure
+
+`src/Simulation/RescaleArrays.py` — `get_adaptive_flux._process_flux`.
+
+Trois quantités descendent du domaine plein vers la résolution du VQA : le
+**score** classique, les **coefficients** d'Hamiltonien et le **flux de
+contrainte** Φ. Les trois sont des indicateurs d'**anomalie** — leur raison
+d'être est qu'un signal fort et isolé survive à la réduction.
+
+Deux d'entre elles étaient max-poolées, et `_process_score` porte même un
+`# No smoothing!` explicite. Le flux, lui, passait par un lissage 3×3 puis
+`zoom(order=1)`, justifié par « smooth physical fields ». Or Φ n'est pas un
+champ lisse : il est bâti sur des **différences** de champ et pique
+exactement là où le score pique.
+
+Un zoom bilinéaire **échantillonne**, il ne moyenne pas :
+
+| réduction 128 → 4 d'un pic isolé | résultat |
+|---|---|
+| positions où le pic survit | **1 sur 256** |
+| pic placé au centre | **0.0000** |
+| même pic, max-pooling | 1000 |
+| même pic, moyenne de bloc | 0.98 |
+
+Le lissage préalable aggravait le tout : il diluait le pic **avant** de
+l'échantillonner.
+
+Part du pic de Φ conservée sur champs DNS réels (patch 128 → 4) :
+
+| scénario | avant | après |
+|---|---|---|
+| orszag_tang | **38.0 %** | 100 % |
+| mhd_rotor | **69.8 %** | 100 % |
+| kelvin_helmholtz | 100 % | 100 % |
+| harris_tearing | 100 % | 100 % |
+
+Corrigé : les trois chemins appliquent désormais la même réduction. Le pic
+est conservé à 100 % sur les quatre scénarios, et la carte de flux réduite
+est maintenant **identique cellule par cellule** à la carte de score réduite
+quand on leur donne la même entrée — ce qui n'était pas vérifiable avant.
+
+Φ n'alimente que ψ. Comme D-11, le rayon d'action est exactement la quantité
+dont l'ablation est au programme.
+
+## Deux autres corrections dans la même passe
+
+**`dns_validation.analyse_one`** utilise désormais les observables corrigées
+`fluctuating_ke_fixed` et `mean_sq_current_fixed`. Les deux fonctions
+d'origine restent en place, inchangées, pour reproduire à l'identique les
+artefacts déjà publiés de phase 1b : le gel porte sur les **fonctions**, pas
+sur l'analyse qui les appelle.
+
+**`_f_gate`** — la docstring dit maintenant que `f ≈ 12.4` illustre la
+formule et ne sort pas de la fonction, `f_max = 10.0` la ramenant à 10.0.
+
+## Un test qui épinglait le défaut, retourné
+
+`test_flux_takes_the_smoothing_path_and_loses_the_spike` affirmait « les flux
+sont lissés puis interpolés, le pic doit s'y diluer ». Il décrivait
+fidèlement le code ; c'est la justification qui ne tenait pas. Il vérifie
+désormais l'inverse, et que le flux suit **exactement** la réduction du
+score.
+
+`tests/test_padded_rescale_contracts.py` passe de 37 à 45 tests.

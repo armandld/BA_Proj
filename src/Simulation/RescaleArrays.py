@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.ndimage import uniform_filter, zoom
+from scipy.ndimage import zoom
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -145,9 +145,16 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     """
     Adapte les flux et les paramètres à la dimension cible du VQA.
 
-    - Flux arrays      → bilinear interpolation (smooth physical fields).
-    - Hamiltonian coefs → max-abs pooling (anomaly detection: a single
-      strong signal in a large block must survive downsampling).
+    Les TROIS chemins qui descendent vers le VQA — score, coefficients
+    d'Hamiltonien, flux de contrainte — appliquent la meme reduction :
+    max-abs pooling. Un signal fort et isole (choc, nappe de courant) dans
+    un gros bloc doit survivre a la reduction ; c'est la raison d'etre de
+    ces trois quantites.
+
+    Le flux passait auparavant par un lissage puis une interpolation
+    bilineaire, au motif qu'il serait un champ lisse. Il ne l'est pas :
+    Phi est bati sur des DIFFERENCES de champ et pique la ou le score
+    pique. Voir `_process_flux` pour la mesure.
 
     type_filter=True  (depth 0) : global periodic scan.
     type_filter=False (depth>0) : local sub-domain with halo.
@@ -161,18 +168,35 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     proc_h = local_h.astype(float)
     proc_v = local_v.astype(float)
 
-    # ── Flux dispatch (bilinear — smooth fields) ──────────────────────
+    # ── Flux dispatch (max-abs pool — anomaly preservation) ───────────
+    #
+    # Le flux passait auparavant par un lissage 3x3 puis `zoom(order=1)`,
+    # justifie par « smooth physical fields ». Mais Phi n'est PAS un champ
+    # lisse : c'est un indicateur d'anomalie, construit sur des DIFFERENCES
+    # de champ, qui pique aux chocs et aux nappes de courant — exactement
+    # comme le score et les coefficients, que ce fichier max-poole deja.
+    #
+    # Un zoom bilineaire ECHANTILLONNE, il ne moyenne pas. Mesure : un pic
+    # isole place a 256 positions differentes dans un patch 128 -> 4 ne
+    # survivait qu'a UNE d'entre elles ; place au centre il rendait
+    # exactement 0.0000 la ou le max-pooling rend 1000 et la moyenne de
+    # bloc 0.98. Sur champs DNS reels, part du pic de Phi conservee :
+    # orszag_tang 38 %, mhd_rotor 70 %, kelvin_helmholtz et harris_tearing
+    # 100 %.
+    #
+    # Le lissage prealable aggravait le tout : il diluait le pic AVANT de
+    # l'echantillonner, alors que `_process_score` porte explicitement
+    # « No smoothing! » pour cette raison.
+    #
+    # Les trois chemins qui descendent vers le VQA — score, coefficients,
+    # flux — appliquent desormais la meme reduction.
     def _process_flux(arr, is_periodic_scan):
         if arr is None:
             return None
         if is_periodic_scan:
-            h, w = arr.shape
-            processed = arr
-            if min(h, w) > target_dim:
-                processed = uniform_filter(arr, size=3, mode='wrap')
-            return zoom(processed, (target_dim / h, target_dim / w), order=1)
+            return _maxabs_pool_2d(arr, target_dim, target_dim)
         else:
-            return _resize_padded_bilinear(arr, target_dim)
+            return _resize_padded_maxpool(arr, target_dim)
 
     # ── Hamiltonian dispatch (max-abs pool — anomaly preservation) ────
     def _process_hamilt(arr, is_periodic_scan):

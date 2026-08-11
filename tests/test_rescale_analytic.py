@@ -270,20 +270,35 @@ def test_score_and_coefficients_take_the_maxabs_path():
     assert _process_score(a, True, 4).max() == 1.0
 
 
-def test_flux_takes_the_smoothing_path_and_loses_the_spike():
-    """Les flux, eux, sont lisses puis interpoles : le pic doit s'y diluer.
+def test_flux_now_takes_the_same_pooling_path_as_the_score():
+    """Le flux conserve son pic, comme le score et les coefficients.
 
-    Ce contraste est le coeur du module. S'il disparaissait, flux et
-    coefficients recevraient le meme traitement sans que rien ne le dise.
+    Ce test affirmait l'inverse : « les flux sont lisses puis interpoles,
+    le pic doit s'y diluer ». Il decrivait fidelement le code, mais la
+    justification ne tenait pas. Phi n'est pas un champ lisse — c'est un
+    indicateur d'anomalie bati sur des DIFFERENCES de champ, qui pique aux
+    chocs et aux nappes de courant, exactement la ou le score pique.
+
+    Le lissage suivi d'un `zoom(order=1)` faisait donc l'inverse de ce que
+    la quantite demande : un pic isole place a 256 positions dans un patch
+    128 -> 4 ne survivait qu'a UNE d'entre elles, et au centre le zoom
+    rendait exactement 0.0000. Sur champs DNS reels la part du pic
+    conservee allait de 38 % (orszag_tang) a 100 %.
+
+    Les trois chemins qui descendent vers le VQA — score, coefficients,
+    flux — appliquent desormais la meme reduction, et le pic est conserve
+    a 100 % sur les quatre scenarios.
     """
     a = np.zeros((16, 16))
     a[5, 5] = 1.0
     zero = np.zeros((16, 16))
     mini_h, _mini_v, _hp, _sc = get_adaptive_flux(
         a, zero, None, None, zero, None, target_dim=4, type_filter=True)
-    assert mini_h.max() < 0.3, (
-        f"le flux conserve le pic ({mini_h.max():.3f}) : il n'est plus "
-        "lisse, et flux et coefficients suivent le meme chemin")
+    assert mini_h.max() == 1.0, (
+        f"le flux a perdu le pic ({mini_h.max():.3f}) : il est retombe sur "
+        "un chemin de lissage")
+    assert np.array_equal(mini_h, _maxabs_pool_2d(a, 4, 4)), (
+        "le flux ne suit pas exactement la meme reduction que le score")
 
 
 def test_e_max_is_never_pooled():
