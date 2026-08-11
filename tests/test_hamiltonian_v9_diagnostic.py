@@ -221,7 +221,13 @@ class TestB_ThresholdContrastSurvival(unittest.TestCase):
         hm = _make_mapper(beta_curl=0.5)
 
         # Solid body rotation: vx = -y, vy = x → uniform ωz
-        Y, X = np.mgrid[0:N, 0:N]
+        # CONVENTION : AXIS_X = 0 dans grid.py, donc l'axe 0 porte x.
+        # `np.mgrid[0:N, 0:N]` rend (axe0, axe1) : le premier est donc
+        # X et le second Y, a l'inverse du nommage historique. Sous la
+        # convention corrigee, le champ ci-dessous est une rotation
+        # solide ; nomme dans l'autre sens, c'etait une deformation
+        # pure, de vorticite exactement nulle.
+        X, Y = np.mgrid[0:N, 0:N]
         fields = _make_fields(N, Bx=0.5)
         fields['vx'] = -3.0 * (Y - N/2) / N
         fields['vy'] = 3.0 * (X - N/2) / N

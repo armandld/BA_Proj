@@ -247,8 +247,15 @@ class TestShearAnomaly(unittest.TestCase):
         """
         V = 1.0
         N = DIM
+        # CONVENTION : AXIS_X = 0, donc l'axe 0 porte x et l'axe 1 porte y.
+        # Un CISAILLEMENT est un saut de vx a travers y, donc a travers les
+        # COLONNES : [[+V, -V], [+V, -V]]. La forme precedente,
+        # [[+V, +V], [-V, -V]], fait varier vx selon x — c'est une
+        # compression, de vorticite exactement nulle. Elle ne declenchait
+        # les coefficients que parce que les mappeurs portaient alors la
+        # meme inversion d'axes.
         fields = {
-            'vx': np.array([[V, V], [-V, -V]], dtype=float),
+            'vx': np.array([[V, -V], [V, -V]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -287,8 +294,15 @@ class TestShearAnomaly(unittest.TestCase):
         """
         V = 1.0
         N = DIM
+        # CONVENTION : AXIS_X = 0, donc l'axe 0 porte x et l'axe 1 porte y.
+        # Un CISAILLEMENT est un saut de vx a travers y, donc a travers les
+        # COLONNES : [[+V, -V], [+V, -V]]. La forme precedente,
+        # [[+V, +V], [-V, -V]], fait varier vx selon x — c'est une
+        # compression, de vorticite exactement nulle. Elle ne declenchait
+        # les coefficients que parce que les mappeurs portaient alors la
+        # meme inversion d'axes.
         fields = {
-            'vx': np.array([[V, V], [-V, -V]], dtype=float),
+            'vx': np.array([[V, -V], [V, -V]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -307,11 +321,23 @@ class TestShearAnomaly(unittest.TestCase):
 
         hp = hm.compute_coefficients(sim, score, fields, 0.0)
 
-        # Vertical flux should be large (shear across rows)
+        # NOMMAGE. `phi_horizontal` designe les differences le long de
+        # l'AXE 1 (`_h_diffs` roule sur axis=1) et `phi_vertical` celles le
+        # long de l'axe 0. Comme AXIS_X = 0, « horizontal » veut donc dire
+        # « selon y ». Le nom est trompeur, mais la convention est tenue
+        # partout — `cost_hamiltonian` couple idx_H(i,j) a idx_H(i,j+1),
+        # voisins selon l'axe 1, et `HamiltParams` forme jump_h avec
+        # roll(axis=1). Aucun defaut numerique, donc, mais il faut savoir
+        # lequel des deux repond : pour un cisaillement variant selon y,
+        # c'est `phi_horizontal`.
         print(f"\n[SHEAR-HAMILT] phi_horizontal:\n{full_h}")
         print(f"[SHEAR-HAMILT] phi_vertical:\n{full_v}")
-        self.assertGreater(np.max(np.abs(full_v)), 0.01,
-                           "Vertical stress flux should be nonzero for sheared fields")
+        self.assertGreater(np.max(np.abs(full_h)), 0.01,
+                           "Le flux le long de l'axe du cisaillement doit "
+                           "etre non nul")
+        self.assertLess(np.max(np.abs(full_v)), 1e-9,
+                        "Le flux perpendiculaire doit rester nul : le "
+                        "cisaillement ne varie pas selon cet axe")
 
         # Design intent: C_edges (gradient coupling) is nonzero here, since
         # shear creates large velocity jumps across cell interfaces → high
@@ -763,7 +789,7 @@ class TestPhaseEncoding(unittest.TestCase):
 
         # Static scenario: same field at t=0 and t=1 → psi = 0
         fields_static = {
-            'vx': np.array([[1.0, 1.0], [-1.0, -1.0]], dtype=float),
+            'vx': np.array([[1.0, -1.0], [1.0, -1.0]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -905,7 +931,7 @@ class TestCoefficientSigns(unittest.TestCase):
         """C_edges must be <= 0 (ferromagnetic: neighbors ALIGN)."""
         N = DIM
         fields = {
-            'vx': np.array([[1.0, 1.0], [-1.0, -1.0]], dtype=float),
+            'vx': np.array([[1.0, -1.0], [1.0, -1.0]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -1017,7 +1043,7 @@ class TestEnergyMinimization(unittest.TestCase):
         """QAOA energy should be close to ground state for shear fields."""
         N = DIM
         fields = {
-            'vx': np.array([[1.0, 1.0], [-1.0, -1.0]], dtype=float),
+            'vx': np.array([[1.0, -1.0], [1.0, -1.0]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -1110,7 +1136,7 @@ class TestEnergyMinimization(unittest.TestCase):
 
         # Weak shear
         fields_weak = {
-            'vx': np.array([[0.3, 0.3], [-0.3, -0.3]], dtype=float),
+            'vx': np.array([[0.3, -0.3], [0.3, -0.3]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),
@@ -1122,7 +1148,7 @@ class TestEnergyMinimization(unittest.TestCase):
 
         # Strong shear
         fields_strong = {
-            'vx': np.array([[2.0, 2.0], [-2.0, -2.0]], dtype=float),
+            'vx': np.array([[2.0, -2.0], [2.0, -2.0]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),

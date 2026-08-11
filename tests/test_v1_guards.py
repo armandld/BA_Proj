@@ -138,7 +138,10 @@ class TestPruningThreshold:
         """
         N = DIM
         fields = {
-            'vx': np.array([[2.0, 2.0], [0.0, 0.0]], dtype=float),
+            # CONVENTION : AXIS_X = 0, donc un saut a travers les COLONNES
+            # est un cisaillement (vorticite non nulle). La forme en lignes
+            # etait une compression, que le mappeur corrige ne voit plus.
+            'vx': np.array([[2.0, 0.0], [2.0, 0.0]], dtype=float),
             'vy': np.zeros((N, N)),
             'Bx': np.zeros((N, N)),
             'By': np.zeros((N, N)),

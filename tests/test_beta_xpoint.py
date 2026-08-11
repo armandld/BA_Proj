@@ -45,10 +45,17 @@ def curl_free_xpoint_fields(N=8):
       - Jz_curl = 0 at interior cells (curl-free)
       - Jz_curl ≠ 0 at periodic-wrap cells (boundary artefact)
     """
+    # CONVENTION : `grid.py` declare AXIS_X = 0, donc x vit sur l'axe 0
+    # et y sur l'axe 1. Ces champs posaient l'inverse, ce qui les
+    # transposait par rapport au reste du depot. L'erreur etait
+    # invisible tant que les mappeurs portaient la meme inversion :
+    # test et code s'accordaient dans la meme confusion. Sous la
+    # convention corrigee, une nappe de Harris ainsi construite
+    # porte un courant Jz EXACTEMENT nul.
     yc = np.linspace(-1.5, 1.5, N)
     xc = np.linspace(-1.5, 1.5, N)
-    Bx = np.tile(yc[:, None], (1, N))
-    By = np.tile(xc[None, :], (N, 1))
+    Bx = np.tile(yc[None, :], (N, 1))     # Bx = y, y sur l'axe 1
+    By = np.tile(xc[:, None], (1, N))     # By = x, x sur l'axe 0
     return {
         'vx': np.zeros((N, N)),
         'vy': np.zeros((N, N)),
@@ -66,8 +73,15 @@ def current_sheet_fields(N=8):
       - det(∇B) ≈ 0 (By = 0 → dBy/dx = dBy/dy = 0)
       - K_plaquettes should fire (via Jz), K_xpoint should NOT
     """
+    # CONVENTION : `grid.py` declare AXIS_X = 0, donc x vit sur l'axe 0
+    # et y sur l'axe 1. Ces champs posaient l'inverse, ce qui les
+    # transposait par rapport au reste du depot. L'erreur etait
+    # invisible tant que les mappeurs portaient la meme inversion :
+    # test et code s'accordaient dans la meme confusion. Sous la
+    # convention corrigee, une nappe de Harris ainsi construite
+    # porte un courant Jz EXACTEMENT nul.
     y = np.linspace(-3, 3, N)
-    Bx = np.tanh(np.tile(y[:, None], (1, N)))
+    Bx = np.tanh(np.tile(y[None, :], (N, 1)))   # varie selon y = axe 1
     return {
         'vx': np.zeros((N, N)),
         'vy': np.zeros((N, N)),
@@ -84,11 +98,18 @@ def xpoint_with_current_fields(N=8):
       Bx = y + tanh(y),  By = x
     Both K_plaquettes (Jz) and K_xpoint (det) should fire.
     """
+    # CONVENTION : `grid.py` declare AXIS_X = 0, donc x vit sur l'axe 0
+    # et y sur l'axe 1. Ces champs posaient l'inverse, ce qui les
+    # transposait par rapport au reste du depot. L'erreur etait
+    # invisible tant que les mappeurs portaient la meme inversion :
+    # test et code s'accordaient dans la meme confusion. Sous la
+    # convention corrigee, une nappe de Harris ainsi construite
+    # porte un courant Jz EXACTEMENT nul.
     yc = np.linspace(-1.5, 1.5, N)
     xc = np.linspace(-1.5, 1.5, N)
-    y2d = np.tile(yc[:, None], (1, N))
+    y2d = np.tile(yc[None, :], (N, 1))          # y sur l'axe 1
     Bx = y2d + 1.5 * np.tanh(y2d * 2)
-    By = np.tile(xc[None, :], (N, 1))
+    By = np.tile(xc[:, None], (1, N))           # x sur l'axe 0
     return {
         'vx': np.zeros((N, N)),
         'vy': np.zeros((N, N)),

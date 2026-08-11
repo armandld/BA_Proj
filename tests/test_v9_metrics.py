@@ -197,8 +197,13 @@ class TestGroundStateStructure(unittest.TestCase):
         energies = []
         for amplitude in [0.1, 0.5, 1.0, 2.0]:
             fields = {
-                'vx': np.array([[amplitude, amplitude],
-                                [-amplitude, -amplitude]], dtype=float),
+        # CONVENTION : AXIS_X = 0. Un cisaillement est un saut de vx a
+        # travers y, donc a travers les COLONNES. La forme en lignes
+        # fait varier vx selon x : c'est une compression, de
+        # vorticite exactement nulle, et le mappeur corrige n'y voit
+        # plus rien.
+                'vx': np.array([[amplitude, -amplitude],
+                                [amplitude, -amplitude]], dtype=float),
                 'vy': np.zeros((N, N)),
                 'Bx': np.zeros((N, N)),
                 'By': np.zeros((N, N)),
