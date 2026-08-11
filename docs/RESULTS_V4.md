@@ -3404,44 +3404,74 @@ explicitement.
 axes numériques nus pour rester bit-à-bit identiques aux artefacts publiés,
 et figurent dans une liste d'exceptions explicitement documentée.
 
-## D-18 — la moyenne de base était prise en travers de la couche
+## D-18 — rectification : la moitié `fluctuating_KE` était déjà connue
 
-`study/pipeline/dns_validation.py`, deux défauts dans le même fichier.
+**Correction à la première rédaction de cette section.** J'avais présenté le
+défaut d'axe de `dns_validation.fluctuating_KE` comme une trouvaille de cet
+audit. C'est faux. Il était déjà connu, consigné comme **déviation D2**, et
+la décision prise alors était explicite — `dns_extension.py:85` : « phase 1b
+reste intouchée, réparation côté v3 par copie ». Un test de `tests/v3`
+épinglait même la contamination
+(`test_phase1b_observable_is_contaminated_by_base_flow`).
 
-**`mean_sq_current`** portait la même inversion d'axes : `⟨J²⟩` valait
-`⟨(∂By/∂y − ∂Bx/∂x)²⟩`.
+Ma correction dans `dns_validation.py` a donc **rompu ce gel**, et c'est la
+grande suite qui l'a signalé en faisant échouer ce test. Le fichier a été
+remis dans son état d'origine.
 
-**`fluctuating_KE`** est plus grave. Elle retranche une moyenne pour ne
-garder que la perturbation ; la moyenne doit donc être prise le long de la
-direction **homogène**. `init_kelvin_helmholtz` construit son profil à
-partir de `grid.Y`, et `meshgrid(x, y, indexing='ij')` fait varier Y le long
-de l'**axe 1** — la direction homogène est l'axe 0. Le code moyennait sur
-l'axe 1, **à travers la couche de cisaillement**, et ne soustrayait donc
-rien. Le commentaire disait « KH shear is in x », l'inverse de ce que le
-solveur initialise.
+### Ce que l'audit apporte réellement
 
-Mesure sur le profil de base **sans aucune perturbation**, où la réponse
-attendue est zéro :
+**1. La mesure de D2, qui n'était chiffrée nulle part.**
+
+`fluctuating_KE` retranche une moyenne pour isoler la perturbation ; elle
+doit être prise le long de la direction **homogène**.
+`init_kelvin_helmholtz` construit son profil à partir de `grid.Y`, que
+`meshgrid(x, y, indexing='ij')` fait varier le long de l'**axe 1** — la
+direction homogène est donc l'axe 0. Le code moyenne sur l'axe 1, **à
+travers la couche de cisaillement**, et ne soustrait rien.
+
+Sur le profil de base **sans aucune perturbation**, où la réponse attendue
+est zéro :
 
 | moyenne prise sur | valeur | part de l'énergie cinétique totale |
 |---|---|---|
-| axe 1 (ancien) | 3.411e−01 | **73 %** |
-| axe 0 (correct) | 1.323e−30 | 0 % |
+| axe 1 (phase 1b, gelé) | 3.411e−01 | **73 %** |
+| axe 0 (`fluctuating_ke_fixed`) | 1.323e−30 | 0 % |
 
-Et en allumant la perturbation nominale (amplitude 0.1) :
+En allumant la perturbation nominale (amplitude 0.1) :
 
 | | base seule | avec perturbation | rapport |
 |---|---|---|---|
-| ancien | 0.34115 | 0.34120 | **1.0002** |
-| correct | 1.3e−30 | 2.5e−04 | 1.9e+26 |
+| gelé | 0.34115 | 0.34120 | **1.0002** |
+| corrigé | 1.3e−30 | 2.5e−04 | 1.9e+26 |
 
-**La grandeur était à 99.98 % de l'écoulement de base**, donc pratiquement
-aveugle à la perturbation qu'elle existe pour mesurer. Un taux de croissance
-KH lu sur cette courbe mesurait le fond, pas l'instabilité.
+La grandeur gelée est à **99.98 % de l'écoulement de base**.
+
+**2. Une seconde déviation dans le même fichier, celle-là non répertoriée.**
+
+`mean_sq_current` porte la même inversion d'axes : `⟨J²⟩` vaut en fait
+`⟨(∂By/∂y − ∂Bx/∂x)²⟩`. Aucun test ne l'épinglait. Elle est désormais
+consignée comme **déviation D3**, `dns_validation.py` reste gelé au même
+titre que pour D2, et une copie corrigée `mean_sq_current_fixed` a été
+ajoutée à `dns_extension.py` sur le modèle de `fluctuating_ke_fixed`.
+
+Vérification de la copie : sur un cisaillement magnétique pur
+`Bx = −sin y`, la version gelée rend **0** et la corrigée retrouve
+`⟨(∇×B)²⟩` à 5 % près ; sur un champ potentiel `B = ∇φ` la corrigée rend
+zéro (contrôle négatif).
+
+### La leçon
+
+Une déviation connue mais **non écrite là où elle vit** se fait recorriger
+par erreur — c'est exactement ce qui vient d'arriver. Les deux sont
+maintenant documentées dans `dns_validation.py` lui-même, et un test vérifie
+que ces mentions y restent.
 
 ## Tests
 
-`tests/v4/test_no_private_curl_survives.py`, 21 tests. Le dernier est un
+`tests/v4/test_no_private_curl_survives.py`, 26 tests. Ils verrouillent les
+**deux côtés** de D2 et D3 : la version gelée doit rester fausse à
+l'identique (sans quoi les artefacts de phase 1b cessent d'être
+reproductibles), et la copie corrigée doit être juste. Un test de plus est un
 **balayage** : tout rotationnel écrit à la main avec un `axis=0`/`axis=1`
 nu, hors de la liste d'exceptions vérifiées, fait échouer la suite. Un
 opérateur écrit à la main est indiscernable d'un opérateur juste tant qu'on

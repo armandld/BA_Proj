@@ -56,6 +56,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
+from Simulation.grid import AXIS_X, AXIS_Y
 
 # scenarios V3 = les 4 V2 + les 4 nouveaux (section 1.1)
 EXTRA_SCENARIOS = ["lamb_oseen", "island_coalescence",
@@ -91,6 +92,25 @@ def fluctuating_ke_fixed(vx, vy):
     phase 1b reste intouchee, reparation cote v3 par copie)."""
     return 0.5 * ((vx - vx.mean(axis=0, keepdims=True)) ** 2
                   + (vy - vy.mean(axis=0, keepdims=True)) ** 2).mean()
+
+
+def mean_sq_current_fixed(Bx, By):
+    """<J_z^2> avec J_z = dBy/dx - dBx/dy, observable CORRIGEE.
+
+    La version de phase 1b (`dns_validation.mean_sq_current`) prend ses deux
+    differences sur l'axe oppose a la convention du depot
+    (`grid.AXIS_X = 0`, `AXIS_Y = 1`). Elle calcule donc
+    dBy/dy - dBx/dx : une combinaison de DEFORMATION, pas un courant.
+
+    Ce n'est pas un courant de signe oppose — le carre n'aurait rien
+    rattrape. C'est son complementaire : sur une rotation solide et sur un
+    cisaillement pur elle rend exactement zero, et sur une compression pure
+    elle rend ce que le courant ne voit pas (deviation D3 ; phase 1b reste
+    intouchee, reparation cote v3 par copie, comme pour D2).
+    """
+    dxBy = (np.roll(By, -1, axis=AXIS_X) - np.roll(By, 1, axis=AXIS_X)) * 0.5
+    dyBx = (np.roll(Bx, -1, axis=AXIS_Y) - np.roll(Bx, 1, axis=AXIS_Y)) * 0.5
+    return ((dxBy - dyBx) ** 2).mean()
 
 
 def check_kh_fixed(dns_path):

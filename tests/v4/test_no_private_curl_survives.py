@@ -306,33 +306,33 @@ def test_the_repo_axis_constants_are_the_ones_these_tests_assume():
 
 
 # ======================================================================
-#  5. D-18 — la moyenne de base etait prise en travers de la couche
+#  5. D-2 / D-3 — le gel de phase 1b, et les copies corrigees
 # ======================================================================
 #
-# `dns_validation.fluctuating_KE` retranche une moyenne pour ne garder que
-# la perturbation. La moyenne doit etre prise le long de la direction
-# HOMOGENE, celle dont l'ecoulement de base ne depend pas.
+# CORRECTION A UNE AFFIRMATION PRECEDENTE : le defaut d'axe de
+# `dns_validation.fluctuating_KE` n'est PAS une trouvaille de cet audit. Il
+# etait deja connu, consigne comme « deviation D2 », et la decision prise
+# alors etait explicite — `dns_extension.py:85` : « phase 1b reste
+# intouchee, reparation cote v3 par copie ». Un test de tests/v3 epinglait
+# meme la contamination. La corriger dans `dns_validation.py` aurait casse
+# la reproductibilite des artefacts de phase 1b.
 #
-# `init_kelvin_helmholtz` construit son profil a partir de `grid.Y`, et
-# `grid.X, grid.Y = np.meshgrid(x, y, indexing='ij')` fait varier Y le long
-# de l'AXE 1. La direction homogene est donc l'axe 0. Le code moyennait sur
-# l'axe 1 — A TRAVERS la couche de cisaillement — et ne soustrayait donc
-# rien. Le commentaire disait « KH shear is in x », l'inverse de ce que le
-# solveur initialise.
+# Ce que l'audit apporte reellement ici :
+#   - la MESURE de l'ampleur de D2, qui n'etait chiffree nulle part ;
+#   - une deuxieme deviation dans le meme fichier, `mean_sq_current`, qui
+#     porte la meme inversion d'axes et qu'aucun test n'epinglait (D3) ;
+#   - une copie corrigee `mean_sq_current_fixed`, sur le modele de
+#     `fluctuating_ke_fixed` qui existait deja pour D2.
 #
-#   profil de base SEUL, reponse attendue zero :
-#     ancien (axis=1) : 3.411e-01   soit 73 % de l'energie cinetique totale
-#     correct (axis=0): 1.323e-30
-#
-#   avec la perturbation nominale (amplitude 0.1) :
-#     ancien  : 0.34115 -> 0.34120, rapport 1.0002
-#     correct : 1.3e-30 -> 2.5e-04
-#
-# La grandeur etait a 99.98 % de l'ecoulement de base, donc pratiquement
-# aveugle a la perturbation qu'elle existe pour mesurer.
+# Les tests ci-dessous verrouillent les DEUX cotes : la version gelee doit
+# rester fausse a l'identique, la copie corrigee doit etre juste.
 
 def _dv():
     return _load("study/pipeline/dns_validation.py", "dns_val_d18")
+
+
+def _dx():
+    return _load("study/pipeline/dns_extension.py", "dns_ext_d18")
 
 
 def _kh(noise, n=128):
@@ -341,63 +341,103 @@ def _kh(noise, n=128):
     return sim
 
 
-def test_the_base_shear_flow_carries_no_perturbation_energy():
-    """Sans perturbation, la grandeur doit valoir zero. C'est sa definition."""
+# ── D2 : la version gelee doit rester gelee ───────────────────────────
+
+def test_the_frozen_observable_still_reports_the_base_flow():
+    """Le gel est une decision, pas un oubli : si cette valeur changeait,
+    les artefacts de phase 1b cesseraient d'etre reproductibles."""
     sim = _kh(0.0)
     got = _dv().fluctuating_KE(sim.vx, sim.vy)
     total = 0.5 * np.mean(sim.vx ** 2 + sim.vy ** 2)
-    assert got < 1e-20, (
-        f"energie de perturbation {got:.3e} sur un ecoulement de base pur, "
-        f"soit {got / total:.0%} de l'energie totale : la moyenne est prise "
-        "en travers de la couche de cisaillement")
+    assert got > 0.1, "la version de phase 1b a ete corrigee : le gel est rompu"
+    assert got / total > 0.5
 
 
-def test_the_perturbation_energy_actually_responds_to_the_perturbation():
+def test_the_measured_size_of_deviation_d2():
+    """Chiffre l'ampleur, qui n'etait consignee nulle part : la grandeur ne
+    bouge que de 0.02 % quand on allume la perturbation."""
     dv = _dv()
     base = dv.fluctuating_KE(*(lambda s: (s.vx, s.vy))(_kh(0.0)))
     pert = dv.fluctuating_KE(*(lambda s: (s.vx, s.vy))(_kh(0.1)))
-    assert pert > 1e6 * max(base, 1e-30), (
-        f"base {base:.3e}, perturbe {pert:.3e} : rapport {pert / max(base, 1e-30):.4f}. "
-        "Une grandeur qui bouge de 0.02 % quand on allume la perturbation "
-        "mesure l'ecoulement de base.")
+    assert pert / base == pytest.approx(1.0002, abs=5e-4)
 
 
-def test_the_perturbation_energy_grows_with_the_noise_amplitude():
-    """Quadratique en l'amplitude : doubler le bruit quadruple l'energie."""
-    dv = _dv()
-    a = dv.fluctuating_KE(*(lambda s: (s.vx, s.vy))(_kh(0.05)))
-    b = dv.fluctuating_KE(*(lambda s: (s.vx, s.vy))(_kh(0.10)))
+# ── D2 : la copie corrigee doit etre juste ────────────────────────────
+
+def test_the_fixed_observable_removes_the_base_flow_exactly():
+    sim = _kh(0.0)
+    assert _dx().fluctuating_ke_fixed(sim.vx, sim.vy) < 1e-20
+
+
+def test_the_fixed_observable_responds_to_the_perturbation():
+    dx = _dx()
+    base = dx.fluctuating_ke_fixed(*(lambda s: (s.vx, s.vy))(_kh(0.0)))
+    pert = dx.fluctuating_ke_fixed(*(lambda s: (s.vx, s.vy))(_kh(0.1)))
+    assert pert > 1e6 * max(base, 1e-30)
+
+
+def test_the_fixed_observable_is_quadratic_in_the_amplitude():
+    dx = _dx()
+    a = dx.fluctuating_ke_fixed(*(lambda s: (s.vx, s.vy))(_kh(0.05)))
+    b = dx.fluctuating_ke_fixed(*(lambda s: (s.vx, s.vy))(_kh(0.10)))
     assert b / a == pytest.approx(4.0, rel=0.05)
 
 
-def test_the_old_axis_would_report_most_of_the_base_flow():
-    """Le defaut lui-meme, fige : 73 % de l'energie totale sur un
-    ecoulement sans la moindre perturbation."""
-    sim = _kh(0.0)
-    vx_m = sim.vx.mean(axis=1, keepdims=True)
-    vy_m = sim.vy.mean(axis=1, keepdims=True)
-    old = 0.5 * np.mean((sim.vx - vx_m) ** 2 + (sim.vy - vy_m) ** 2)
-    total = 0.5 * np.mean(sim.vx ** 2 + sim.vy ** 2)
-    assert old / total > 0.5
+# ── D3 : meme structure, deviation trouvee par cet audit ──────────────
 
-
-def test_the_mean_square_current_sees_a_current_sheet():
-    """<J^2> doit suivre le rotationnel partage, pas son complementaire."""
+def test_the_frozen_current_still_carries_the_axis_inversion():
+    """Sur un cisaillement magnetique pur, la version gelee doit rendre
+    zero — c'est la signature de l'inversion d'axes."""
     n = 128
     c = np.arange(n) * L / n
     X, Y = np.meshgrid(c, c, indexing="ij")
     Bx, By = -np.sin(Y), np.zeros_like(X)      # Jz = -dBx/dy = cos y
-    got = _dv().mean_sq_current(Bx, By)
-    ref = np.mean(forward_curl_z(Bx, By) ** 2)
-    assert got == pytest.approx(ref, rel=0.05)
-    assert got > 0.0
+    assert _dv().mean_sq_current(Bx, By) < 1e-25, (
+        "la version de phase 1b a ete corrigee : le gel est rompu")
 
 
-def test_the_mean_square_current_is_zero_on_a_potential_field():
-    """B = grad(phi) porte un courant nul : c'est le controle negatif."""
+def test_the_fixed_current_sees_the_current_sheet():
     n = 128
     c = np.arange(n) * L / n
     X, Y = np.meshgrid(c, c, indexing="ij")
-    # phi = cos x + cos y  ->  B = (-sin x, -sin y),  curl B = 0
-    got = _dv().mean_sq_current(-np.sin(X), -np.sin(Y))
-    assert got < 1e-25
+    Bx, By = -np.sin(Y), np.zeros_like(X)
+    got = _dx().mean_sq_current_fixed(Bx, By)
+    assert got == pytest.approx(np.mean(forward_curl_z(Bx, By) ** 2), rel=0.05)
+    assert got > 0.0
+
+
+def test_the_fixed_current_is_zero_on_a_potential_field():
+    """B = grad(phi) porte un courant nul : le controle negatif."""
+    n = 128
+    c = np.arange(n) * L / n
+    X, Y = np.meshgrid(c, c, indexing="ij")
+    assert _dx().mean_sq_current_fixed(-np.sin(X), -np.sin(Y)) < 1e-25
+
+
+def test_the_two_current_versions_really_differ():
+    """Sinon la copie corrigee serait decorative."""
+    n = 128
+    c = np.arange(n) * L / n
+    X, Y = np.meshgrid(c, c, indexing="ij")
+    Bx, By = -np.sin(Y), np.zeros_like(X)
+    assert _dx().mean_sq_current_fixed(Bx, By) > 1e6 * max(
+        _dv().mean_sq_current(Bx, By), 1e-30)
+
+
+def test_the_fixed_current_scales_as_the_square_of_the_field():
+    n = 128
+    c = np.arange(n) * L / n
+    X, Y = np.meshgrid(c, c, indexing="ij")
+    dx = _dx()
+    a = dx.mean_sq_current_fixed(-np.sin(Y), np.zeros_like(X))
+    b = dx.mean_sq_current_fixed(-3.0 * np.sin(Y), np.zeros_like(X))
+    assert b / a == pytest.approx(9.0, rel=1e-9)
+
+
+def test_both_frozen_deviations_are_written_down_where_they_live():
+    """Une deviation connue mais non ecrite se refait corriger par erreur —
+    c'est exactement ce qui a failli arriver ici."""
+    src = open(os.path.join(_REPO, "study", "pipeline",
+                            "dns_validation.py"), encoding="utf-8").read().lower()
+    for marker in ("deviation d2", "deviation d3", "phase 1b reste intouchee"):
+        assert marker in src, f"{marker} n'est pas consigne dans le fichier gele"
