@@ -2935,3 +2935,186 @@ re-exécution. Le défaut est donc mesuré, testé et consigné ici, mais
 | champs physiques | toutes les clés à la bonne taille, moyenne préservée, halo, enroulement torique |
 | détection de bord | chaque bord reconnu pour lui-même, anomalie intérieure ignorée, patch uniformément actif silencieux |
 | impact AMR | annulation sous patch, survie sur le fond, `max_depth=0` identique à `step_full` |
+
+---
+
+# Audit de contrat : quatre défauts trouvés en demandant à chaque
+# fonction ce qu'elle prétend faire
+
+Les tests analytiques déjà en place vérifient des **valeurs**. Cette passe
+vérifie des **contrats** : pour chaque fonction du chemin de décision, que
+promet sa docstring, consomme-t-elle les entrées que sa signature annonce,
+rend-elle la forme et le domaine promis, et deux chemins censés coïncider
+coïncident-ils encore ?
+
+Les quatre défauts ci-dessous étaient invisibles aux tests de valeur, parce
+qu'ils partagent tous la même forme : un calcul qui rend une valeur
+parfaitement plausible, indiscernable d'une valeur juste.
+
+Commande de recette :
+
+```bash
+python -m pytest tests/test_mapper_contracts.py \
+                 tests/test_hamiltonian_contracts.py \
+                 tests/test_downsampling_contracts.py -q
+```
+
+`107c1cf` + cette passe. 59 + 29 + 28 = **116 tests**.
+
+## D-11 — la diode de choc s'appliquait au cisaillement
+
+`src/Simulation/PhysToAngle.py` — `compute_stress_flux`.
+
+`_compute_filtered_flux` lit `array[0]` comme la composante **normale**
+(diode `max(0, −Δ)`, poids `w_compress = 2`) et `array[1]` comme la
+**tangentielle** (`abs`, poids `w_shear = 1`). L'ordre des tuples était
+écrit sous la convention inverse du dépôt (axis=1 lu comme x), si bien que
+la composante transverse arrivait dans la case de la normale.
+
+| mesure sur champ analytique | code | conception |
+|---|---|---|
+| rapport compression / cisaillement | **0.500** | 2.0 |
+| compression distinguée de l'expansion | **non** — flux identique | oui |
+
+La diode était donc **inerte** : sa seule raison d'être est de séparer la
+compression de l'expansion, et elle ne le faisait pas. Le signe d'une
+différence tangentielle ne porte aucune information de compression ; la vraie
+différence normale, elle, passait par `np.abs` dans la branche de
+cisaillement.
+
+Écart relatif sur Φ, snapshots DNS réels à N=256, Re=400 :
+
+| scénario | Φ_h | Φ_v | médiane \|Δψ\| | max \|Δψ\| |
+|---|---|---|---|---|
+| orszag_tang | 36.6 % | 43.4 % | 0.259 | 2.98 |
+| kelvin_helmholtz | 96.5 % | 51.0 % | 0.047 | 1.33 |
+| mhd_rotor | 46.2 % | 37.1 % | 0.023 | 3.14 |
+| harris_tearing | 93.3 % | 43.9 % | 0.008 | 2.90 |
+
+Φ n'alimente pas θ (le score classique s'en charge) : il alimente **ψ**. Le
+rayon d'action du défaut est donc exactement ψ — la quantité dont l'ablation
+est au programme. **Toute lecture de l'ablation ψ antérieure à cette
+correction porte sur un ψ construit sur un flux faux.**
+
+Corrigé derrière `AngleMapper(fixed_flux=True)`, par défaut **True**, même
+traitement que `fixed_curl`. `fixed_flux=False` reproduit le chemin
+historique bit à bit.
+
+## D-12 — le mappeur déployé est aveugle à trois des quatre grandeurs
+## que sa docstring nomme
+
+`src/Simulation/HamiltParams_v2.py` — `PhysicalMapperV2`.
+
+La docstring annonçait « Only physical constants (nu, eta, dx) and the
+refinement threshold (thr_amr) affect the output ». Mesuré :
+
+| grandeur | effet mesuré |
+|---|---|
+| `dx` : 1.0 contre 0.001 | `C`, `K`, `H` **bit à bit identiques** ; `K_xpoint` à 3.8e−11 |
+| amplitude des champs ×10 | identique à 1.6e−10 |
+| `nu`, `eta` | **absents du fichier** — aucun nombre de Reynolds n'entre |
+| `thr_amr` | seule grandeur nommée qui agit |
+
+Le v2 est **adimensionnel** : chaque terme est divisé par une norme prise sur
+le même champ. `det(∇B) ∝ 1/dx²` est divisé par `max|det| ∝ 1/dx²` ; `dx` se
+simplifie exactement.
+
+Ce n'est pas un bug de calcul, mais cela change la lecture de deux
+hypothèses. **H4 (transfert)** : le mappeur ne peut pas distinguer un
+écoulement visqueux d'un écoulement inertiel, donc un transfert entre nombres
+de Reynolds est trivialement satisfait par les coefficients — toute
+dépendance en Re ne peut venir que du score externe. **H3
+(représentation)** : le v2 ne voit que la *forme relative* des champs, jamais
+leur échelle.
+
+Aucun code modifié : la docstring a été réécrite pour dire ce que le code
+fait. Deux autres mensonges de documentation corrigés dans le même fichier :
+l'argument `sim`, annoncé comme fournissant les opérateurs de gradient, est
+inutilisé (le v2 les réimplémente en ligne) ; et le commentaire du biais Z
+portait encore le signe négatif que l'en-tête du module avait déjà corrigé.
+
+## D-13 — les bords gauche et haut de l'Hamiltonien lisaient l'arête
+## intérieure
+
+`src/VQA/cost_hamiltonian.py` — `create_bounded_hamiltonian`.
+
+`C_edges[0][a, b]` couple la cellule `(a, b)` à `(a, b+1)` : c'est la
+convention des deux mappeurs, qui forment leurs sauts par
+`champ − np.roll(champ, −1, axis=1)`. L'arête reliant le halo de gauche à la
+première colonne du cœur est donc `C_edges[0][ci, 0]`.
+
+Le code lisait `[ci, 1]` — l'arête **intérieure** (0)-(1), déjà consommée
+quelques lignes plus haut comme couplage de cœur. Même chose en haut avec
+`C_edges[1][1, cj]` au lieu de `[0, cj]`. Le bon coefficient existe pourtant :
+les paramètres sont calculés sur un patch `(dim+2, dim+2)` qui contient le
+halo.
+
+Les bords **droit** et **bas**, eux, lisaient la bonne case. L'Hamiltonien
+était donc **asymétrique entre gauche et droite sur un patch symétrique** —
+c'est le test qui attrape le défaut sans connaître les indices.
+
+Écart sur un patch réel d'Orszag-Tang (N=256, dim=4, cœur de la nappe de
+courant) :
+
+| bord | lu | correct | écart |
+|---|---|---|---|
+| gauche, ci=1 | −1.0243 | −0.9572 | 0.0671 (7.0 %) |
+| gauche, ci=4 | −1.0251 | −0.9809 | 0.0442 (4.5 %) |
+| haut, cj=1 | −1.1678 | −1.1476 | 0.0202 (1.8 %) |
+| haut, cj=4 | −1.3117 | −1.2965 | 0.0152 (1.2 %) |
+
+Corrigé directement : contrairement au rotationnel, il n'existe pas de
+lecture défendable où `[ci, 1]` serait l'arête du halo.
+
+**Garde ajouté au passage.** Toutes les lectures sont indexées par `dim` sur
+des tableaux supposés `(dim+2, dim+2)`. Un tableau **trop grand** ne
+déclenchait aucune erreur : la boucle lisait un sous-bloc du coin supérieur
+gauche et rendait un Hamiltonien valide, calculé sur la mauvaise portion du
+patch. `create_bounded_hamiltonian` refuse désormais toute forme différente
+et nomme chaque tableau fautif.
+
+## D-14 — le score et les champs ne décrivaient pas la même région
+
+`src/Simulation/refinement.py` — `_downsample_fields`.
+
+Un patch descend vers le VQA par deux chemins indépendants : les champs par
+**mean-pool** (`_downsample_fields`), le score par **max-pool**
+(`RescaleArrays._process_score`). Le max-pool couvre 100 % du patch depuis sa
+correction ; le mean-pool découpait `patch[:out_dim*bh, :out_dim*bw]` et
+jetait le reste de la division.
+
+La cellule `(i, j)` du score ne désignait donc plus la cellule `(i, j)` des
+champs. La perte tombe toujours du même côté — les dernières lignes et
+colonnes — donc c'est un **biais, pas du bruit**. Et ces dernières lignes
+sont exactement le **halo droit et bas**, c'est-à-dire l'information de
+voisinage que H3 cherche à évaluer.
+
+Le patch vaut `extent + 2·pad` (le halo de `get_periodic_patch`) et la cible
+`dim + 2·pad` : la division tombe rarement juste. Couverture à N=256 :
+
+| dim | prof. 0 | prof. 1 | prof. 2 | prof. 3 |
+|---|---|---|---|---|
+| **2 (déployé)** | 100 % | **98.5 %** | **97.0 %** | **94.1 %** |
+| 3 | 99.6 % | 100 % | 98.5 % | 88.2 % |
+| 4 | 100 % | 96.9 % | 100 % | 88.2 % |
+| 8 | 100 % | 100 % | 90.9 % | 88.2 % |
+
+Le chemin déployé était touché dès la première descente.
+
+Corrigé par des bornes `np.linspace` couvrant toute l'étendue — la même
+correction que `_maxabs_pool_2d`, ce qui remet les deux chemins d'accord.
+Quand la division tombe juste, la sortie est bit à bit identique et le
+chemin rapide `reshape` est conservé.
+
+## Ce que cette passe dit des tests précédents
+
+Les quatre défauts partagent la forme que les tests de valeur ne peuvent pas
+voir : ils rendent un résultat plausible. Trois d'entre eux ont été trouvés
+par la même question — *deux chemins censés coïncider coïncident-ils ?* —
+qu'aucun test antérieur ne posait :
+
+- D-11 : la diode contre sa propre docstring ;
+- D-13 : le bord gauche contre le bord droit ;
+- D-14 : la réduction des champs contre celle du score.
+
+C'est la classe de test à étendre en priorité, pas le nombre d'assertions.

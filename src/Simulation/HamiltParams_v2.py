@@ -51,8 +51,24 @@ class PhysicalMapperV2:
     """
     Parameter-free Hamiltonian coefficient computation from MHD fields.
 
-    Only physical constants (nu, eta, dx) and the refinement threshold
-    (thr_amr) affect the output. No trainable hyperparameters.
+    Seul `thr_amr` (et les poids fixes w_zz / w_zzzz / c_bias) change la
+    sortie. Ce mappeur est ADIMENSIONNEL : chaque terme est divise par une
+    norme prise sur le meme champ, si bien que
+
+      - `dx` se simplifie exactement (il n'apparait que dans
+        `_compute_det_jacobian_B`, ou det ∝ 1/dx² est ensuite divise par
+        max|det| ∝ 1/dx²) ;
+      - l'amplitude des champs se simplifie de meme (multiplier v et B par
+        10 laisse C, K et H inchanges) ;
+      - `nu` et `eta` n'apparaissent nulle part : aucun nombre de Reynolds
+        n'entre dans le v2.
+
+    Consequence a garder en tete : le v2 ne peut pas distinguer un ecoulement
+    visqueux d'un ecoulement inertiel, ni une grille fine d'une grille
+    grossiere. Il ne voit que la FORME relative des champs. Un transfert
+    entre nombres de Reynolds est donc trivialement satisfait par les
+    coefficients — la dependance en Re ne peut venir que du score externe.
+    `tests/test_mapper_contracts.py` mesure ces trois invariances.
     """
 
     # Fixed weights (not trained, chosen once by physical reasoning)
@@ -97,8 +113,14 @@ class PhysicalMapperV2:
 
         Parameters
         ----------
-        sim : MHDSolver
-            Solver instance (grid methods used for gradient operators).
+        sim : MHDSolver or None
+            Non utilise. Le v2 reimplemente ses operateurs de saut en ligne
+            (voir plus bas) au lieu d'appeler `sim.grid._get_vector_jump`.
+            L'argument est conserve pour garder la signature commune avec
+            `PhysicalMapper.compute_coefficients` (v1), que le pipeline
+            appelle sans savoir lequel des deux il tient.
+            `tests/test_mapper_contracts.py` verifie que les deux
+            implementations coincident encore.
         score : (N, N) array
             Classical instability score in [0, 1].
         fields : dict
@@ -165,7 +187,10 @@ class PhysicalMapperV2:
 
         # ==============================================================
         #  3. Z (activity bias)
-        #     h_i = -c * median(|C|, |K|) * (s_i - thr)
+        #     h_i = +c * median(|C|, |K|) * (s_i - thr)
+        #     Signe POSITIF, cf. l'en-tete du module : au-dessus du seuil le
+        #     biais pousse vers |1> (raffiner). Cette ligne portait un signe
+        #     negatif, contraire au code qui la suit.
         # ==============================================================
         all_coeffs = np.concatenate([
             np.abs(C_horiz).ravel(),

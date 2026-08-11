@@ -64,6 +64,36 @@ def create_bounded_hamiltonian(
     """
     sparse_list = []
 
+    # --- A0. Le coeur demande doit etre celui des tableaux fournis ---
+    #
+    # Toutes les lectures ci-dessous sont indexees par `dim` sur des tableaux
+    # supposes (dim+2, dim+2). Un tableau TROP GRAND ne declenche aucune
+    # erreur : la boucle lit simplement un sous-bloc du coin superieur gauche
+    # et rend un Hamiltonien parfaitement valide, calcule sur la mauvaise
+    # portion du patch. Rien en aval ne peut le detecter.
+    #
+    # Un tableau trop petit, lui, finit par lever un IndexError — mais
+    # seulement au premier bord atteint, donc apres avoir deja encode des
+    # termes. On refuse les deux cas d'emblee.
+    expected = (dim + 2, dim + 2)
+    _shapes = {
+        'C_edges[0]': np.shape(hamilt_params['C_edges'][0]),
+        'C_edges[1]': np.shape(hamilt_params['C_edges'][1]),
+        'H_edges[0]': np.shape(hamilt_params['H_edges'][0]),
+        'H_edges[1]': np.shape(hamilt_params['H_edges'][1]),
+        'theta_h_full': np.shape(theta_h_full),
+        'theta_v_full': np.shape(theta_v_full),
+    }
+    if hamilt_params.get('K_plaquettes') is not None:
+        _shapes['K_plaquettes'] = np.shape(hamilt_params['K_plaquettes'])
+    _bad = {k: v for k, v in _shapes.items() if tuple(v) != expected}
+    if _bad:
+        raise ValueError(
+            f"create_bounded_hamiltonian(dim={dim}) attend des tableaux "
+            f"{expected} (coeur dim x dim + halo d'epaisseur 1) ; recu "
+            + ", ".join(f"{k}={tuple(v)}" for k, v in sorted(_bad.items()))
+        )
+
     # --- A. Extraction Cœur vs Halo ---
     # Cœur = indices [1:-1, 1:-1]
 
@@ -164,10 +194,27 @@ def create_bounded_hamiltonian(
                         sparse_list.append(("Z", [q_curr], _halo_term))
 
             # --- Bords Gauche et Haut (Champs manquants) ---
+            #
+            # `C_edges[0][a, b]` couple la cellule (a, b) a la cellule
+            # (a, b+1) — c'est la convention des deux mappeurs, qui forment
+            # leurs sauts par `champ - np.roll(champ, -1, axis=1)`.
+            # L'arete qui relie le halo de gauche a la premiere colonne du
+            # coeur est donc `C_edges[0][ci, 0]`, et non `[ci, 1]`.
+            #
+            # `[ci, 1]` est l'arete INTERIEURE (j=0)-(j=1), deja consommee
+            # quelques lignes plus haut comme `c_h`. Le bord gauche
+            # reutilisait donc un couplage interieur a la place du sien,
+            # alors que le bon coefficient existe : les parametres sont
+            # calcules sur un patch (dim+2, dim+2) qui contient le halo.
+            #
+            # Les bords DROIT et BAS, eux, lisent `[ci, cj]` a cj = dim,
+            # c'est-a-dire l'arete (dim)-(dim+1) : le bon coefficient. Le
+            # defaut rendait donc l'Hamiltonien asymetrique entre gauche et
+            # droite sur un patch pourtant symetrique.
             if j == 0:
                 # Bord Gauche: centered halo contraction
                 val_halo = z_halo_left[i]
-                c_left = hamilt_params['C_edges'][0][ci, 1]
+                c_left = hamilt_params['C_edges'][0][ci, 0]
                 _halo_term = c_left * val_halo
                 if abs(_halo_term) > COEFF_MIN:
                     sparse_list.append(("Z", [idx_H(i, 0)], _halo_term))
@@ -175,7 +222,7 @@ def create_bounded_hamiltonian(
             if i == 0:
                 # Bord Haut: centered halo contraction
                 val_halo = z_halo_top[j]
-                c_top = hamilt_params['C_edges'][1][1, cj]
+                c_top = hamilt_params['C_edges'][1][0, cj]
                 _halo_term = c_top * val_halo
                 if abs(_halo_term) > COEFF_MIN:
                     sparse_list.append(("Z", [idx_V(0, j)], _halo_term))

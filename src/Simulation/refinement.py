@@ -85,20 +85,51 @@ def _downsample_fields(fields, y_s, y_e, x_s, x_e, target_dim, pad=0):
 
     Uses mean-pooling (area averaging) which preserves the physical
     mean in each coarse cell — appropriate for velocity/magnetic fields.
+
+    Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue du
+    patch, comme dans `RescaleArrays._maxabs_pool_2d`.
+
+    La version precedente decoupait `patch[:out_dim*bh, :out_dim*bw]` et
+    jetait le reste de la division. Ce n'etait pas neutre : le score, lui,
+    est reduit par max-pooling qui couvre 100 % du patch. Les deux chemins
+    decrivaient donc des REGIONS DIFFERENTES du domaine, et la cellule (i,j)
+    du score ne designait plus la cellule (i,j) des champs.
+
+    La perte tombe systematiquement du meme cote — les dernieres lignes et
+    colonnes — donc c'est un biais et non du bruit. Et ces dernieres lignes
+    sont precisement le HALO droit et bas, l'information de voisinage que
+    l'etude cherche a evaluer.
+
+    Le patch vaut `extent + 2*pad` (get_periodic_patch ajoute le halo) et la
+    cible `dim + 2*pad` ; la division tombe rarement juste. Pour N=256 et la
+    taille deployee dim=2 : 100 % a la profondeur 0 (pad=0), puis 98.5 %,
+    97.0 % et 94.1 % aux profondeurs 1, 2 et 3. Pour dim=8 a la profondeur 2,
+    90.9 %.
+
+    Quand h % out_dim == 0, les bornes retombent sur les memes blocs qu'avant
+    et la sortie est bit-a-bit identique.
     """
     result = {}
+    out_dim = target_dim + 2 * pad
     for key in ('vx', 'vy', 'Bx', 'By', 'Jz'):
         patch = get_periodic_patch(fields[key], y_s, y_e, x_s, x_e, pad)
         h, w = patch.shape
-        # Mean-pool to target_dim (+ 2*pad if bounded)
-        out_dim = target_dim + 2 * pad
         bh = h // out_dim
         bw = w // out_dim
         if bh < 1 or bw < 1:
             result[key] = zoom(patch, (out_dim / h, out_dim / w), order=1)
+        elif h == out_dim * bh and w == out_dim * bw:
+            # Division exacte : le chemin rapide donne exactement les memes
+            # blocs, on le garde pour ne rien changer au cas deploye.
+            result[key] = patch.reshape(out_dim, bh, out_dim, bw).mean(axis=(1, 3))
         else:
-            cropped = patch[:out_dim * bh, :out_dim * bw]
-            result[key] = cropped.reshape(out_dim, bh, out_dim, bw).mean(axis=(1, 3))
+            ii = np.linspace(0, h, out_dim + 1).astype(int)
+            jj = np.linspace(0, w, out_dim + 1).astype(int)
+            out = np.empty((out_dim, out_dim), dtype=float)
+            for a in range(out_dim):
+                for b in range(out_dim):
+                    out[a, b] = patch[ii[a]:ii[a + 1], jj[b]:jj[b + 1]].mean()
+            result[key] = out
     return result
 
 

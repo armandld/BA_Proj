@@ -11,6 +11,13 @@ def _lohner_estimator(f):
 
     Returns a dimensionless field in ~[0, 1] that peaks at discontinuities
     and is insensitive to smooth gradients.
+
+    Les noms `_x` / `_y` ci-dessous suivent la convention inverse de celle du
+    depot (axis=1 y est lu comme x). C'est sans consequence numerique : la
+    formule est SYMETRIQUE par echange des deux axes, donc echanger les
+    etiquettes ne change pas la valeur rendue. `tests/test_mapper_contracts.py`
+    fige cette symetrie — c'est elle qui rend le mauvais nom inoffensif, et
+    toute edition qui la briserait rendrait le nom dangereux.
     """
     fp_x = np.roll(f, -1, axis=1) - np.roll(f, 1, axis=1)
     fp_y = np.roll(f, -1, axis=0) - np.roll(f, 1, axis=0)
@@ -48,13 +55,18 @@ class AngleMapper:
     ) but is NO LONGER used for θ.
     """
 
-    def __init__(self, v0=1.0, B0=1.0, J0=1, w_compress=2.0, w_shear=1.0, w_J=1.0):
+    def __init__(self, v0=1.0, B0=1.0, J0=1, w_compress=2.0, w_shear=1.0,
+                 w_J=1.0, fixed_flux=True):
         self.v0 = v0
         self.B0 = B0
         self.J0 = J0
         self.w_compress = w_compress
         self.w_shear = w_shear
         self.w_J = w_J
+        # Voir compute_stress_flux : False reproduit bit-a-bit le chemin
+        # historique (normale/tangentielle echangees), True applique la
+        # convention AXIS_X/AXIS_Y declaree dans Simulation.grid.
+        self.fixed_flux = bool(fixed_flux)
 
     # ── Stress flux (still needed for Hamiltonian + ψ) ─────────────────
 
@@ -82,6 +94,26 @@ class AngleMapper:
         """
         Computes edge-wise MHD stress flux Φ.
 
+        Une famille d'aretes est nommee par l'axe du DECALAGE qui relie les
+        deux voisins : 'horizontal' = decalage le long de axis=1, 'vertical'
+        = decalage le long de axis=0. Sous la convention du depot
+        (`grid.AXIS_X = 0`, `AXIS_Y = 1`) la normale d'une arete 'horizontale'
+        est donc y, et celle d'une arete 'verticale' est x.
+
+        `_compute_filtered_flux` lit array[0] comme la composante NORMALE
+        (diode de choc, poids w_compress) et array[1] comme la TANGENTIELLE
+        (poids w_shear). L'ordre des tuples ci-dessous doit donc suivre l'axe
+        du decalage.
+
+        fixed_flux=False conserve l'ordre historique, ecrit sous la convention
+        inverse (axis=1 lu comme x). Il place la composante transverse dans la
+        case de la normale : la diode de choc s'applique alors au cisaillement
+        — dont le signe ne porte aucune information de compression — et la
+        compression passe par `np.abs` dans la branche de cisaillement. Sur des
+        champs analytiques ce chemin rend un rapport compression/cisaillement
+        de 0.5 la ou la conception en demande 2.0, et rend la diode inerte
+        (compression et expansion donnent le meme flux).
+
         Returns dict with:
             'phi_horizontal', 'phi_vertical'            — flux magnitudes
         """
@@ -91,23 +123,32 @@ class AngleMapper:
         By = physics_state['By'] / self.B0
         Jz = physics_state['Jz'] / self.J0
 
-        # Horizontal edges (x-direction neighbors)
+        if self.fixed_flux:
+            # axis=1 = AXIS_Y : normale = y  -> (vy, vx, By, Bx)
+            order_h = (vy, vx, By, Bx, Jz)
+            # axis=0 = AXIS_X : normale = x  -> (vx, vy, Bx, By)
+            order_v = (vx, vy, Bx, By, Jz)
+        else:
+            order_h = (vx, vy, Bx, By, Jz)
+            order_v = (vy, vx, By, Bx, Jz)
+
+        # Aretes 'horizontales' : voisins decales le long de axis=1
         def _h_diffs(arr, shift):
             return np.roll(arr, shift, axis=1) - arr
 
-        grad_h_right = np.array([_h_diffs(f, -1) for f in (vx, vy, Bx, By, Jz)])
-        grad_h_left = np.array([_h_diffs(f, 1) for f in (vx, vy, Bx, By, Jz)])
+        grad_h_right = np.array([_h_diffs(f, -1) for f in order_h])
+        grad_h_left = np.array([_h_diffs(f, 1) for f in order_h])
         norm_flux_h = np.maximum(
             self._compute_filtered_flux(grad_h_right),
             self._compute_filtered_flux(grad_h_left),
         )
 
-        # Vertical edges (y-direction neighbors) — note swapped vx/vy, Bx/By for normal/tangential
+        # Aretes 'verticales' : voisins decales le long de axis=0
         def _v_diffs(arr, shift):
             return np.roll(arr, shift, axis=0) - arr
 
-        grad_v_bottom = np.array([_v_diffs(f, -1) for f in (vy, vx, By, Bx, Jz)])
-        grad_v_top = np.array([_v_diffs(f, 1) for f in (vy, vx, By, Bx, Jz)])
+        grad_v_bottom = np.array([_v_diffs(f, -1) for f in order_v])
+        grad_v_top = np.array([_v_diffs(f, 1) for f in order_v])
         norm_flux_v = np.maximum(
             self._compute_filtered_flux(grad_v_bottom),
             self._compute_filtered_flux(grad_v_top),
@@ -179,6 +220,15 @@ class AngleMapper:
         score_h, score_v : (N, N) arrays
             Classical multi-indicator score in [0, 1], one per edge direction.
             Used for θ: P(|1⟩) = sin²(θ/2) = score.
+
+            La signature accepte deux cartes distinctes, mais TOUS les
+            appelants du depot passent la meme (`refinement._prepare_vqa_input`
+            passe `mini_score` deux fois). En deploiement θ_h ≡ θ_v : les deux
+            familles de qubits partent du meme etat, et ne se distinguent que
+            par ψ et par C_horiz / C_vert dans l'Hamiltonien.
+            `tests/test_mapper_contracts.py` fige cette equivalence : si un
+            appelant venait a passer deux cartes differentes, ce serait un
+            changement de comportement scientifique, pas un detail.
         phi_dict_prev, phi_dict : dict or None
             Previous and current stress flux dicts (for ψ temporal encoding).
         AveragePhiDev : float or None
