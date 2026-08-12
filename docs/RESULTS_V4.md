@@ -3786,3 +3786,58 @@ qui rend le champ intégré à divergence nulle par construction, ou passer à
 une formulation à pression.
 
 Le plan a été corrigé en conséquence.
+
+---
+
+# D-24 — la contrainte imposée après le pas ramenait l'ordre 4 à 1,2
+
+`src/Simulation/solver.py` — `_rk4_step`.
+
+Le système est **différentiel-algébrique** : v et B doivent rester à
+divergence nulle. `step_full` appliquait RK4 puis projetait l'**état** — un
+splitting de Lie, d'ordre 1. En projetant le **second membre** à chaque
+étage, le champ intégré est à divergence nulle *par construction* et RK4
+garde son ordre.
+
+Mesure à grille **fixe** (N=96, T=0,5, Orszag-Tang), en ne raffinant que le
+pas de temps, chaque schéma comparé à sa propre référence à 1024 pas :
+
+| schéma | 32 pas | 64 | 128 | 256 | ordre | max\|div v\| |
+|---|---|---|---|---|---|---|
+| projection de l'**état** | 1,098e−2 | 5,396e−3 | 2,539e−3 | 1,093e−3 | 1,03 → 1,22 | 5,04e−3 |
+| projection du **second membre** | 8,610e−8 | 5,381e−9 | 3,362e−10 | **2,092e−11** | **4,00 / 4,00 / 4,01** | 5,11e−3 |
+| aucune projection | 1,908e−3 | 1,234e−4 | 7,705e−6 | 4,790e−7 | 3,95 → 4,01 | **5,89e+0** |
+
+La correction rend **les deux** : l'ordre 4 du schéma — erreur **52 000 fois
+plus petite** à 256 pas — et le contrôle de la divergence au même niveau
+qu'avant. Ne pas projeter du tout donne aussi l'ordre 4, mais laisse la
+divergence exploser d'un facteur **1150**.
+
+## Deux vérifications avant d'annoncer le gain
+
+Un gain de dix ordres sur horizon court sentait le piège. Deux contrôles :
+
+- **le champ évolue** — déplacement relatif de `vx` sur T=0,02 : 8,4813e−3
+  pour les deux schémas, identiques à 6e−6 près ;
+- **le second membre projeté n'est pas annulé** — il conserve **30,0 %** de
+  sa norme.
+
+La première mesure (T=0,02) était simplement au plancher de la double
+précision dès 32 pas : l'ordre n'y était pas mesurable. Il a fallu allonger
+l'horizon à T=0,5 pour l'obtenir.
+
+## Ce que cela ferme
+
+Le plan annonçait le facteur limitant du solveur comme « identifié et
+corrigeable ». Il est corrigé, et la valeur de « corrigé » est chiffrée. La
+mention d'un splitting de Strang est retirée : elle ne s'applique pas — un
+splitting symétrique suppose deux *flots* découpables en demi-pas, alors que
+la projection est un **projecteur idempotent**. Vérifié : `P ∘ RK4 ∘ P` rend
+des erreurs identiques à `P ∘ RK4` à la dernière décimale.
+
+Implémenté derrière `MHDSolver.PROJECT_RHS`, par défaut `True`, le chemin
+historique restant reproductible bit à bit. Vérifié par `step_full` — donc
+le chemin déployé, pas une reconstruction.
+
+**Conséquence** : tout nombre publié passant par `step_full` change. La
+campagne entière est à relancer, ce qui était déjà le cas pour D-22.

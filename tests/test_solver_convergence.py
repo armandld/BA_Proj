@@ -434,3 +434,159 @@ class TestCorrectedMaxDepth:
 if __name__ == '__main__':
     import pytest
     pytest.main([__file__, '-v'])
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-24 — la contrainte imposee APRES le pas ramenait l'ordre 4 a 1.2
+# ══════════════════════════════════════════════════════════════════════
+#
+# Le systeme est differentiel-algebrique : v et B doivent rester a
+# divergence nulle. `step_full` appliquait RK4 puis projetait l'ETAT — un
+# splitting de Lie, d'ordre 1. En projetant le SECOND MEMBRE a chaque etage,
+# le champ integre est a divergence nulle par construction et RK4 garde son
+# ordre.
+#
+# Mesure a grille FIXE (N=96, T=0.5, Orszag-Tang), en ne raffinant que le
+# pas de temps, chaque schema compare a sa propre reference a 1024 pas :
+#
+#   schema                     32 pas      256 pas    ordre    max|div v|
+#   projection de l'ETAT     1.098e-02   1.093e-03   1.0->1.2   5.04e-03
+#   projection du SECOND M.  8.610e-08   2.092e-11     4.00     5.11e-03
+#   aucune projection        1.908e-03   4.790e-07   3.95->4.01 5.89e+00
+#
+# La correction rend les DEUX : l'ordre 4 (erreur 52 000 fois plus petite a
+# 256 pas) et le controle de la divergence au meme niveau qu'avant. Ne pas
+# projeter du tout donne l'ordre 4 mais laisse la divergence exploser d'un
+# facteur 1150.
+#
+# A ne pas confondre avec un splitting de Strang : il suppose deux FLOTS
+# decoupables en demi-pas, la projection est un projecteur idempotent.
+# Verifie — `P.RK4.P` rend des erreurs identiques a `P.RK4`.
+
+import numpy as _np
+import pytest as _pytest
+
+from Simulation.grid import PeriodicGrid as _Grid, divergence as _div
+from Simulation.solver import MHDSolver as _Solver
+
+
+def _order_run(n, project_rhs, N=96, T=0.5):
+    old = _Solver.PROJECT_RHS
+    _Solver.PROJECT_RHS = project_rhs
+    try:
+        s = _Solver(_Grid(N), dt=T / n, Re=400, Rm=400)
+        s.init_orszag_tang()
+        for _ in range(n):
+            s.step_full(record_stats=False)
+        vec = _np.concatenate([s.vx.ravel(), s.vy.ravel(),
+                               s.Bx.ravel(), s.By.ravel()])
+        return vec, s
+    finally:
+        _Solver.PROJECT_RHS = old
+
+
+def _observed_order(project_rhs, coarse=64, fine=256):
+    ref, _ = _order_run(1024, project_rhs)
+    a, _ = _order_run(coarse, project_rhs)
+    b, _ = _order_run(fine, project_rhs)
+    ea = _np.linalg.norm(a - ref) / _np.linalg.norm(ref)
+    eb = _np.linalg.norm(b - ref) / _np.linalg.norm(ref)
+    return _np.log2(ea / eb) / _np.log2(fine / coarse), ea, eb
+
+
+@_pytest.mark.slow
+def test_the_corrected_scheme_recovers_fourth_order():
+    """L'ordre du schema, pas une approximation : RK4 vaut 4."""
+    order, _, _ = _observed_order(True)
+    assert order == _pytest.approx(4.0, abs=0.15), f"ordre observe {order:.3f}"
+
+
+@_pytest.mark.slow
+def test_the_legacy_scheme_really_was_first_order():
+    """Le defaut lui-meme, fige. S'il remontait, ce ne serait plus le
+    chemin historique."""
+    order, _, _ = _observed_order(False)
+    assert order < 1.5, f"ordre observe {order:.3f}"
+
+
+@_pytest.mark.slow
+def test_the_correction_buys_four_orders_of_magnitude_on_the_error():
+    _, _, e_new = _observed_order(True)
+    _, _, e_old = _observed_order(False)
+    assert e_old / e_new > 1e4, (
+        f"gain seulement {e_old / e_new:.1f}x — la correction n'apporte pas "
+        "ce que la mesure annonce")
+
+
+@_pytest.mark.slow
+def test_the_divergence_stays_as_well_controlled_as_before():
+    """Le point qui rend la correction acceptable : on ne troque pas la
+    contrainte contre la precision. Sans projection du tout, l'ordre 4 est
+    la aussi — mais la divergence explose d'un facteur 1150."""
+    _, s_new = _order_run(256, True)
+    _, s_old = _order_run(256, False)
+    d_new = _np.max(_np.abs(_div(s_new.vx, s_new.vy, True)))
+    d_old = _np.max(_np.abs(_div(s_old.vx, s_old.vy, True)))
+    assert d_new <= 2.0 * d_old, (
+        f"divergence {d_new:.3e} contre {d_old:.3e} : la correction relache "
+        "la contrainte")
+
+
+def test_the_projected_rhs_is_divergence_free_at_every_stage():
+    """La propriete qui fait tout marcher, verifiee directement."""
+    s = _Solver(_Grid(64), dt=1e-3, Re=400, Rm=400)
+    s.init_orszag_tang()
+    kvx, kvy, kBx, kBy = s._projected_rhs(s.vx, s.vy, s.Bx, s.By,
+                                          s.dx, None, None)
+    for a, b in ((kvx, kvy), (kBx, kBy)):
+        assert _np.max(_np.abs(_div(a, b, True))) < 1e-10
+
+
+def test_the_projected_rhs_is_not_annihilated():
+    """Si la projection tuait le second membre, l'erreur d'ordre tomberait
+    a zero par IMMOBILITE et non par precision. Mesure : 30 % de la norme
+    survit."""
+    s = _Solver(_Grid(64), dt=1e-3, Re=400, Rm=400)
+    s.init_orszag_tang()
+    raw = s._compute_rhs_fd(s.vx, s.vy, s.Bx, s.By, s.dx, None, None)
+    proj = s._projected_rhs(s.vx, s.vy, s.Bx, s.By, s.dx, None, None)
+    kept = _np.linalg.norm(proj[0]) / _np.linalg.norm(raw[0])
+    assert 0.05 < kept < 1.0, f"part conservee {kept:.2%}"
+
+
+def test_the_field_still_moves_under_the_corrected_scheme():
+    """Controle grossier mais decisif : les deux schemas doivent produire
+    un deplacement du meme ordre."""
+    disp = {}
+    for flag in (False, True):
+        old = _Solver.PROJECT_RHS
+        _Solver.PROJECT_RHS = flag
+        try:
+            s = _Solver(_Grid(64), dt=0.02 / 64, Re=400, Rm=400)
+            s.init_orszag_tang()
+            v0 = s.vx.copy()
+            for _ in range(64):
+                s.step_full(record_stats=False)
+            disp[flag] = _np.linalg.norm(s.vx - v0) / _np.linalg.norm(v0)
+        finally:
+            _Solver.PROJECT_RHS = old
+    assert disp[True] > 1e-4
+    assert disp[True] == _pytest.approx(disp[False], rel=0.05)
+
+
+def test_the_corrected_path_is_the_default():
+    """Une correction derriere un drapeau par defaut a False n'en est pas une."""
+    assert _Solver.PROJECT_RHS is True
+
+
+def test_strang_would_have_changed_nothing():
+    """Fige la raison pour laquelle le splitting symetrique ne s'applique
+    pas : la projection est idempotente, donc P.RK4.P == P.RK4 des le
+    deuxieme pas."""
+    s = _Solver(_Grid(48), dt=1e-3, Re=400, Rm=400)
+    s.init_orszag_tang()
+    s.enforce_incompressibility()
+    a = (s.vx.copy(), s.vy.copy())
+    s.enforce_incompressibility()
+    assert _np.max(_np.abs(s.vx - a[0])) < 1e-13
+    assert _np.max(_np.abs(s.vy - a[1])) < 1e-13

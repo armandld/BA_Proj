@@ -86,10 +86,21 @@ le premier pas l'état est déjà dans le sous-espace, donc la projection
 initiale est l'identité.
 
 Le système est **différentiel-algébrique** : l'ordre chute parce que la
-contrainte est imposée *après* un pas RK4 non contraint. Les deux corrections
-qui tiennent sont de projeter le **second membre** à chaque étage — le champ
-intégré est alors à divergence nulle par construction — ou de passer à une
-formulation à pression.
+contrainte est imposée *après* un pas RK4 non contraint.
+
+**Corrigé.** En projetant le **second membre** à chaque étage, le champ
+intégré est à divergence nulle par construction et RK4 garde son ordre.
+Mesuré dans les mêmes conditions :
+
+| schéma | erreur à 256 pas | ordre | max\|div v\| |
+|---|---|---|---|
+| projection de l'état | 1,093e−3 | 1,22 | 5,04e−3 |
+| **projection du second membre** | **2,092e−11** | **4,00** | 5,11e−3 |
+| aucune projection | 4,790e−7 | 4,01 | **5,89e+0** |
+
+La correction rend les deux : l'ordre 4 — erreur 52 000 fois plus petite —
+et le contrôle de la divergence au même niveau. Ne pas projeter du tout
+donne l'ordre 4 mais laisse la divergence exploser d'un facteur 1150.
 
 Candidat non testé : la projection est spectrale alors que le second membre
 est aux différences finies d'ordre 4 — deux opérateurs de divergence
