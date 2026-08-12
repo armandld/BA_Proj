@@ -23,7 +23,7 @@ sépare l'**objet d'étude** (`src/`, gelé) du **travail de falsification**
 src/                    V1 — solveur MHD (FD4/RK4), grille, raffinement,
                         PhysToAngle, HamiltParams, pile VQA/QAOA.
                         C'est l'objet étudié, pas une dépendance à améliorer.
-tests/                  tests de src/ ; tests/v3/ et tests/v4/ testent study/
+tests/                  tests de src/ ; tests/study/ et tests/study/ testent study/
 study/
   pipeline/             DNS → patches durs → coefficients → diagonalisation
                         (config.py, phase0–phase4, t8_dns_extension)
@@ -63,7 +63,8 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
   dans `docs/RESULTS.md`. Elle n'est jamais faite « au passage ».
 - **Un test qui ne peut pas échouer est un défaut.** Tout script de `study/`
   ou de `tests/` porte une assertion, et un balayage vide doit crier.
-- Chaque tâche livre : code + un pytest sous `tests/v3/` ou `tests/v4/` +
+- Chaque tâche livre : code + un pytest dans le dossier de `tests/`
+  correspondant au sous-système touché (voir `tests/README.md`) +
   une entrée dans `docs/RESULTS.md` (commande, hash git, nombres).
 - Déterminisme : tout script accepte `--seed` et écrit le hash du commit et
   les arguments CLI complets dans ses `.npz`.
@@ -76,8 +77,9 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 ## Tests de recette
 
 ```bash
-python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q   # V1
-python -m pytest tests/v3 tests/v4 -q                            # study
+python -m pytest tests/ -q -m "not slow"        # tout, hors mesures longues
+python -m pytest tests/solver -q                # un sous-système
+python -m pytest tests/ -q -m slow              # ordre de convergence, ~10 min
 python study/common/aggregate_master_table.py                          # 180 lignes,
                                                                  # 0 DIFF, 0 MISSING
 ```

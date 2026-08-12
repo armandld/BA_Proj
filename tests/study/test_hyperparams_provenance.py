@@ -16,7 +16,24 @@ import sqlite3
 
 import pytest
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+
+def _repo_root():
+    """Racine du depot : on remonte jusqu'au dossier qui contient `src/`.
+
+    Un calcul par `dirname` repete depend de la profondeur du fichier et
+    casse au premier deplacement — souvent en silence, en pointant vers un
+    chemin qui n'existe pas.
+    """
+    d = os.path.dirname(os.path.abspath(__file__))
+    while d != os.path.dirname(d):
+        if os.path.isdir(os.path.join(d, "src")):
+            return d
+        d = os.path.dirname(d)
+    raise RuntimeError("racine du depot introuvable depuis " + __file__)
+
+
+_REPO_ROOT = _repo_root()
 _HP = os.path.join(_REPO_ROOT, "results", "hyperparams")
 _STUDIES = os.path.join(_HP, "optuna_studies")
 _DOC = os.path.join(_HP, "PROVENANCE.md")

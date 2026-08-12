@@ -160,16 +160,85 @@ def _spectral_div(fx, fy, dx):
                                 + 1j * KY * np.fft.fft2(fy)))
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS)
+#: Scenarios dont le champ magnetique initial est solenoidal PAR
+#: CONSTRUCTION. Les autres posent une perturbation qui ne l'est pas, et
+#: comptaient sur `enforce_incompressibility` pour la rattraper — voir D-27.
+SOLENOIDAL_BY_CONSTRUCTION = [
+    "kelvin_helmholtz", "orszag_tang", "magnetic_twist", "ghost_twisting",
+    "lamb_oseen_vortex", "mhd_rotor",
+]
+
+#: D-27 — les autres, avec la part de perturbation que la projection leur
+#: laissait. Mesure a N=64, |By| max avec projection / sans projection :
+#:
+#:   harris_tearing      27.5 %       island_coalescence  27.5 %
+#:   noisy_uniform       55.7 %       double_tearing      77.3 %
+#:
+#: `harris_tearing` est un des quatre scenarios DEPLOYES : le mode de
+#: dechirement y etait amorce a 27.5 % de son amplitude nominale. La
+#: correction propre est d'ecrire la perturbation comme le rotationnel
+#: d'une fonction de flux — solenoidale par construction — ce qui change
+#: les champs et donc tout nombre publie. Decision en attente.
+NOT_SOLENOIDAL_AT_INIT = {
+    "harris_tearing": 2.801e-3,
+    "double_tearing": 9.062e-4,
+    "island_coalescence": 1.400e-2,
+    "noisy_uniform": 4.947e-1,
+}
+
+
+@pytest.mark.parametrize("scenario", SOLENOIDAL_BY_CONSTRUCTION)
 def test_the_magnetic_field_starts_solenoidal(scenario):
-    """div B = 0 est une contrainte physique, pas une preference."""
+    """Solenoidal SANS projection : la contrainte tient par construction.
+
+    Ce test passait sur les dix scenarios tant que `enforce_incompressibility`
+    projetait B. En cessant de le faire (D-25), quatre d'entre eux se sont
+    reveles non solenoidaux — la projection les rattrapait, en amputant leur
+    perturbation.
+    """
     s = _sim(scenario)
     dx = s.grid.dx
-    b_rms = float(np.sqrt(np.mean(s.Bx ** 2 + s.By ** 2))) + 1e-30
+    b_rms = float(np.sqrt(np.mean(s.Bx**2 + s.By**2)))
+    if b_rms < 1e-12:
+        pytest.skip("champ magnetique nul")
     rel = float(np.max(np.abs(_spectral_div(s.Bx, s.By, dx)))) * dx / b_rms
     assert rel < 1e-10, (
-        f"{scenario} : div B spectrale relative {rel:.3e} des "
-        "l'initialisation")
+        f"{scenario} : div B spectrale relative {rel:.3e} des l'initialisation")
+
+
+@pytest.mark.parametrize("scenario,expected", sorted(NOT_SOLENOIDAL_AT_INIT.items()))
+def test_the_four_seeded_scenarios_are_still_not_solenoidal(scenario, expected):
+    """D-27 fige : ces quatre-la posent une perturbation non solenoidale.
+
+    A retourner le jour ou elles seront ecrites comme le rotationnel d'une
+    fonction de flux. En attendant, le nombre est ecrit pour qu'une derive
+    se voie.
+    """
+    s = _sim(scenario)
+    dx = s.grid.dx
+    b_rms = float(np.sqrt(np.mean(s.Bx**2 + s.By**2)))
+    rel = float(np.max(np.abs(_spectral_div(s.Bx, s.By, dx)))) * dx / b_rms
+    assert rel == pytest.approx(expected, rel=0.25), (
+        f"{scenario} : div B relative {rel:.3e}, attendu ~{expected:.1e}")
+
+
+def test_projecting_B_amputates_the_tearing_seed():
+    """Le cout de la projection sur un scenario DEPLOYE, mesure.
+
+    `harris_tearing` amorce son mode de dechirement par
+    `dBy = eps cos(kx) sech^2`. La projection en retire 72.5 %.
+    """
+    old = MHDSolver.PROJECT_B
+    try:
+        MHDSolver.PROJECT_B = False
+        a = _sim("harris_tearing")
+        MHDSolver.PROJECT_B = True
+        b = _sim("harris_tearing")
+    finally:
+        MHDSolver.PROJECT_B = old
+    kept = float(np.max(np.abs(b.By)) / np.max(np.abs(a.By)))
+    assert kept == pytest.approx(0.275, abs=0.05), (
+        f"la projection conserve {kept:.1%} de la perturbation")
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
@@ -374,17 +443,63 @@ def test_magnetic_twist_keeps_a_nonzero_guide_component():
         f"|By| = {np.max(np.abs(s.By)):.3e} : la composante guide a disparu")
 
 
-def test_ghost_twisting_is_localised():
-    """La torsion « fantome » doit etre concentree, pas globale."""
-    s = _sim("ghost_twisting")
-    energy = s.vx ** 2 + s.vy ** 2 + s.Bx ** 2 + s.By ** 2
-    assert float(energy.max()) > 3 * float(np.median(energy)), (
-        "la structure n'est pas localisee")
+def test_ghost_twisting_rotates_the_direction_and_stays_solenoidal():
+    """D-26 : la version precedente posait un champ IMPOSSIBLE.
+
+    Elle ecrivait `Bx = cos(alpha(y))`, `By = sin(alpha(y))` en annoncant
+    « Bx^2 + By^2 TOUJOURS egal a 1.0 ». Ce champ a
+    `div B = alpha'(y) cos(alpha) != 0` : en 2-D, un champ solenoidal dont
+    la direction tourne exige que la composante le long de la variation
+    reste constante. Amplitude constante et direction tournante sont
+    incompatibles.
+
+    `enforce_incompressibility` rattrapait la divergence — en detruisant le
+    scenario. Mesure a N=64 :
+
+      avec projection   |B| de 0.0607 a 1.0000, angle 0.0267 rad
+      sans projection   |B| = 1.0000 exact,     angle 2.9595 rad,
+                        mais div B relative = 1.25
+
+    Le scenario ne posait AUCUNE torsion : 0.027 rad au lieu de ~pi. Meme
+    defaut que D-6 sur `init_magnetic_twist`, meme correction : un champ
+    guide constant porte la composante le long de la variation.
+
+    Le defaut n'a ete VU que parce que D-25 a cesse de projeter B. Tant que
+    la projection masquait la divergence, le scenario paraissait sain.
+    """
+    sim = _sim("ghost_twisting")
+    dx = sim.grid.dx
+    b_rms = float(np.sqrt(np.mean(sim.Bx**2 + sim.By**2)))
+
+    # solenoidal PAR CONSTRUCTION, pas grace a une projection
+    rel = float(np.max(np.abs(_spectral_div(sim.Bx, sim.By, dx)))) * dx / b_rms
+    assert rel < 1e-12, f"div B spectrale relative {rel:.3e}"
+
+    # la direction balaie un angle FINI — c'est la raison d'etre du scenario
+    ang = np.arctan2(sim.By, sim.Bx)
+    assert ang.max() - ang.min() > 1.0, (
+        f"amplitude d'angle {ang.max() - ang.min():.4f} rad : le scenario ne "
+        "pose pas de torsion")
+
+    # |B| n'est PLUS constant, et ne peut pas l'etre : on fige la borne
+    mag = np.sqrt(sim.Bx**2 + sim.By**2)
+    assert mag.min() >= np.cos(np.pi / 4) - 1e-9
+    assert mag.max() < 1.3
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  3. Le scan de raffinement voit ces structures
-# ═══════════════════════════════════════════════════════════════════════
+def test_the_impossible_ghost_field_is_not_back():
+    """Fige l'impossibilite : (cos a, sin a) a une divergence non nulle."""
+    sim = _sim("ghost_twisting")
+    dx = sim.grid.dx
+    Y = sim.grid.Y
+    alpha = (np.pi / 2.0) * (np.tanh((Y - np.pi / 2) / 0.8)
+                             - np.tanh((Y - 3 * np.pi / 2) / 0.8) - 1.0)
+    bx, by = np.cos(alpha), np.sin(alpha)
+    rel = float(np.max(np.abs(_spectral_div(bx, by, dx)))) * dx / 1.0
+    assert rel > 0.1, (
+        f"div B relative {rel:.3e} : le champ d'amplitude constante serait "
+        "solenoidal, la contrainte 2-D ne tient plus")
+
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_the_classical_score_is_defined_and_bounded_on_every_scenario(scenario):

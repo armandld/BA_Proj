@@ -30,8 +30,7 @@ est réutilisable est importé — `MHDSolver`, `build_patch_hamiltonian`,
 **Recette de vérification**
 
 ```bash
-python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q -m "not slow"
-python -m pytest tests/v3 tests/v4 -q
+python -m pytest tests/ -q -m "not slow"
 python study/common/aggregate_master_table.py     # recalcule chaque nombre
 ```
 
@@ -623,7 +622,7 @@ normalisation because it *"kills the signal when the domain is uniformly
 active"*; the uncertainty window reintroduces that failure mode at the score
 level.
 
-Tests: `tests/v4/test_t17_uncertainty_window.py` (9).
+Tests: `tests/study/test_t17_uncertainty_window.py` (9).
 
 ---
 
@@ -707,7 +706,7 @@ the ground state also goes from 64.8-fold degenerate to unique.
 Note the control (`full` = 0.0000) holds in both arms, so the measurement
 chain is validated separately for each.
 
-Tests: `tests/v4/test_t18_window_counterfactual.py` (7), including a
+Tests: `tests/study/test_t18_window_counterfactual.py` (7), including a
 positive control — the instrument is shown to detect a change when one
 exists, without which "changed = 0" everywhere would prove nothing.
 
@@ -2217,7 +2216,7 @@ indistinguishable from a valid one**. Twelve were found by auditing code:
 | a CLI mode accepted and documented but never implemented | 1× | `--mode no-leak`: only the filename changed |
 
 **Four of the twelve were in the verification code written to catch the
-others**, and three more were found only by `tests/v4/test_silent_failure_sweep.py`,
+others**, and three more were found only by `tests/study/test_silent_failure_sweep.py`,
 which sweeps the mechanically checkable forms. Searching as you go is
 demonstrably not enough.
 
@@ -2276,8 +2275,8 @@ afterwards.
 Base commit `d3d8fe6`. Commands:
 
 ```bash
-python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q
-python -m pytest tests/v3 tests/v4 -q
+python -m pytest tests/ --ignore=tests/study -q
+python -m pytest tests/study -q
 ```
 
 ## Before: 44 of 175 tests were failing, and no green gate existed
@@ -2762,8 +2761,8 @@ déjà r = +0.000 avec la vraie densité de courant.
 | fichier | tests | ce qu'ils verrouillent |
 |---|---|---|
 | `tests/test_analytic_fields.py` | 36 | les cinq grandeurs nommées contre des champs à réponse connue ; l'invariance bit-à-bit du chemin par défaut |
-| `tests/v4/test_fixed_curl_variant.py` | 7 | le drapeau change vraiment quelque chose, atteint θ à travers l'encodeur ψ, et suffixe son artefact |
-| `tests/v4/test_curl_convention_gap.py` | 14 | budget apparié, Spearman, bootstrap par scénario, verdict sans IC interdit |
+| `tests/study/test_fixed_curl_variant.py` | 7 | le drapeau change vraiment quelque chose, atteint θ à travers l'encodeur ψ, et suffixe son artefact |
+| `tests/study/test_curl_convention_gap.py` | 14 | budget apparié, Spearman, bootstrap par scénario, verdict sans IC interdit |
 
 Les trois mutations essayées sur `tests/test_analytic_fields.py` (axes
 échangés dans `forward_curl_z`, `curl_z` ignorant son drapeau, `fixed_curl`
@@ -3505,7 +3504,7 @@ que ces mentions y restent.
 
 ## Tests
 
-`tests/v4/test_no_private_curl_survives.py`, 26 tests. Ils verrouillent les
+`tests/study/test_no_private_curl_survives.py`, 26 tests. Ils verrouillent les
 **deux côtés** de D2 et D3 : la version gelée doit rester fausse à
 l'identique (sans quoi les artefacts de phase 1b cessent d'être
 reproductibles), et la copie corrigée doit être juste. Un test de plus est un

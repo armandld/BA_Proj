@@ -13,7 +13,24 @@ import warnings
 import numpy as np
 import pytest
 
-_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _repo_root():
+    """Racine du depot : on remonte jusqu'au dossier qui contient `src/`.
+
+    Un calcul par `dirname` repete depend de la profondeur du fichier et
+    casse au premier deplacement — souvent en silence, en pointant vers un
+    chemin qui n'existe pas.
+    """
+    d = os.path.dirname(os.path.abspath(__file__))
+    while d != os.path.dirname(d):
+        if os.path.isdir(os.path.join(d, "src")):
+            return d
+        d = os.path.dirname(d)
+    raise RuntimeError("racine du depot introuvable depuis " + __file__)
+
+
+_REPO = _repo_root()
 _SRC = os.path.join(_REPO, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)

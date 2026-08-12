@@ -151,20 +151,47 @@ class MHDSolver:
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
 
-    def init_ghost_twisting(self, twist_width=0.8):
+    def init_ghost_twisting(self, twist_width=0.8, B0=1.0):
         """
-        Scénario 'Fantôme' : Amplitude de B constante, seule la phase tourne.
-        Le critère classique |grad(B)| est trompé si on regarde la magnitude.
+        Scénario 'Fantôme' : la direction de B tourne sans discontinuité
+        d'amplitude. Le critère classique |grad(B)| y est peu sensible.
+
+        LA VERSION PRÉCÉDENTE POSAIT UN CHAMP IMPOSSIBLE. Elle écrivait
+        `Bx = cos(alpha(y))`, `By = sin(alpha(y))` en annonçant « Bx² + By²
+        TOUJOURS égal à 1.0 ». Ce champ a
+        `div B = alpha'(y) cos(alpha) != 0` : en 2-D, un champ solénoïdal
+        dont la direction tourne exige que la composante le long de la
+        variation reste CONSTANTE. Amplitude constante et direction
+        tournante sont incompatibles.
+
+        `enforce_incompressibility` rattrapait donc la divergence — en
+        détruisant le scénario. Mesuré à N=64 :
+
+          avec projection   |B| de 0.0607 à 1.0000, angle 0.0267 rad
+          sans projection   |B| = 1.0000 exact,     angle 2.9595 rad,
+                            mais div B relative = 1.25
+
+        Le scénario ne posait aucune torsion : 0.027 rad au lieu de ~pi.
+        C'est le même défaut que D-6 sur `init_magnetic_twist`, et la même
+        correction : un champ guide constant porte la composante le long de
+        la variation, la composante transverse porte la rotation.
+
+        Ce qui est perdu au passage, et qui ne pouvait pas exister : |B|
+        n'est plus rigoureusement constant. Il varie de `b_guide` à `B0`.
+        Le scénario reste un test de détection de phase — la direction
+        balaie bien un angle fini — mais il n'est plus « fantôme » au sens
+        d'une amplitude parfaitement plate.
         """
         X, Y = self.grid.X, self.grid.Y
-        
-        # L'angle alpha tourne de 0 à pi
-        alpha = (np.pi / 2.0) * (np.tanh((Y - np.pi/2) / twist_width) 
+
+        # L'angle parcourt [-pi/2, +pi/2] entre les deux interfaces
+        alpha = (np.pi / 2.0) * (np.tanh((Y - np.pi/2) / twist_width)
                                 - np.tanh((Y - 3*np.pi/2) / twist_width) - 1.0)
-        
-        # Bx et By changent, mais Bx^2 + By^2 est TOUJOURS égal à 1.0
-        self.Bx = np.cos(alpha)
-        self.By = np.sin(alpha)
+
+        # Solénoïdal PAR CONSTRUCTION : Bx ne dépend pas de x, By est constant.
+        b_guide = B0 * np.cos(np.pi / 4.0)
+        self.Bx = B0 * np.sin(alpha)
+        self.By = np.full_like(X, b_guide)
         
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
