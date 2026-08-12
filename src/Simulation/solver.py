@@ -492,9 +492,26 @@ class MHDSolver:
                 By + (dt / 2.0) * (k1[3] + k2[3]))
     
     #: Projeter le SECOND MEMBRE a chaque etage RK4 plutot que l'ETAT une
-    #: fois le pas fini. Voir `_rk4_step` pour la mesure d'ordre.
-    #: False reproduit bit-a-bit le chemin historique.
-    PROJECT_RHS = True
+    #: fois le pas fini. Voir `_rk4_step` pour la mesure d'ordre : 4.00 au
+    #: lieu de 1.22, a divergence egale.
+    #:
+    #: PAR DEFAUT False, malgre ce gain, parce que la correction n'est
+    #: VALIDE QUE SUR `step_full`. `_rk4_step` a trois appelants :
+    #:
+    #:   step_full       champ global periodique       -> projection valide
+    #:   step_layered/1  champ global sous-echantillonne -> periodique, mais
+    #:                   d'une autre TAILLE que self.grid : la projection
+    #:                   leve (operands could not be broadcast, (256,256)
+    #:                   contre (8,8))
+    #:   step_layered/2  patch LOCAL avec halo          -> pas periodique,
+    #:                   une projection spectrale periodique n'y est pas
+    #:                   definie
+    #:
+    #: Projeter les deux premiers et pas le troisieme romprait la garantie
+    #: « a max_depth, step_layered est identique a step_full ». Le choix
+    #: — projection par taille de grille, formulation a pression, ou autre —
+    #: est une decision de modelisation, pas une correction de defaut.
+    PROJECT_RHS = False
 
     def _projected_rhs(self, vx, vy, Bx, By, dx, nu, eta):
         """Second membre rendu a divergence nulle avant integration.

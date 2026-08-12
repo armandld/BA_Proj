@@ -88,9 +88,9 @@ initiale est l'identité.
 Le système est **différentiel-algébrique** : l'ordre chute parce que la
 contrainte est imposée *après* un pas RK4 non contraint.
 
-**Corrigé.** En projetant le **second membre** à chaque étage, le champ
-intégré est à divergence nulle par construction et RK4 garde son ordre.
-Mesuré dans les mêmes conditions :
+**Mesuré, non appliqué.** En projetant le **second membre** à chaque étage,
+le champ intégré est à divergence nulle par construction et RK4 garde son
+ordre :
 
 | schéma | erreur à 256 pas | ordre | max\|div v\| |
 |---|---|---|---|
@@ -101,6 +101,18 @@ Mesuré dans les mêmes conditions :
 La correction rend les deux : l'ordre 4 — erreur 52 000 fois plus petite —
 et le contrôle de la divergence au même niveau. Ne pas projeter du tout
 donne l'ordre 4 mais laisse la divergence exploser d'un facteur 1150.
+
+Elle n'est cependant **valide que sur `step_full`**. `step_layered` appelle
+le même intégrateur sur un champ global sous-échantillonné (autre taille de
+grille) et sur des patchs locaux **non périodiques**, où une projection
+spectrale périodique n'est pas définie. L'appliquer aux uns et pas aux
+autres romprait la garantie « à `max_depth`, `step_layered` est identique à
+`step_full` ».
+
+Pour ce papier, la chute d'ordre est donc **documentée comme limite**, avec
+sa cause et sa correction connues. Elle est **commune aux deux bras** : elle
+ne biaise pas leur comparaison, elle comprime la plage dans laquelle un
+meilleur critère pourrait se distinguer.
 
 Candidat non testé : la projection est spectrale alors que le second membre
 est aux différences finies d'ordre 4 — deux opérateurs de divergence

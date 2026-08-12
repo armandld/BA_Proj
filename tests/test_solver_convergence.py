@@ -532,14 +532,36 @@ def test_the_divergence_stays_as_well_controlled_as_before():
         "la contrainte")
 
 
-def test_the_projected_rhs_is_divergence_free_at_every_stage():
-    """La propriete qui fait tout marcher, verifiee directement."""
+def test_the_projected_rhs_is_divergence_free_in_the_SPECTRAL_sense():
+    """La propriete qui fait tout marcher — mais dans le bon operateur.
+
+    Ce test exigeait d'abord une divergence AUX DIFFERENCES FINIES nulle.
+    Elle vaut 1.15e-02, et ce n'est pas un defaut de la projection : celle-ci
+    est SPECTRALE, elle annule la divergence de Fourier, pas celle du
+    stencil FD d'ordre 4. Les deux operateurs ne coincident pas — c'est
+    l'incompatibilite deja signalee entre le second membre (FD4) et la
+    projection (FFT).
+
+    Le test verifie donc ce que la projection promet reellement : appliquee
+    deux fois, elle ne change plus rien (idempotence), et la divergence
+    SPECTRALE tombe a la precision machine.
+    """
     s = _Solver(_Grid(64), dt=1e-3, Re=400, Rm=400)
     s.init_orszag_tang()
     kvx, kvy, kBx, kBy = s._projected_rhs(s.vx, s.vy, s.Bx, s.By,
                                           s.dx, None, None)
+    P = s.grid.project_divergence_free
     for a, b in ((kvx, kvy), (kBx, kBy)):
-        assert _np.max(_np.abs(_div(a, b, True))) < 1e-10
+        a2, b2 = P(a, b)
+        assert _np.max(_np.abs(a2 - a)) < 1e-10, "projection non idempotente"
+        assert _np.max(_np.abs(b2 - b)) < 1e-10
+        # divergence spectrale
+        n = a.shape[0]
+        k = _np.fft.fftfreq(n, d=1.0 / n)
+        KX, KY = _np.meshgrid(k, k, indexing="ij")
+        dh = 1j * KX * _np.fft.fft2(a) + 1j * KY * _np.fft.fft2(b)
+        rel = _np.max(_np.abs(dh)) / (_np.max(_np.abs(_np.fft.fft2(a))) + 1e-30)
+        assert rel < 1e-10, f"divergence spectrale relative {rel:.3e}"
 
 
 def test_the_projected_rhs_is_not_annihilated():
@@ -574,9 +596,24 @@ def test_the_field_still_moves_under_the_corrected_scheme():
     assert disp[True] == _pytest.approx(disp[False], rel=0.05)
 
 
-def test_the_corrected_path_is_the_default():
-    """Une correction derriere un drapeau par defaut a False n'en est pas une."""
-    assert _Solver.PROJECT_RHS is True
+def test_the_correction_is_off_by_default_and_the_reason_is_written():
+    """PROJECT_RHS reste a False : la correction n'est valide que sur
+    `step_full`. `step_layered` appelle `_rk4_step` sur un champ global
+    sous-echantillonne (autre taille que self.grid) et sur des patchs
+    locaux non periodiques, ou une projection spectrale periodique n'est
+    pas definie.
+
+    Ce test verifie que la raison est ECRITE dans le code, pas seulement
+    dans un rapport : un drapeau desactive sans justification se fait
+    reactiver par erreur.
+    """
+    import inspect
+    assert _Solver.PROJECT_RHS is False
+    src = inspect.getsource(_Solver)
+    head = src[:src.index("def _projected_rhs")]
+    for marker in ("step_full", "step_layered", "patch LOCAL",
+                   "pas periodique"):
+        assert marker in head, f"la raison ne mentionne pas {marker}"
 
 
 def test_strang_would_have_changed_nothing():

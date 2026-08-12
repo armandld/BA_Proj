@@ -3835,9 +3835,46 @@ splitting symétrique suppose deux *flots* découpables en demi-pas, alors que
 la projection est un **projecteur idempotent**. Vérifié : `P ∘ RK4 ∘ P` rend
 des erreurs identiques à `P ∘ RK4` à la dernière décimale.
 
-Implémenté derrière `MHDSolver.PROJECT_RHS`, par défaut `True`, le chemin
-historique restant reproductible bit à bit. Vérifié par `step_full` — donc
-le chemin déployé, pas une reconstruction.
+## La correction n'est pas applicable en l'état — `PROJECT_RHS = False`
 
-**Conséquence** : tout nombre publié passant par `step_full` change. La
-campagne entière est à relancer, ce qui était déjà le cas pour D-22.
+J'ai d'abord activé la correction par défaut. **Elle casse le chemin AMR**,
+et la suite de tests l'a montré : huit échecs, dont six sur des tests
+préexistants.
+
+`_rk4_step` a **trois** appelants, pas un :
+
+| appelant | champ | projection |
+|---|---|---|
+| `step_full` | global périodique | **valide** |
+| `step_layered` phase 1 | global **sous-échantillonné** | lève — `(256,256)` contre `(8,8)` |
+| `step_layered` phase 2 | **patch local** avec halo | **pas périodique** : une projection spectrale périodique n'y est pas définie |
+
+Projeter les deux premiers et pas le troisième romprait la garantie « à
+`max_depth`, `step_layered` est identique à `step_full` » — propriété
+documentée et testée.
+
+Le drapeau reste donc à `False`, avec la raison écrite dans le code et un
+test qui vérifie qu'elle y reste. Le choix — projection par taille de
+grille, formulation à pression, ou autre — est une **décision de
+modélisation**, pas une correction de défaut.
+
+Trois voies, par coût croissant :
+
+1. **Laisser en l'état.** Le solveur reste d'ordre 1,2, mesuré et documenté
+   comme limite. La chute est **commune aux deux bras**, donc elle ne biaise
+   pas leur comparaison.
+2. **Projection par taille de grille**, plus une décision sur les patchs non
+   périodiques. Casse probablement la garantie AMR.
+3. **Formulation à pression** — la voie propre, mais c'est réécrire le cœur
+   du solveur.
+
+## Un test à moi était faux
+
+`test_the_projected_rhs_is_divergence_free_at_every_stage` exigeait une
+divergence **aux différences finies** nulle. Elle vaut 1,15e−2 — et ce n'est
+pas un défaut de la projection : celle-ci est **spectrale**, elle annule la
+divergence de Fourier, pas celle du stencil FD4. C'est exactement
+l'incompatibilité déjà signalée entre le second membre (FD4) et la
+projection (FFT). Mauvais opérateur choisi. Le test vérifie désormais ce que
+la projection promet réellement : idempotence, et divergence **spectrale** à
+la précision machine.
