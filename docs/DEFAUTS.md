@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **3** |
+| **ouverts** — décision ou campagne requise | **4** |
 | **gelés** volontairement | 2 |
 
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
@@ -152,6 +152,101 @@ seconde option est défendable — mais alors il faut le dire.
 
 ```bash
 python src/train_hyperparams.py --print-space
+```
+
+---
+
+## D-39 — le check de tearing n'a plus de signal avec l'observable corrigée
+
+**Où ça bloque.** `dns_validation.main()` classe **harris_tearing comme
+WEAK sur les 4 Re canoniques** (400/800/1200/1600) et sur les deux
+résolutions supplémentaires présentes dans `results/` (N64, N96). C'est le
+seul des trois checks 1b (OT, KH, tearing) qui porte sur la reconnexion :
+le pipeline de validation phase 1b a perdu son seul signal qualitatif de
+reconnexion magnétique, silencieusement, depuis D-21.
+
+**Comment on est tombé dessus.** `memory#3` (revue d'Evening) signale que
+`claude/kind-babbage-927g10` aurait « cassé son propre gel de
+reproductibilité » : `analyse_one` appelle désormais
+`mean_sq_current_fixed` au lieu de `mean_sq_current` (`be72b519`, D-21),
+quatre commits après que `2b4f400` (D-18) a restauré les FONCTIONS gelées.
+
+Vérification indépendante du texte du gel d'abord : `2b4f400` et `be72b51`
+sont explicites — « le gel porte sur les FONCTIONS, pas sur l'analyse »
+(commentaire dans `dns_validation.py:176-183`, repris dans `DEFAUTS.md`
+lui-même, section « Gelés volontairement » ci-dessous). Rien n'a été
+« cassé » au sens d'une décision annulée : `analyse_one` n'a jamais été
+gelée, seules `mean_sq_current`/`fluctuating_KE` le sont, et la reproduire
+en l'état reproduirait le défaut D3 documenté.
+
+Mais l'**effet** qu'Evening rapporte est réel — vérifié indépendamment en
+rejouant `check_tearing` sur les 6 fichiers DNS `harris_tearing` présents
+dans `results/`, avec `J2` calculé soit par `mean_sq_current` (brut, gelé,
+= l'ancien câblage d'`analyse_one` avant D-21) soit par
+`mean_sq_current_fixed` (corrigé, câblage actuel) :
+
+| Re | N | amplification ANCIEN (brut) | ok | amplification ACTUEL (corrigé) | ok |
+|---|---|---|---|---|---|
+| 400 | 64 | 1.53× | **True** | 1.000× | **False** |
+| 400 | 96 | 1.96× | **True** | 1.000× | **False** |
+| 400 | 256 | 2.65× | **True** | 1.000× | **False** |
+| 800 | 96 | 2.27× | **True** | 1.039× | **False** |
+| 1200 | 96 | 2.35× | **True** | 1.063× | **False** |
+| 1600 | 96 | 2.40× | **True** | 1.077× | **False** |
+
+**Hypothèse de cause, non tranchée.** `mean_sq_current(_fixed)` moyenne
+`J_z²` sur **tout le domaine**, y compris le courant d'équilibre de la
+nappe de Harris, `J_z0(y)`, uniforme le long de `AXIS_X` (= axe 0) et donc
+non nul dès `t=0`. Ce fond domine la moyenne spatiale et ne croît presque
+pas pendant la simulation (amplification 1,00–1,08×). La version brute
+(défaut D3 : `∂By/∂y − ∂Bx/∂x`, une combinaison de DÉFORMATION) est nulle
+par construction sur l'équilibre de la nappe (cisaillement pur) — elle
+ignore donc *par accident* le fond stationnaire et ne répond qu'à la
+composante non homogène en x qui grandit réellement pendant la
+reconnexion. Le check qualitatif marchait avec le défaut D3 en jouant, sans
+le vouloir, le rôle d'un filtre passe-haut que la version corrigée n'a pas.
+
+Comparer aux séries temporelles : sur `Re400_N256`, `J2` (corrigé)
+DÉCROÎT de façon monotone de `t=0` à `t=1.91` (0.000851 → 0.000802) ; `J2`
+(brut) décroît puis remonte d'un facteur 3,5× après `t≈0.9` — le profil
+qualitatif attendu d'une instabilité de reconnexion.
+
+**Ce que ce n'est pas.** Ni un bug de `mean_sq_current_fixed` (verrouillée
+par 22+26 tests dans `test_t8_dns_extension.py` /
+`test_no_private_curl_survives.py`, formule conforme à la convention
+`AXIS_X=0`/`AXIS_Y=1`), ni le gel remis en cause (les fonctions gelées
+restent inchangées). C'est `check_tearing` — ou le choix d'observable
+qu'`analyse_one` lui fournit — qui ne sépare pas fond stationnaire et
+croissance de la reconnexion.
+
+**Où on en est.** Pas corrigé. Deux issues possibles, à trancher : (a)
+`check_tearing` compare une composante **fluctuante** de `J²` — soustraire
+la moyenne le long de `AXIS_X`, comme `fluctuating_ke_fixed` le fait déjà
+pour `Ep` — plutôt que la moyenne pleine grille ; (b) la fenêtre
+`[0, t_max]` actuelle de `harris_tearing` ne développe simplement pas assez
+la reconnexion pour que le signal dépasse le fond dans une moyenne globale,
+et c'est la scène (ou `t_max`) qu'il faut revoir. Ne pas rebrancher
+`analyse_one` sur les fonctions gelées : ce serait réintroduire D3 pour
+faire retomber `ok=True`, exactement la « recorrection par erreur » que ce
+fichier existe pour empêcher.
+
+```bash
+python3 -c "
+import sys, glob, re, numpy as np
+sys.path.insert(0, 'study/pipeline'); sys.path.insert(0, 'src')
+import dns_validation as dv
+for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
+    d = np.load(path)
+    vx=d['vx'].astype(float); vy=d['vy'].astype(float)
+    Bx=d['Bx'].astype(float); By=d['By'].astype(float); t=d['t'].astype(float)
+    n = vx.shape[0]
+    J2f = np.array([dv.mean_sq_current_fixed(Bx[i],By[i]) for i in range(n)])
+    J2r = np.array([dv.mean_sq_current(Bx[i],By[i]) for i in range(n)])
+    cf = dv.check_tearing({'t':t,'J2':J2f}); cr = dv.check_tearing({'t':t,'J2':J2r})
+    m = re.search(r'Re(\d+)_N(\d+)', path)
+    print(m.group(0), 'fixed', cf['ok'], round(cf['amplification'],3),
+          '| raw', cr['ok'], round(cr['amplification'],3))
+"
 ```
 
 ---
