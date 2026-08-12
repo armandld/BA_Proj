@@ -23,7 +23,7 @@ Aucune couleur, aucune fonction n'est redefinie ici.
 
 DEUX DENOMINATEURS, ET POURQUOI ILS DIFFERENT.
 
-Le rapport annote ici n'est PAS celui des tableaux de RESULTS_V4.md, et
+Le rapport annote ici n'est PAS celui des tableaux de RESULTS.md, et
 c'est voulu :
 
   - figure  : phys(Q-HAS) / frontiere INTERPOLEE au budget REALISE par

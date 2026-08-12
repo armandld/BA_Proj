@@ -146,7 +146,7 @@ def test_each_cell_maps_to_its_own_qubit():
 # cinq tests ci-dessous passaient des comptes bruts : ils figeaient une
 # tolerance qui rendait indetectable le cas ou l'amont oublierait de
 # diviser par le nombre de tirs. Voir tests/test_vqa_chain_contracts.py
-# pour l'audit complet et D-15 dans docs/RESULTS_V4.md.
+# pour l'audit complet et D-15 dans docs/RESULTS.md.
 
 def test_postprocess_reads_the_bitstring_right_to_left():
     """Convention : le bit le PLUS A DROITE est le qubit 0.

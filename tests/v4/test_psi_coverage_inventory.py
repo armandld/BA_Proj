@@ -126,7 +126,7 @@ def test_the_unwired_scripts_really_run_with_psi_zero():
         assert not _passes_with_psi(callers[name]), (
             f"{name} passe desormais with_psi : le deplacer de "
             "PSI_STILL_ZERO vers PSI_WIRED dans cet inventaire, et "
-            "consigner le changement dans docs/RESULTS_V4.md")
+            "consigner le changement dans docs/RESULTS.md")
 
 
 def test_the_debt_is_not_silently_growing():

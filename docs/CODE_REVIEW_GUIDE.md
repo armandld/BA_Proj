@@ -26,7 +26,7 @@ byte-identically (a few minutes each).
 
 Consequences for your review:
 
-- the numbers in `RESULTS_V4.md` are **diffable**, not merely claims: run
+- the numbers in `RESULTS.md` are **diffable**, not merely claims: run
   `python study/v4/t16_aggregate_v4.py`, which recomputes every headline
   number from the artifacts and compares it to the published value. It must
   print `0 DIFF` (180 rows, 0 MISSING);
@@ -88,7 +88,7 @@ You will understand 80 % of the work from these:
 | 2 | `docs/level3_preregistration.md` | the decision rules, frozen *before* Level 3 ran. Check §4 against what §5 of this guide says I actually did |
 | 3 | `study/v4/t15c_fold_synthesis.py` | applies those rules; ~360 lines; where a bent rule would hide |
 | 4 | `study/v4/t19_arm_divergence_audit.py` | the catch that changed the conclusions (see §3) |
-| 5 | `study/v4/RESULTS_V4.md` | every number with its command and reading |
+| 5 | `study/v4/RESULTS.md` | every number with its command and reading |
 
 ---
 

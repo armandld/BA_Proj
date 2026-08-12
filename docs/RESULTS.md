@@ -1,27 +1,49 @@
-# V4 results log — experimental answer to the scientific audit
+# Résultats
 
-One entry per study, in the order they were run. The opening tasks answer
-the audit's proof blocks that are executable without the closed-loop
-campaign — **quantum attribution** (P0), **confirmatory statistics** (P0),
-**equivariance** (P1), **causal term ablations** (P1), **numerical
-validation** (P1) — and the later ones (T15–T23) are the Level-3 closed-loop
-campaign itself, which has since run on all four folds. Entries written
-before a result was superseded are kept, with the retraction stated in
-place; read *CLOSING THE CLOSED-LOOP STUDY* at the end for what stands.
+**Un résultat, comment il a été obtenu, donc comment le réobtenir.**
 
-Continuity rule: no V1/V2/V3 symbol is redefined. Everything reusable is
-imported — `MHDSolver`, `build_patch_hamiltonian`, `build_ising_terms`,
-`sa_multi_restart`, `spins_to_decisions`, `prepare_qaoa_inputs`,
-`run_qaoa_on_snapshot`, `div_B`, `total_energy`, `downsample_fields`,
-`bootstrap_by_trajectory`, `git_commit_hash`.
+Chaque entrée porte : la commande exacte, les conditions, les nombres, et le
+hash du commit qui les a produits. Un résultat qu'on ne sait pas refaire
+n'est pas un résultat — il n'a pas sa place ici.
 
-Test gate: **147 pytests pass** (118 v3 + 29 v4).
+| fichier | contenu |
+|---|---|
+| **`RESULTS.md`** (ce fichier) | les résultats et leur mode d'emploi |
+| `DEFAUTS.md` | les défauts : comment on est tombé dessus, comment tester s'ils sont encore là |
+| `PLAN_PREPRINT.md` | la structure du manuscrit |
 
-**All studies were re-run at production resolution N=256** (4 scenarios,
-Re=400, DNS regenerated here with `phase1_dns_sweep.run_dns`). Both the
-N=64 exploratory pass and the N=256 confirmation are reported; every
-qualitative conclusion is identical at the two resolutions. Section
-"N=256 confirmation" at the end gives the side-by-side table.
+Les entrées sont dans l'ordre où elles ont été produites. Celles qu'un
+résultat postérieur a dépassées sont **conservées, avec la rétractation
+écrite sur place** — c'est la trace de ce qui a été cru, et pourquoi ce
+n'est plus vrai.
+
+L'ordre historique fait apparaître des références à « V3 » et « V4 » : ce
+sont des étapes de l'étude, pas des versions du code. Les campagnes
+antérieures sont dans `docs/archive/`.
+
+**Règle de continuité** : aucun symbole de V1 n'est redéfini. Tout ce qui
+est réutilisable est importé — `MHDSolver`, `build_patch_hamiltonian`,
+`build_ising_terms`, `sa_multi_restart`, `spins_to_decisions`,
+`prepare_qaoa_inputs`, `run_qaoa_on_snapshot`, `div_B`, `total_energy`,
+`downsample_fields`, `bootstrap_by_trajectory`, `git_commit_hash`.
+
+**Recette de vérification**
+
+```bash
+python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q -m "not slow"
+python -m pytest tests/v3 tests/v4 -q
+python study/common/aggregate_master_table.py     # recalcule chaque nombre
+```
+
+Le troisième est le test de non-régression : il recalcule chaque nombre
+publié depuis son artefact. **État actuel : 164 OK / 16 DIFF / 0 MISSING** —
+les 16 écarts sont les nombres déplacés par les corrections, à republier
+après la réoptimisation (voir `DEFAUTS.md`).
+
+Toutes les études ont été relancées à la résolution de production **N=256**
+(4 scénarios, Re=400). Les deux passes — N=64 exploratoire et N=256 de
+confirmation — sont rapportées ; chaque conclusion qualitative est identique
+aux deux résolutions.
 
 ---
 
@@ -3759,7 +3781,7 @@ modification le jour où chaque valeur déployée sera traçable à un essai.
 
 # Correction d'une affirmation : le splitting de Strang ne s'applique pas ici
 
-J'ai écrit à plusieurs reprises, dans `docs/RESULTS_V4.md` et dans le plan,
+J'ai écrit à plusieurs reprises, dans `docs/RESULTS.md` et dans le plan,
 qu'« un splitting de Strang rendrait l'ordre 2 ». **C'est faux, et la mesure
 le montre.**
 

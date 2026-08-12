@@ -304,7 +304,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     # Optuna gelee l'echantillonne — son meilleur essai trouve 0.0230. Le
     # repli sur 0.05 n'est donc pas un defaut raisonnable : c'est une valeur
     # que rien n'a choisie, appliquee au parametre au coeur de D-9 (la
-    # largeur de la fenetre gaussienne). Voir D-22 dans docs/RESULTS_V4.md.
+    # largeur de la fenetre gaussienne). Voir D-22 dans docs/RESULTS.md.
     #
     # On ne leve pas — cela arreterait toute campagne en cours — mais le
     # repli est signale une fois et consigne dans les details du run, pour

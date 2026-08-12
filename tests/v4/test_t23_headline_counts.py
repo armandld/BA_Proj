@@ -102,7 +102,7 @@ def test_published_counts_match_the_artifacts():
     """Regression sur la valeur publiee apres correction : 18/18, 16/18, 16/18.
 
     Si ce test casse, c'est soit qu'un artefact a change, soit que le
-    decompte a re-derive — dans les deux cas RESULTS_V4.md doit etre repris
+    decompte a re-derive — dans les deux cas RESULTS.md doit etre repris
     en meme temps, jamais l'un sans l'autre."""
     rows = [r for r in (fold_counts(RESULTS, f) for f in FOLDS) if r]
     if len(rows) < 4:

@@ -116,7 +116,7 @@ def test_identical_inputs_give_different_outputs(repeated_scores):
     assert any(not np.array_equal(a, b) for b in repeated_scores[1:]), (
         "les appels repetes donnent des sorties identiques : le bras QAOA "
         "est devenu deterministe. Retablir alors les assertions d'egalite "
-        "exacte, et consigner le changement dans docs/RESULTS_V4.md")
+        "exacte, et consigner le changement dans docs/RESULTS.md")
 
 
 def test_the_spread_dwarfs_the_exact_tie_tolerance(repeated_scores):

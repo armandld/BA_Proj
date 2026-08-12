@@ -1,12 +1,16 @@
-# Registre des défauts
+# Défauts
 
-Index de référence. Une ligne par défaut, avec **la commande qui vérifie son
-état**. Pour savoir où on en est, lancer la commande — pas relire un rapport.
+**Comment on est tombé sur le défaut, donc comment tester s'il est encore là.**
 
-- Les **mesures détaillées** (avant/après, conditions) sont dans
-  `docs/RESULTS_V4.md`.
-- Le **contenu destiné au papier** est dans `docs/PLAN_PREPRINT.md`.
-- Ce fichier ne contient ni l'un ni l'autre : seulement l'état et la preuve.
+Chaque entrée dit : ce qui l'a révélé, et la commande qui vérifie son état
+aujourd'hui. Pour savoir où on en est, on lance la commande — on ne relit pas
+un rapport.
+
+| fichier | contenu |
+|---|---|
+| **`DEFAUTS.md`** (ce fichier) | les défauts, ce qui les a révélés, comment les retester |
+| `RESULTS.md` | les résultats, comment ils ont été obtenus, comment les réobtenir |
+| `PLAN_PREPRINT.md` | la structure du manuscrit |
 
 **Vérification globale**
 
@@ -15,6 +19,42 @@ python -m pytest tests/ --ignore=tests/v3 --ignore=tests/v4 -q -m "not slow"
 python -m pytest tests/v3 tests/v4 -q
 python study/common/aggregate_master_table.py     # 180 lignes, 0 DIFF attendu
 ```
+
+---
+
+## Ce qui a révélé ces défauts
+
+Douze des vingt-quatre viennent d'une seule question, et c'est celle par
+laquelle il faut commencer :
+
+> **Deux chemins censés coïncider coïncident-ils encore ?**
+
+Les trois autres questions de l'audit de contrat, par rentabilité
+décroissante : *pourquoi cette fonction existe-t-elle* — *que promet sa
+docstring* — *consomme-t-elle ce que sa signature annonce*.
+
+Aucun test de valeur ne pouvait les voir : **tous rendent un résultat
+plausible**, de la bonne forme, aux valeurs finies, dans le bon intervalle.
+C'est la seule classe de défaut qui compte ici — un plantage se voit, un NaN
+se voit.
+
+**Les huit patrons rencontrés**, avec le test qui révèle chacun :
+
+| patron | comment on le trouve |
+|---|---|
+| convention d'axes inversée | l'évaluer sur une **rotation solide** |
+| rôles échangés dans un tuple | un champ analytique où les deux rôles diffèrent |
+| index décalé d'un cran | un patch **symétrique** → sortie asymétrique |
+| troncature silencieuse | placer un pic dans la **dernière** cellule |
+| variable locale non réécrite | **rejouer** la trace et comparer |
+| repli silencieux | remonter au fichier censé fournir la valeur |
+| double comptage | sommer la couverture, exiger **exactement 1** |
+| valeur sans provenance | remonter à l'artefact qui devrait la produire |
+
+**Piège de validation à connaître** : sur Taylor-Green, deux conventions de
+rotationnel opposées rendent la *même* enstrophie, par symétrie de leurs
+carrés. Un test écrit sur ce champ passe sans rien vérifier. Toujours se
+demander : *sur quelle entrée les deux hypothèses divergent-elles ?*
 
 ---
 
@@ -187,7 +227,7 @@ s'interdit.
    test qui **épingle l'ancien comportement**, pour que la correction ne
    puisse pas être défaite en silence.
 5. Une ligne ici, avec la commande de vérification.
-6. Le détail dans `docs/RESULTS_V4.md`.
+6. Le détail dans `docs/RESULTS.md`.
 
 Un défaut sans mesure n'est pas un défaut : c'est une suspicion. Un défaut
 sans commande de vérification n'a pas sa place dans ce fichier.

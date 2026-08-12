@@ -1,7 +1,15 @@
 # BA_Proj — working context
 
-Spécification complète : `docs/protocol_v3_evaluation.md`. Résultats publiés :
-`docs/RESULTS_V3.md`, `docs/RESULTS_V4.md`, `docs/FINDINGS_V2.md`.
+Trois documents portent l'état du projet, avec des rôles disjoints :
+
+| fichier | contenu |
+|---|---|
+| `docs/DEFAUTS.md` | les défauts : ce qui les a révélés, comment tester s'ils sont encore là |
+| `docs/RESULTS.md` | les résultats : comment ils ont été obtenus, comment les réobtenir |
+| `docs/PLAN_PREPRINT.md` | la structure du manuscrit |
+
+Spécification du protocole : `docs/protocol_v3_evaluation.md`. Campagnes
+antérieures : `docs/archive/`.
 
 ## Contexte
 
@@ -52,11 +60,11 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 
 - **`src/` est l'objet d'étude.** Toute modification est un changement de
   comportement scientifique : elle doit être justifiée, testée et consignée
-  dans `docs/RESULTS_V4.md`. Elle n'est jamais faite « au passage ».
+  dans `docs/RESULTS.md`. Elle n'est jamais faite « au passage ».
 - **Un test qui ne peut pas échouer est un défaut.** Tout script de `study/`
   ou de `tests/` porte une assertion, et un balayage vide doit crier.
 - Chaque tâche livre : code + un pytest sous `tests/v3/` ou `tests/v4/` +
-  une entrée dans `docs/RESULTS_V4.md` (commande, hash git, nombres).
+  une entrée dans `docs/RESULTS.md` (commande, hash git, nombres).
 - Déterminisme : tout script accepte `--seed` et écrit le hash du commit et
   les arguments CLI complets dans ses `.npz`.
 - Réutiliser avant de réécrire : importer `build_dataset`,

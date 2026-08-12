@@ -5,7 +5,7 @@ POURQUOI CETTE TACHE EXISTE
 Le resultat le plus cite de l'etude — « Q-HAS est moins fidele que la regle
 classique appariee en budget sur 19/20 executions, plus couteux sur 18/20,
 strictement Pareto-domine sur 17/20 » — n'etait produit par AUCUN script.
-Il avait ete compose a la main dans `RESULTS_V4.md`, et ne se reproduisait
+Il avait ete compose a la main dans `RESULTS.md`, et ne se reproduisait
 pas depuis les artefacts. Deux ecarts :
 
   1. sur `kh`, les colonnes « moins fidele » et « plus couteux » etaient

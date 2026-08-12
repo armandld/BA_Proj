@@ -3,7 +3,7 @@
 **Purpose.** Single hand-off document gathering every result available for
 writing the final manuscript: what is established, with which numbers, at
 which scope, and what is still pending. It supersedes nothing — every number
-traces to `study/v4/RESULTS_V4.md`, `study/v3/RESULTS.md`,
+traces to `study/v4/RESULTS.md`, `study/v3/RESULTS.md`,
 `docs/v3_master_table_ca7f815.md` or the named `.npz`/`.json` outputs.
 
 **Reproducibility.** V3: `bash study/v3/run_study_v3.sh --all` → 51/51 OK at

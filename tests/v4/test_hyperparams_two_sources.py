@@ -92,7 +92,7 @@ def test_the_two_sources_really_disagree():
                  if k in d and abs(d[k] - cfg) > 1e-3 * max(abs(cfg), 1e-9)]
     assert len(differing) >= 6, (
         f"seulement {differing} different ; si les deux sources ont ete "
-        "reconciliees, mettre a jour ce fichier et RESULTS_V4.md")
+        "reconciliees, mettre a jour ce fichier et RESULTS.md")
     assert abs(d["w_z_frac"] - config.TRAINED_W_Z_FRAC) > 10.0, (
         "l'ecart de 100x sur w_z_frac a disparu")
 

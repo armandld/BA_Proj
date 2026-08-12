@@ -4,7 +4,7 @@
 **Scope:** 199 commits, 186 files, ~23 000 added lines
 (76 files are tracked artifacts under `study/results/`).
 **The closed-loop study is closed** — see *CLOSING THE CLOSED-LOOP STUDY*
-at the end of `study/v4/RESULTS_V4.md` for the one-sentence result, the
+at the end of `study/v4/RESULTS.md` for the one-sentence result, the
 evidence ranked by strength, and what would overturn it.
 
 **Read `docs/EVALUATION_CRITIQUE.md` before quoting any number.** It
@@ -279,7 +279,7 @@ study/v4/
   make_pareto_figure.py        single-fold figure
   make_pareto_panel.py         4-fold panel
   level3_status.py  run_fold.sh
-  RESULTS_V4.md                every number with its command
+  RESULTS.md                every number with its command
 tests/v4/                      70 tests
 figures_v4/                    pdf + png + csv per figure
 ```

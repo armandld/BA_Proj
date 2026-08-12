@@ -48,7 +48,7 @@ base de calcul — c'est la définition même d'un encodage QUBO/Ising d'un coû
 classique. La non-commutativité vient du **mixeur** (champ transverse), pas
 du coût. Si cet argument valait, QAOA serait inutile pour *tout* problème
 combinatoire, ce qui dépasse de très loin ce que ces données montrent.
-`RESULTS_V4.md` utilise correctement la diagonalité pour ce qu'elle vaut :
+`RESULTS.md` utilise correctement la diagonalité pour ce qu'elle vaut :
 une commodité de calcul (la diagonalisation exacte se réduit à une
 énumération, donc on peut vérifier l'optimum par force brute).
 
