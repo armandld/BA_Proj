@@ -67,6 +67,7 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-18 | garde de divergence à 1e100, inerte | 1e50 passait → seuil **1e8** | `pytest tests/solver/test_solver_guards_and_objective.py -k caught` |
 | D-26 | `init_ghost_twisting` pose un champ **impossible** | angle **0,027 → 1,906 rad** | `pytest tests/solver/test_scenarios_analytic.py -k ghost` |
 | — | `search_space` : 4 constantes présentées comme réglables | espace réel **5 paramètres**, pas 9 | `pytest tests/solver/test_solver_guards_and_objective.py -k search` |
+| D-28 | `hyperparams_loader` substituait en silence les paramètres de l'**autre bras** (`quantum`↔`classical`) quand celui demandé manquait, et choisissait le premier lambda par ordre alphabétique quand plusieurs coexistaient | substitution → **lève** ; choix arbitraire → **lève sauf lambda unique** | `pytest tests/study/test_hyperparams_two_sources.py -k "refuses or implicit"` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
@@ -107,6 +108,90 @@ Toutes les études ont été relancées à la résolution de production **N=256*
 (4 scénarios, Re=400). Les deux passes — N=64 exploratoire et N=256 de
 confirmation — sont rapportées ; chaque conclusion qualitative est identique
 aux deux résolutions.
+
+### D-28, en détail
+
+Trouvé en auditant par contrat `src/hyperparams_loader.py` (`VIGIL.md`, Q4 :
+deux chemins censés coïncider). Le correctif existait déjà — commit
+`0327ce1`, 12 tests dans `tests/study/test_hyperparams_two_sources.py` —
+mais n'avait de ligne ni dans `DEFAUTS.md` ni ici : exactement la déviation
+que `VIGIL.md` interdit de laisser non écrite. Cette entrée referme l'écart ;
+le correctif lui-même n'est pas de cette passe.
+
+**Avant** (`_load_new_format`, avant `0327ce1`) :
+
+```python
+entry = default.get(method)
+if entry is None:
+    # Fallback: try the other method
+    for m in ['quantum', 'classical']:
+        if m in default:
+            entry = default[m]
+            break
+if entry is None:
+    raise KeyError(f"No default {method} params found in JSON")
+```
+
+Demander `method='quantum'` sur un fichier ne portant que `classical`
+renvoyait donc les paramètres de l'**autre** bras, sans le signaler — la
+boucle essaie `'quantum'` puis `'classical'` dans cet ordre fixe, donc
+systématiquement, pas seulement par accident. `src/pipeline.py` ne peut pas
+distinguer ce cas d'un vrai jeu quantique : la comparaison des deux bras
+devient vide de sens, en silence. Second repli du même ordre : plusieurs
+`lambda_cost` pour une phase → le premier pris par ordre alphabétique, un
+choix arbitraire indiscernable d'un choix motivé.
+
+**Après** : `KeyError` explicite listant les bras disponibles pour le
+premier ; `KeyError` sauf lambda unique (choix alors forcé, donc licite)
+pour le second.
+
+**Mesuré** sur `results/hyperparams/best_hyperparams.json` (gelé) : les
+deux bras s'y chargent toujours normalement — non-régression — et les deux
+fautes lèvent sur les cas construits qui les provoquent
+(`test_the_loader_refuses_to_substitute_the_other_arm`,
+`test_the_loader_refuses_an_ambiguous_cost_weight`,
+`test_a_single_cost_weight_stays_implicit`).
+
+```bash
+pytest tests/study/test_hyperparams_two_sources.py -q
+```
+→ 12 passed (vérifié à `HEAD`, `claude/kind-babbage-927g10`).
+`python study/common/aggregate_master_table.py` inchangé (164 OK / 16 DIFF /
+0 MISSING) : cette entrée ne déplace aucun nombre publié.
+
+**Trouvé au passage, non corrigé.** Le bloc `per_scenario` du bras quantique
+contient quatre copies **identiques** du bloc `default` — aucun réglage n'y
+est réellement par scénario — et `orszag_tang`/`mhd_rotor` (2 des 4
+scénarios de l'étude) en sont absents pour les deux bras.
+`load_hyperparams(scenario=...)` n'est appelé nulle part dans le dépôt
+(`grep -rn "load_hyperparams(.*scenario" src/ study/` ne rend rien) : la
+branche est morte, aucun nombre publié n'en dépend aujourd'hui. Épinglé,
+pas corrigé, par `test_the_per_scenario_quantum_block_is_one_set_repeated`
+et `test_two_study_scenarios_have_no_per_scenario_entry` — pour que
+personne ne « répare » ce bloc en y recopiant `default`, ce qui masquerait
+le problème au lieu de le trancher.
+
+### Écart de registre trouvé en écrivant cette entrée — signalé, non corrigé
+
+En cherchant où consigner D-28, deux incohérences non liées à D-28 :
+
+- **Collision de numéro.** La section « D-18 » plus bas dans ce fichier
+  (« rectification : la moitié `fluctuating_KE` était déjà connue »)
+  raconte la déviation reclassée depuis comme **D2** dans `DEFAUTS.md`
+  (table « Gelés volontairement »). Le numéro D-18 désigne aujourd'hui,
+  dans la table ci-dessus et dans `DEFAUTS.md`, un défaut différent : la
+  garde de divergence à 1e100. Un lecteur qui suit
+  `DEFAUTS.md/RESULTS.md → D-18 → chercher "D-18" plus bas dans ce fichier`
+  tombe sur la mauvaise section. Survit à la réorganisation du 12 août.
+- **Compte de tête inexact.** Avant cette entrée, le titre de cette section
+  annonçait « Les 24 défauts corrigés » pour 23 lignes numérotées D-N dans
+  la table — un défaut d'écart au niveau du registre lui-même, pas du code.
+  L'ajout de D-28 le rend exact par coïncidence ; ne pas s'y fier comme
+  preuve que le compte était juste avant.
+
+Non corrigé ici : ni l'un ni l'autre n'est de mon audit, et je ne peux pas
+écrire leur mesure sans la fabriquer — mesurer, documenter, ne pas
+corriger sans la mesure, règle de `VIGIL.md`.
 
 ---
 
