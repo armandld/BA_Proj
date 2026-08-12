@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import zoom, map_coordinates
+from Simulation.grid import project_divergence_free_any
 from Simulation.utils import compute_local_factor
 
 class MHDSolver:
@@ -527,8 +528,11 @@ class MHDSolver:
         etages.
         """
         kvx, kvy, kBx, kBy = self._compute_rhs_fd(vx, vy, Bx, By, dx, nu, eta)
-        kvx, kvy = self.grid.project_divergence_free(kvx, kvy)
-        kBx, kBy = self.grid.project_divergence_free(kBx, kBy)
+        # Projection independante de la taille : `step_layered` calcule sa
+        # phase 1 sur le champ global SOUS-ECHANTILLONNE, qui reste
+        # periodique mais n'a plus la taille de la grille.
+        kvx, kvy = project_divergence_free_any(kvx, kvy)
+        kBx, kBy = project_divergence_free_any(kBx, kBy)
         return kvx, kvy, kBx, kBy
 
     def _rk4_step(self, vx, vy, Bx, By, dx, dt, nu=None, eta=None):

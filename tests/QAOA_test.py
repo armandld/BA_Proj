@@ -297,41 +297,34 @@ class TestZZGradient:
 #  TEST D: ZZZZ PLAQUETTE -- Lamb-Oseen vortex in top-left
 # ==============================================================================
 class TestZZZZPlaquette:
-    def test_the_vortex_gains_positive_contrast_once_the_curl_sees_it(self):
-        """A Lamb-Oseen vortex in the top-left DOES produce positive spatial
-        contrast.
+    def test_the_curl_correction_wakes_the_plaquette_coefficient(self):
+        """Le terme ZZZZ etait numeriquement mort sur un vortex.
 
-        Ce test affirmait le contraire — « -0.0058 +/- 0.0064 sur 12
-        tirages, le QAOA tire meme la cellule chaude vers le bas » — et il
-        mesurait bien ce qui se passait alors. Mais la cause n'etait pas le
-        QAOA : c'etait le defaut D-1. Le rotationnel des mappeurs etait
-        ecrit sous la convention `indexing='xy'` alors que la grille
-        construit ses champs en `indexing='ij'` ; une rotation solide
-        rendait donc exactement 0, et le terme ZZZZ de plaquette — dont la
-        seule raison d'etre est de detecter une circulation — etait
-        numeriquement mort sur un vortex pur.
+        Ce test affirmait d'abord que le vortex ne gagnait aucun contraste
+        spatial, puis — apres correction du rotationnel — qu'il en gagnait un.
+        Les DEUX assertions portaient sur le contraste de la DECISION, une
+        grandeur qui n'est pas reproductible a la precision requise : deux
+        executions de la meme configuration ont donne +0.0186 +/- 0.0067
+        (16 tirages) et +0.0053 +/- 0.0029 (8 tirages), un facteur 3.5
+        d'ecart. Une assertion « a plus de deux erreurs types » tombe alors
+        dans la zone ou la variation d'execution decide du verdict.
 
-        Attribution mesuree sur ce meme vortex, 16 tirages par ligne, tout
-        le reste egal :
+        Le test porte desormais sur le COEFFICIENT, qui est deterministe —
+        ecart nul entre appels repetes — et qui est ce que la correction du
+        rotationnel change reellement :
 
-          | fixed_curl | fixed_flux | contraste | ecart-type |  sigma | max|K| |
-          |------------|------------|-----------|------------|--------|--------|
-          | False      | False      |  -0.00725 |    0.00859 |  -3.4  | 0.0553 |
-          | False      | True       |  -0.00852 |    0.00896 |  -3.8  | 0.0553 |
-          | True       | False      |  +0.05672 |    0.03976 |  +5.7  | 1.2545 |
-          | True       | True       |  +0.07292 |    0.04429 |  +6.6  | 1.2545 |
+          fixed_curl=False   max|K| = 0.055278
+          fixed_curl=True    max|K| = 1.254506     rapport 22.7x
 
-        La ligne (False, False) reproduit la valeur historique a l'ecart-type
-        pres. Le coefficient de plaquette passe de 0.055 a 1.255 — vingt-trois
-        fois plus grand — des que le rotationnel voit la rotation.
+        Le rotationnel « legacy » vaut dfy/dy - dfx/dx : il est nul sur une
+        rotation solide, donc le terme de plaquette — dont la seule raison
+        d'etre est de detecter une circulation — etait aveugle aux vortex.
 
-        Reste vrai : theta_h[0,0] = pi, la cellule (0,0) part deja a
-        P(|1>) = 1 et n'a plus de marge ; et le tirage a 4096 coups bruite
-        chaque marginale a ~0.008. La moyenne sur REPEATS reste donc
-        indispensable — un tirage isole ne prouve rien.
+        Ce que ce test NE dit PAS : que le QAOA discrimine mieux un vortex.
+        Cet effet-la existe peut-etre, mais la mesure du depot ne le tranche
+        pas.
         """
         grid = make_grid()
-        mapper = make_mapper(grid)
         sim = MockSolver(grid)
         fields = uniform_fields(grid, v_bg=0.0, B_bg=0.5)
 
@@ -347,37 +340,31 @@ class TestZZZZPlaquette:
                 fields['vx'][i, j] += -v_theta * dy / r
                 fields['vy'][i, j] += v_theta * dx / r
 
-        theta_h, theta_v, psi_h, psi_v, mini_hp, raw_hp = run_pipeline(
-            fields, grid, mapper, sim)
-        print_coefficients(raw_hp, "ZZZZ plaquette")
+        nu = grid.L / RE
+        eta = grid.L / RM
 
-        REPEATS = 8
-        contrasts = []
-        for _ in range(REPEATS):
-            m = run_vqa(theta_h, theta_v, psi_h, psi_v, mini_hp)
-            c, prob_map = get_contrast(m)
-            contrasts.append(c)
-        contrasts = np.array(contrasts)
+        def max_K(fixed_curl):
+            m = PhysicalMapper(cs=CS, nu=nu, eta_mhd=eta, beta_curl=BETA_MIC,
+                               beta_xpoint=BETA_MIC, dx=grid.dx,
+                               fixed_curl=fixed_curl)
+            hp = m.compute_coefficients(sim, m.physical_score(fields),
+                                        fields, THRESHOLD,
+                                        advanced_anomalies_enabled=False)
+            return float(np.abs(hp['K_plaquettes']).max())
 
-        print(f"\n  [ZZZZ plaquette] theta_h = "
-              f"{np.array2string(theta_h, precision=4)}")
-        print(f"  [ZZZZ plaquette] contrasts = "
-              f"{np.array2string(contrasts, precision=5)}")
-        print(f"  [ZZZZ plaquette] mean = {contrasts.mean():+.5f}, "
-              f"std = {contrasts.std():.5f}")
-        for i in range(VQA_N):
-            print(f"    {['%.4f' % prob_map[i,j] for j in range(VQA_N)]}")
+        legacy, fixed = max_K(False), max_K(True)
+        print(f"\n  [ZZZZ plaquette] max|K| legacy={legacy:.6f} "
+              f"corrige={fixed:.6f} rapport={fixed / legacy:.2f}x")
 
-        sem = contrasts.std() / np.sqrt(REPEATS)
-        assert contrasts.mean() > 2.0 * sem, (
-            f"le vortex doit gagner un contraste positif distinct du bruit ; "
-            f"mesure {contrasts.mean():+.5f} +/- {sem:.5f} sur {REPEATS} "
-            f"tirages. S'il retombe a zero, le terme de plaquette a cesse de "
-            f"voir la circulation — verifier fixed_curl.")
-        assert (contrasts > 0).mean() >= 0.7, (
-            f"le signe doit etre stable ; seulement "
-            f"{(contrasts > 0).mean():.0%} des tirages sont positifs : "
-            f"{np.array2string(contrasts, precision=5)}")
+        assert max_K(True) == fixed, "le coefficient n'est pas deterministe"
+        assert legacy < 0.1, (
+            f"le rotationnel legacy rend max|K| = {legacy:.6f} : il n'est "
+            "plus aveugle au vortex, ce n'est plus le chemin historique")
+        assert fixed > 1.0, (
+            f"le rotationnel corrige rend max|K| = {fixed:.6f} : le terme de "
+            "plaquette ne voit plus la circulation")
+        assert fixed / legacy > 10.0, (
+            f"rapport {fixed / legacy:.2f}x, attendu > 10")
 
 
 # ==============================================================================

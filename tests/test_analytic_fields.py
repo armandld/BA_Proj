@@ -445,3 +445,94 @@ def test_the_mapper_selectors_dispatch_on_the_flag(turbulent):
     np.testing.assert_array_equal(curl_z(vx, vy), forward_curl_z(vx, vy))
     np.testing.assert_array_equal(divergence(vx, vy),
                                   forward_divergence(vx, vy))
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Projection independante de la taille de grille
+# ══════════════════════════════════════════════════════════════════════
+#
+# `PeriodicGrid.project_divergence_free` est liee a `self.N` : appelee sur
+# un champ d'une autre taille, elle leve. Or le solveur en a besoin a
+# plusieurs resolutions — `step_layered` calcule sa phase 1 sur le champ
+# global SOUS-ECHANTILLONNE, qui reste periodique mais n'a plus la taille
+# de la grille.
+#
+# `project_divergence_free_any` deduit la taille du tableau. Elle doit etre
+# IDENTIQUE a la methode quand les tailles coincident, sans quoi le solveur
+# aurait deux projections legerement differentes selon le chemin — la forme
+# de defaut que ce depot cherche.
+
+from Simulation.grid import (  # noqa: E402
+    PeriodicGrid as _PG,
+    project_divergence_free_any as _P_any,
+)
+
+
+@pytest.mark.parametrize("n", [8, 16, 32, 64])
+def test_the_size_agnostic_projection_matches_the_grid_method(n):
+    """Deux projections qui divergeraient donneraient au solveur deux
+    physiques selon le chemin emprunte."""
+    rng = np.random.default_rng(n)
+    a, b = rng.normal(size=(n, n)), rng.normal(size=(n, n))
+    ga, gb = _PG(n).project_divergence_free(a, b)
+    aa, ab = _P_any(a, b)
+    assert np.max(np.abs(ga - aa)) < 1e-12
+    assert np.max(np.abs(gb - ab)) < 1e-12
+
+
+@pytest.mark.parametrize("n", [7, 8, 16, 24, 33, 64])
+def test_it_is_idempotent_at_every_size(n):
+    """D-7 : sans le traitement du mode de Nyquist, la projection n'est ni
+    exacte ni idempotente sur un champ bruite."""
+    rng = np.random.default_rng(n)
+    a, b = rng.normal(size=(n, n)), rng.normal(size=(n, n))
+    pa, pb = _P_any(a, b)
+    qa, qb = _P_any(pa, pb)
+    assert np.max(np.abs(qa - pa)) < 1e-12
+    assert np.max(np.abs(qb - pb)) < 1e-12
+
+
+@pytest.mark.parametrize("n", [8, 16, 32])
+def test_it_actually_removes_the_divergence(n):
+    """La divergence SPECTRALE, seule que la projection promet d'annuler —
+    pas celle du stencil FD4, qui est un autre operateur.
+
+    Et mesuree avec la MEME convention de Nyquist que la projection : celle-ci
+    annule la derivee au mode de Nyquist (D-7), donc une divergence calculee
+    avec un KX/KY non annule y trouve un residu qui n'est pas un defaut de la
+    projection, mais un desaccord d'operateur. Premiere version de ce test
+    faisait exactement cette erreur.
+    """
+    rng = np.random.default_rng(n + 100)
+    a, b = _P_any(rng.normal(size=(n, n)), rng.normal(size=(n, n)))
+    k = np.fft.fftfreq(n, d=1.0 / n)
+    KX, KY = np.meshgrid(k, k, indexing="ij")
+    if n % 2 == 0:
+        nyq = n // 2
+        KX = KX.copy()
+        KY = KY.copy()
+        KX[nyq, :] = 0.0
+        KY[:, nyq] = 0.0
+    dh = 1j * KX * np.fft.fft2(a) + 1j * KY * np.fft.fft2(b)
+    assert np.max(np.abs(dh)) / (np.max(np.abs(np.fft.fft2(a))) + 1e-30) < 1e-10
+
+
+def test_it_preserves_a_field_that_is_already_divergence_free():
+    """Un champ deja solenoidal ne doit pas bouger."""
+    n = 32
+    c = np.arange(n) * 2 * np.pi / n
+    X, Y = np.meshgrid(c, c, indexing="ij")
+    vx, vy = np.sin(X) * np.cos(Y), -np.cos(X) * np.sin(Y)
+    px, py = _P_any(vx, vy)
+    assert np.max(np.abs(px - vx)) < 1e-12
+    assert np.max(np.abs(py - vy)) < 1e-12
+
+
+def test_it_refuses_a_non_square_grid():
+    with pytest.raises(ValueError, match="non carree"):
+        _P_any(np.zeros((8, 16)), np.zeros((8, 16)))
+
+
+def test_it_refuses_mismatched_shapes():
+    with pytest.raises(ValueError, match="incompatibles"):
+        _P_any(np.zeros((8, 8)), np.zeros((16, 16)))

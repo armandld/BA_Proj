@@ -85,6 +85,54 @@ def divergence(fx, fy, fixed_curl=True):
             else legacy_forward_divergence(fx, fy))
 
 
+def project_divergence_free_any(vx, vy):
+    """Projection spectrale a divergence nulle, a TOUTE taille de grille.
+
+    `PeriodicGrid.project_divergence_free` est liee a `self.N` : appelee sur
+    un champ d'une autre taille, elle leve. Or le solveur en a besoin a
+    plusieurs resolutions — `step_layered` calcule sa phase 1 sur le champ
+    global SOUS-ECHANTILLONNE, qui reste periodique mais n'a plus la taille
+    de la grille.
+
+    Cette fonction deduit la taille du tableau. Elle est identique a la
+    methode pour un champ de taille N : meme traitement du mode de Nyquist
+    (D-7), meme garde sur la singularite k=0.
+
+    PRECONDITION : le champ doit etre PERIODIQUE. Sur un patch local avec
+    halo, qui ne l'est pas, le resultat n'a pas de sens physique — la
+    fonction ne peut pas le verifier, l'appelant doit le savoir.
+    """
+    n, m = vx.shape
+    if n != m:
+        raise ValueError(f"grille non carree : {vx.shape}")
+    if vy.shape != vx.shape:
+        raise ValueError(f"formes incompatibles : {vx.shape} et {vy.shape}")
+
+    k = np.fft.fftfreq(n, d=1.0 / n)
+    KX, KY = np.meshgrid(k, k, indexing='ij')
+
+    # D-7 : annuler la derivee au Nyquist, sans quoi la projection n'est ni
+    # exacte ni idempotente sur un champ bruite.
+    if n % 2 == 0:
+        nyq = n // 2
+        KX = KX.copy()
+        KY = KY.copy()
+        KX[nyq, :] = 0.0
+        KY[:, nyq] = 0.0
+
+    K2 = KX ** 2 + KY ** 2
+    K2 = np.where(K2 == 0.0, 1.0, K2)
+    K2[0, 0] = 1.0
+
+    vx_hat = np.fft.fft2(vx)
+    vy_hat = np.fft.fft2(vy)
+    div_hat = 1j * KX * vx_hat + 1j * KY * vy_hat
+    phi_hat = -div_hat / K2
+    vx_hat = vx_hat - 1j * KX * phi_hat
+    vy_hat = vy_hat - 1j * KY * phi_hat
+    return np.real(np.fft.ifft2(vx_hat)), np.real(np.fft.ifft2(vy_hat))
+
+
 class PeriodicGrid:
     """
     Représente une grille spatiale 2D périodique [0, L] x [0, L].
