@@ -56,11 +56,16 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             print(f"\n--- Null Hamiltonian detected (all coefficients zero). "
                   f"Skipping optimization — returning θ-init marginals. ---")
 
-        # Use warm-start params if available, otherwise zeros (p=0 = pure θ-init)
-        if warm_start_params is not None and len(warm_start_params) == 2 * reps:
-            optimal_params = warm_start_params
-        else:
-            optimal_params = np.zeros(2 * reps)
+        # θ-init EXACTEMENT : tous les angles a zero, mixer compris.
+        #
+        # Cette branche reprenait le warm start quand il existait. Or avec
+        # un Hamiltonien nul le terme de cout n'impose rien : seul le mixer
+        # agit, et il tourne l'etat sans qu'aucun cout ne le justifie.
+        # Mesure a 8 qubits, score classique 0.700, warm start
+        # beta = (0.35, 0.30) : marginales rendues 0.5535 au lieu de 0.700,
+        # soit 21 % de deplacement sur une decision que le commentaire
+        # ci-dessus annonce inchangee.
+        optimal_params = np.zeros(2 * reps)
 
         optimized_circuit = qc.assign_parameters(optimal_params)
 
@@ -121,15 +126,28 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
                 options={'maxiter': K_opt},
             )
 
+            # `bounds` pour les methodes qui les honorent, `constraints`
+            # pour COBYLA qui n'accepte que celles-la.
+            #
+            # Powell etait range avec COBYLA : scipy avertissait
+            # « Method Powell cannot handle constraints » et
+            # « Unknown solver options: rhobeg », puis optimisait SANS
+            # borne sur le mixer. L'avertissement partait sur stderr d'un
+            # essai parmi des centaines. Powell accepte `bounds` : c'est
+            # par la qu'il faut passer.
+            bounds_beta  = [(-beta_max, beta_max)] * reps
+            bounds_gamma = [(0.0, 2.0 * np.pi)] * reps
+
             if method == "L-BFGS-B":
-                bounds_beta  = [(-beta_max, beta_max)] * reps
-                bounds_gamma = [(0.0, 2.0 * np.pi)] * reps
                 common['bounds'] = bounds_beta + bounds_gamma
                 fd_eps = max(eps, 1.0 / np.sqrt(shots))
                 common['options']['ftol'] = eps
                 common['options']['gtol'] = eps * 10
                 common['options']['eps'] = fd_eps
-            elif method in ("COBYLA", "Powell"):
+            elif method == "Powell":
+                common['tol'] = eps
+                common['bounds'] = bounds_beta + bounds_gamma
+            elif method == "COBYLA":
                 common['tol'] = eps
                 # Small initial simplex keeps COBYLA near θ-init
                 common['options']['rhobeg'] = 0.05
@@ -142,7 +160,17 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
                                         'fun': lambda x, _i=i: x[_i] + beta_max})
                 common['constraints'] = constraints
             else:
-                common['tol'] = eps
+                # La borne sur beta n'est exprimable que par `bounds`
+                # (L-BFGS-B) ou par des contraintes (COBYLA, Powell). Tout
+                # autre optimiseur la perdrait EN SILENCE, et le commentaire
+                # ci-dessus dit ce que cela coute : le mixer part a beta=1,
+                # rabat P(|1>) a ~0.25, et supprime tout raffinement. On
+                # refuse plutot que de rendre un resultat qu'on sait faux.
+                raise ValueError(
+                    f"methode d'optimisation '{method}' non supportee : la "
+                    f"borne sur le mixer (|beta| <= {beta_max:.4f}) ne peut "
+                    "pas lui etre imposee. Utiliser COBYLA, Powell ou "
+                    "L-BFGS-B.")
 
             return common
 
@@ -182,6 +210,12 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
         # Volontairement non protégé : si l'affectation échoue, la lecture
         # se ferait au mauvais nombre de tirs et toutes les marginales en
         # aval seraient silencieusement plus bruitées.
+        #
+        # `sampler` peut appartenir a `vqa_runtime`, donc etre PARTAGE par
+        # tous les appels de la campagne. L'ecrasement etait definitif :
+        # apres un seul patch en MPS, chaque appel ulterieur tirait 8192
+        # coups quel que soit `shots`. On restaure la valeur d'origine.
+        _prev_shots = sampler.options.default_shots
         sampler.options.default_shots = mps_shots
         pub = (optimized_circuit,)
         job = sampler.run([pub])
@@ -189,6 +223,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
         counts_bin = pub_result.data.meas.get_counts()
         total_shots = sum(counts_bin.values())
         final_distribution = {key: val / total_shots for key, val in counts_bin.items()}
+        sampler.options.default_shots = _prev_shots
     else:
         if verbose:
             print("\n--- Final Sampling ---")

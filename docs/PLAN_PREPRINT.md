@@ -151,5 +151,15 @@ chaque étape conditionnant la suivante :
 4. **Ajout du témoin « mixeur seul »** aux campagnes H0b — sans lui, l'apport
    de l'hamiltonien n'est pas séparable d'une rotation de mixeur.
 
-Aucune conclusion actuelle n'est *invalidée* par ces étapes : elles sont **en
-attente de confirmation** sur le code corrigé, ce qui n'est pas la même chose.
+**Une conclusion est désormais invalidée, pas seulement en attente.** À toute
+profondeur de raffinement supérieure à la première, le biais Z de
+l'hamiltonien et ses couplages décrivaient deux grilles différentes : le biais
+d'un patch venait du quart haut-gauche de ce patch (D-37, écart 41 % du plus
+grand coefficient, présent depuis le premier commit). À `max_depth = 4`,
+réglage de toutes les campagnes, trois niveaux sur quatre passaient par là.
+
+Le bras classique n'est pas touché — il ne construit aucun hamiltonien. La
+comparaison des deux bras était donc biaisée dans un sens connu.
+
+Le reste est **en attente de confirmation** sur le code corrigé, ce qui n'est
+pas la même chose qu'invalidé → `EVALUATION.md`.

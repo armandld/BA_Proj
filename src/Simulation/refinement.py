@@ -177,9 +177,21 @@ def _prepare_vqa_input(
     )
     patch_phys_size = (y_e - y_s) / full_phi_h.shape[0] * sim.grid.L
     dx_eff = patch_phys_size / target_dim
-    mini_score_for_hamilt = _process_score(
-        local_score, depth == 0, target_dim + 2 * pad if pad > 0 else target_dim,
-    )
+    # `target_dim`, PAS `target_dim + 2 * pad` : a depth > 0,
+    # `_process_score` emprunte `_resize_padded_maxpool`, dont le contrat
+    # est « entree (N+2, M+2) -> sortie (t_dim+2, t_dim+2) ». Le halo est
+    # donc deja ajoute par la fonction. L'appelant l'ajoutait une SECONDE
+    # fois : pour un coeur 2x2 il demandait t_dim=4 et recevait (6, 6),
+    # la ou les champs rendaient (4, 4).
+    #
+    # `H_edges` (biais Z, bati sur le score) et `C_edges` / `K_plaquettes`
+    # (bati sur les champs) decrivaient alors des grilles DIFFERENTES.
+    # `create_bounded_hamiltonian(dim=2)` lisait le coin superieur gauche
+    # du (6, 6) : le biais Z d'un patch venait du quart haut-gauche de ce
+    # patch, plus un halo situe deux cellules trop loin. Mesure sur
+    # `orszag_tang` apres 40 pas : ecart jusqu'a 0.05814 sur des
+    # coefficients dont le plus grand vaut 0.14107, soit 41 %. Voir D-37.
+    mini_score_for_hamilt = _process_score(local_score, depth == 0, target_dim)
     mini_hamilt_params = HamiltMapper.compute_coefficients(
         sim, mini_score_for_hamilt, mini_fields, threshold_amr,
         advanced_anomalies_enabled=args.AdvAnomaliesEnable,

@@ -23,7 +23,7 @@ dépendant d'un réglage sans provenance. Ce document trie.
 
 Ce qui tient aujourd'hui, et sur quoi le papier peut s'appuyer.
 
-**Les 24 défauts corrigés, chacun mesuré avant/après.** C'est le matériau le
+**Les 36 défauts corrigés, chacun mesuré avant/après.** C'est le matériau le
 plus solide du travail. Chaque mesure est déterministe, refaite par une
 commande, et verrouillée par un test qui échoue sur l'ancienne version.
 → `RESULTS.md`, `COUVERTURE.md`
@@ -43,7 +43,8 @@ indépendants de tout réglage :
 temporelles, chaque schéma contre sa propre référence. Reproductible.
 
 **La méthode d'audit elle-même.** Les quatre questions, les huit patrons, les
-proportions — 12 défauts sur 27 par une seule question. C'est une
+proportions — 12 défauts sur 36 par une seule question, et deux trouvés
+en retirant une couche plutôt qu'en posant une question. C'est une
 contribution à part entière, et elle ne dépend d'aucune campagne.
 
 ---
@@ -90,6 +91,21 @@ sur une **valeur** ne tiennent pas.
 
 ## D — Obsolète
 
+**Tout nombre Q-HAS obtenu à une profondeur de raffinement supérieure à 1**
+(D-37). Le biais Z et les couplages de l'Hamiltonien décrivaient deux grilles
+différentes à toute profondeur > 0 : le biais d'un patch venait du quart
+haut-gauche de ce patch. Écart mesuré 41 % du plus grand coefficient. Présent
+depuis le premier commit du fichier.
+
+Portée : `depth = 0` est épargné — il est périodique et n'a pas de halo. À
+`max_depth = 4`, réglage de toutes les campagnes, **trois niveaux sur quatre**
+passaient par là. Cela ne se répare pas en reclassant : il faut refaire les
+mesures.
+
+Ce qui **n'est pas** touché : le bras classique, qui ne construit aucun
+Hamiltonien. La comparaison des deux bras est donc biaisée dans un sens
+connu — le bras quantique décidait sur un biais Z lu au mauvais endroit.
+
 **Tous les nombres publiés dans les documents antérieurs à cet audit.** Ils
 ont été obtenus sur du code dont on sait maintenant qu'il calculait autre
 chose que ce qu'il annonçait, et dont le code d'étude n'était pas testé.
@@ -117,5 +133,11 @@ restent valides — ils décrivent un **protocole**, pas des résultats.
 4. Il ne dépend d'aucun réglage sans provenance.
 5. L'opérateur de mesure est **assorti** à celui qui a produit la grandeur.
 
-Le point 5 a coûté quatre erreurs dans ce dépôt, dont une où un défaut de
-huit ordres de grandeur restait invisible.
+Le point 5 a coûté cinq erreurs dans ce dépôt, dont une où un défaut de huit
+ordres de grandeur restait invisible, et une où une correction *correcte*
+paraissait fausse.
+
+6. **Le test qui l'entoure emprunte-t-il le chemin réel ?** D-37 a survécu à
+   toute la suite parce que les configurations rapides utilisent
+   `max_depth = 1`, profondeur à laquelle le chemin borné n'est jamais
+   emprunté. Un test qui ne descend pas là où le code vit ne le teste pas.

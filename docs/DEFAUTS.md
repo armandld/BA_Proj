@@ -8,12 +8,15 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **2** |
+| **ouverts** — décision ou campagne requise | **3** |
 | **gelés** volontairement | 2 |
 
-D-27 est sorti d'ici : corrigé, mesuré, verrouillé — il vit dans `RESULTS.md`.
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
-qu'on peut prendre après.
+qu'on peut prendre après. D-27 et D-37 sont sortis d'ici : corrigés, mesurés,
+verrouillés — ils vivent dans `RESULTS.md`.
+
+**Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
+encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
 
 ---
 
@@ -119,6 +122,36 @@ publié.
 
 ```bash
 pytest tests/solver/test_solver_convergence.py -m slow     # ~10 min
+```
+
+---
+
+## La borne haute de `w_z_frac` — décision avant de lancer
+
+**Où ça bloque.** Nulle part techniquement : la campagne partirait. Mais elle
+explorerait un domaine dont la moitié haute n'a peut-être aucun sens.
+
+**Comment on est tombé dessus.** En déclarant l'espace de recherche pour
+l'audit du script d'entraînement (D-35). Écrire les bornes comme des données
+oblige à les lire.
+
+**Ce qui est établi.** `w_z_frac` est documenté comme la **fraction** de la
+médiane des couplages qui donne son poids au biais Z :
+`alpha_z = w_z_frac × median(|C|, |K|)`. Sa borne haute vaut **1000**. Une
+fraction de 1000 signifie un biais Z mille fois plus grand que les couplages,
+c'est-à-dire un Hamiltonien où les termes ZZ et ZZZZ ne pèsent plus rien — le
+quantique dégénère vers la décision classique.
+
+La borne vient de la campagne gelée, dont la graine valait 500. Conservée
+telle quelle pour ne pas changer la science en même temps que le code.
+
+**Décision attendue.** Resserrer à un intervalle où le mot « fraction » a un
+sens (par exemple 0,01–10, en log), ou garder 1000 et documenter que la
+partie haute du domaine teste la dégénérescence vers le classique. La
+seconde option est défendable — mais alors il faut le dire.
+
+```bash
+python src/train_hyperparams.py --print-space
 ```
 
 ---

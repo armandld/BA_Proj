@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 34 défauts corrigés
+## Les 36 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -82,6 +82,13 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-34 | budget d'essais calculé une fois, par worker | 4 workers, cible 12 : **48 essais → 12** | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k budget` |
 | D-35 | le JSON final ne portait que les paramètres **échantillonnés** | `threshold_amr` absent → **9/9 valeurs** + hash git + argv | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k redeploy` |
 | D-36 | 3 des 4 sorties détaillées de `pipeline` sans provenance de `sigma` | trace présente **seulement sur les runs divergés** → sur les 4 | `pytest tests/solver/test_solver_guards_and_objective.py -k sigma` |
+
+**Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-37 | à **toute profondeur > 0**, le biais Z et les couplages décrivaient des grilles différentes | `H_edges` (6,6) contre `C_edges` (4,4) ; écart **0,05814 sur une échelle de 0,14107**, soit 41 % | `pytest tests/amr/test_patch_encoding_shapes.py` |
+| D-38 | trois gardes de `execute` qui ne tenaient que sur le chemin habituellement testé | marginales **0,5535 → 0,700** ; Powell borné ; tirs MPS restaurés | `pytest tests/quantum/test_runtime_contracts.py -k "bound or null_hamiltonian or optimizer"` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
@@ -4444,3 +4451,210 @@ Ce qu'il ne montre pas : que l'objectif **discrimine**. À cette résolution il
 n'y a qu'une décision de raffinement, donc les six sous-pertes sont égales
 (0,285714). Il montre que le chemin complet s'exécute et que les artefacts en
 sortent complets.
+
+---
+
+# D-37 — le biais Z et les couplages décrivaient deux grilles différentes
+
+**Commande.** `pytest tests/amr/test_patch_encoding_shapes.py` (13 tests, ~16 s)
+
+**Pourquoi on est allé voir.** `COUVERTURE.md` listait trois fonctions du
+chemin d'entraînement dont le contrat n'avait jamais été audité. Elles
+décident la valeur qu'une campagne d'une semaine va minimiser. Celle-ci est
+tombée en instrumentant la marge du garde CFL : le pipeline **plantait** dès
+qu'on le lançait avec `max_depth ≥ 2`.
+
+## Ce qui se passait
+
+`_prepare_vqa_input` construit les deux moitiés de l'Hamiltonien par deux
+chemins distincts :
+
+| | source | taille rendue |
+|---|---|---|
+| `C_edges`, `K_plaquettes`, `K_xpoint` | les **champs**, via `_downsample_fields(..., target_dim, pad)` | (4, 4) |
+| `H_edges` — le biais Z | le **score**, via `_process_score(..., target_dim + 2·pad)` | **(6, 6)** |
+
+À `depth > 0`, `_process_score` emprunte `_resize_padded_maxpool`, dont le
+contrat est écrit dans sa docstring : *« Input shape: (N+2, M+2). Output
+shape: (t_dim+2, t_dim+2). »* **Le halo est déjà ajouté par la fonction.**
+L'appelant l'ajoutait une seconde fois.
+
+`create_bounded_hamiltonian(dim=2)` indexe ses lectures par `dim` sur des
+tableaux supposés `(dim+2, dim+2)`. Devant un tableau **trop grand**, il ne
+lève pas : il lit le coin supérieur gauche et rend un Hamiltonien
+parfaitement valide, calculé sur la mauvaise portion du patch. Le biais Z
+d'un patch venait donc du **quart haut-gauche** de ce patch, plus un halo
+situé deux cellules trop loin.
+
+**Mesure**, `orszag_tang` à N=64 après 40 pas, patch (0:32, 0:32), cœur 2×2 :
+
+```
+ce qui était lu               ce qui aurait dû l'être
+[[0.109 0.109 0.097 0.064]    [[0.109 0.109 0.064 0.005]
+ [0.111 0.141 0.094 0.064]     [0.111 0.141 0.078 0.079]
+ [0.095 0.096 0.070 0.065]     [0.068 0.073 0.106 0.106]
+ [0.062 0.062 0.044 0.081]]    [0.069 0.078 0.075 0.079]]
+```
+
+Écart maximal **0,05814**, pour des coefficients dont le plus grand vaut
+**0,14107** : **41 %**. Les deux premières colonnes coïncident — c'est le
+recouvrement du coin — et tout le reste décrit une autre région.
+
+## Depuis quand, et sur quoi
+
+```
+git log -S "target_dim + 2 * pad" -- src/Simulation/refinement.py
+cf93ba3 2026-04-09 Q-HAS: report submission snapshot
+```
+
+**Depuis le premier commit du fichier.** Tous les niveaux de raffinement sauf
+le premier passent par là : à `max_depth = 4`, trois niveaux sur quatre.
+`depth = 0` est le seul épargné, parce qu'il est périodique et n'a pas de
+halo.
+
+Le garde de forme ajouté en auditant les mappeurs (`7c0ae2f`) transforme
+depuis lors la lecture silencieuse en `ValueError`. C'est ce garde qui a
+rendu le défaut visible — mais il rend aussi **le pipeline inutilisable à
+`max_depth ≥ 2`** : dans l'état d'avant ce correctif, la campagne n'aurait
+pas pu tourner du tout.
+
+## Pourquoi les tests ne l'avaient pas vu
+
+Les configurations rapides — celles qu'on écrit pour qu'un test tourne en
+quelques secondes — utilisent `max_depth_override = 1`. À `max_depth = 1`, le
+balayage traite `depth = 0` puis s'arrête : **le chemin borné n'est jamais
+emprunté**. Le test de régression paramètre donc explicitement
+`max_depth ∈ {1, 2, 3}`.
+
+## Correction
+
+Une ligne : `_process_score(local_score, depth == 0, target_dim)`. Le halo
+vient de la fonction, une fois.
+
+| | avant | après |
+|---|---|---|
+| `H_edges` à depth>0 | (6, 6) | **(4, 4)** |
+| `C_edges` à depth>0 | (4, 4) | (4, 4) |
+| pipeline à `max_depth=2` | `ValueError` | **s'exécute sur les 6 scénarios** |
+
+**Tout nombre Q-HAS publié qui traverse un raffinement au-delà du premier
+niveau est affecté.**
+
+## Au passage — le garde CFL, vérifié et trouvé sain
+
+C'est en cherchant sa marge que D-37 est tombé. `pipeline` abandonne l'essai
+si `check_cfl() > 1.0`. `adapt_dt` et `check_cfl` emploient bien la **même**
+vitesse rapide `c_fast = max|v| + max|B|`, donc la CFL réalisée vaut la cible.
+Mesuré à travers le vrai pipeline, `max_depth = 2`, N=64 :
+
+| scénario | CFL max | marge |
+|---|---|---|
+| kh, vortex, tearing, coalescence, rotor | 0,4000 – 0,4018 | **2,5×** |
+| orszag_tang | 0,4042 | **2,47×** |
+
+**Rectification.** Une première mesure donnait 0,755 pour `orszag_tang`, soit
+une marge de 1,3×. Elle était fausse : j'avais instancié le solveur avec les
+`Re`/`Rm` par défaut au lieu de 800, donc une viscosité différente de celle
+de la trace DNS. Le garde n'est pas serré.
+
+---
+
+# D-38 — trois gardes de `execute` qui ne tenaient que sur le chemin testé
+
+**Commande.**
+`pytest tests/quantum/test_runtime_contracts.py -k "bound or null_hamiltonian or optimizer"`
+
+Même famille que D-37 : des protections correctes là où on les regarde, et
+absentes ailleurs.
+
+## Le warm start passait outre un Hamiltonien nul
+
+Quand tous les coefficients sont nuls, `execute` court-circuite l'optimisation
+et — dit son commentaire — *« returning θ-init marginals »*. Il reprenait
+pourtant les paramètres du warm start s'il y en avait un. Or sans terme de
+coût, seul le mixer agit : il tourne l'état sans qu'aucun coût ne le justifie.
+
+**Mesure**, 8 qubits, score classique 0,700, warm start β = (0,35 ; 0,30) :
+
+| | marginales rendues |
+|---|---|
+| sans warm start | **0,7000** |
+| avec warm start | **0,5535** |
+
+21 % de déplacement sur une décision annoncée inchangée. Corrigé :
+`optimal_params = np.zeros(2·reps)`, sans condition.
+
+*Portée.* Depuis D-8, `create_period_hamiltonian` et
+`create_bounded_hamiltonian` **lèvent** sur un Hamiltonien nul : la branche
+n'est plus atteignable par `mapping`. Elle reste fausse là où elle est.
+
+## Powell recevait des contraintes que scipy ignore
+
+Le commentaire de `execute` explique pourquoi le mixer doit rester borné :
+sans borne, COBYLA part à β = 1, rabat P(|1⟩) à ≈ 0,25 et **supprime tout
+raffinement**. La borne était posée par `bounds` pour L-BFGS-B et par
+`constraints` pour `("COBYLA", "Powell")`.
+
+Powell n'accepte pas de contraintes. scipy le disait :
+
+```
+RuntimeWarning: Method Powell cannot handle constraints.
+OptimizeWarning: Unknown solver options: rhobeg
+```
+
+…sur stderr, dans un essai parmi des centaines. Powell optimisait donc le
+mixer **sans borne**. Corrigé : Powell passe par `bounds`, `constraints` reste
+à COBYLA seul. Toute autre méthode **lève** désormais, au lieu de perdre la
+borne en silence.
+
+*Note de méthode.* Ma première correction a créé le même trou : elle refusait
+les méthodes inconnues mais laissait Powell dans la liste des trois
+autorisées. Le test qui l'a rattrapée est celui qui vérifie **|β| dans le
+résultat**, pas celui qui vérifie que l'appel passe. Un test qui constate
+qu'une fonction « ne plante pas » ne teste pas sa garantie.
+
+## Le mode MPS écrasait définitivement le nombre de tirs
+
+`sampler.options.default_shots = max(shots, 8192)` était appliqué à un objet
+qui peut appartenir à `vqa_runtime`, donc **partagé par toute la campagne**.
+Après un seul patch en MPS, chaque appel ultérieur tirait 8 192 coups quel que
+soit `shots`. La valeur d'origine est restaurée après lecture.
+
+*Portée.* Le backend déployé est `state_vector` ; ce chemin ne s'exécute pas
+aujourd'hui.
+
+## Vérifié et trouvé sain, dans le même passage
+
+**L'ordre des paramètres du circuit.** Les contraintes bornent `x[0:reps]`,
+ce qui n'est correct que si le circuit ordonne ses paramètres
+`[β…, γ…]`. Mesuré : `['β[0]', 'β[1]', 'γ[0]', 'γ[1]']`. L'ordre vient du tri
+alphabétique de Qiskit sur les noms — un détail d'implémentation d'une
+bibliothèque extérieure. S'il changeait, la borne s'appliquerait à γ et le
+mixer tournerait libre. **Épinglé par un test.**
+
+**Le score, et l'équité entre les deux bras.** `weighted_relative_error` vaut
+bien 0 sur une reconstruction exacte et 1 quand le bras rend zéro. La carte de
+pondération est construite sur la **référence**, donc identique pour les deux
+bras. La comptabilité de pixels est symétrique : même `step_layered`, même
+`max_depth`, même `target_dim`, accumulation à chaque pas pour les deux.
+
+**La réduction du score, entre les deux bras.** Le bras classique décide sur
+`_process_score`, le bras quantique sur le `mini_score` de
+`get_adaptive_flux`. Deux chemins, une seule question : donnent-ils le même
+nombre ? Mesuré sur un champ aléatoire, `target_dim = 2` :
+
+| profondeur | écart maximal |
+|---|---|
+| 0 | **0,000e+00** |
+| 1 | **0,000e+00** |
+
+Identiques. La comparaison des deux bras porte donc bien sur le critère, pas
+sur la réduction.
+
+**`_run_level_classical` contre `_run_level`.** Le bloc de décision — seuil,
+TTL, sondage de bord, ventilation en `if/elif/else` — est structurellement
+identique, correction D-16 comprise. Deux échappatoires `continue` du chemin
+quantique (`prep is None`, `result is None`) sont **inatteignables** :
+ni `_prepare_vqa_input` ni `call_vqa_shell` ne rendent `None`. Elles auraient
+fait disparaître un patch du pavage, donc laissé une région sans traitement ;
+elles ne le font pas.

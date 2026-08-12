@@ -206,3 +206,115 @@ def test_transpiling_preserves_the_qubit_count():
         qc.ry(0.3 * (k + 1), k)
     out = _rt().transpile(qc)
     assert out.num_qubits == 4
+
+
+# ══════════════════════════════════════════════════════════════════
+#  D-38 — trois gardes de `execute` qui ne tenaient que sur le
+#  chemin qu'on avait pris l'habitude de tester
+# ══════════════════════════════════════════════════════════════════
+
+def _tiny_circuit(score=0.7, reps=2):
+    """Un circuit QAOA a 8 qubits dont l'etat initial encode `score`."""
+    import numpy as np
+    from qiskit.circuit.library import QAOAAnsatz
+    from qiskit.quantum_info import SparsePauliOp
+    from VQA.init_qbits_state import init_qbits_state
+
+    th = np.full((2, 2), 2 * np.arcsin(np.sqrt(score)))
+    ps = np.zeros((2, 2))
+    qc0 = init_qbits_state(th, th, ps, ps)
+    n = qc0.num_qubits
+    H = SparsePauliOp.from_list([("Z" + "I" * (n - 1), 0.0),
+                                 ("ZZ" + "I" * (n - 2), 0.0)])
+    qc = QAOAAnsatz(cost_operator=H, reps=reps, initial_state=qc0)
+    return qc.decompose().decompose(), H, n
+
+
+def test_the_mixer_bound_lands_on_beta_not_gamma():
+    """Les contraintes bornent `x[0:reps]`. C'est correct SI le circuit
+    ordonne ses parametres [beta..., gamma...].
+
+    Cet ordre vient du tri alphabetique de Qiskit sur les noms, ou
+    'beta' precede 'gamma'. C'est un detail d'implementation d'une
+    bibliotheque exterieure : s'il changeait, la borne s'appliquerait a
+    gamma et le mixer tournerait libre — precisement ce que le
+    commentaire de `execute` decrit comme supprimant tout raffinement.
+    """
+    qc, _, _ = _tiny_circuit()
+    noms = [p.name for p in qc.parameters]
+    assert noms == ["β[0]", "β[1]", "γ[0]", "γ[1]"], (
+        f"l'ordre des parametres a change : {noms}. La borne sur le mixer "
+        "ne porte plus sur les bons indices.")
+
+
+def test_a_null_hamiltonian_returns_theta_init_even_with_a_warm_start():
+    """D-38. Sans terme de cout, le mixer tourne l'etat sans qu'aucun cout
+    ne le justifie. Mesure : 0.5535 rendu au lieu de 0.700."""
+    import numpy as np
+    from VQA.execute import execute
+    from VQA.postprocess import postprocess
+
+    score = 0.7
+    qc, H, n = _tiny_circuit(score)
+
+    def run(ws):
+        d, _ = execute(qc, H, "simulator", "state_vector", 256, 2, 30, 1e-2,
+                       1.0, False, vqa_runtime=None, method="COBYLA",
+                       warm_start_params=ws)
+        return np.asarray(postprocess(d, n, False))
+
+    froid = run(None)
+    chaud = run(np.array([0.35, 0.30, 1.1, 0.9]))
+    assert froid == pytest.approx(np.full(n, score), abs=1e-6)
+    assert chaud == pytest.approx(froid, abs=1e-6), (
+        "le warm start deplace encore les marginales sans Hamiltonien")
+
+
+def test_an_optimizer_without_a_mixer_bound_is_refused():
+    """La borne n'est exprimable que pour trois methodes. Les autres la
+    perdaient en silence."""
+    from VQA.execute import execute
+    qc, H, _ = _tiny_circuit()
+    from qiskit.quantum_info import SparsePauliOp
+    n = qc.num_qubits
+    H_reel = SparsePauliOp.from_list([("Z" + "I" * (n - 1), -0.5)])
+    with pytest.raises(ValueError, match="non supportee"):
+        execute(qc, H_reel, "simulator", "state_vector", 64, 2, 4, 1e-2,
+                1.0, False, vqa_runtime=None, method="Nelder-Mead")
+
+
+@pytest.mark.parametrize("method", ["COBYLA", "Powell", "L-BFGS-B"])
+def test_the_three_supported_optimizers_keep_the_bound(method, recwarn):
+    """Le test qui mord : |beta| <= pi/(4 reps) DANS LE RESULTAT.
+
+    Verifier que l'appel « passe » ne prouvait rien. Powell etait range
+    avec COBYLA et recevait des `constraints` que scipy ignore : il
+    avertissait sur stderr, puis optimisait le mixer sans borne.
+    """
+    import warnings as _w
+    import numpy as np
+    from qiskit.quantum_info import SparsePauliOp
+    from VQA.execute import execute
+
+    reps = 2
+    beta_max = np.pi / (4 * reps)
+    qc, _, n = _tiny_circuit(reps=reps)
+    #  Un Hamiltonien FORT, pour que l'optimiseur ait interet a pousser
+    #  beta au-dela de la borne s'il en a le droit.
+    H_reel = SparsePauliOp.from_list(
+        [("Z" + "I" * (n - 1), -5.0), ("ZZ" + "I" * (n - 2), -5.0)])
+
+    with _w.catch_warnings(record=True) as caught:
+        _w.simplefilter("always")
+        dist, params = execute(qc, H_reel, "simulator", "state_vector", 64,
+                               reps, 40, 1e-3, 1.0, False, vqa_runtime=None,
+                               method=method)
+
+    assert len(params) == 2 * reps
+    assert abs(sum(dist.values()) - 1.0) < 1e-6
+    assert np.max(np.abs(params[:reps])) <= beta_max + 1e-6, (
+        f"{method} rend beta={params[:reps]} hors de +/-{beta_max:.4f}")
+    ignores = [str(w.message) for w in caught
+               if "cannot handle" in str(w.message)
+               or "Unknown solver options" in str(w.message)]
+    assert not ignores, f"{method} : scipy ignore des reglages — {ignores}"

@@ -70,11 +70,24 @@ fonctions seulement :
 
 | fichier | ce qui reste |
 |---|---|
-| `Simulation/refinement.py` | `_run_level_classical`, TTL, reprise de campagne |
+| `Simulation/refinement.py` | le TTL, la reprise de campagne |
 | `train_hyperparams.py` | le mode Colab (non testable ici) |
-| `VQA/execute.py` | la boucle COBYLA, les contraintes sur β, les branches matériel |
-| `pipeline.py` | le calcul de score, la garde de divergence, le mode `classical_only` |
+| `VQA/execute.py` | les branches **matériel** (`mode != "simulator"`, session IBM) |
+| `pipeline.py` | le mode `classical_only` de bout en bout |
 | `study/` | **en totalité** — c'est le chantier suivant |
+
+**Audité le 12 août, sur le chemin d'entraînement** — parce que ces
+fonctions décident le nombre qu'une campagne d'une semaine minimise :
+
+| fonction | verdict |
+|---|---|
+| `_prepare_vqa_input` | **D-37** : le biais Z et les couplages décrivaient deux grilles différentes à toute profondeur > 0 |
+| `execute`, boucle et bornes | **D-38** : trois gardes qui ne tenaient que sur le chemin habituellement testé |
+| `pipeline.score`, `weighted_relative_error` | **sain** — 0 sur une reconstruction exacte, 1 quand le bras rend zéro ; pondération construite sur la référence, donc identique aux deux bras |
+| comptabilité de pixels des deux bras | **saine** — même `step_layered`, même profondeur, accumulation à chaque pas |
+| réduction du score, classique contre quantique | **saine** — écart **0,000e+00** aux profondeurs 0 et 1 |
+| `_run_level_classical` contre `_run_level` | **sain** — bloc de décision identique, correction D-16 comprise |
+| garde CFL (`check_cfl > 1.0`) | **sain** — marge mesurée **2,5×** sur les six scénarios |
 
 ---
 
