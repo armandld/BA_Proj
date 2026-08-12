@@ -373,8 +373,32 @@ class MHDSolver:
         self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
         self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
 
-    def is_diverged(self, max_value=1e100):
-        """Check if any field has NaN, Inf, or has blown up beyond physical limits."""
+    def is_diverged(self, max_value=1e8):
+        """Check if any field has NaN, Inf, or has blown up beyond physical limits.
+
+        Le seuil valait 1e100, ce qui le rendait inerte : `float64` ne
+        deborde qu'au-dela de ~1e154, donc un champ a 1e50 — physiquement
+        mort, 1e49 fois l'echelle du probleme — passait sans un mot. Seuls
+        NaN et Inf etaient reellement attrapes, et ils n'arrivent qu'apres
+        que le run a cesse d'avoir un sens.
+
+        Mesure sur les quatre scenarios, 200 pas a CFL 0.4 :
+
+          orszag_tang       1.81      kelvin_helmholtz  1.50
+          mhd_rotor         3.85      harris_tearing    1.00
+
+        Pic a 3.85. Le seuil de 1e8 laisse donc une marge de 2.6e7 sur le
+        comportement observe — aucun transitoire legitime ne s'en approche —
+        tout en attrapant une divergence quatre-vingt-douze ordres de
+        grandeur plus tot qu'avant.
+
+        Une divergence MHD croit exponentiellement : elle traverse 1e8 en
+        route vers 1e100. Abreger plus tot ne perd donc aucun run viable, et
+        laisse le score partiel se calculer sur des champs moins corrompus.
+
+        `max_value` reste un parametre : un appelant qui travaille a une
+        autre echelle peut l'elargir explicitement.
+        """
         for field in [self.vx, self.vy, self.Bx, self.By]:
             if np.any(np.isnan(field)) or np.any(np.isinf(field)):
                 return True

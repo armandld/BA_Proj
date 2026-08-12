@@ -1,3 +1,4 @@
+import warnings
 import argparse
 import sys
 from math import log
@@ -298,6 +299,24 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
 
     # ── Hamiltonian hyperparameters (Tier 2) ──
     # sigma: uncertainty width for ZZ coupling (replaces beta_grad)
+    #
+    # `best_hyperparams.json` ne contient PAS sigma, alors que la campagne
+    # Optuna gelee l'echantillonne — son meilleur essai trouve 0.0230. Le
+    # repli sur 0.05 n'est donc pas un defaut raisonnable : c'est une valeur
+    # que rien n'a choisie, appliquee au parametre au coeur de D-9 (la
+    # largeur de la fenetre gaussienne). Voir D-22 dans docs/RESULTS_V4.md.
+    #
+    # On ne leve pas — cela arreterait toute campagne en cours — mais le
+    # repli est signale une fois et consigne dans les details du run, pour
+    # qu'aucun artefact ne puisse laisser croire que sigma vient de
+    # l'entrainement.
+    _sigma_defaulted = 'sigma' not in hp
+    if _sigma_defaulted:
+        warnings.warn(
+            "sigma absent des hyperparametres charges : repli sur 0.05, une "
+            "valeur qu'aucun essai n'a choisie. La campagne gelee "
+            "l'echantillonne pourtant (meilleur essai : 0.0230). Voir D-22.",
+            RuntimeWarning, stacklevel=2)
     sigma      = hp.get('sigma',       _defaults.get('sigma', 0.05))
     beta_curl  = hp.get('beta_curl',   _defaults['beta_curl'])
     beta_xpoint = hp.get('beta_xpoint',  _defaults['beta_xpoint'])
@@ -583,6 +602,10 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 _out = {'combined': combined, 'phys_score': phys_score,
                         'patch_ratio': patch_ratio, 'field_errors': field_errors}
                 _out['scoring_error'] = scoring_error
+                # D-22 : consigne d'ou vient sigma, pour qu'aucun artefact ne
+                # puisse laisser croire qu'il vient de l'entrainement.
+                _out['sigma'] = float(sigma)
+                _out['sigma_source'] = 'default' if _sigma_defaulted else 'loaded'
                 return _out
             return combined
 

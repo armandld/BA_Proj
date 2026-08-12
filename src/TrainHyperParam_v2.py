@@ -602,6 +602,47 @@ def expand_split_beta_seeds(base_params_list):
 #  COMPOSITE MULTI-SCENARIO OBJECTIVE (QAOA — Phase 1 & 2)
 # ============================================================
 
+# ══════════════════════════════════════════════════════════════════════
+#  Constantes de l'objectif — ce qui N'EST PAS explore
+# ══════════════════════════════════════════════════════════════════════
+#
+# Ces quatre valeurs etaient ecrites en dur a l'interieur de
+# `make_composite_objective`, sous une forme (`if "x" not in frozen:`) qui
+# les faisait passer pour des parametres conditionnels. Elles sont
+# nommees ici pour que la difference entre « fixe » et « explore » soit
+# lisible depuis l'exterieur.
+
+#: Meilleur essai de l'etude classique gelee (#42, perte 0.2148).
+CLASSICAL_BEST_THRESHOLD = 0.14959824837662078
+FIXED_GAMMA_HYDRO = 2.0
+FIXED_GAMMA_MAG = 0.5
+FIXED_KAPPA = 10.0
+
+#: Les parametres reellement proposes a Optuna, par phase.
+SEARCH_SPACE = {
+    "phase1": ("beta", "w_z_frac", "beta_michelson"),
+    "phase2+": ("beta", "w_z_frac", "sigma", "beta_curl", "beta_xpoint"),
+}
+
+#: Les parametres que l'objectif FIXE, avec leur valeur.
+FIXED_PARAMS = {
+    "threshold_amr": CLASSICAL_BEST_THRESHOLD,
+    "gamma_hydro": FIXED_GAMMA_HYDRO,
+    "gamma_mag": FIXED_GAMMA_MAG,
+    "kappa": FIXED_KAPPA,
+}
+
+
+def search_space(split_michelson):
+    """Les noms que `make_composite_objective` proposera reellement.
+
+    Une campagne qui croit optimiser `kappa` ne le fait pas : cette
+    fonction permet de le verifier avant de lancer, plutot que de le
+    decouvrir en relisant la base a posteriori.
+    """
+    return SEARCH_SPACE["phase2+"] if split_michelson else SEARCH_SPACE["phase1"]
+
+
 def make_composite_objective(dns_traces, scenario_list, split_michelson=False, frozen_params=None, lambda_cost=LAMBDA_COST_SOFT):
     """
     Composite loss across a set of scenarios (QAOA method).
@@ -628,16 +669,30 @@ def make_composite_objective(dns_traces, scenario_list, split_michelson=False, f
         # ── Tier 1: Encoding + AMR ──
         if "beta" not in frozen:
             HyperParams["beta"] = trial.suggest_float("beta", 0.5, 10.0)
-        if "threshold_amr" not in frozen:
-            HyperParams["threshold_amr"] = 0.14959824837662078 # le meilleur classique
 
-        # ── Tier 2: Hamiltonian gates ──
+        # threshold_amr, gamma_hydro, gamma_mag et kappa sont des CONSTANTES,
+        # pas des parametres explores. La forme `if "x" not in frozen:` les
+        # faisait passer pour conditionnels : l'espace de recherche reel
+        # compte cinq parametres (beta, w_z_frac, sigma, beta_curl,
+        # beta_xpoint), pas neuf.
+        #
+        # `search_space()` plus bas rend cette liste consultable par un
+        # appelant, pour qu'aucune campagne ne puisse plus croire optimiser
+        # ce qu'elle fixe.
+        if "threshold_amr" not in frozen:
+            # Meilleur essai de l'etude classique (#42, perte 0.2148) : gele
+            # pour que la comparaison porte sur ce que le quantique ajoute et
+            # non sur un seuil different. Verifie contre la base dans
+            # tests/test_hyperparams_provenance_break.py.
+            HyperParams["threshold_amr"] = CLASSICAL_BEST_THRESHOLD
+
+        # ── Tier 2: Hamiltonian gates (constantes, non explorees) ──
         if "gamma_hydro" not in frozen:
-            HyperParams["gamma_hydro"] = 2.0
+            HyperParams["gamma_hydro"] = FIXED_GAMMA_HYDRO
         if "gamma_mag" not in frozen:
-            HyperParams["gamma_mag"] = 0.5
+            HyperParams["gamma_mag"] = FIXED_GAMMA_MAG
         if "kappa" not in frozen:
-            HyperParams["kappa"] = 10.0
+            HyperParams["kappa"] = FIXED_KAPPA
         if "w_z_frac" not in frozen:
             HyperParams["w_z_frac"] = trial.suggest_float("w_z_frac", 0.10, 1000, log=True)
 

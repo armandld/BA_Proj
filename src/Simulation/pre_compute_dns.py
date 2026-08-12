@@ -15,11 +15,33 @@ def _init_dns_scenario(sim, scenario):
         'mhd_rotor':         sim.init_mhd_rotor,
         'ghost_twisting':     sim.init_ghost_twisting,
     }
+    if scenario not in init_map:
+        raise ValueError(
+            f"scenario inconnu : {scenario!r}. Attendu l'un de "
+            + ", ".join(sorted(init_map))
+        )
     init_map[scenario]()
 
 
 def precompute_dns(phase_config):
     """Compute the DNS trajectory once and return a lightweight trace.
+
+    CONVENTION DE TEMPS — deux conventions coexistent, et c'est voulu :
+
+      dns_trace[k]['dt']      le pas de temps DU pas k
+      dns_trace[k]['fluxes']  l'etat AVANT le pas k, pour tout k sauf le
+                              dernier
+      dns_trace[step-1]['fluxes']  l'etat APRES le dernier pas
+
+    La derniere entree est reecrite apres la boucle parce que le pipeline en
+    a besoin comme verite terrain finale : il la compare a l'etat de ses deux
+    bras une fois tous les pas faits. Les entrees intermediaires, elles,
+    servent de reference au pas k et doivent donc etre prises avant lui.
+
+    Ce n'est pas une incoherence a corriger — c'est ce que le consommateur
+    demande — mais cela doit etre ecrit, faute de quoi un futur lecteur
+    prendra l'une pour l'autre. `tests/test_precompute_dns_contracts.py`
+    fige les deux.
 
     Memory optimization: we store the full field snapshots (fluxes) only at
     hybrid-update boundaries and at the final step.  The per-step dt is
@@ -51,6 +73,18 @@ def precompute_dns(phase_config):
     while t_current < T_MAX:
         dt = sim_dns.adapt_dt(cfl_target=0.4)
         dt = min(dt, T_MAX - t_current)
+        # Le clamp doit etre REECRIT dans le solveur. `adapt_dt` fixe
+        # `sim_dns.dt` et le rend ; le `min` ci-dessus ne creait qu'une
+        # variable locale, si bien que `step_full` integrait avec le dt NON
+        # borne pendant que `t_current` avancait du dt borne.
+        #
+        # Mesure sur orszag_tang N=32, T_MAX=0.05 : au dernier pas le
+        # solveur integrait 0.037997804 alors que la comptabilite avancait
+        # de 0.010730092. La trajectoire de REFERENCE finissait donc a
+        # t ~ 0.077 tandis que la trace annoncait 0.050 — et le pipeline,
+        # qui avance ses deux bras avec `dns_trace[step]['dt']`, les
+        # comparait a une reference prise 3.5 fois plus loin dans le temps.
+        sim_dns.dt = dt
 
         # Capture Hot-Start state
         if t_current >= T_START and hot_start_state is None:
