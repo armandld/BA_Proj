@@ -147,22 +147,44 @@ def test_the_study_constants_are_the_best_quantum_trial():
 
 
 def test_the_frozen_constants_match_the_training_script():
-    """threshold, gammas et kappa etaient GELES pendant phase1.
+    """Ce que `study/` croit gele doit l'etre reellement en amont.
 
-    Ils ne figurent donc pas dans la base : leur seule source est le code
-    d'entrainement. config.py doit reproduire ces valeurs, sinon l'etude
-    tourne sur un reglage que la campagne n'a jamais evalue.
+    Remesure du 12 aout (D-29 a D-36). La version precedente cherchait
+    la chaine `HyperParams["gamma_hydro"] = 2.0` dans le source du script
+    d'entrainement. Elle n'y est plus, et c'est VOULU : `gamma_hydro`,
+    `gamma_mag` et `kappa` sont entres dans l'espace de recherche a huit
+    parametres, decision de USER pour la reoptimisation.
+
+    Le test ne cherche donc plus une chaine — il interroge le module.
+    - `threshold_amr` reste FIXE en amont : `study/` peut continuer de
+      s'y adosser ;
+    - les trois autres sont desormais EXPLORES : `study/` les gele de son
+      cote via `FROZEN_DEFAULTS`, et ce gel doit rester explicite.
     """
     import config
+    import train_hyperparams as T
 
-    src = open(os.path.join(_REPO_ROOT, "src", "train_hyperparams.py"),
-               encoding="utf-8").read()
-    assert "0.14959824837662078" in src
-    assert abs(config.TRAINED_THRESHOLD - 0.14959824837662078) < 1e-4
-    for name, value in (("gamma_hydro", 2.0), ("gamma_mag", 0.5),
-                        ("kappa", 10.0)):
-        assert f'HyperParams["{name}"] = {value}' in src, (
-            f"{name}={value} n'est plus gele dans train_hyperparams")
+    assert T.FIXED_PARAMS["threshold_amr"] == T.CLASSICAL_BEST_THRESHOLD
+    assert abs(config.TRAINED_THRESHOLD - T.CLASSICAL_BEST_THRESHOLD) < 1e-4
+
+    for name in ("gamma_hydro", "gamma_mag", "kappa"):
+        assert name in T.SEARCH_SPACE, (
+            f"{name} n'est plus explore : si c'est voulu, il doit revenir "
+            f"dans FIXED_PARAMS et ce test doit etre remesure")
+        assert name not in T.FIXED_PARAMS
+
+    #  Les valeurs V1 que `study/` continue d'imposer. Elles vivent
+    #  maintenant dans la campagne d'etude, pas dans le script
+    #  d'entrainement -- et les bornes doivent les contenir, sinon
+    #  l'etude tourne sur un reglage hors du domaine explore.
+    from closed_loop_campaign import FROZEN_DEFAULTS
+    assert FROZEN_DEFAULTS == {"gamma_hydro": 2.0, "gamma_mag": 0.5,
+                               "kappa": 10.0}
+    for name, value in FROZEN_DEFAULTS.items():
+        lo, hi, _ = T.SEARCH_SPACE[name]
+        assert lo <= value <= hi, (
+            f"{name}={value} est hors des bornes explorees [{lo}, {hi}]")
+
     assert config.TRAINED_GAMMA_HYDRO == 2.0
     assert config.TRAINED_GAMMA_MAG == 0.5
     assert config.TRAINED_KAPPA == 10.0
@@ -198,13 +220,20 @@ def test_the_closed_loop_covers_every_key_the_pipeline_reads():
     du dict de l'appelant vient du JSON, dont les valeurs ne sont PAS celles
     de l'etude.
     """
+    import train_hyperparams as T
+    from closed_loop_campaign import FROZEN_DEFAULTS
+
     camp = open(_CAMPAIGN, encoding="utf-8").read()
     assert "FROZEN_DEFAULTS = dict(gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0)" in camp
-    assert 'best.setdefault("threshold_amr", 0.14959824837662078)' in camp
+    #  Le seuil etait ecrit en dur (`best.setdefault("threshold_amr",
+    #  0.14959824837662078)`). Il vient desormais de `T`, une seule
+    #  definition pour les deux -- une constante recopiee finit toujours
+    #  par diverger de son original.
+    assert 'best.setdefault("threshold_amr", T.CLASSICAL_BEST_THRESHOLD)' in camp
 
-    provided = {"gamma_hydro", "gamma_mag", "kappa", "threshold_amr"}
-    #  les 5 parametres explores par l'objectif V1
-    provided |= {"beta", "beta_curl", "beta_xpoint", "sigma", "w_z_frac"}
+    provided = set(FROZEN_DEFAULTS) | {"threshold_amr"}
+    #  ce que l'objectif propose reellement a Optuna
+    provided |= set(T.search_space())
     missing = _live_pipeline_keys() - provided
     assert not missing, (
         f"la campagne ne fournit pas {sorted(missing)} ; ces cles seraient "
