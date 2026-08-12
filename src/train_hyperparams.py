@@ -72,7 +72,7 @@ import sys
 import itertools
 import shutil
 import numpy as np
-from pipeline import pipeline
+from pipeline import DIVERGENCE_PENALTY, pipeline
 from types import SimpleNamespace
 from Simulation.pre_compute_dns import precompute_dns
 
@@ -651,9 +651,11 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
                       hyperparams, lambda_cost, classical_only=False):
     """Un scenario, une sous-perte. Renvoie la perte finie a ajouter.
 
-    Une exception coute 10.0 — penalite finie, pour qu'Optuna puisse
-    continuer a modeliser l'espace au lieu de recevoir un `inf` qui
-    n'ordonne rien.
+    Une exception coute `DIVERGENCE_PENALTY` — penalite FINIE, pour
+    qu'Optuna puisse continuer a modeliser l'espace au lieu de recevoir un
+    `inf` qui n'ordonne rien. La valeur est importee de `pipeline` plutot
+    que recopiee : elle y etait deja definie quatre fois, dont trois dans
+    des portees qui masquaient la premiere.
     """
     dns_trace, hot_start_state = dns_traces[scenario_key]
     DT = scenario_config["DT"]
@@ -677,19 +679,25 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
         print(f"[Trial {trial.number}] FAILED on {scenario_key}: {e}")
         import traceback
         traceback.print_exc()
-        trial.set_user_attr(f"phys_{scenario_key}", 10.0)
+        trial.set_user_attr(f"phys_{scenario_key}", DIVERGENCE_PENALTY)
         trial.set_user_attr(f"patch_{scenario_key}", 1.0)
-        return 10.0
+        return DIVERGENCE_PENALTY
 
     combined = result['combined'] if isinstance(result, dict) else result
     if np.isnan(combined) or np.isinf(combined):
-        combined = 10.0
+        combined = DIVERGENCE_PENALTY
 
     if isinstance(result, dict):
         trial.set_user_attr(f"phys_{scenario_key}", float(result.get('phys_score', 0)))
         trial.set_user_attr(f"patch_{scenario_key}", float(result.get('patch_ratio', 0)))
         for field, err in result.get('field_errors', {}).items():
             trial.set_user_attr(f"error_{field}_{scenario_key}", float(err))
+        # D-22 / D-35 : d'ou vient sigma, essai par essai. Un artefact ne
+        # doit jamais laisser croire qu'une valeur vient de l'entrainement
+        # alors qu'elle vient d'un repli.
+        if result.get('sigma_source') is not None:
+            trial.set_user_attr(f"sigma_source_{scenario_key}",
+                                result['sigma_source'])
     return float(combined)
 
 

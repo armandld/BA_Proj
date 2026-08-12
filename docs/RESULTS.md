@@ -4196,12 +4196,19 @@ def _curl_z_fd4(psi, dx):
     return g_y, -g_x
 ```
 
+À N=64, `div_FD B` normalisée par `max|Bx| + max|By|` et multipliée par `dx` :
+
 | scénario | div_FD B relative | \|δB\| max |
 |---|---|---|
-| `harris_tearing` | **1,208e−16** | 0,010000 |
-| `double_tearing` | **2,393e−16** | 0,010000 |
-| `island_coalescence` | **1,150e−16** | 0,050000 |
-| `noisy_uniform` | **1,808e−16** | 0,239451 |
+| `harris_tearing` | **1,076e−16** | 0,010000 |
+| `double_tearing` | **1,863e−16** | 0,010000 |
+| `island_coalescence` | **9,862e−17** | 0,050000 |
+| `noisy_uniform` | **1,275e−16** | 0,239451 |
+
+Ces valeurs sont au niveau du bruit d'arrondi : elles bougent au dernier
+chiffre avec la résolution. Les tests posent donc un **seuil** (`< 1e−12`),
+pas une égalité — un test calibré sur la mesure du jour cesserait de mesurer
+au premier changement légitime.
 
 Douze à treize ordres de grandeur, et l'amplitude nominale entièrement
 conservée. Les champs de ces quatre scénarios changent : **tout nombre publié

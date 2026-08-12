@@ -25,6 +25,18 @@ pytest tests/ -q -m slow                # ordre de convergence, ~10 min
 Les suites QAOA de `quantum/` prennent environ une heure : les lancer en
 fond.
 
+**Avant de lancer une campagne d'entraînement** — c'est-à-dire avant de louer
+des cœurs :
+
+```bash
+python src/train_hyperparams.py --print-space              # l'espace réel
+pytest tests/pipeline/test_train_hyperparams_contracts.py -q   # 60 tests, 14 s
+pytest tests/pipeline/test_train_hyperparams_smoke.py -q       #  7 tests, 16 s
+```
+
+Le second fichier ne simule rien : vrai solveur, vrai circuit, vraie base
+Optuna, vrai JSON de déploiement, sur les six scénarios — à N=32.
+
 ## Chemins
 
 `conftest.py` résout `src/` et les paquets de `study/` depuis la racine du
