@@ -370,9 +370,47 @@ class MHDSolver:
         self.energy_history['magnetic'].append(Em)
         self.energy_history['total'].append(Ek + Em)
 
+    #: Projeter aussi le champ magnetique. Par defaut False : l'induction le
+    #: garde deja a divergence nulle, et la projection l'en ECARTE.
+    #: Voir `enforce_incompressibility` pour la mesure.
+    PROJECT_B = False
+
     def enforce_incompressibility(self):
+        """Impose la contrainte de divergence nulle sur la vitesse.
+
+        LE CHAMP MAGNETIQUE N'EST PLUS PROJETE — et c'est une correction,
+        pas un oubli.
+
+        L'induction est ecrite en forme rotationnelle :
+        `rhs_B = (dEz/dy, -dEz/dx)`. Sa divergence AUX DIFFERENCES FINIES
+        vaut `d2Ez/dxdy - d2Ez/dydx`, exactement nulle puisque les decalages
+        de `np.roll` commutent. B est donc solenoidal par construction, dans
+        l'operateur meme qui construit le second membre.
+
+        La projection, elle, est SPECTRALE. Appliquee a un champ deja a
+        divergence FD nulle, elle ne le nettoie pas : elle y injecte le
+        desaccord entre les deux operateurs. Mesure sur Orszag-Tang N=64,
+        divergence FD4 du champ B :
+
+          second membre                        1.97e-14
+          etat, 50 pas SANS projection         1.00e-14
+          etat, 50 pas AVEC projection         4.63e-07
+
+          ordre en temps, T=0.05, 256 pas :
+            projection v et B    erreur 1.185e-05   div_FD B = 4.877e-06
+            projection de v seul erreur 1.185e-05   div_FD B = 2.818e-14
+
+        Huit ordres de grandeur sur la contrainte, pour une erreur identique
+        a la quatrieme decimale. La projection de B ne coutait rien en
+        precision et degradait la seule chose qu'elle etait censee garantir.
+
+        La vitesse, elle, en a besoin : `div_FD(rhs_v)` vaut 4.17 en relatif.
+
+        `PROJECT_B = True` reproduit le chemin historique bit a bit.
+        """
         self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
-        self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
+        if self.PROJECT_B:
+            self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
 
     def is_diverged(self, max_value=1e8):
         """Check if any field has NaN, Inf, or has blown up beyond physical limits.

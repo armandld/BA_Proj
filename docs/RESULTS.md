@@ -3900,3 +3900,83 @@ l'incompatibilité déjà signalée entre le second membre (FD4) et la
 projection (FFT). Mauvais opérateur choisi. Le test vérifie désormais ce que
 la projection promet réellement : idempotence, et divergence **spectrale** à
 la précision machine.
+
+---
+
+# Van Kan mesuré — non concluant ; et D-25, la projection qui abîmait B
+
+## La question
+
+`step_full` applique RK4 puis projette l'état : un splitting de Lie, d'ordre 1.
+La correction de pression incrémentale (Van Kan) promet l'ordre 2 en ajoutant
+le gradient du potentiel du pas précédent au second membre.
+
+**Commande** — `scratchpad/vankan.py`, N=64, T=0,05, Orszag-Tang, grille fixe,
+chaque schéma comparé à sa propre référence à 2048 pas.
+
+## Le tableau
+
+| schéma | erreur 32 pas | 256 pas | ordre | div_FD B | div_FD v |
+|---|---|---|---|---|---|
+| projection v **et** B *(actuel)* | 1,0665e−04 | 1,1853e−05 | 1,02 → 1,10 | **4,877e−06** | 2,914e−06 |
+| projection de **v seul** | 1,0665e−04 | 1,1853e−05 | 1,02 → 1,10 | **2,818e−14** | 2,914e−06 |
+| **Van Kan** sur v, B non projeté | 1,0411e−04 | 1,1563e−05 | 1,02 → 1,10 | 2,928e−14 | 2,914e−06 |
+
+## Verdict Van Kan : non
+
+**L'ordre reste à 1,10 dans les trois cas.** Van Kan gagne 2,4 % sur l'erreur,
+rien de plus. La théorie promet l'ordre 2 ; on ne l'obtient pas.
+
+Hypothèse **non vérifiée** : le même désaccord FD/spectral que D-25. Le
+gradient de φ est calculé spectralement et ajouté à un second membre FD4,
+donc la correction n'annule pas ce qu'elle devrait. Le vérifier demanderait
+un solveur de Poisson FD-cohérent — la réécriture qu'on cherchait à éviter.
+L'implémentation elle-même peut aussi être fautive.
+
+## D-25 : la projection spectrale abîmait un champ déjà solénoïdal
+
+La deuxième ligne est un gain net, et il ne doit rien à Van Kan.
+
+L'induction est en forme rotationnelle : `rhs_B = (∂Ez/∂y, −∂Ez/∂x)`. Sa
+divergence **aux différences finies** vaut `∂²Ez/∂x∂y − ∂²Ez/∂y∂x`, exactement
+nulle puisque les décalages de `np.roll` commutent. **B est solénoïdal par
+construction, dans l'opérateur même qui construit le second membre.**
+
+La projection, elle, est **spectrale**. Appliquée à ce champ, elle n'y nettoie
+rien : elle y injecte le désaccord entre les deux opérateurs.
+
+| divergence FD4 du champ B, Orszag-Tang N=64 | |
+|---|---|
+| second membre | 1,97e−14 |
+| état, 50 pas **sans** projection | 1,00e−14 |
+| état, 50 pas **avec** projection | **4,63e−07** |
+
+**Huit ordres de grandeur sur la contrainte, pour une erreur identique à la
+quatrième décimale.** La projection de B ne coûtait rien en précision et
+dégradait la seule chose qu'elle était censée garantir.
+
+La vitesse, elle, en a besoin : `div_FD(rhs_v)` vaut **4,17** en relatif.
+
+`PROJECT_B = False` par défaut ; `True` reproduit le chemin historique bit à
+bit. La garantie AMR — `step_layered` ≡ `step_full` à `max_depth` — tient
+toujours à **3,331e−16**.
+
+## Note de méthode : l'opérateur de mesure décidait du verdict
+
+La première mesure de ce défaut, faite avec la divergence **spectrale**, ne
+montrait rien : 9,5e−02, indistinguable du bruit. C'est en la refaisant avec
+l'opérateur **assorti** — le même stencil FD4 que le second membre — que
+l'écart de huit ordres apparaît.
+
+Troisième fois que ce piège se referme dans ce dépôt. Une grandeur discrète
+n'a de valeur que relativement à l'opérateur qui la calcule ; mesurer avec un
+autre ne mesure pas le champ, mais l'écart entre deux opérateurs.
+
+## Tests
+
+`tests/test_solver_convergence.py`, 7 tests : l'induction préserve la
+divergence de B (contrôle positif), le second membre de v **ne** la préserve
+pas (contrôle négatif, sans quoi on croirait qu'aucune projection n'est
+nécessaire), la projection dégrade la contrainte de quatre ordres au moins,
+la vitesse reste projetée, la raison est écrite dans la docstring, et le
+retrait ne coûte rien en précision.

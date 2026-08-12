@@ -627,3 +627,116 @@ def test_strang_would_have_changed_nothing():
     s.enforce_incompressibility()
     assert _np.max(_np.abs(s.vx - a[0])) < 1e-13
     assert _np.max(_np.abs(s.vy - a[1])) < 1e-13
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-25 — la projection SPECTRALE abimait un champ deja solenoidal en FD
+# ══════════════════════════════════════════════════════════════════════
+#
+# L'induction est en forme rotationnelle : rhs_B = (dEz/dy, -dEz/dx). Sa
+# divergence AUX DIFFERENCES FINIES vaut d2Ez/dxdy - d2Ez/dydx, exactement
+# nulle puisque les decalages commutent. B est solenoidal par construction,
+# dans l'operateur meme qui construit le second membre.
+#
+# La projection, elle, est SPECTRALE. Appliquee a ce champ, elle n'y nettoie
+# rien : elle y injecte le desaccord entre les deux operateurs.
+#
+#   divergence FD4 du champ B, Orszag-Tang N=64
+#     second membre                       1.97e-14
+#     etat, 50 pas SANS projection        1.00e-14
+#     etat, 50 pas AVEC projection        4.63e-07
+#
+#   ordre en temps, T=0.05, 256 pas
+#     projection v et B     erreur 1.185e-05   div_FD B = 4.877e-06
+#     projection de v seul  erreur 1.185e-05   div_FD B = 2.818e-14
+#
+# Huit ordres sur la contrainte, pour une erreur identique a la quatrieme
+# decimale.
+#
+# NOTE DE METHODE : la premiere mesure de ce defaut a ete faite avec une
+# divergence SPECTRALE et n'a rien montre (9.5e-02, indistinguable du bruit).
+# C'est en la refaisant avec l'operateur ASSORTI — le meme stencil FD4 que
+# le second membre — que l'ecart de huit ordres apparait. Le choix de
+# l'operateur de mesure decidait du verdict.
+
+def _fd_div(a, b, dx):
+    ax, _ = _Solver._fd_grad(a, dx)
+    _, by = _Solver._fd_grad(b, dx)
+    return ax + by
+
+
+def _evolve(n_steps, project_B, N=64, dt=1e-4):
+    old = _Solver.PROJECT_B
+    _Solver.PROJECT_B = project_B
+    try:
+        s = _Solver(_Grid(N), dt=dt, Re=400, Rm=400)
+        s.init_orszag_tang()
+        for _ in range(n_steps):
+            s.step_full(record_stats=False)
+        return s
+    finally:
+        _Solver.PROJECT_B = old
+
+
+def test_the_induction_preserves_the_magnetic_divergence_exactly():
+    """La propriete qui rend la projection de B inutile, verifiee sur le
+    second membre lui-meme."""
+    s = _Solver(_Grid(64), dt=1e-4, Re=400, Rm=400)
+    s.init_orszag_tang()
+    _, _, kBx, kBy = s._compute_rhs_fd(s.vx, s.vy, s.Bx, s.By, s.dx, None, None)
+    d = _np.max(_np.abs(_fd_div(kBx, kBy, s.dx)))
+    assert d / _np.max(_np.abs(kBx)) < 1e-12, (
+        f"div_FD du second membre de B = {d:.3e} : la forme rotationnelle "
+        "ne preserve plus la contrainte")
+
+
+def test_the_velocity_right_hand_side_does_NOT_preserve_it():
+    """Le controle : v a bien besoin d'une pression, B non. Sans ce test,
+    on pourrait croire qu'aucune projection n'est necessaire."""
+    s = _Solver(_Grid(64), dt=1e-4, Re=400, Rm=400)
+    s.init_orszag_tang()
+    kvx, kvy, _, _ = s._compute_rhs_fd(s.vx, s.vy, s.Bx, s.By, s.dx, None, None)
+    rel = _np.max(_np.abs(_fd_div(kvx, kvy, s.dx))) / _np.max(_np.abs(kvx))
+    assert rel > 0.1, f"div_FD relative du second membre de v = {rel:.3e}"
+
+
+def test_not_projecting_B_keeps_its_divergence_at_machine_precision():
+    s = _evolve(50, project_B=False)
+    assert _np.max(_np.abs(_fd_div(s.Bx, s.By, s.dx))) < 1e-12
+
+
+def test_projecting_B_degrades_its_divergence_by_orders_of_magnitude():
+    """Le defaut lui-meme, fige."""
+    good = _np.max(_np.abs(_fd_div(*(lambda s: (s.Bx, s.By))(_evolve(50, False)),
+                                   2 * _np.pi / 64)))
+    bad = _np.max(_np.abs(_fd_div(*(lambda s: (s.Bx, s.By))(_evolve(50, True)),
+                                  2 * _np.pi / 64)))
+    assert bad > 1e4 * max(good, 1e-16), (
+        f"projete {bad:.3e} contre {good:.3e} : la projection ne degrade "
+        "plus la contrainte, ce n'est plus le chemin historique")
+
+
+def test_the_velocity_is_still_projected():
+    """Retirer la projection de B ne doit pas retirer celle de v."""
+    import inspect
+    src = inspect.getsource(_Solver.enforce_incompressibility)
+    assert "self.vx, self.vy = self.grid.project_divergence_free" in src
+    assert "if self.PROJECT_B:" in src
+
+
+def test_the_corrected_path_is_the_default_and_the_reason_is_written():
+    import inspect
+    assert _Solver.PROJECT_B is False
+    doc = _Solver.enforce_incompressibility.__doc__
+    for marker in ("rotationnelle", "SPECTRALE", "4.63e-07", "2.818e-14"):
+        assert marker in doc, f"la mesure ne mentionne pas {marker}"
+
+
+def test_dropping_the_B_projection_costs_nothing_in_accuracy():
+    """Le point qui rend la correction acceptable : meme trajectoire."""
+    a = _evolve(50, project_B=False)
+    b = _evolve(50, project_B=True)
+    rel = max(_np.max(_np.abs(getattr(a, k) - getattr(b, k)))
+              for k in ("vx", "vy", "Bx", "By"))
+    scale = max(_np.max(_np.abs(getattr(a, k))) for k in ("vx", "vy", "Bx", "By"))
+    assert rel / scale < 1e-3, f"ecart relatif {rel / scale:.3e}"

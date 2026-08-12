@@ -62,10 +62,10 @@ demander : *sur quelle entrée les deux hypothèses divergent-elles ?*
 
 | état | nombre |
 |---|---|
-| **corrigés et verrouillés par un test** | 20 |
+| **corrigés et verrouillés par un test** | 21 |
 | **gelés volontairement** (reproductibilité) | 2 |
 | **ouverts** — décision ou campagne requise | 2 |
-| **total** | **24** |
+| **total** | **25** |
 
 ---
 
@@ -97,6 +97,7 @@ vérifie la correction.
 | **D-14** | réduction des champs tronque, celle du score non | 94,1 % → **100 %** de couverture | `pytest tests/test_downsampling_contracts.py` |
 | **D-21** | flux réduit par lissage + interpolation bilinéaire | pic **38 % → 100 %** | `pytest tests/test_padded_rescale_contracts.py` |
 | **D-23** | `dt` intégré ≠ `dt` écrit dans la trace DNS | référence à t≈0,077 au lieu de 0,050 → rejeu **exact** | `pytest tests/test_precompute_dns_contracts.py` |
+| **D-25** | la projection **spectrale** de B abîme un champ déjà solénoïdal en FD | div_FD B **4,63e−07 → 1,00e−14** | `pytest tests/test_solver_convergence.py -k induction` |
 
 ### Encodage et décision
 
