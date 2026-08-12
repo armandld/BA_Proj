@@ -98,7 +98,7 @@ def rotor_state():
 @pytest.fixture(scope="module")
 def repeated_scores(rotor_state):
     """N_REPEATS appels STRICTEMENT identiques."""
-    from tests.test_qaoa_scaling_and_hparams import qaoa_block_scores
+    from tests.quantum.test_qaoa_scaling_and_hparams import qaoa_block_scores
 
     sim, phi_prev = rotor_state
     #  `.ravel()` est indispensable : les scores sortent en (3, 3), et
@@ -149,7 +149,7 @@ def test_the_spread_dwarfs_the_exact_tie_tolerance(repeated_scores):
     """
     import itertools
 
-    from tests.test_qaoa_scaling_and_hparams import MAX_CLEAN_ADVANTAGE
+    from tests.quantum.test_qaoa_scaling_and_hparams import MAX_CLEAN_ADVANTAGE
 
     spread = max(float(np.max(np.abs(a - b)))
                  for a, b in itertools.combinations(repeated_scores, 2))
@@ -227,7 +227,7 @@ def test_the_sweep_check_no_longer_asserts_an_exact_tie():
     """Le correctif lui-meme, verrouille contre une reintroduction."""
     import inspect
 
-    from tests.test_qaoa_scaling_and_hparams import check_sweep_behaviour
+    from tests.quantum.test_qaoa_scaling_and_hparams import check_sweep_behaviour
 
     src = inspect.getsource(check_sweep_behaviour)
     assert "assert ties" not in src, (

@@ -586,10 +586,45 @@ def test_a_scoring_bug_is_now_distinguishable_from_a_divergence():
     Le filet est conserve — un essai Optuna ne doit pas faire tomber la
     campagne — mais la cause est journalisee et rendue sous la cle
     `scoring_error`, donc distinguable d'une divergence physique.
+
+    Remesure du 12 aout (D-36). La version precedente cherchait la chaine
+    `_out['scoring_error'] = scoring_error` dans le source. Elle a disparu
+    quand les QUATRE sorties detaillees de `pipeline` ont ete routees par
+    un `_details` unique — auparavant une seule portait la provenance,
+    celle du chemin de divergence, donc la trace n'existait que sur les
+    runs qu'on jette. Le test interroge desormais l'AST : toute sortie
+    sous `if return_details` passe par le helper, quel que soit le nom
+    des variables locales.
     """
+    import ast
+
     assert "except Exception as exc:" in _PIPELINE_SRC
     assert "[SCORING-ERROR]" in _PIPELINE_SRC
     assert "traceback.print_exc" in _PIPELINE_SRC
-    assert "_out['scoring_error'] = scoring_error" in _PIPELINE_SRC
+
+    tree = ast.parse(_PIPELINE_SRC)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "pipeline")
+
+    #  le helper existe et pose la cle
+    helper = next(n for n in ast.walk(fn)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_details")
+    poses = [ast.unparse(n) for n in ast.walk(helper)
+             if isinstance(n, ast.Assign) and "scoring_error" in ast.unparse(n)]
+    assert poses, "`_details` ne pose pas `scoring_error`"
+
+    #  et AUCUNE sortie detaillee ne s'en echappe
+    echappees = []
+    for node in ast.walk(fn):
+        if not (isinstance(node, ast.If)
+                and "return_details" in ast.unparse(node.test)):
+            continue
+        for ret in (n for n in ast.walk(node) if isinstance(n, ast.Return)):
+            texte = ast.unparse(ret)
+            if not ("_details(" in texte or "_divergence_details(" in texte):
+                echappees.append(texte[:80])
+    assert echappees == [], (
+        f"sorties detaillees sans provenance : {echappees}")
+
     assert "scoring_error = None" in _PIPELINE_SRC, (
         "la cle doit valoir None quand tout s'est bien passe")
