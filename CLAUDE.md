@@ -1,12 +1,20 @@
 # BA_Proj — working context
 
-Trois documents portent l'état du projet, avec des rôles disjoints :
+Six documents portent l'état du projet, avec des rôles disjoints. Les tenir
+à jour fait partie de chaque tâche.
 
-| fichier | contenu |
+| document | contenu |
 |---|---|
-| `docs/DEFAUTS.md` | les défauts : ce qui les a révélés, comment tester s'ils sont encore là |
-| `docs/RESULTS.md` | les résultats : comment ils ont été obtenus, comment les réobtenir |
-| `docs/PLAN_PREPRINT.md` | la structure du manuscrit |
+| `docs/PLAN_PREPRINT.md` | **la source mère** : objectif, hypothèses, ce qu'on peut prouver ou non |
+| `docs/DEFAUTS.md` | où ça **bloque** — uniquement ce qui n'est pas résolu |
+| `docs/COUVERTURE.md` | ce qui est **testé**, comment et pourquoi ; ce qui ne l'est pas |
+| `docs/RESULTS.md` | ce qui est **accompli**, et la commande pour le refaire |
+| `docs/EVALUATION.md` | ce qui, dans RESULTS, est **exploitable** — et ce qui ne l'est pas |
+| `docs/CODE_REVIEW.md` | note de relecture |
+
+**Les nombres des documents archivés sont obsolètes** : obtenus sur du code
+dont on sait qu'il calculait autre chose que ce qu'il annonçait. Voir
+`docs/archive/README.md`.
 
 Spécification du protocole : `docs/protocol_v3_evaluation.md`. Campagnes
 antérieures : `docs/archive/`.

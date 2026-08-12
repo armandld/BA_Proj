@@ -411,13 +411,38 @@ def test_dissipation_can_only_remove_energy():
 
 
 def test_div_b_stays_at_roundoff_on_a_real_flow():
+    """La contrainte magnetique, mesuree avec l'operateur qui la conserve.
+
+    Ce test utilisait la divergence SPECTRALE. Il passait tant que
+    `enforce_incompressibility` projetait B — spectralement, donc dans le
+    meme operateur. Depuis D-25, B n'est plus projete : l'induction le garde
+    solenoidal, mais AUX DIFFERENCES FINIES, puisque `rhs_B = curl(Ez)` est
+    bati avec le stencil FD4.
+
+    Mesurer au spectral un champ conservé en FD ne mesure donc pas le champ :
+    cela mesure l'ecart entre les deux operateurs. Il vaut 1.65e-05 apres
+    evolution — ce n'est pas une derive de la contrainte, c'est le desaccord
+    FD/spectral, deja signale comme candidat non teste.
+
+    Quatrieme occurrence de ce piege dans ce depot.
+    """
     N = 48
     s = _sim(N)
     s.init_orszag_tang()
     _march(s, 0.2, 5e-4)
     b_rms = float(np.sqrt(np.mean(s.Bx ** 2 + s.By ** 2)))
-    rel = float(np.max(np.abs(_spectral_div(s.Bx, s.By, s.dx)))) * s.dx / b_rms
-    assert rel < 1e-9, f"div B relative {rel:.3e} apres evolution"
+
+    # l'operateur ASSORTI : le meme stencil FD4 que le second membre
+    bx_x, _ = MHDSolver._fd_grad(s.Bx, s.dx)
+    _, by_y = MHDSolver._fd_grad(s.By, s.dx)
+    rel_fd = float(np.max(np.abs(bx_x + by_y))) * s.dx / b_rms
+    assert rel_fd < 1e-11, f"div_FD B relative {rel_fd:.3e} apres evolution"
+
+    # le desaccord FD/spectral, fige pour qu'une derive se voie
+    rel_spec = float(np.max(np.abs(_spectral_div(s.Bx, s.By, s.dx)))) * s.dx / b_rms
+    assert rel_spec < 1e-3, (
+        f"div spectrale relative {rel_spec:.3e} : l'ecart entre les deux "
+        "operateurs a grandi au-dela de ce qui est mesure")
 
 
 def test_the_flow_stays_incompressible():

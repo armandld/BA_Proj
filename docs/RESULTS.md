@@ -6,11 +6,75 @@ Chaque entrée porte : la commande exacte, les conditions, les nombres, et le
 hash du commit qui les a produits. Un résultat qu'on ne sait pas refaire
 n'est pas un résultat — il n'a pas sa place ici.
 
-| fichier | contenu |
+| document | contenu |
 |---|---|
-| **`RESULTS.md`** (ce fichier) | les résultats et leur mode d'emploi |
-| `DEFAUTS.md` | les défauts : comment on est tombé dessus, comment tester s'ils sont encore là |
-| `PLAN_PREPRINT.md` | la structure du manuscrit |
+| `PLAN_PREPRINT.md` | l'objectif et les hypothèses — la source mère |
+| `DEFAUTS.md` | où ça **bloque**, uniquement |
+| `COUVERTURE.md` | ce qui est **testé**, comment et pourquoi |
+| **`RESULTS.md`** (ce fichier) | ce qui est **accompli**, et comment le refaire |
+| `EVALUATION.md` | ce qui, ici, est **exploitable** |
+| `CODE_REVIEW.md` | note de relecture |
+
+---
+
+## Les 24 défauts corrigés
+
+Le matériau le plus solide du travail. Chacun est mesuré avant et après,
+refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
+version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
+
+**Conventions et opérateurs**
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-1 | rotationnel des mappeurs sous `indexing='xy'` | 0,0 → **+2,0** sur rotation solide | `pytest tests/study/test_curl_convention_gap.py` |
+| D-3 | l'objectif pondère par cette vorticité fausse | 0,0 → **+2,0** | `pytest tests/mapping/test_objective_and_estimators_analytic.py` |
+| D-11 | diode de choc appliquée au cisaillement | rapport **0,500 → 2,0** | `pytest tests/mapping/test_mapper_contracts.py -k flux` |
+| D-17 | 3 sites hors `src/` en convention pré-D-1 | enstrophie **0 % → 0,02 %** d'écart | `pytest tests/study/test_no_private_curl_survives.py` |
+| — | critère Q : déformation à moitié, partie isotrope comptée | cisaillement **+0,25 → 0** | `pytest tests/solver/test_analytic_fields.py -k q_criterion` |
+
+**Numérique et rééchantillonnage**
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-2 | prolongation AMR centrée cellule, `mode='wrap'` | 2,49e−1 → **7,74e−6** | `pytest tests/amr/test_amr_resampling_analytic.py` |
+| D-7 | projection ignore le mode de Nyquist | 0,378 → **1,1e−14** | `pytest tests/solver/test_solver_analytic.py -k idempot` |
+| D-14 | réduction des champs tronque, celle du score non | 94,1 % → **100 %** | `pytest tests/mapping/test_downsampling_contracts.py` |
+| D-21 | flux réduit par lissage + bilinéaire | pic **38 % → 100 %** | `pytest tests/mapping/test_padded_rescale_contracts.py` |
+| D-23 | `dt` intégré ≠ `dt` écrit dans la trace DNS | référence à t≈0,077 → rejeu **exact** | `pytest tests/solver/test_precompute_dns_contracts.py` |
+| D-25 | la projection **spectrale** de B abîme un champ solénoïdal en FD | div_FD B **4,63e−07 → 1,00e−14** | `pytest tests/solver/test_solver_convergence.py -k induction` |
+
+**Encodage et décision**
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-8 | hamiltonien encode des coefficients nuls sans lever | non détecté → **lève** | `pytest tests/quantum/test_hamiltonian_contracts.py -k raises` |
+| D-13 | bords gauche/haut lisent l'arête intérieure | asymétrie 1,2–7,0 % → **symétrique** | `pytest tests/quantum/test_hamiltonian_contracts.py -k halo` |
+| D-15 | `postprocess` accepte des comptes bruts | marginales ~1000 → **refusé** | `pytest tests/quantum/test_vqa_chain_contracts.py -k refus` |
+| D-16 | liste de patchs AMR se recouvre elle-même | **25 % → 0 %**, sans trou | `pytest tests/amr/test_amr_tiling_contracts.py` |
+| D-19 | backend inconnu → contexte mort sans erreur | silence → **lève** | `pytest tests/quantum/test_runtime_contracts.py -k backend` |
+| D-20 | cache d'ansatz confond deux hamiltoniens | même objet → **séparés** | `pytest tests/quantum/test_runtime_contracts.py -k ansatz` |
+
+**Scénarios, mesure et documentation**
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-4 | doc annonce le double du facteur appliqué | ×2 → aligné | `pytest tests/mapping/test_objective_and_estimators_analytic.py` |
+| D-5 | divergence notée sans pondération | 1,8 % → **0** | idem |
+| D-6 | `init_magnetic_twist` ne pose aucune torsion | 6,4e−7 → **π/2 exact** | `pytest tests/solver/test_scenarios_analytic.py -k twist` |
+| D-9 | ablation ψ mesure la fenêtre sur le mauvais score | « annihilation » → **ZZ domine K de 1,5 à 8,2×** | `pytest tests/study -k window` |
+| D-12 | mappeur `study/` : ν, η, dx annoncés influents, sans effet | doc alignée | `pytest tests/mapping/test_mapper_contracts.py -k v2` |
+| D-18 | garde de divergence à 1e100, inerte | 1e50 passait → seuil **1e8** | `pytest tests/solver/test_solver_guards_and_objective.py -k caught` |
+| D-26 | `init_ghost_twisting` pose un champ **impossible** | angle **0,027 → 1,906 rad** | `pytest tests/solver/test_scenarios_analytic.py -k ghost` |
+| — | `search_space` : 4 constantes présentées comme réglables | espace réel **5 paramètres**, pas 9 | `pytest tests/solver/test_solver_guards_and_objective.py -k search` |
+
+**Douze de ces défauts viennent d'une seule question** — *deux chemins censés
+coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
+tous rendaient un résultat plausible.
+
+Deux ont été vus non par une question, mais en **retirant une couche** : D-26
+et D-27 n'apparaissent qu'une fois la projection de B supprimée. Tant qu'elle
+masquait la divergence, les scénarios paraissaient sains.
 
 Les entrées sont dans l'ordre où elles ont été produites. Celles qu'un
 résultat postérieur a dépassées sont **conservées, avec la rétractation
