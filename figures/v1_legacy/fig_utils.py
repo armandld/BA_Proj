@@ -328,7 +328,7 @@ TRAINED_PARAMS = load_hyperparams(phase=_phase_arg)
 CLASSICAL_PARAMS = load_hyperparams(phase=_phase_arg, method='classical')
 
 # If params were frozen during quantum training, they won't appear in the
-# quantum params.  Fill in defaults matching what was frozen in TrainHyperParam_v2.
+# quantum params.  Fill in defaults matching what was frozen in train_hyperparams.
 _FROZEN_DEFAULTS = {
     'threshold_amr': CLASSICAL_PARAMS.get('threshold_amr', 0.15),
     'gamma_hydro': 2.0,

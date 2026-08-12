@@ -7,7 +7,7 @@ DEUX PROBLEMES DISTINCTS, dont un seul etait traite jusqu'ici.
 (1) FUITE DE PARAMETRE (defaut D13, decouvert ici).
     Le protocole Level-3 pretend que la classe tenue n'intervient dans
     AUCUN reglage. C'est faux pour le bras QAOA. Dans
-    `TrainHyperParam_v2.make_composite_objective` le seuil de decision est
+    `train_hyperparams.make_composite_objective` le seuil de decision est
     code en dur :
 
         HyperParams["threshold_amr"] = 0.14959824837662078  # le meilleur classique

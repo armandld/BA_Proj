@@ -15,7 +15,7 @@ couvert à **100 %** : ses tests vérifiaient des valeurs, partageaient le
 modèle mental du code, donc son erreur. Un module à 95 % peut être un piège ;
 un module à 60 % peut être sain.
 
-**1 771 tests**, 71 fichiers. Commandes dans `tests/README.md`.
+**1 827 tests**, 73 fichiers. Commandes dans `tests/README.md`.
 
 ---
 
@@ -30,7 +30,7 @@ chiffres de ces trois-là sont donc faux par défaut)*.
 | module | couverture | ce qui manque |
 |---|---|---|
 | `pipeline.py` | **14 %** | la boucle fermée elle-même — exercée par les suites QAOA, non comptée ici |
-| `TrainHyperParam_v2.py` | **14 %** | les phases d'entraînement ; seul `search_space` et l'objectif sont testés |
+| `train_hyperparams.py` | **89 %** | le mode Colab, l'analyse des CSV de rescore en erreur |
 | `hyperparams_loader.py` | **28 %** | les sélecteurs par scénario, combo, phase, rang |
 | `VQA/execute.py` | **49 %** | les branches matériel, MPS, et la boucle COBYLA |
 | `Simulation/solver.py` | **52 %** | `step_layered` en profondeur, le sous-cyclage |
@@ -50,16 +50,20 @@ effectivement relu fonction par fonction.
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
-| `TrainHyperParam_v1/v3/v4.py` | 1 641 | trois variantes de l'objectif d'entraînement ; c'est dans `v2` que vivait D-3 |
 | `analyze_hyperparams.py` | 918 | analyse de la campagne |
 | `recompute_lambda_scores.py` | 717 | recalcul de scores publiés |
 | `compare_rotor_budget.py` | 481 | comparaison de budget, utilise le pipeline |
 | `visual.py`, `help_visual.py` | 327 | figures |
 | `import_Neon_data_to_local.py` | 76 | import de données |
 
-**~4 160 lignes.** `TrainHyperParam_v1/v3/v4` est la seule entrée de cette
-liste qui touche le chemin scientifique : à auditer **avant** toute
-réoptimisation qui en utiliserait une.
+**~2 520 lignes**, toutes en aval du chemin scientifique : elles lisent des
+résultats, elles n'en produisent pas.
+
+`TrainHyperParam_v1/v3/v4.py` (1 641 lignes) figuraient ici. **Supprimés** :
+quatre variantes du même script d'entraînement coexistaient sans qu'aucune ne
+soit désignée. `TrainHyperParam_v2.py` est renommé `train_hyperparams.py`,
+audité fonction par fonction, et couvert par 67 tests — voir D-27 à D-36 dans
+`RESULTS.md`.
 
 **Partiellement audité** — le contrat a été vérifié sur une partie des
 fonctions seulement :
@@ -67,6 +71,7 @@ fonctions seulement :
 | fichier | ce qui reste |
 |---|---|
 | `Simulation/refinement.py` | `_run_level_classical`, TTL, reprise de campagne |
+| `train_hyperparams.py` | le mode Colab (non testable ici) |
 | `VQA/execute.py` | la boucle COBYLA, les contraintes sur β, les branches matériel |
 | `pipeline.py` | le calcul de score, la garde de divergence, le mode `classical_only` |
 | `study/` | **en totalité** — c'est le chantier suivant |
@@ -107,7 +112,7 @@ résolutions temporelles. Quelques minutes chacune.
 | `tests/mapping/` | `PhysToAngle`, `HamiltParams`, `HamiltParams_v2`, `RescaleArrays` | **100 / 98 / 100 / 97 %** | **complet** |
 | `tests/quantum/` | `VQA/*` | 90–100 % sauf `execute` (49 %) | hamiltonien, chaîne de décision, runtime |
 | `tests/amr/` | `refinement.py`, `utils.py` | 73 / 65 % | pavage, rééchantillonnage |
-| `tests/pipeline/` | `pipeline.py`, `hyperparams_loader.py` | 14 / 28 % | provenance des hyperparamètres |
+| `tests/pipeline/` | `pipeline.py`, `hyperparams_loader.py`, `train_hyperparams.py` | 14 / 28 / **89 %** | provenance des hyperparamètres, espace de recherche, budget d'essais, routage des 8 phases, campagne miniature de bout en bout |
 | `tests/study/` | tout `study/` | non mesuré | **aucun** |
 
 ---
@@ -124,8 +129,9 @@ divergent-elles ?*
 
 **L'opérateur non assorti.** Mesurer la divergence d'un champ avec un stencil
 différent de celui qui l'a produit ne mesure pas le champ, mais l'écart entre
-deux opérateurs. **Trois occurrences ici**, dont une où un défaut de huit
-ordres de grandeur restait invisible.
+deux opérateurs. **Cinq occurrences ici**, dont une où un défaut de huit ordres
+de grandeur restait invisible, et une où une correction *paraissait* fausse
+(2,1e−05) alors que c'est la mesure qui l'était.
 
 **Le balayage vide.** Une commande `pytest -k` dont le motif ne correspond à
 rien sort en vert. Vérifier le **nombre de tests sélectionnés**, pas le code
@@ -143,7 +149,7 @@ grandeur s'avère non reproductible, on change de **grandeur**, pas de seuil.
 
 | | état |
 |---|---|
-| tests | **1 771**, déterministes sauf les suites QAOA |
+| tests | **1 827**, déterministes sauf les suites QAOA |
 | nombres publiés recalculés depuis leur artefact | **164 / 180** |
 | écarts en attente | **16** — les nombres déplacés par les corrections |
 | artefacts portant hash git + arguments CLI | tous les `.npz` |

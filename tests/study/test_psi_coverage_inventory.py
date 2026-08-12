@@ -3,7 +3,7 @@
 `qaoa_inputs.prepare_qaoa_inputs` met psi a zero sauf si on lui passe
 `with_psi=True` ET l'instantane precedent. Le pipeline deploye, lui, calcule
 psi (`refinement.py:181`), et la campagne Optuna a regle les hyperparametres
-avec psi actif (`TrainHyperParam_v2.py:70` importe `pipeline`). Tout script
+avec psi actif (`train_hyperparams.py:70` importe `pipeline`). Tout script
 de l'etude qui n'a pas rebranche psi evalue donc une variante du modele
 amputee d'un de ses trois encodages.
 

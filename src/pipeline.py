@@ -99,6 +99,10 @@ def main():
             "Re": 800,
             "Rm": 800,
             "shots": 256,
+            # Etait absent ici aussi : Orszag-Tang tournait sans anomalies
+            # avancees, donc sans terme ZZZZ de point X, alors que les six
+            # autres scenarios les activaient.
+            "AdvAnomaliesEnable": True,
         },
 
         "kelvin_helmholtz": {
@@ -339,6 +343,30 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         print(f"  Hamiltonian: sigma={sigma}, beta_curl={beta_curl}, beta_xpoint={beta_xpoint}")
         print(f"               gamma_hydro={gamma_hydro}, gamma_mag={gamma_mag}, kappa={kappa}")
         print(f"  Physics:     Re={argus.Re}, Rm={argus.Rm}, nu={nu:.6f}, eta_mhd={eta_mhd:.6f}, cs={c_s}")
+
+    def _details(payload, scoring_error=None):
+        """Sortie detaillee — TOUS les chemins passent par ici.
+
+        `pipeline` a quatre sorties `return_details`. Une seule portait la
+        provenance de sigma : celle du chemin de divergence. Autrement
+        dit, la trace exigee par D-22 n'existait que sur les runs qu'on
+        jette, et jamais sur ceux qu'on publie. Deux chemins censes
+        rendre le meme dictionnaire ne le rendaient pas.
+        """
+        out = dict(payload)
+        out['scoring_error'] = scoring_error
+        out['sigma'] = float(sigma)
+        out['sigma_source'] = 'default' if _sigma_defaulted else 'loaded'
+        return out
+
+    def _divergence_details(scoring_error=None):
+        return _details({
+            'combined': DIVERGENCE_PENALTY,
+            'phys_score': DIVERGENCE_PENALTY,
+            'patch_ratio': 1.0,
+            'field_errors': {v: DIVERGENCE_PENALTY
+                             for v in ['vx', 'vy', 'Bx', 'By', 'Jz']},
+        }, scoring_error=scoring_error)
 
     # Skip Hamiltonian + VQA setup in classical-only mode (no quantum circuit needed)
     HamiltMapper = None
@@ -599,14 +627,10 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 field_errors = {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}
                 scoring_error = f"{type(exc).__name__}: {exc}"
             if return_details:
-                _out = {'combined': combined, 'phys_score': phys_score,
-                        'patch_ratio': patch_ratio, 'field_errors': field_errors}
-                _out['scoring_error'] = scoring_error
-                # D-22 : consigne d'ou vient sigma, pour qu'aucun artefact ne
-                # puisse laisser croire qu'il vient de l'entrainement.
-                _out['sigma'] = float(sigma)
-                _out['sigma_source'] = 'default' if _sigma_defaulted else 'loaded'
-                return _out
+                return _details({'combined': combined, 'phys_score': phys_score,
+                                 'patch_ratio': patch_ratio,
+                                 'field_errors': field_errors},
+                                scoring_error=scoring_error)
             return combined
 
         # --- Intermediate scoring for Optuna pruning ---
@@ -643,8 +667,8 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             last_step -= 1
         if last_step < 0:
             if return_details:
-                return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
-                        'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
+                return _divergence_details(
+                    scoring_error='no dns flux snapshot before the last step')
             return DIVERGENCE_PENALTY
         ground_truth_fluxes = dns_trace[last_step]['fluxes']
         score_result = score(sim_quantum.get_fluxes(), ground_truth_fluxes, lambda_cost, total_pixel_used, step_simulated, N**2)
@@ -661,8 +685,8 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     final_score = score_result['combined']
     if np.isnan(final_score) or np.isinf(final_score):
         if return_details:
-            return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
-                    'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
+            return _divergence_details(
+                scoring_error='final score is NaN or inf')
         return DIVERGENCE_PENALTY
 
     # Store decomposed metrics for hyperparameter analysis
@@ -708,7 +732,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             print("=" * 40)
 
     if return_details:
-        return score_result
+        return _details(score_result)
     return final_score
 
 

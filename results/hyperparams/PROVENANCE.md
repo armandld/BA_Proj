@@ -34,7 +34,7 @@ une relance. Coût médian d'un essai : **35 min** (classique), **56 min**
 
 Trois faits de plus, tous vérifiables dans les fichiers :
 
-1. **Seule `phase1` a tourné.** `TrainHyperParam_v2.PHASES` déclare 600 /
+1. **Seule `phase1` a tourné.** `train_hyperparams.PHASES` déclare 600 /
    600 / 400 essais pour `phase1_composite`, `phase2_complex` et
    `phase3_validation` ; les bases phase2 et phase3 sont vides.
    `best_hyperparams.json` le confirme : `best_per_phase` ne contient que

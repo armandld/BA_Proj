@@ -25,7 +25,7 @@ La resolution est rassurante mais devait etre verifiee, pas supposee :
      quantique, RANG 1 sur 178 — l'etude utilise bien le meilleur essai,
      et les valeurs gelees (`threshold_amr` = meilleur classique,
      gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0) sont exactement celles que
-     `TrainHyperParam_v2` fixe en dur pendant phase1 ;
+     `train_hyperparams` fixe en dur pendant phase1 ;
   2. la campagne de boucle fermee passe a `pipeline()` un dict COMPLET
      (FROZEN_DEFAULTS + les 5 parametres regles + le seuil), qui couvre
      toutes les cles lues : le JSON n'y fuit donc pas.
@@ -155,14 +155,14 @@ def test_the_frozen_constants_match_the_training_script():
     """
     import config
 
-    src = open(os.path.join(_REPO_ROOT, "src", "TrainHyperParam_v2.py"),
+    src = open(os.path.join(_REPO_ROOT, "src", "train_hyperparams.py"),
                encoding="utf-8").read()
     assert "0.14959824837662078" in src
     assert abs(config.TRAINED_THRESHOLD - 0.14959824837662078) < 1e-4
     for name, value in (("gamma_hydro", 2.0), ("gamma_mag", 0.5),
                         ("kappa", 10.0)):
         assert f'HyperParams["{name}"] = {value}' in src, (
-            f"{name}={value} n'est plus gele dans TrainHyperParam_v2")
+            f"{name}={value} n'est plus gele dans train_hyperparams")
     assert config.TRAINED_GAMMA_HYDRO == 2.0
     assert config.TRAINED_GAMMA_MAG == 0.5
     assert config.TRAINED_KAPPA == 10.0

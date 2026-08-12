@@ -67,21 +67,27 @@ FROZEN_DEFAULTS = dict(gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0)
 
 def _load_v1_training_module():
     """Importe le module d'entrainement V1 (scenarios, objectifs, DNS)."""
-    import TrainHyperParam_v2 as T
+    import train_hyperparams as T
     return T
 
 
 def fold_scenarios(T, only=None, warn=True):
     """Liste DEDOUBLONNEE des classes disponibles pour les folds LOSO.
 
-    ATTENTION (defaut du module d'entrainement V1). `T.SCENARIOS_ALL` vaut
-    `SCENARIOS_ISOLATED + SCENARIOS_COMPLEX`, or SCENARIOS_ISOLATED contient
-    deja `ot` et `rotor` et SCENARIOS_COMPLEX les reintroduit a l'identique :
-    la liste compte 6 entrees pour 4 classes distinctes, et la perte
-    composite `mean(Loss_i)` pondere donc OT et rotor deux fois plus que KH
-    et tearing. Pour un fold LOSO, laisser le doublon reviendrait a garder la
-    classe « tenue » dans l'entrainement, c'est-a-dire a fabriquer une fuite.
-    On deduplique par cle en conservant le premier exemplaire.
+    Historique. `T.SCENARIOS_ALL` comptait six entrees pour quatre classes
+    distinctes : `SCENARIOS_ISOLATED` contenait deja `ot` et `rotor`, et
+    `SCENARIOS_COMPLEX` les reintroduisait a l'identique. La perte
+    composite `mean(Loss_i)` les ponderait donc double, et pour un fold
+    LOSO laisser le doublon aurait garde la classe « tenue » dans
+    l'entrainement — une fuite fabriquee. D'ou cette deduplication.
+
+    Le defaut est corrige en amont : `SCENARIOS_ISOLATED` porte a nouveau
+    les quatre scenarios isoles (kh, vortex, tearing, coalescence) et
+    `SCENARIOS_ALL` compte six classes DISTINCTES. Deux consequences pour
+    les campagnes lancees d'ici :
+      - la deduplication ne retire plus rien ; elle reste comme garde,
+      - il y a six folds LOSO possibles au lieu de quatre. Les resultats
+        publies sur quatre folds ne sont pas comparables terme a terme.
     """
     seen, scen = set(), []
     dupes = []
@@ -92,7 +98,7 @@ def fold_scenarios(T, only=None, warn=True):
         seen.add(k)
         scen.append((k, c))
     if dupes and warn:
-        print(f"  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists {dupes} "
+        print(f"  [WARNING] train_hyperparams.SCENARIOS_ALL lists {dupes} "
               f"twice; de-duplicated for LOSO (see docstring).", flush=True)
     if only:
         keep = {o.lower() for o in only}
@@ -138,8 +144,15 @@ def train_params_excluding(T, dns_traces, train_list, n_trials, seed=0,
     optuna.logging.set_verbosity(
         optuna.logging.INFO if verbose else optuna.logging.WARNING)
     lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
+    # `frozen_params` explicite : `gamma_hydro`, `gamma_mag` et `kappa`
+    # etaient des constantes du module d'entrainement, donc geles de fait.
+    # Ils font desormais partie de l'espace de recherche a 8 parametres.
+    # On les passe donc en geles ici, pour que cette campagne continue de
+    # mesurer ce qu'elle mesurait — le gel etait une decision, pas un
+    # effet de bord de l'implementation d'en face.
     obj = T.make_composite_objective(
-        dns_traces, train_list, split_michelson=True, lambda_cost=lam)
+        dns_traces, train_list, frozen_params=dict(FROZEN_DEFAULTS),
+        lambda_cost=lam)
     if storage_path:
         study = _persistent_study(storage_path, study_name, seed)
         done = _n_completed(study)
@@ -156,7 +169,7 @@ def train_params_excluding(T, dns_traces, train_list, n_trials, seed=0,
         study.optimize(obj, n_trials=todo, catch=(Exception,))
     best = dict(FROZEN_DEFAULTS)
     best.update(study.best_params)
-    best.setdefault("threshold_amr", 0.14959824837662078)
+    best.setdefault("threshold_amr", T.CLASSICAL_BEST_THRESHOLD)
     return best, float(study.best_value), _n_completed(study)
 
 

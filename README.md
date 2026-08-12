@@ -233,7 +233,6 @@ BA_Proj/
 ├── setup_env.sh                    # Create the Conda environment
 ├── update.sh                       # Update/sync the Conda environment
 ├── run_pipeline.sh                 # Run the main Q-HAS simulation
-├── TrainHyperParams.sh             # Train hyperparameters (local)
 ├── TrainHP_GoogleColab.sh          # Train hyperparameters (Google Colab)
 ├── TrainHPC.sh                     # Train hyperparameters (HPC/SLURM)
 ├── VisuParam.sh                    # Visualize training results
@@ -245,8 +244,8 @@ BA_Proj/
 │
 ├── src/                            # ── Main source code ──
 │   ├── pipeline.py                 # Main pipeline orchestrator & scoring
-│   ├── TrainHyperParam.py          # 3-phase Optuna hyperparameter optimization (v1, Orszag-Tang only)
-│   ├── TrainHyperParam_v2.py      # Multi-scenario composite training (v2, isolated anomalies)
+│   ├── train_hyperparams.py        # THE training script — 8-parameter Optuna search,
+│   │                               #   3 QAOA phases + 3 classical phases, 6 scenarios
 │   ├── analyze_hyperparams.py      # Post-training analysis & diagnostic plots
 │   ├── hyperparams_loader.py        # Load best hyperparameters from JSON (phase/lambda/rank)
 │   ├── recompute_lambda_scores.py  # Rescore trials with different lambda values + Pareto plots
@@ -409,7 +408,8 @@ The pipeline initializes two parallel MHD simulations (`sim_quantum` = Q-HAS, `s
 ### Training, Figures & Tests
 
 ```bash
-bash TrainHyperParams.sh             # Train hyperparameters (local, Optuna)
+python src/train_hyperparams.py --print-space   # inspect the search space
+python src/train_hyperparams.py --seed 0        # train (local, Optuna)
 bash TrainHP_GoogleColab.sh          # Train on Google Colab
 bash VisuParam.sh                    # Visualize training results (12 plot types)
 
@@ -895,7 +895,7 @@ Post halo-fix analysis revealed that ZZ coupling was redundant with the classica
 
 ### Current Training (Phase 1)
 
-The training system (`src/TrainHyperParam_v2.py`) uses Optuna with MedianPruner. DNS trajectories are precomputed once for each scenario.
+The training system (`src/train_hyperparams.py`) uses Optuna with MedianPruner. DNS trajectories are precomputed once for each scenario.
 
 **Trained scenarios:** Kelvin-Helmholtz, Harris Tearing, Orszag-Tang, MHD Rotor (4 scenarios).
 
@@ -991,8 +991,10 @@ The loader automatically handles the split-beta architecture: Phase 1 results ha
 Run `bash VisuParam.sh` to generate 12 diagnostic plots: parameter importance (fANOVA), convergence curves, Pareto fronts, score landscapes, per-field sensitivity, and correlation heatmaps. Output goes to `Train_results/analysis_*/`.
 
 ```bash
-python src/TrainHyperParam_v2.py                           # Full sequential
-WORKER_PHASE=2 WORKER_TRIALS=50 python src/TrainHyperParam_v2.py  # Distributed
+python src/train_hyperparams.py --print-space             # what will be searched — check FIRST
+python src/train_hyperparams.py --seed 0                  # full sequential run
+python src/train_hyperparams.py --phase 2 --seed 0        # one phase
+WORKER_TRIALS=50 python src/train_hyperparams.py --phase 2 --seed 0   # one distributed worker
 ```
 
 ---
@@ -1097,8 +1099,8 @@ sbatch --export=PHASE=3,TRIALS=30 hpc/submit_training.sh
 
 ```bash
 export OPTUNA_STORAGE="postgresql://user:pass@ep-xxx.neon.tech/optuna_db?sslmode=require"
-export WORKER_PHASE="1" WORKER_TRIALS="50"
-python src/TrainHyperParam.py
+export WORKER_TRIALS="50"
+python src/train_hyperparams.py --phase 1 --seed 0
 ```
 
 ---

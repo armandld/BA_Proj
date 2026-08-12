@@ -27,7 +27,7 @@ held-out class with identical DNS trace, hot start, hybrid budget and depth.
 
 | item | protocol | this run | reason |
 |---|---|---|---|
-| folds | 8 classes | **4** | `TrainHyperParam_v2` exposes 4 distinct classes (see the duplication defect in `study/v4/RESULTS.md`) |
+| folds | 8 classes | **4** | `train_hyperparams` exposes 4 distinct classes (see the duplication defect in `study/v4/RESULTS.md`) |
 | Optuna budget | 170 trials | **4** (classical 2) | measured cost ≈ 55 min per trial across the 4 folds; 170 would take ≈ 7 days |
 | physics seeds | ≥ 3 | **1** | the pipeline initialises each scenario deterministically |
 

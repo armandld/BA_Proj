@@ -73,7 +73,7 @@ def survey():
 def test_only_phase1_was_ever_run(survey):
     """Le fait central : les phases 2 et 3 n'ont jamais tourne.
 
-    `TrainHyperParam_v2.PHASES` declare 600 / 600 / 400 essais pour
+    `train_hyperparams.PHASES` declare 600 / 600 / 400 essais pour
     phase1_composite, phase2_complex et phase3_validation. Seules les bases
     phase1 contiennent des essais. Les hyperparametres publies viennent donc
     d'UNE phase, pas de la sequence complete — ce que le manuscrit doit dire.

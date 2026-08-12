@@ -110,71 +110,22 @@ def test_the_caller_can_still_widen_the_threshold_explicitly():
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  2. L'objectif : ce qu'il explore vraiment
+#  2. L'objectif d'entrainement
 # ══════════════════════════════════════════════════════════════════════
 #
-# Quatre parametres etaient ecrits `if "x" not in frozen:` — la forme d'un
-# parametre conditionnel — alors que ce sont des constantes. Une campagne
-# pouvait croire optimiser kappa sans le faire.
-
-def _T():
-    import TrainHyperParam_v2 as T
-    return T
-
-
-def test_the_search_space_is_five_parameters_not_nine():
-    T = _T()
-    assert set(T.search_space(True)) == {"beta", "w_z_frac", "sigma",
-                                         "beta_curl", "beta_xpoint"}
-    assert len(T.search_space(True)) == 5
-
-
-def test_the_first_phase_searches_the_shared_michelson_instead():
-    T = _T()
-    assert "beta_michelson" in T.search_space(False)
-    assert "sigma" not in T.search_space(False)
-
-
-@pytest.mark.parametrize("name", ["threshold_amr", "gamma_hydro",
-                                  "gamma_mag", "kappa"])
-def test_the_fixed_parameters_are_named_and_never_searched(name):
-    T = _T()
-    assert name in T.FIXED_PARAMS
-    assert name not in T.search_space(True)
-    assert name not in T.search_space(False)
-
+# Les contrats de `train_hyperparams` vivent desormais dans
+# tests/pipeline/test_train_hyperparams_contracts.py, aupres du module
+# qu'ils testent. Il en reste ici le seul lien qui concerne le solveur :
+# le seuil gele, dont la valeur vient de l'etude classique.
 
 def test_the_frozen_threshold_is_the_measured_classical_best():
     """0.14959824837662078 est la valeur du meilleur essai classique (#42).
     Le lien est verifie contre la base dans
-    tests/test_hyperparams_provenance_break.py."""
-    assert _T().CLASSICAL_BEST_THRESHOLD == pytest.approx(
+    tests/pipeline/test_hyperparams_provenance_break.py."""
+    import train_hyperparams as T
+    assert T.CLASSICAL_BEST_THRESHOLD == pytest.approx(
         0.14959824837662078, abs=1e-15)
-
-
-def test_the_search_space_matches_what_the_objective_actually_suggests():
-    """Le test croise : la liste declaree doit coincider avec les
-    `trial.suggest_*` du code. Une liste qui derive du code serait pire
-    qu'une absence de liste."""
-    import inspect
-    import re
-    T = _T()
-    src = inspect.getsource(T.make_composite_objective)
-    suggested = set(re.findall(r'trial\.suggest_\w+\("(\w+)"', src))
-    declared = set(T.search_space(True)) | set(T.search_space(False))
-    assert suggested == declared, (
-        f"le code propose {sorted(suggested)}, la liste annonce "
-        f"{sorted(declared)}")
-
-
-def test_no_fixed_parameter_is_ever_suggested():
-    import inspect
-    import re
-    T = _T()
-    src = inspect.getsource(T.make_composite_objective)
-    suggested = set(re.findall(r'trial\.suggest_\w+\("(\w+)"', src))
-    assert not (suggested & set(T.FIXED_PARAMS)), (
-        "un parametre declare fixe est propose a Optuna")
+    assert T.FIXED_PARAMS["threshold_amr"] == T.CLASSICAL_BEST_THRESHOLD
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -190,12 +141,32 @@ def test_the_pipeline_warns_when_sigma_has_to_be_defaulted():
     assert "D-22" in src
 
 
-def test_the_run_details_record_where_sigma_came_from():
-    """Sans cette trace, un artefact ne permet pas de dire si sigma vient de
-    l'entrainement ou d'un repli."""
-    src = open(os.path.join(_SRC, "pipeline.py"), encoding="utf-8").read()
-    assert "_out['sigma_source']" in src
-    assert "'default' if _sigma_defaulted else 'loaded'" in src
+def test_every_detailed_exit_records_where_sigma_came_from():
+    """Sans cette trace, un artefact ne permet pas de dire si sigma vient
+    de l'entrainement ou d'un repli.
+
+    `pipeline` a QUATRE sorties `return_details`. Une seule portait la
+    provenance : celle du chemin de divergence. La trace exigee par D-22
+    n'existait donc que sur les runs qu'on jette, jamais sur ceux qu'on
+    publie. Elles passent desormais toutes par `_details` /
+    `_divergence_details` ; ce test verifie qu'aucune ne s'en echappe.
+    """
+    import ast
+    tree = ast.parse(open(os.path.join(_SRC, "pipeline.py"),
+                          encoding="utf-8").read())
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "pipeline")
+
+    escaped = []
+    for node in ast.walk(fn):
+        if not (isinstance(node, ast.If) and "return_details" in ast.unparse(node.test)):
+            continue
+        for ret in (n for n in ast.walk(node) if isinstance(n, ast.Return)):
+            text = ast.unparse(ret)
+            if not ("_details(" in text or "_divergence_details(" in text):
+                escaped.append(text[:80])
+    assert escaped == [], (
+        f"sorties detaillees sans provenance de sigma : {escaped}")
 
 
 def test_sigma_is_currently_absent_from_the_loaded_hyperparameters():

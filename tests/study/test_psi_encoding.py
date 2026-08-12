@@ -3,7 +3,7 @@
 `qaoa_inputs.prepare_qaoa_inputs` met psi a zero en dur
 (« no temporal flux in study »), alors que le pipeline V1 le calcule
 (`refinement.py:181`) et que la campagne Optuna a regle les hyperparametres
-en le faisant tourner (`TrainHyperParam_v2.py:70` importe `pipeline`).
+en le faisant tourner (`train_hyperparams.py:70` importe `pipeline`).
 
 L'etude evalue donc une variante du modele amputee d'un de ses trois
 encodages. Ces tests epinglent le fait, et verifient que la variante

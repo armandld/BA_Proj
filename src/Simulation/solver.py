@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.ndimage import zoom, map_coordinates
-from Simulation.grid import project_divergence_free_any
+from Simulation.grid import AXIS_X, AXIS_Y, project_divergence_free_any
 from Simulation.utils import compute_local_factor
 
 class MHDSolver:
@@ -117,8 +117,19 @@ class MHDSolver:
     def init_noisy_uniform(self, B0=1.0, noise_sigma=0.05, seed=42):
         X = self.grid.X
         rng = np.random.default_rng(seed)
-        self.Bx = B0 + noise_sigma * rng.standard_normal(X.shape)
-        self.By = noise_sigma * rng.standard_normal(X.shape)
+        # D-27 : bruit tiré d'une fonction de flux, donc solénoïdal par
+        # construction. La version précédente tirait Bx et By
+        # indépendamment : `enforce_incompressibility` n'en gardait que la
+        # moitié solénoïdale, et `noise_sigma` n'était pas la déviation
+        # obtenue. Ici on tire psi, on prend son rotationnel, puis on
+        # renormalise pour que l'écart-type demandé soit celui produit.
+        psi = rng.standard_normal(X.shape)
+        bx, by = self._curl_z_fd4(psi, self.dx)
+        scale = noise_sigma / max(float(np.std(np.concatenate([bx.ravel(),
+                                                               by.ravel()]))),
+                                  1e-30)
+        self.Bx = B0 + scale * bx
+        self.By = scale * by
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
@@ -141,11 +152,18 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Perturbation magnétique pour déclencher la tearing mode
-        self.By = perturbation * np.cos(k_mode * X) * (
-            1.0 / np.cosh((Y - np.pi / 2) / shear_width) ** 2
-            + 1.0 / np.cosh((Y - 3 * np.pi / 2) / shear_width) ** 2
-        )
+        # Perturbation magnétique pour déclencher la tearing mode.
+        # D-27 : posée par fonction de flux, donc à divergence nulle par
+        # construction. La version précédente ne posait que `dBy` ; la
+        # projection en retirait 72.5 %.
+        u1 = (Y - np.pi / 2) / shear_width
+        u2 = (Y - 3 * np.pi / 2) / shear_width
+        env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
+        # d/dy sech^2(u) = -(2/w) sech^2(u) tanh(u)
+        psi = -(perturbation / k_mode) * np.sin(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         # Pas de vitesse initiale — la reconnexion drive la dynamique
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
@@ -266,11 +284,18 @@ class MHDSolver:
             - np.tanh((Y - (3 * np.pi / 2 + d)) / shear_width)
             - 2.0
         )
-        # Perturbation pour la tearing
-        self.By = perturbation * np.sin(k_mode * X) * (
-            np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
-            + np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
-        )
+        # Perturbation pour la tearing.
+        # D-27 : posée par fonction de flux. `_solenoidal_perturbation` pose
+        # `dBy ~ cos(kx)` ; ici la version historique était en `sin(kx)`, on
+        # décale donc la phase de -pi/(2k) pour retrouver le même profil.
+        g1 = np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
+        g2 = np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
+        env = g1 + g2
+        # profil historique en sin(kx) : psi = (amp/k) cos(kx) f(y)
+        psi = (perturbation / k_mode) * np.cos(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
@@ -360,12 +385,15 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Stronger perturbation to drive island coalescence
-        # Uses cos(k*x) to create multiple X-points along the sheet
-        self.By = perturbation * np.cos(k_mode * X) * (
-            1.0 / np.cosh((Y - np.pi / 2) / shear_width) ** 2
-            + 1.0 / np.cosh((Y - 3 * np.pi / 2) / shear_width) ** 2
-        )
+        # Stronger perturbation to drive island coalescence.
+        # D-27 : posée par fonction de flux (voir harris_tearing).
+        u1 = (Y - np.pi / 2) / shear_width
+        u2 = (Y - 3 * np.pi / 2) / shear_width
+        env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
+        psi = -(perturbation / k_mode) * np.sin(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         # Small velocity perturbation to drive coalescence
         self.vx = np.zeros_like(X)
         self.vy = perturbation * np.sin(k_mode * X) * (
@@ -373,6 +401,25 @@ class MHDSolver:
             + np.exp(-((Y - 3 * np.pi / 2) ** 2) / shear_width ** 2)
         )
         self.enforce_incompressibility()
+
+    # ----------------------------------------------------------------
+    #  Perturbations magnétiques : par fonction de flux
+    # ----------------------------------------------------------------
+    @staticmethod
+    def _curl_z_fd4(psi, dx):
+        """`rot(psi z)` avec le MEME stencil FD4 que le second membre.
+
+        `div(rot psi) = d_x d_y psi - d_y d_x psi` : exactement nul, parce
+        que les deux dérivées FD4 sont des combinaisons de `np.roll` et
+        commutent. Dériver `psi` analytiquement ne donnerait la contrainte
+        qu'à la précision de discrétisation — mesuré 2.1e-05 au lieu de
+        1e-16 sur `harris_tearing`.
+
+        La leçon vaut au-delà d'ici : une contrainte discrète ne se satisfait
+        que dans l'opérateur qui la mesure.
+        """
+        g_x, g_y = MHDSolver._fd_grad(psi, dx)
+        return g_y, -g_x
 
     def get_fluxes(self):
         dx = self.dx

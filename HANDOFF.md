@@ -146,7 +146,7 @@ verification commands in `docs/v4_final_results_for_paper.md` §3 and
 |---|---|---|
 | D1 | KH physics-seed amplitude overwhelms the intended mode | V3 Task 8 |
 | D2 | phase-1b KH observable averages on the wrong axis — the check could **never** detect KH growth | `phase1b_dns_validation` |
-| D3 | `SCENARIOS_ALL` lists `ot`/`rotor` twice → 2:1 loss weighting; for LOSO would manufacture leakage | `TrainHyperParam_v2` |
+| D3 | `SCENARIOS_ALL` lists `ot`/`rotor` twice → 2:1 loss weighting; for LOSO would manufacture leakage | `train_hyperparams` |
 | D4 | QAOA threshold hard-coded at 0.1496 while the classical arm tunes freely → arms compared at different operating points | `make_composite_objective` |
 | D5 | RK4-then-projection = first-order Lie splitting; scheme is order 1 | `solver.py::step_full` |
 | D6 | V1 suite fails 8 tests on a clean checkout (6 signature drift, **2 substantive**) | `tests/test_v9_metrics.py` etc. |
@@ -156,7 +156,7 @@ verification commands in `docs/v4_final_results_for_paper.md` §3 and
 | D10 | `compare_rotor_budget.py` raises `TypeError`; **as committed it has never been runnable** | `src/compare_rotor_budget.py:110` |
 | **D11** | **the Q-HAS arm is not deterministic** — no RNG seed anywhere in V1's VQA chain | `src/VQA/execute.py`, `runtime.py` |
 | **D12** | aborted runs return a **partial score with keys identical** to a completed run | `src/pipeline.py:499` |
-| **D13** | **train/test leak**: the QAOA arm's threshold `0.1496` was fitted on *all four* classes, including the held-out one, while the classical arm re-tunes per fold | `TrainHyperParam_v2:632`, `t15:154` |
+| **D13** | **train/test leak**: the QAOA arm's threshold `0.1496` was fitted on *all four* classes, including the held-out one, while the classical arm re-tunes per fold | `train_hyperparams:632`, `t15:154` |
 | **D14** | *(mine, found late)* T20's classical **determinism control** ran at the *tuned* threshold on `ot` and `kh` while the artifact field reads `"budget-matched classical"`. The field describes the reference *value* (correctly read from T15b), not the replayed control. Recomputing from `classical_stats` gives phys **0.4845** on `ot` against the matched **0.0827** — enough to flip the fold's direction | `t20:122`, `t20:298` |
 | **D15** | *(mine, found late)* `git_commit_hash()` is called at **save** time, so a 1-hour run is stamped with code committed *after* it started. This is how the `ot`/`kh` T20 artifacts carry a hash that postdates the `always_matched=True` fix while having executed the pre-fix code. The provenance stamp CLAUDE.md requires is therefore not sufficient on its own for long runs | every `study/v4/t*.py` |
 

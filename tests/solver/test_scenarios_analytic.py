@@ -160,85 +160,106 @@ def _spectral_div(fx, fy, dx):
                                 + 1j * KY * np.fft.fft2(fy)))
 
 
-#: Scenarios dont le champ magnetique initial est solenoidal PAR
-#: CONSTRUCTION. Les autres posent une perturbation qui ne l'est pas, et
-#: comptaient sur `enforce_incompressibility` pour la rattraper — voir D-27.
-SOLENOIDAL_BY_CONSTRUCTION = [
-    "kelvin_helmholtz", "orszag_tang", "magnetic_twist", "ghost_twisting",
-    "lamb_oseen_vortex", "mhd_rotor",
-]
+# ══════════════════════════════════════════════════════════════════════
+#  D-27 — la perturbation est posee par fonction de flux
+# ══════════════════════════════════════════════════════════════════════
+#
+# Quatre scenarios posaient `dBy` seul. En 2-D, `div B = dBx/dx + dBy/dy` :
+# poser la seule composante transverse donne `div B = d(dBy)/dy != 0`, et
+# `enforce_incompressibility` rattrapait la contrainte — en retirant 72.5 %
+# de la perturbation sur `harris_tearing`, un scenario DEPLOYE. Le mode de
+# dechirement etait amorce au quart de son amplitude nominale.
+#
+#   avant         div B rel      perturbation conservee
+#     harris_tearing      2.801e-03     27.5 %
+#     island_coalescence  1.400e-02     27.5 %
+#     noisy_uniform       4.947e-01     55.7 %
+#     double_tearing      9.062e-04     77.3 %
+#
+# Corrige : `B = rot(psi z)` est a divergence nulle par construction.
+#
+# LE POINT QUI A DEMANDE DEUX ESSAIS : deriver `psi` ANALYTIQUEMENT ne donne
+# la contrainte qu'a la precision de discretisation — 2.1e-05 mesure. Il
+# faut deriver avec le MEME stencil FD4 que le second membre, car alors
+# `div(rot psi) = d_x d_y psi - d_y d_x psi` est exactement nul : les deux
+# derivees sont des combinaisons de `np.roll` et commutent.
+#
+# Une contrainte discrete ne se satisfait que dans l'operateur qui la mesure.
 
-#: D-27 — les autres, avec la part de perturbation que la projection leur
-#: laissait. Mesure a N=64, |By| max avec projection / sans projection :
-#:
-#:   harris_tearing      27.5 %       island_coalescence  27.5 %
-#:   noisy_uniform       55.7 %       double_tearing      77.3 %
-#:
-#: `harris_tearing` est un des quatre scenarios DEPLOYES : le mode de
-#: dechirement y etait amorce a 27.5 % de son amplitude nominale. La
-#: correction propre est d'ecrire la perturbation comme le rotationnel
-#: d'une fonction de flux — solenoidale par construction — ce qui change
-#: les champs et donc tout nombre publie. Decision en attente.
-NOT_SOLENOIDAL_AT_INIT = {
-    "harris_tearing": 2.801e-3,
-    "double_tearing": 9.062e-4,
-    "island_coalescence": 1.400e-2,
-    "noisy_uniform": 4.947e-1,
-}
+
+def _fd_div_rel(s):
+    """Divergence FD4 relative — l'operateur que l'induction conserve."""
+    ax, _ = MHDSolver._fd_grad(s.Bx, s.dx)
+    _, by = MHDSolver._fd_grad(s.By, s.dx)
+    b_rms = float(np.sqrt(np.mean(s.Bx**2 + s.By**2)))
+    return float(np.max(np.abs(ax + by))) * s.dx / b_rms
 
 
-@pytest.mark.parametrize("scenario", SOLENOIDAL_BY_CONSTRUCTION)
+@pytest.mark.parametrize("scenario", SCENARIOS)
 def test_the_magnetic_field_starts_solenoidal(scenario):
-    """Solenoidal SANS projection : la contrainte tient par construction.
+    """Solenoidal SANS projection, dans l'operateur qui le conserve.
 
-    Ce test passait sur les dix scenarios tant que `enforce_incompressibility`
-    projetait B. En cessant de le faire (D-25), quatre d'entre eux se sont
-    reveles non solenoidaux — la projection les rattrapait, en amputant leur
-    perturbation.
+    Les dix scenarios, desormais. Quatre ne l'etaient pas avant D-27.
     """
     s = _sim(scenario)
-    dx = s.grid.dx
-    b_rms = float(np.sqrt(np.mean(s.Bx**2 + s.By**2)))
-    if b_rms < 1e-12:
+    if float(np.sqrt(np.mean(s.Bx**2 + s.By**2))) < 1e-12:
         pytest.skip("champ magnetique nul")
-    rel = float(np.max(np.abs(_spectral_div(s.Bx, s.By, dx)))) * dx / b_rms
-    assert rel < 1e-10, (
-        f"{scenario} : div B spectrale relative {rel:.3e} des l'initialisation")
+    rel = _fd_div_rel(s)
+    assert rel < 1e-12, (
+        f"{scenario} : div_FD B relative {rel:.3e} des l'initialisation")
 
 
-@pytest.mark.parametrize("scenario,expected", sorted(NOT_SOLENOIDAL_AT_INIT.items()))
-def test_the_four_seeded_scenarios_are_still_not_solenoidal(scenario, expected):
-    """D-27 fige : ces quatre-la posent une perturbation non solenoidale.
-
-    A retourner le jour ou elles seront ecrites comme le rotationnel d'une
-    fonction de flux. En attendant, le nombre est ecrit pour qu'une derive
-    se voie.
-    """
+@pytest.mark.parametrize("scenario,expected_amp", [
+    ("harris_tearing", 0.01),
+    ("island_coalescence", 0.05),
+    ("double_tearing", 0.01),
+])
+def test_the_perturbation_keeps_its_full_nominal_amplitude(scenario, expected_amp):
+    """D-27 : la projection en retirait jusqu'a 72.5 %. Plus maintenant."""
     s = _sim(scenario)
-    dx = s.grid.dx
-    b_rms = float(np.sqrt(np.mean(s.Bx**2 + s.By**2)))
-    rel = float(np.max(np.abs(_spectral_div(s.Bx, s.By, dx)))) * dx / b_rms
-    assert rel == pytest.approx(expected, rel=0.25), (
-        f"{scenario} : div B relative {rel:.3e}, attendu ~{expected:.1e}")
+    got = float(np.max(np.abs(s.By)))
+    assert got == pytest.approx(expected_amp, rel=1e-3), (
+        f"{scenario} : perturbation a {got:.6f}, nominale {expected_amp}")
 
 
-def test_projecting_B_amputates_the_tearing_seed():
-    """Le cout de la projection sur un scenario DEPLOYE, mesure.
+def test_a_flux_function_perturbation_is_exactly_divergence_free():
+    """La propriete qui fait tout marcher, isolee.
 
-    `harris_tearing` amorce son mode de dechirement par
-    `dBy = eps cos(kx) sech^2`. La projection en retire 72.5 %.
+    `div(rot psi)` doit valoir zero A LA PRECISION MACHINE, pas a la
+    precision de discretisation — c'est ce qui distingue une derivee FD4
+    d'une derivee analytique.
     """
-    old = MHDSolver.PROJECT_B
-    try:
-        MHDSolver.PROJECT_B = False
-        a = _sim("harris_tearing")
-        MHDSolver.PROJECT_B = True
-        b = _sim("harris_tearing")
-    finally:
-        MHDSolver.PROJECT_B = old
-    kept = float(np.max(np.abs(b.By)) / np.max(np.abs(a.By)))
-    assert kept == pytest.approx(0.275, abs=0.05), (
-        f"la projection conserve {kept:.1%} de la perturbation")
+    s = _sim("orszag_tang")
+    rng = np.random.default_rng(0)
+    psi = rng.normal(size=s.Bx.shape)
+    bx, by = MHDSolver._curl_z_fd4(psi, s.dx)
+    ax, _ = MHDSolver._fd_grad(bx, s.dx)
+    _, byy = MHDSolver._fd_grad(by, s.dx)
+    scale = float(np.max(np.abs(bx))) + 1e-30
+    assert float(np.max(np.abs(ax + byy))) / scale < 1e-13
+
+
+def test_an_analytic_derivative_would_not_have_been_exact():
+    """Fige la raison du deuxieme essai : l'ecart de discretisation.
+
+    Une perturbation derivee analytiquement laisse une divergence discrete
+    de l'ordre de dx^4, pas 1e-16. Sur `harris_tearing` a N=64 : 2.1e-05.
+    """
+    s = _sim("harris_tearing")
+    X, Y = s.grid.X, s.grid.Y
+    w, k, amp = 0.3, 1.0, 0.01
+    u1, u2 = (Y - np.pi / 2) / w, (Y - 3 * np.pi / 2) / w
+    env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
+    d_env = -(2.0 / w) * (np.tanh(u1) / np.cosh(u1) ** 2
+                          + np.tanh(u2) / np.cosh(u2) ** 2)
+    dBx = -(amp / k) * np.sin(k * X) * d_env      # derivees ANALYTIQUES
+    dBy = amp * np.cos(k * X) * env
+    ax, _ = MHDSolver._fd_grad(dBx, s.dx)
+    _, byy = MHDSolver._fd_grad(dBy, s.dx)
+    rel = float(np.max(np.abs(ax + byy))) / (float(np.max(np.abs(dBy))) + 1e-30)
+    assert rel > 1e-9, (
+        f"la derivee analytique donne {rel:.3e} : elle serait exacte, et la "
+        "distinction avec le stencil FD4 n'aurait plus lieu d'etre")
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)

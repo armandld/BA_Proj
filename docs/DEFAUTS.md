@@ -8,11 +8,12 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **3** |
+| **ouverts** — décision ou campagne requise | **2** |
 | **gelés** volontairement | 2 |
 
-Avant la réoptimisation, les trois ouverts doivent être tranchés : deux
-demandent une décision, un demande la campagne elle-même.
+D-27 est sorti d'ici : corrigé, mesuré, verrouillé — il vit dans `RESULTS.md`.
+Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
+qu'on peut prendre après.
 
 ---
 
@@ -21,7 +22,7 @@ demandent une décision, un demande la campagne elle-même.
 **Où ça bloque.** Réoptimiser demande de savoir d'où l'on part. Aucun chiffre
 de performance n'est attribuable à un réglage dont on ignore l'origine.
 
-**Comment on est tombé dessus.** En auditant `TrainHyperParam_v2`, quatre
+**Comment on est tombé dessus.** En auditant `train_hyperparams`, quatre
 paramètres écrits comme conditionnels se sont révélés être des constantes. En
 remontant aux bases Optuna pour voir lesquels avaient réellement été
 échantillonnés, le JSON déployé ne correspondait à aucune.
@@ -41,16 +42,33 @@ coïncide. Le code d'entraînement, lui, est cohérent avec les bases : il fixe
 `threshold_amr` à 0,14959824837662078, exactement le meilleur essai
 classique. **C'est le JSON qui est orphelin.**
 
-**Où on en est.** Ne se corrige pas par du code. Seule la réoptimisation le
-règle. Trois paramètres n'ayant jamais été échantillonnés, ce sera pour eux
+**Où on en est.** Ne se corrige pas par du code seul. Seule la réoptimisation
+le règle. Trois paramètres n'ayant jamais été échantillonnés, ce sera pour eux
 une *première*, pas une reprise.
 
-**Décision attendue** : périmètre — les 5 déjà échantillonnés, ou les 8.
-Nuance qui allège : `g_strain + g_rot ≡ 1`, donc `kappa` ne contrôle **qu'un**
-degré de liberté.
+**Périmètre : tranché — les 8.** `beta`, `w_z_frac`, `sigma`, `beta_curl`,
+`beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`. `threshold_amr` reste gelé
+au meilleur essai classique, pour que la comparaison porte sur ce que le
+quantique ajoute. Nuance qui allège : `g_strain + g_rot ≡ 1`, donc `kappa` ne
+contrôle **qu'un** degré de liberté.
+
+**Le mécanisme est fermé, la campagne reste à faire.** D-35 identifiait
+pourquoi le fichier déployé ne correspondait à aucune base : `_save_results`
+n'écrivait que `study.best_params`, c'est-à-dire les seuls paramètres
+*échantillonnés*. Le JSON écrit désormais le jeu complet, l'espace de
+recherche avec ses bornes, le hash du commit et `sys.argv`. Une campagne
+lancée aujourd'hui produira donc un fichier traçable — mais le fichier
+**actuellement déployé** reste orphelin jusqu'à ce qu'elle tourne.
+
+**Reste à trancher avant de lancer.** La borne haute de `w_z_frac` vaut 1000
+alors que le paramètre est documenté comme une *fraction*. Elle vient de la
+campagne gelée (graine 500). Conservée telle quelle pour ne pas changer la
+science en même temps que le code.
 
 ```bash
+python src/train_hyperparams.py --print-space          # l'espace réel
 pytest tests/pipeline/test_hyperparams_provenance_break.py
+pytest tests/pipeline/test_train_hyperparams_contracts.py
 ```
 
 Le dernier test est le **critère d'acceptation** : `xfail` aujourd'hui, il
@@ -101,48 +119,6 @@ publié.
 
 ```bash
 pytest tests/solver/test_solver_convergence.py -m slow     # ~10 min
-```
-
----
-
-## D-27 — la projection amputait la perturbation de quatre scénarios
-
-**Où ça bloque.** `harris_tearing` est un des quatre scénarios **déployés**.
-Réoptimiser avant de trancher, c'est ajuster contre une instabilité amorcée
-au quart de son amplitude.
-
-**Comment on est tombé dessus.** En retirant la projection de B — elle
-dégradait sa divergence de huit ordres — quatre scénarios se sont révélés non
-solénoïdaux à l'initialisation. Ils ne l'avaient jamais été ; la projection
-les rattrapait, et personne ne l'avait vu parce qu'elle masquait la
-divergence.
-
-| scénario | div B relative | perturbation conservée |
-|---|---|---|
-| **`harris_tearing`** *(déployé)* | 2,801e−03 | **27,5 %** |
-| `island_coalescence` | 1,400e−02 | **27,5 %** |
-| `noisy_uniform` | 4,947e−01 | 55,7 % |
-| `double_tearing` | 9,062e−04 | 77,3 % |
-
-`harris_tearing` amorce son mode de déchirement par `δBy = ε cos(kx) sech²`.
-**La projection en retirait 72,5 %.**
-
-Le plan note que ce scénario « dégénère dans toutes les configurations
-testées, sans explication ». Ceci en est peut-être une part — **non
-affirmé** : seule l'amplitude initiale est mesurée, pas le comportement de
-l'instabilité.
-
-**Où on en est.** L'état actuel est figé par des tests, valeurs mesurées
-écrites, pour qu'une dérive se voie.
-
-**Décision attendue.** La correction propre est d'écrire la perturbation
-comme le rotationnel d'une fonction de flux, `δB = ∇×(ψ ẑ)` — solénoïdale par
-construction, comme cela a déjà été fait pour `magnetic_twist` et
-`ghost_twisting`. Elle change les champs de quatre scénarios, donc tout
-nombre publié qui les traverse.
-
-```bash
-pytest tests/solver/test_scenarios_analytic.py -k "solenoidal or amputates"
 ```
 
 ---

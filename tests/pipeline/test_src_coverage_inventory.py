@@ -74,10 +74,7 @@ COVERED = {
 #  Scripts lancés en ligne de commande : on teste qu'ils s'importent et
 #  que leur interface d'arguments tient.
 ENTRY_POINTS = {
-    "TrainHyperParam_v1.py",
-    "TrainHyperParam_v2.py",
-    "TrainHyperParam_v3.py",
-    "TrainHyperParam_v4.py",
+    "train_hyperparams.py",
     "compare_rotor_budget.py",
     "analyze_hyperparams.py",
     "recompute_lambda_scores.py",

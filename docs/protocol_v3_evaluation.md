@@ -224,7 +224,7 @@ The paper is publishable under ANY outcome, with narrative fixed in advance:
 
 **New code required:** dynamic GT generator (Level 1.2 — reuses
 `step_layered` machinery), L2 horizon-shifted dataset builder (~trivial on
-top of phase 11), L3 driver (reuses V1 `pipeline.py` + `TrainHyperParam_v2`
+top of phase 11), L3 driver (reuses V1 `pipeline.py` + `train_hyperparams`
 with a scenario-exclusion flag), trajectory block bootstrap helper.
 
 ---

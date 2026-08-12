@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 24 défauts corrigés
+## Les 34 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -66,8 +66,22 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-12 | mappeur `study/` : ν, η, dx annoncés influents, sans effet | doc alignée | `pytest tests/mapping/test_mapper_contracts.py -k v2` |
 | D-18 | garde de divergence à 1e100, inerte | 1e50 passait → seuil **1e8** | `pytest tests/solver/test_solver_guards_and_objective.py -k caught` |
 | D-26 | `init_ghost_twisting` pose un champ **impossible** | angle **0,027 → 1,906 rad** | `pytest tests/solver/test_scenarios_analytic.py -k ghost` |
-| — | `search_space` : 4 constantes présentées comme réglables | espace réel **5 paramètres**, pas 9 | `pytest tests/solver/test_solver_guards_and_objective.py -k search` |
+| D-27 | 4 scénarios initialisés non solénoïdaux, rabotés par la projection | perturbation **27,5 % → 100 %**, div_FD B **2,801e−03 → 1,08e−16** | `pytest tests/solver/test_scenarios_analytic.py -k "solenoidal or amputates"` |
 | D-28 | `hyperparams_loader` substituait en silence les paramètres de l'**autre bras** (`quantum`↔`classical`) quand celui demandé manquait, et choisissait le premier lambda par ordre alphabétique quand plusieurs coexistaient | substitution → **lève** ; choix arbitraire → **lève sauf lambda unique** | `pytest tests/study/test_hyperparams_two_sources.py -k "refuses or implicit"` |
+| — | `search_space` : 4 constantes présentées comme réglables | espace réel **5 paramètres**, pas 9 | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k declares` |
+
+**Le script d'entraînement** — audité pour la réoptimisation, un seul survit
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-29 | `SCENARIOS_ISOLATED` contenait les scénarios **complexes** ; `ot` et `rotor` comptés deux fois | **6 entrées / 4 classes → 6 / 6**, pondération 2:1 → 1:1 | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k scenario` |
+| D-30 | le chemin séquentiel appelle `_run_phase1(study, dns)` — la fonction prend **un** argument | `TypeError` après la phase 1 → chemin exécuté de bout en bout | `pytest tests/pipeline/test_train_hyperparams_smoke.py` |
+| D-31 | `beta_michelson` proposé à Optuna, **jamais lu** par `pipeline.py` | phase 1 optimisait un paramètre sans effet → paramètre supprimé | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k michelson` |
+| D-32 | l'élagage ne rapportait qu'au step 0, sous `n_warmup_steps=2` | 1e9 au step 0 après 40 essais : **jamais élagué** → élagué au 3ᵉ scénario | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k prun` |
+| D-33 | `AdvAnomaliesEnable` absent d'Orszag-Tang, replié sur `False` | OT sans terme ZZZZ de point X → **6/6 scénarios** l'activent, la clé manquante **lève** | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k argus` |
+| D-34 | budget d'essais calculé une fois, par worker | 4 workers, cible 12 : **48 essais → 12** | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k budget` |
+| D-35 | le JSON final ne portait que les paramètres **échantillonnés** | `threshold_amr` absent → **9/9 valeurs** + hash git + argv | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k redeploy` |
+| D-36 | 3 des 4 sorties détaillées de `pipeline` sans provenance de `sigma` | trace présente **seulement sur les runs divergés** → sur les 4 | `pytest tests/solver/test_solver_guards_and_objective.py -k sigma` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
@@ -512,7 +526,7 @@ scientific; the mode exists only to de-risk a day-long run.
 
 ### Defect found in the V1 training module (blocking for LOSO)
 
-`TrainHyperParam_v2.SCENARIOS_ALL = SCENARIOS_ISOLATED + SCENARIOS_COMPLEX`
+`train_hyperparams.SCENARIOS_ALL = SCENARIOS_ISOLATED + SCENARIOS_COMPLEX`
 where `SCENARIOS_ISOLATED` already contains `ot` and `rotor` and
 `SCENARIOS_COMPLEX` re-adds **the same config objects**. The list therefore
 has 6 entries for **4 distinct classes**, and since the composite loss is
@@ -1326,7 +1340,7 @@ three observations.
 `docs/level3_preregistration.md` states the held-out class is excluded from
 **all** tuning of both arms. That is **false for the QAOA arm**.
 
-`TrainHyperParam_v2.make_composite_objective` hard-codes the decision
+`train_hyperparams.make_composite_objective` hard-codes the decision
 threshold:
 
 ```python
@@ -3888,7 +3902,7 @@ de ses quatre paramètres communs ne coïncide :
 
 ## Le code d'entraînement, lui, est cohérent
 
-`TrainHyperParam_v2` code en dur `threshold_amr = 0.14959824837662078` avec
+`train_hyperparams` code en dur `threshold_amr = 0.14959824837662078` avec
 le commentaire « le meilleur classique ». C'est **exactement** la valeur du
 meilleur essai classique (#42, perte 0.2148). Le code et les bases sont
 d'accord ; **c'est le JSON qui est orphelin**.
@@ -3907,7 +3921,7 @@ Corollaire pour le périmètre : `gamma_hydro`, `gamma_mag` et `kappa` n'ont
 jamais été optimisés par la campagne gelée. Les inclure dans la
 réoptimisation n'est donc pas une *re*-optimisation, c'est une première.
 
-## Autres constats sur `TrainHyperParam_v2`
+## Autres constats sur `train_hyperparams`
 
 `make_composite_objective` présente quatre paramètres comme conditionnels
 (`if "x" not in frozen:`) alors qu'ils sont des **constantes** :
@@ -4128,3 +4142,298 @@ pas (contrôle négatif, sans quoi on croirait qu'aucune projection n'est
 nécessaire), la projection dégrade la contrainte de quatre ordres au moins,
 la vitesse reste projetée, la raison est écrite dans la docstring, et le
 retrait ne coûte rien en précision.
+
+---
+
+# D-27 — la projection amputait la perturbation de quatre scénarios
+
+**Commande.** `pytest tests/solver/test_scenarios_analytic.py -k "solenoidal or amputates"`
+· commit de la mesure : `git rev-parse HEAD`
+
+## Ce qui se passait
+
+En 2-D, `div B = ∂Bx/∂x + ∂By/∂y = 0`. `harris_tearing` pose un `Bx` qui ne
+dépend que de `y` — donc `∂Bx/∂x = 0` — et une perturbation
+`δBy = ε·cos(kx)·sech²(y)` dont `∂By/∂y ≠ 0`. La perturbation **viole** donc
+la contrainte, et la projection la rabote pour la rétablir.
+
+Le défaut n'était pas visible tant que B était projeté : la projection
+masquait la divergence qu'elle corrigeait. Il n'apparaît qu'une fois D-25
+corrigé — **trouvé en retirant une couche, pas en posant une question.**
+
+| scénario | div_FD B relative | perturbation conservée |
+|---|---|---|
+| **`harris_tearing`** *(déployé)* | 2,801e−03 | **27,5 %** |
+| `island_coalescence` | 1,400e−02 | **27,5 %** |
+| `noisy_uniform` | 4,947e−01 | 55,7 % |
+| `double_tearing` | 9,062e−04 | 77,3 % |
+
+`harris_tearing` amorce son mode de déchirement par cette perturbation. **La
+projection en retirait 72,5 %.** Le plan notait que ce scénario « dégénère
+dans toutes les configurations testées, sans explication » ; ceci en est
+peut-être une part — **non affirmé**, seule l'amplitude initiale est mesurée.
+
+## La correction, et sa première version fausse
+
+La perturbation s'écrit comme le rotationnel d'une fonction de flux,
+`δB = ∇×(ψ ẑ)`, solénoïdale par construction — comme cela avait déjà été fait
+pour `magnetic_twist` et `ghost_twisting`.
+
+**Première version : dérivées analytiques de ψ.** Résultat `div_FD B` =
+**2,1e−05**, pas 1e−16. Le champ était exactement solénoïdal pour l'opérateur
+continu, et faux pour celui du solveur — l'erreur mesurée était l'erreur de
+discrétisation. **Cinquième occurrence du même piège** : mesurer une grandeur
+discrète avec un stencil autre que celui qui l'a produite.
+
+**Version retenue :** dériver ψ avec le **même** stencil FD4 que le second
+membre. `div(rot ψ) = ∂x∂y ψ − ∂y∂x ψ` est alors exactement nul, parce que les
+deux dérivées FD4 sont des combinaisons de `np.roll` et commutent.
+
+```python
+@staticmethod
+def _curl_z_fd4(psi, dx):
+    g_x, g_y = MHDSolver._fd_grad(psi, dx)
+    return g_y, -g_x
+```
+
+| scénario | div_FD B relative | \|δB\| max |
+|---|---|---|
+| `harris_tearing` | **1,208e−16** | 0,010000 |
+| `double_tearing` | **2,393e−16** | 0,010000 |
+| `island_coalescence` | **1,150e−16** | 0,050000 |
+| `noisy_uniform` | **1,808e−16** | 0,239451 |
+
+Douze à treize ordres de grandeur, et l'amplitude nominale entièrement
+conservée. Les champs de ces quatre scénarios changent : **tout nombre publié
+qui les traverse est à refaire.**
+
+## Tests
+
+`tests/solver/test_scenarios_analytic.py`, 159 tests dont
+`test_a_flux_function_perturbation_is_exactly_divergence_free` et
+`test_an_analytic_derivative_would_not_have_been_exact` — ce dernier épingle
+*pourquoi* la première version ne suffisait pas, avec sa mesure.
+
+---
+
+# D-29 à D-36 — audit du script d'entraînement
+
+**Commandes.**
+`pytest tests/pipeline/test_train_hyperparams_contracts.py` (60 tests, ~14 s)
+`pytest tests/pipeline/test_train_hyperparams_smoke.py` (7 tests, ~16 s)
+
+Quatre variantes du script d'entraînement coexistaient
+(`TrainHyperParam_v1/v2/v3/v4.py`, 3 009 lignes). **Trois sont supprimées**,
+la quatrième renommée `src/train_hyperparams.py`. C'est elle qui tournera sur
+les cœurs loués ; l'audit porte sur elle seule.
+
+## D-29 — le jeu « isolé » contenait les scénarios complexes
+
+Tout l'argument du protocole est qu'Orszag-Tang mélange les classes
+d'anomalies, donc qu'il faut des scénarios qui en isolent une. La liste
+disait :
+
+```python
+SCENARIOS_ISOLATED = [("kh", …), ("ot", …), ("tearing", …), ("rotor", …)]
+SCENARIOS_COMPLEX  = [("ot", …), ("rotor", …)]
+SCENARIOS_ALL      = SCENARIOS_ISOLATED + SCENARIOS_COMPLEX
+```
+
+Trois conséquences, toutes silencieuses :
+
+- le jeu « isolé » n'isolait rien : il contenait les deux scénarios complexes ;
+- `SCENARIO_VORTEX` et `SCENARIO_COALESCENCE` étaient **définis et jamais
+  utilisés** ;
+- `SCENARIOS_ALL` valait **6 entrées pour 4 classes distinctes**. La perte
+  composite `mean(Loss_i)` divisait par 6 une somme où `ot` et `rotor`
+  entraient deux fois : pondération **2:1** contre `kh` et `tearing`, pour le
+  **double du coût** de simulation.
+
+**Ce qui tranche.** Le JSON déployé porte, pour sa phase 1, un bloc
+`per_scenario` qui liste `kelvin_helmholtz`, `lamb_oseen_vortex`,
+`harris_tearing`, `island_coalescence`. C'est la liste des quatre isolés qui a
+produit la campagne gelée : la version trouvée dans le code était une
+**régression**, pas une intention.
+
+Corrigé, plus une garde `_assert_scenarios_wellformed` qui refuse un doublon,
+un jeu vide, ou une trace DNS manquante — et qui refuse **à la construction de
+l'objectif**, pas au milieu du premier essai, c'est-à-dire après le pré-calcul
+DNS.
+
+**Conséquence pour `study/`.** `closed_loop_campaign.fold_scenarios`
+dédoublonnait ce défaut à la main pour éviter de fabriquer une fuite LOSO. La
+déduplication ne retire plus rien, mais il y a désormais **six** folds LOSO
+possibles au lieu de quatre : les résultats publiés sur quatre folds ne sont
+pas comparables terme à terme.
+
+## D-30 — le chemin séquentiel ne pouvait pas finir
+
+```python
+study_p1 = _run_phase1(dns_traces)      # ligne 1346
+…
+study_p1 = _run_phase1(study_p1, dns_traces)   # ligne 1352 — deux arguments
+```
+
+`_run_phase1` prend **un** argument. Le chemin par défaut — celui qu'on obtient
+sans `WORKER_PHASE` — lève donc `TypeError` **après** la phase 1, c'est-à-dire
+après ses 600 essais. `_save_results(study_p1, study_p1, …)` passait par
+ailleurs la même étude deux fois, dans les emplacements « phase 1 » et
+« phase 1b », et lisait des clés `vortex` / `coalescence` qui n'existaient
+dans aucune des deux.
+
+## D-31 — un paramètre optimisé que rien ne lit
+
+Avec `split_michelson=False`, la phase 1 proposait `beta_michelson` à Optuna.
+`pipeline.py` ne lit ce nom **nulle part** : il n'apparaît que dans un bloc mis
+en commentaire. La phase optimisait donc un paramètre sans effet sur la perte.
+Le chemin vivant passait `split_michelson=True`, donc le défaut n'a pas
+produit de nombre faux — mais l'option existait, documentée comme le
+comportement de la phase 1.
+
+`split_michelson`, `beta_michelson` et la « phase 1b » sont supprimés.
+`make_phase3_objective` — 64 lignes, aucun appelant, sa propre copie non nommée
+des quatre constantes — et `expand_split_beta_seeds` — qui mutait son argument
+et dont le repli `params.pop(k, params.get(k, 0.5))` n'atteignait jamais le
+`get` — sont supprimés aussi.
+
+## D-32 — l'élagage était décoratif
+
+L'objectif composite rapportait **une** valeur, au step 0 :
+
+```python
+trial.report(composite, step=0)
+if trial.should_prune(): …
+```
+
+sous un `MedianPruner(n_warmup_steps=2)`. Un pruner ne mord jamais avant
+`n_warmup_steps` : `should_prune()` au step 0 renvoie toujours `False`.
+
+**Mesure.** 40 essais terminés à 1,0 ; un essai qui rapporte **1e9** au step 0 :
+`should_prune()` = `False`. Le garde-fou n'a jamais élagué un seul essai.
+
+Corrigé : la moyenne **courante** est rapportée après chaque scénario, au step
+égal à son indice. Le même 1e9 rapporté aux steps 0, 1, 2 déclenche désormais
+l'élagage — et un essai élagué au 3ᵉ scénario ne simule pas le 4ᵉ, ce qui est
+tout l'intérêt sur des cœurs loués. La comparabilité entre essais impose que
+l'ordre des scénarios soit fixe : `SCENARIOS_*` sont des tuples.
+
+## D-33 — Orszag-Tang tournait sans anomalies avancées
+
+`create_argus` lisait `scenario_config.get("AdvAnomaliesEnable", False)`.
+`SCENARIO_OT` était le seul des six à ne pas porter la clé.
+
+**Mesure.** `create_argus(SCENARIO_OT).AdvAnomaliesEnable` = `False`,
+`create_argus(SCENARIO_ROTOR).AdvAnomaliesEnable` = `True`.
+
+Le terme ZZZZ de point X n'existe pas sans anomalies avancées. La phase 2
+entraînait donc `beta_xpoint` sur un jeu de deux scénarios dont **l'un ne
+pouvait pas l'exprimer**. Le même oubli existait dans la table `PHASE` de
+`pipeline.main()`.
+
+Corrigé aux deux endroits, et `create_argus` **lève** désormais si une clé
+manque : le repli silencieux sur une valeur valide est exactement le motif
+qu'on cherche à éliminer.
+
+## D-34 — le budget d'essais était multiplié par le nombre de workers
+
+```python
+remaining = phase_config["n_trials"] - trials_done      # calculé UNE fois
+study.optimize(objective_fn, n_trials=remaining)
+```
+
+Chaque worker lit le compte **au démarrage**. N workers lancés ensemble lisent
+tous « 0 fait » et demandent chacun la campagne entière.
+
+**Mesure.** 4 workers, cible 12 essais : **48 essais** exécutés. À l'échelle
+réelle — 8 cœurs, `n_trials=600` — cela ferait **4 800 essais au lieu de 600**,
+huit fois le coût annoncé.
+
+Corrigé : la boucle relit le compte à chaque essai et s'arrête dès la cible
+atteinte, quel que soit le nombre de workers. Coût : une lecture de base par
+essai, contre 10 à 20 minutes de calcul. `WORKER_TRIALS` reste un plafond
+**par worker**, pour une durée de location bornée.
+
+## D-35 — le JSON final ne portait pas de quoi redéployer
+
+`_save_results` écrivait `study_p3.best_params`. Or `best_params` ne contient
+que ce qu'Optuna a **échantillonné** : les paramètres fixes n'y sont pas. Le
+fichier déployé était donc structurellement incomplet, et le déploiement
+comblait les manques par des replis que personne n'avait choisis.
+
+**C'est le mécanisme de D-22** : `sigma` disparu du JSON, `gamma_hydro`,
+`gamma_mag` et `kappa` présents dans le fichier déployé alors qu'**aucune base
+Optuna ne les a jamais échantillonnés**.
+
+Corrigé sur deux plans :
+
+- chaque essai porte son dictionnaire d'hyperparamètres **résolu** — exploré +
+  fixe — en `user_attr` ;
+- le JSON porte ce dictionnaire, plus l'espace de recherche avec ses bornes,
+  les paramètres fixes, la liste des scénarios, `lambda_cost`, le hash du
+  commit, la propreté de l'arbre de travail, et `sys.argv`.
+
+`deployable_params` signale par ailleurs, plutôt que de le taire, le cas où il
+doit reconstruire faute d'attribut résolu.
+
+## D-36 — la provenance de `sigma` n'existait que sur les runs jetés
+
+`pipeline` a **quatre** sorties `return_details`. Une seule portait `sigma` et
+`sigma_source` : celle du chemin d'exception de scoring. La trace exigée par
+D-22 n'existait donc que sur les runs **divergés** — jamais sur ceux qu'on
+publie.
+
+Les quatre passent désormais par un `_details` unique. Le test ne cherche plus
+une chaîne dans le source : il parcourt l'AST de `pipeline` et vérifie
+qu'aucune sortie sous `if return_details` ne s'échappe du helper.
+
+## L'espace de recherche, désormais déclaré
+
+Le périmètre décidé pour la réoptimisation est de **8 paramètres** :
+
+| paramètre | bornes | échelle |
+|---|---|---|
+| `beta` | 0,5 – 10,0 | linéaire |
+| `w_z_frac` | 0,10 – 1000 | log |
+| `sigma` | 0,02 – 0,30 | linéaire |
+| `beta_curl` | 0,0 – 5,0 | linéaire |
+| `beta_xpoint` | 0,0 – 5,0 | linéaire |
+| `gamma_hydro` | 0,1 – 5,0 | linéaire |
+| `gamma_mag` | 0,1 – 5,0 | linéaire |
+| `kappa` | 0,5 – 50,0 | log |
+
+`threshold_amr` reste **fixé** à 0,14959824837662078 — le meilleur essai de
+l'étude classique — pour que la comparaison porte sur ce que le quantique
+ajoute et non sur un seuil différent. C'est une décision, elle est déclarée
+dans `FIXED_PARAMS` et vérifiée par un test qui exige qu'elle tombe dans les
+bornes que le bras classique avait le droit d'explorer.
+
+Trois de ces huit — `gamma_hydro`, `gamma_mag`, `kappa` — n'ont **jamais** été
+échantillonnés par aucune campagne : pour eux ce sera une première, pas une
+reprise. Nuance qui allège : `g_strain + g_rot ≡ 1` exactement, donc `kappa`
+ne pilote **qu'un** degré de liberté.
+
+**Réserve consignée.** La borne haute de `w_z_frac` vaut 1000 alors que le
+paramètre est documenté comme une *fraction* de la médiane des couplages. Elle
+vient de la campagne gelée, dont la graine valait 500. Conservée telle quelle
+pour ne pas changer la science en même temps que le code — mais elle est à
+trancher avant la campagne.
+
+## Ce qui vérifie tout cela avant de louer des cœurs
+
+```bash
+python src/train_hyperparams.py --print-space     # l'espace réel, sans rien calculer
+pytest tests/pipeline/test_train_hyperparams_contracts.py -q    # 60 tests
+pytest tests/pipeline/test_train_hyperparams_smoke.py -q        # 7 tests
+```
+
+Le second fichier n'est pas une simulation : il fait tourner le **vrai**
+solveur, le **vrai** circuit, une **vraie** base Optuna et écrit un **vrai**
+JSON de déploiement — à N=32, deux pas de temps, une profondeur de
+raffinement, en 16 secondes. Les six scénarios y passent. Une campagne d'une
+semaine ne doit pas être le premier endroit où l'on découvre qu'un scénario ne
+s'initialise pas.
+
+Ce qu'il ne montre pas : que l'objectif **discrimine**. À cette résolution il
+n'y a qu'une décision de raffinement, donc les six sous-pertes sont égales
+(0,285714). Il montre que le chemin complet s'exécute et que les artefacts en
+sortent complets.

@@ -38,7 +38,7 @@ Trois ecarts, tous verifies ici :
      | w_z_frac    | 39.599016| 0.101338 |
 
 Le code d'entrainement, lui, est COHERENT avec les bases :
-`TrainHyperParam_v2` code en dur `threshold_amr = 0.14959824837662078` avec
+`train_hyperparams` code en dur `threshold_amr = 0.14959824837662078` avec
 le commentaire « le meilleur classique », et c'est exactement la valeur du
 meilleur essai classique (#42, perte 0.2148). C'est le JSON qui est
 orphelin.
@@ -201,13 +201,13 @@ def test_no_common_parameter_of_the_declared_trial_matches(name):
 # ── 4. Le code d'entrainement, lui, est coherent avec les bases ───────
 
 def test_the_training_objective_hard_codes_the_true_classical_best():
-    """`TrainHyperParam_v2` code en dur 0.14959824837662078 avec le
+    """`train_hyperparams` code en dur 0.14959824837662078 avec le
     commentaire « le meilleur classique ». C'est exactement la valeur du
     meilleur essai classique : le code d'entrainement est tracable."""
     num, loss, params = _best(_C_DB)
     assert params["threshold_amr"] == pytest.approx(0.14959824837662078,
                                                     abs=1e-9)
-    src = open(os.path.join(_SRC, "TrainHyperParam_v2.py"),
+    src = open(os.path.join(_SRC, "train_hyperparams.py"),
                encoding="utf-8").read()
     assert "0.14959824837662078" in src
 
