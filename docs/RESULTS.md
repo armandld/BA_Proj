@@ -562,6 +562,19 @@ reps = 4. The ground state is uniform on 100% of snapshots.
 > `QAOA p1/p2 mask match` sont intactes. Trois options et leur coût :
 > `docs/DEFAUTS.md` D-48.
 
+> **⚠ Verdict non reproductible — D-50.** Indépendamment de D-48 : la phrase
+> que T11b **imprime** bascule entre deux exécutions identiques. Le script
+> tranche sur `|progress moyen| < 0,1`, seuil sans provenance, alors que
+> trois exécutions de la commande publiée rendent **0,1034 / 0,0850 /
+> 0,0859** — la première au-dessus du seuil, les deux autres en dessous.
+> **Une exécution sur trois imprime la conclusion inverse** (« the circuit
+> moves substantially toward its own optimum »). La valeur publiée 0,0854
+> est à 0,0146 du seuil pour une dispersion mesurée de 0,018.
+> `check_expected_behaviour` ne garde pas cette distance, et
+> `aggregate_master_table` épingle la même moyenne à ±0,002, soit 9× plus
+> serré que sa dispersion. Non corrigé : `VIGIL.md` demande de changer de
+> **grandeur**, pas de seuil. Options : `docs/DEFAUTS.md` D-50.
+
 ### T12 at N=256
 
 dim=8 orbit error: classical route **0.0146** (flip0 0.0078, flip1 0.0156,

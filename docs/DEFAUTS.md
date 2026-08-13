@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **7** |
+| **ouverts** — décision ou campagne requise | **8** |
 | **gelés** volontairement | 2 |
 
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
@@ -18,11 +18,14 @@ verrouillés — ils vivent dans `RESULTS.md`.
 D-47 bloque la phase 4 et tout ce qui s'appuie sur sa sélection, sans bloquer
 la réoptimisation.
 
-**D-48 est le dernier arrivé, et c'est le seul qui touche une lecture
-publiée** : la tendance décroissante de T11b est mesurée comme une propriété
-du schedule d'initialisation, pas du circuit. Aucun nombre publié n'a bougé —
+**D-48 et D-50 sont les derniers arrivés, et ce sont les seuls qui touchent
+une lecture publiée.** D-48 : la tendance décroissante de T11b est mesurée
+comme une propriété du schedule d'initialisation, pas du circuit. D-50 : la
+phrase de conclusion que T11b imprime bascule d'une exécution à l'autre de la
+même commande — une sur trois donne l'inverse. Aucun nombre publié n'a bougé —
 le master table reste à 180 / 164 / 16 / 0 — mais leur lecture demande une
-décision.
+décision. Les deux se composent et **ne se confondent pas** : D-50 tient même
+si D-48 est tranché en ne changeant rien.
 
 **Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
 encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
@@ -607,8 +610,82 @@ python study/common/aggregate_master_table.py         # 180 / 164 / 16 / 0
 
 ## D-50 — le verdict imprimé de T11b bascule d'une exécution à l'autre de la même commande
 
-**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
-en cours. Ne pas reprendre D-50.
+**Où ça bloque.** `h0_qaoa_displacement.main()` imprime l'une de **deux
+phrases opposées** selon que `|progress moyen| < 0,1` :
+
+```python
+print("\n  READING: " + (
+    "the circuit stays at the classical encoding; the deployed decision "
+    "is not a minimiser of its declared cost."
+    if abs(prog_all) < 0.1 else
+    "the circuit moves substantially toward its own optimum."))
+```
+
+C'est la conclusion de T11b, celle qui alimente le verdict **RÉFUTÉ** de
+`h0_selection` dans `CLAUDE.md`. Elle repose sur un seuil codé en dur, sans
+provenance, appliqué à une grandeur **non reproductible à cette précision**.
+
+**Comment on est tombé dessus.** En relisant `h0_qaoa_displacement.py` en
+entier après D-48. Les trois répétitions du bras publié avaient déjà été
+mesurées ; il a suffi de les comparer au seuil.
+
+**Ce qui est établi.** Configuration publiée (N=256, dim=2, mapper v2,
+`k_opt=100`, `shots=4096`, `--n-snaps 2`, reps 1–4), trois exécutions de la
+**même** commande, bras warm — celui du code :
+
+| répétition | progression moyenne | `abs(·) < 0,1` | phrase imprimée |
+|---|---|---|---|
+| 1 | **0,1034** | **non** | *« the circuit moves substantially toward its own optimum »* |
+| 2 | 0,0850 | oui | *« the circuit stays at the classical encoding »* |
+| 3 | 0,0859 | oui | *« the circuit stays at the classical encoding »* |
+
+**Une exécution sur trois imprime la conclusion inverse.** La valeur publiée,
+0,0854, est à **0,0146** du seuil, pour une dispersion inter-exécutions
+mesurée à **0,018** — plus large que la marge. Le verdict est décidé par le
+tirage, pas par le code.
+
+Le changement d'initialisation de D-48 le fait basculer *systématiquement* :
+bras cold, moyenne **+0,186**, la phrase devient « moves substantially » aux
+trois répétitions. Les deux défauts se composent, ils ne se confondent pas :
+**D-50 tient même si D-48 est tranché par l'option 1** (ne rien changer).
+
+**Ce que les garde-fous existants ne couvrent pas.**
+`check_expected_behaviour` vérifie deux choses réelles — la fraction
+d'instantanés à progression indéfinie (`MAX_FRAC_UNDEFINED`) et le nombre de
+paires pour la pente (`MIN_PAIRED`) — mais **rien** sur la distance du
+résultat au seuil qui décide de la phrase. Le script sort donc en `[ACCEPTANCE]
+… nombres publiables` en imprimant l'une ou l'autre conclusion.
+
+`aggregate_master_table.rows_t11b` épingle par ailleurs cette même moyenne à
+`0,0854` avec `TOL = 0,002`, soit **9× plus serré** que la dispersion mesurée :
+le statut OK/DIFF de cette ligne se joue aussi au tirage. C'est une seconde
+face du même problème, pas un défaut distinct.
+
+**Où on en est — non corrigé, décision requise.** `VIGIL.md` est explicite :
+quand une grandeur s'avère non reproductible à la précision d'un seuil, on
+change de **grandeur**, pas de seuil. Retoucher 0,1 ou `TOL` ferait passer
+la suite sans rien mesurer de plus. Trois directions, aucune appliquée :
+
+1. **Répéter et publier une dispersion.** N exécutions, moyenne ± écart-type,
+   et le verdict n'est imprimé que si l'intervalle **entier** tombe d'un
+   côté du seuil ; sinon la phrase dit qu'on ne tranche pas. C'est la seule
+   option qui garde la grandeur actuelle.
+2. **Changer de grandeur** pour une déterministe. La pente appariée
+   `slope_paired` est déjà calculée et déjà appariée par instantané ; sa
+   dispersion mesurée est **0,008** sur trois répétitions (−0,1202 / −0,1143 /
+   −0,1124), contre 0,018 pour la moyenne. Elle discrimine mieux — mais elle
+   dépend de l'initialisation exactement comme D-48 le décrit.
+3. **Retirer la phrase.** Publier les nombres et leur dispersion, laisser la
+   lecture au texte. Le moins coûteux, et cohérent avec ce que le module
+   annonce déjà en tête (« une progression qui n'augmente pas avec la
+   profondeur est **rapportée comme telle** »).
+
+Aucune n'est appliquée : toutes changent ce que le script publie.
+
+```bash
+python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
+# a relancer 3 fois : la ligne READING n'est pas stable
+```
 
 ---
 
