@@ -355,6 +355,25 @@ côté-là de l'axe) ; bord **périodique** ; warm start **absent** ; optimiseur
 bord borné, backend échantillonné, `depth > 0`, `dim = 3 / 4`, et l'axe des
 anomalies avancées (D-51).
 
+### `study/h3_representation/h3_uncertainty_window.py` — lu en entier
+
+Lu tout de suite après T13, parce que c'est lui qui donne le **mécanisme**
+de l'inertie causale que T13 constate. **Aucun défaut.**
+
+| lu | verdict |
+|---|---|
+| `uncertainty_window`, réimplémentation de la fenêtre de `src` | **sain à l'usage, avec une divergence latente mesurée** — la docstring annonce « exactement comme `HamiltParams.compute_coefficients` la calcule ». Vérifié sur `init_orszag_tang` N=32 : les formes du score et des champs **coïncident** (32,32), donc la branche de redimensionnement de `src` n'est **pas** empruntée, et les deux fenêtres sont identiques à **0,000e+00**. Mais `src` redimensionne le score (`scipy.ndimage.zoom`, ordre 1) quand les formes diffèrent, et la copie de `study/` **ne le fait pas** : sur un score à halo (34,34) elle rendrait une fenêtre (34,34) là où `src` en rendrait une (32,32). C'est la forme exacte de D-37. Aucune conséquence ici — aucun appelant ne lui passe un score à halo — donc **noté, pas corrigé** |
+| appariement de chaque famille d'arêtes à **sa propre** fenêtre | **sain, et c'est un point fin déjà réglé** — `w_h` sur les arêtes horizontales, `w_v` sur les verticales, avec un commentaire disant pourquoi les apparier entre elles fausserait `zz_mass_kept` |
+| neutralisation de la fenêtre pour isoler les portes amont | **saine et assertée** — `sigma → 1e9` donne `w ≡ 1`, vérifié par un `assert` qui mord (`window not neutralised`), et la comparaison sépare bien les deux causes possibles d'un ZZ nul |
+| les deux `sigma` « entraînés » | **saine** — le module refuse de les confondre (0,023 du pipeline ouvert lu **depuis le module** pour qu'il ne puisse pas diverger, contre 0,1888 du fold Level-3) et rapporte les jeux de paramètres séparément, sans conclure d'un seul |
+| balayage vide | **crie** — `SystemExit("no scenario produced a measurement")` |
+| statistiques rapportées sur `w_h` seul | **choix documenté, sans conséquence** — `zz_mass_kept`, la grandeur qui porte la lecture, concatène bien les deux familles |
+
+**Axes empruntés** : aucun du tableau de la fiche — ce module ne construit ni
+circuit ni décision, il mesure un coefficient de `src` sur trois jeux de
+paramètres (`v1_test_default`, `deployed_openloop`, `level3_trained`) et
+quatre scénarios. C'est un diagnostic de mappeur, pas un chemin de décision.
+
 ### `study/h3_representation/h3_equivariance.py` — lu en entier
 
 Troisième consommateur du schedule de D-48. Lu pour savoir si un nombre publié
