@@ -674,43 +674,66 @@ def main():
 
     if args.lambda_cost is None and args.lambda_sweep is None:
         parser.error("Provide either --lambda-cost or --lambda-sweep (or both)")
+
+    # D-49 : `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
+    # code 1.
+    #
+    # Avant, un unique `except Exception` enveloppait tout le corps de
+    # `main` -- chargement, rescore, ecriture CSV, chaque figure, le
+    # balayage -- imprimait « Erreur lors du chargement : ... » et laissait
+    # la fonction rendre la main. Deux consequences mesurees :
+    #
+    #   base inexistante        -> « Erreur lors du chargement »,  code 0
+    #   repertoire non ecrivable-> « Erreur lors du chargement »,  code 0
+    #                              alors que l'etude etait chargee (125
+    #                              essais annonces juste avant)
+    #
+    # Un script de campagne qui teste `$?` voyait donc un succes, et le
+    # message accusait le chargement pour une panne survenue bien apres.
     try:
         study, completed = load_completed_trials(args.db_path, args.study_name)
-        if not completed:
-            print("[ERROR] No completed trials with finite score.")
-            sys.exit(1)
-
-        base_dir = args.output_dir or os.path.dirname(os.path.abspath(args.db_path))
-
-        # Collect all lambda values to process
-        lambdas_to_run = []
-        if args.lambda_cost is not None:
-            lambdas_to_run.append(args.lambda_cost)
-        if args.lambda_sweep is not None:
-            lambdas_to_run.extend(args.lambda_sweep)
-        # Deduplicate while preserving order
-        seen = set()
-        unique_lambdas = []
-        for l in lambdas_to_run:
-            if l not in seen:
-                seen.add(l)
-                unique_lambdas.append(l)
-
-        # Run per-lambda analysis
-        for lam in unique_lambdas:
-            out = os.path.join(base_dir, f"rescore_{args.study_name}_lambda{lam:.4f}")
-            run_single_lambda(completed, lam, out)
-
-        # Lambda sweep comparison (if multiple values)
-        sweep_lambdas = args.lambda_sweep or unique_lambdas
-        if len(sweep_lambdas) >= 2:
-            sweep_dir = os.path.join(base_dir, f"rescore_{args.study_name}_sweep")
-            os.makedirs(sweep_dir, exist_ok=True)
-            plot_lambda_sweep(completed, sorted(sweep_lambdas), sweep_dir)
-
-        print(f"\nDone. All outputs in: {base_dir}/rescore_*")
     except Exception as e:
-        print(f"Erreur lors du chargement : {e}")
+        print(f"[ERREUR] chargement de '{args.study_name}' depuis "
+              f"{args.db_path} : {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not completed:
+        print(f"[ERREUR] '{args.study_name}' ne contient aucun essai COMPLETE "
+              f"a valeur finie — rien a rescorer.", file=sys.stderr)
+        sys.exit(1)
+
+    base_dir = args.output_dir or os.path.dirname(os.path.abspath(args.db_path))
+
+    # Collect all lambda values to process
+    lambdas_to_run = []
+    if args.lambda_cost is not None:
+        lambdas_to_run.append(args.lambda_cost)
+    if args.lambda_sweep is not None:
+        lambdas_to_run.extend(args.lambda_sweep)
+    # Deduplicate while preserving order
+    seen = set()
+    unique_lambdas = []
+    for l in lambdas_to_run:
+        if l not in seen:
+            seen.add(l)
+            unique_lambdas.append(l)
+
+    # Run per-lambda analysis. Rien n'est rattrape ici : une ecriture qui
+    # echoue, une figure qui casse, un repertoire non ecrivable doivent
+    # remonter avec leur trace et un code de retour non nul. Un rescore a
+    # moitie ecrit qui s'annonce « Done » est pire qu'un rescore absent.
+    for lam in unique_lambdas:
+        out = os.path.join(base_dir, f"rescore_{args.study_name}_lambda{lam:.4f}")
+        run_single_lambda(completed, lam, out)
+
+    # Lambda sweep comparison (if multiple values)
+    sweep_lambdas = args.lambda_sweep or unique_lambdas
+    if len(sweep_lambdas) >= 2:
+        sweep_dir = os.path.join(base_dir, f"rescore_{args.study_name}_sweep")
+        os.makedirs(sweep_dir, exist_ok=True)
+        plot_lambda_sweep(completed, sorted(sweep_lambdas), sweep_dir)
+
+    print(f"\nDone. All outputs in: {base_dir}/rescore_*")
 
 
 if __name__ == "__main__":

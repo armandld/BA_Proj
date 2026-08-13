@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 37 défauts corrigés
+## Les 39 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -91,6 +91,13 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 
 *(D-39 à D-47 sont sur la branche `vigil/…` de l'agent, en attente de
 fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
+
+**Les fichiers jamais audités de V1** — le dernier chantier avant la réoptimisation
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
+| D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -4809,3 +4816,220 @@ passaient. L'échec est apparu à 33 % d'un `pytest tests/` intégral, dans un
 fichier qu'aucune des deux lectures ne désignait. Troisième occurrence du
 même piège : **ne pas annoncer avant d'avoir lu la ligne de résumé d'un run
 complet.**
+
+## Un test qui mesurait la machine, pas le dépôt
+
+**Commande.** `pytest tests/test_suite_integrity.py -q` (80 tests, < 1 s)
+
+La même exécution complète a fait tomber un troisième test :
+`test_every_package_directory_carries_its_init` signalait `tests/v3` et
+`tests/v4` comme des paquets sans `__init__.py`.
+
+Les deux dossiers ne contiennent **rien d'autre qu'un `__pycache__`** : ce
+sont les résidus de la réorganisation de `tests/` par sous-système. Les
+sources ont été déplacées, le bytecode est resté. Git ne suit pas les
+dossiers vides — **un clone neuf ne les a jamais eus**, et les effacer ne
+tient pas : ils reviennent avec le répertoire de travail. Le test rapportait
+donc quelque chose de vrai localement et inexistant à l'arrivée.
+
+C'est un cousin du balayage vide, dans l'autre sens : au lieu de passer sans
+rien vérifier, il échouait sans que le dépôt ait quoi que ce soit à se
+reprocher. Un test qui dépend de l'état d'une machine ne mesure pas le code.
+
+**Correction.** Le critère porte désormais sur les dossiers qui portent
+effectivement du `.py`. Un vrai sous-dossier de test ajouté sans
+`__init__.py` en contient par construction : il reste attrapé.
+
+**Et le garde-fou de l'assouplissement.** Relâcher un critère peut rendre un
+test incapable d'échouer — c'est ce que ce dépôt s'interdit. Un second test,
+`test_the_init_check_can_still_fail`, construit dans un `tmp_path` un vrai
+dossier fautif *et* un résidu, puis exige que le premier soit signalé et le
+second ignoré. Sans lui, l'assouplissement serait invérifiable.
+
+---
+
+# D-49 — `recompute_lambda_scores` : le chemin d'échec rendait 0
+
+**Commande.** `pytest tests/pipeline/test_recompute_lambda_scores.py -q`
+(12 tests, ~10 s)
+
+Premier des cinq fichiers « jamais audités » de V1. Il ne produit aucun
+nombre publié — il décide comment on **lit** les nombres publiés, en
+recalculant le score combiné des essais Optuna avec un autre `lambda_cost`.
+
+## Le cœur du script est sain — et c'est la mesure qui compte
+
+Question 4, sur les données réelles : à `lambda = 0,4`, la valeur avec
+laquelle les bases gelées ont été produites, `recompute_score` doit rendre
+exactement `trial.value`.
+
+| base | essais finis | écart max | classement |
+|---|---|---|---|
+| `classical_v2_phase1` | 125 | **2,220e−16** | identique |
+| `q_has_v2_phase1` | 178 | **5,551e−17** | identique |
+
+**303 essais, écart médian 0,000e+00.** Le script recalcule bien la fonction
+objectif de la campagne, et pas une autre qui lui ressemble.
+
+Le test sépare : à `lambda = 0,41` — 2,5 % d'écart — l'erreur passe à
+**9,839e−03**, treize ordres de grandeur plus haut. Ce n'est donc pas un test
+qui passerait quoi qu'il arrive.
+
+Deux contrôles de sens, également passés : à `lambda = 0` le score vaut la
+physique seule, et augmenter `lambda` déplace le score vers le coût dans le
+bon sens sur les deux populations (`patch > phys` et `patch < phys`, toutes
+deux non vides — un balayage dégénéré échoue).
+
+## D-49 — un échec total sortait en succès
+
+`main()` enveloppait **tout son corps** dans un unique `except Exception` :
+chargement, rescore, écriture CSV, chacune des six figures, le balayage. Le
+gestionnaire imprimait `Erreur lors du chargement : ...` puis laissait la
+fonction rendre la main.
+
+Mesuré, avant :
+
+```
+base inexistante         → « Erreur lors du chargement »   code 0
+répertoire non écrivable → « Erreur lors du chargement »   code 0
+```
+
+Le second cas est le plus trompeur : l'étude **était chargée** — le script
+venait d'annoncer `125 completed (finite)` — et c'est l'écriture qui
+échouait. Le message accusait quand même le chargement. Un lanceur de
+campagne qui teste `$?` voyait un succès dans les deux cas.
+
+Après :
+
+```
+base inexistante         → [ERREUR] chargement de 'bidon' depuis ...   code 1
+répertoire non écrivable → FileNotFoundError, trace sur makedirs       code 1
+chemin nominal           → CSV + résumé + 4 figures produits           code 0
+```
+
+Le `try` ne couvre plus que le chargement. Le reste remonte avec sa trace :
+un rescore à moitié écrit qui s'annonce « Done » est pire qu'un rescore
+absent.
+
+## Un piège armé, mesuré, non déclenché
+
+`recompute_score` détecte les scénarios **par essai** ; `build_trial_table`
+les détecte sur l'**ensemble**, et seulement sur `completed[:10]`. Si un
+essai portait un jeu de clés différent de ses voisins, son score serait
+moyenné sur un autre dénominateur — puis classé avec eux, sans signalement.
+
+Mesuré sur les deux bases gelées : les deux chemins **coïncident sur 100 %
+des 303 essais**. Le piège est armé, pas déclenché. Il est figé par un test
+qui tombera sur la première campagne produisant des essais hétérogènes,
+plutôt que dans un classement silencieusement faussé.
+
+La limite de l'échantillon à dix essais est figée de la même façon : le test
+n'exige pas qu'on la corrige, il exige qu'elle reste **connue**.
+
+## Reste à lire dans ce fichier
+
+Les six fonctions de tracé (`plot_pareto_with_isocost`,
+`plot_convergence_reranked`, `plot_decomposition_rescored`,
+`plot_scenario_reranked`, `plot_lambda_sweep`, `_pareto_front`) n'ont pas
+encore été relues ligne à ligne. Elles ne rendent aucune valeur consommée
+par un autre script — elles écrivent des `.png`. Le chemin de données, lui,
+est audité de bout en bout.
+
+---
+
+# D-50 — `analyze_hyperparams` : même piège, diagnostic qui désigne la mauvaise cause
+
+**Commande.** `pytest tests/pipeline/test_analyze_hyperparams.py -q`
+(11 tests, ~18 s)
+
+Deuxième des cinq fichiers jamais audités. Il ne produit aucun nombre
+publié — il produit le résumé et les seize figures **à partir desquels on
+décide**. Un diagnostic faux y coûte autant qu'un nombre faux ailleurs.
+
+## D-50 — l'échec rendait 0, et accusait une base distante
+
+`main()` enveloppait tout son corps dans **deux** gestionnaires :
+
+```python
+except KeyError:
+    print(f"⚠️  Skipping {study}: Study does not exist on Neon yet.")
+except Exception as e:
+    print(f"❌ Error loading study: {e}")
+    return
+```
+
+Mesuré sur un `.db` local inexistant :
+
+```
+⚠️  Skipping bidon: Study does not exist on Neon yet.     code 0
+```
+
+Deux erreurs dans une seule ligne. Le code de retour annonce un succès. Et
+le message accuse **Neon** — une base distante qui n'intervient nulle part
+dans ce chemin — pour un fichier local absent : il envoie chercher la panne
+au mauvais endroit.
+
+La branche `KeyError` est le piège le plus fin : elle enveloppait aussi les
+**treize fonctions de tracé**. Une clé d'attribut manquante dans n'importe
+quelle figure était donc annoncée comme « l'étude n'existe pas », alors que
+l'étude venait d'être chargée et résumée.
+
+Après : le `try` ne couvre plus que le chargement, les deux gestionnaires
+généraux disparaissent, et l'échec sort en **code 1** avec la cause réelle.
+Chemin nominal revérifié : **10 fichiers produits, code 0**.
+
+## Corrigé au passage — une détection qui inventait trois scénarios
+
+`_detect_scenario_keys` existe en **deux copies**, une par script d'analyse.
+Elles avaient divergé — préfixe différent (`loss_` contre `phys_`) et
+surtout sémantique différente : la copie d'`analyze_hyperparams` rendait
+**toute la famille** dès qu'**une** clé était trouvée, sans vérifier que les
+autres existent.
+
+Mesuré sur les deux bases gelées, qui portent quatre scénarios :
+
+| | scénarios annoncés |
+|---|---|
+| données réelles | `kh`, `tearing`, `ot`, `rotor` — **4** |
+| `recompute_lambda_scores._detect_scenario_keys` | les mêmes 4 |
+| `analyze_hyperparams._detect_scenario_keys` | **7** — plus `vortex`, `coalescence`, `gt` |
+
+Trois scénarios qu'**aucune campagne n'a jamais exécutés**.
+
+**Aucun nombre faux n'en sortait, et c'est la mesure qui le dit.** Les
+quatre appelants filtrent tous par `if f"loss_{k}" in attrs` ; le résumé
+imprime bien quatre lignes, et « Lamb-Oseen », « Island Coalescence » et
+« Ghost Twisting » n'y figurent pas. Ma première lecture concluait au
+défaut ; la mesure l'a corrigée. Le piège était **armé, non déclenché** —
+le premier appelant qui ferait confiance à la liste obtiendrait un
+`KeyError`, ou pire une moyenne sur sept termes dont trois `NaN`.
+
+La correction rend la docstring vraie sans rien changer en sortie :
+**empreinte SHA-256 du résumé complet identique avant et après**, sur les
+deux bases.
+
+```
+classical_v2_phase1   8bf8d878…3018   identique
+q_has_v2_phase1       dc746ee4…1d36   identique
+```
+
+Un test compare désormais les deux copies sur la même base : elles doivent
+en tirer les mêmes scénarios, sans quoi les deux analyses d'une même
+campagne ne parlent pas du même sous-ensemble.
+
+## Deux corrections de `PROVENANCE.md`
+
+En vérifiant les quotas de la campagne gelée contre `PHASES` :
+
+- « 143 et 202 essais contre **600** déclarés » — le quota classique vaut
+  **300**, pas 600. Le bras classique s'est arrêté à 143/300 (48 %), le
+  quantique à 202/600 (34 %).
+- deux chemins morts : `tests/v4/test_hyperparams_provenance.py` (déplacé
+  vers `tests/study/`) et `src/TrainHyperParam_v1.py à _v4.py` (supprimés).
+  Une commande de vérification qui ne peut plus être lancée ne vérifie rien.
+
+## Reste à lire dans ce fichier
+
+Les treize fonctions de tracé. Comme pour `recompute_lambda_scores`, elles
+n'écrivent que des `.png` : le chemin de données et le chemin d'échec sont
+audités, la mise en page ne l'est pas.
