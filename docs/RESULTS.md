@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 42 défauts corrigés
+## Les 44 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -136,6 +136,20 @@ seul artefact non certifié du dépôt
 `match` `NaN` sur ses 8 lignes) n'entre dans aucune ligne du master table.
 La correction ne change que ce que le script **affirme** quand il n'a rien
 certifié.
+
+**T13, le contrôle et le balayage vide** — `h3_term_ablation.py` ne portait
+**aucune** assertion : 0 `assert`, 0 `raise`, 0 `SystemExit` (mesuré par AST,
+contre 5 et 6 dans son voisin `h0_optimiser_equivalence.py`).
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-54 | le contrôle `full` de T13 est une **tautologie** : `zero_hamiltonian_terms(hp, ())` rend une copie de `hp`, donc le masque comparé sort de la **même fonction sur la même entrée**. Il ne peut détecter qu'un indéterminisme d'`exhaustive_ground_state`, qui n'en a pas. `RESULTS.md` en tirait pourtant *« The control is exactly 0, which validates the measurement chain »* | mesuré en **sabotant** l'ablation (`TERM_KEYS` pointant sur des clés inexistantes, donc plus rien n'est jamais mis à zéro), orszag_tang Re=400 N=64 dim=2, 2 instantanés : contrôle `full` **0,000000 dans les deux cas**, et `no_ZZ` / `no_ZZZZ` / `Z_only` rendent **0,0000 / 0,0000 / 0,0000** — les trois lignes exactes sur lesquelles repose la lecture « causalement inertes » — identiques à l'ablation correcte. Seules `no_Z` / `couplings_only` (1,0000 → 0,0000) trahissaient le sabotage, et ce ne sont pas les lignes qui portent la conclusion. **L'instance n'est pas hypothétique** : D-51 a montré que `no_ZZZZ` annule `K_xpoint`, une clé que `ground_state_mask` ne lit jamais — une ablation réellement vide, que le contrôle n'a pas vue. Après : chaque ligne porte `removed_max`, le **max\|Δ\| de ce que `build_ising_terms` produit réellement** (opérateur assorti : c'est l'objet que la décision consomme), une ablation qui n'a rien retiré est imprimée `EMPTY` au lieu d'`inert`, et le contrôle est **asserté** au lieu d'être imprimé | `pytest tests/study/test_t13_control_is_not_vacuous.py` |
+| D-55 | balayage vide silencieux : sans artefact d'entrée, `h3_term_ablation.py` imprimait `no input.` et **sortait avec le code 0**, sans écrire d'artefact — donc en laissant en place celui d'une campagne précédente. C'est le défaut que son voisin `h0_optimiser_equivalence.py` a déjà corrigé, mot pour mot (*« une campagne qui n'avait rien mesuré était indiscernable d'une campagne réussie »*) | même entrée (`--scenario no_such_scenario --N 64 --dim 2`) : T13 **code 0**, `h0_optimiser_equivalence` **code 1** avec un `RuntimeError` nommant les artefacts attendus. Après : T13 **code 1**, même message | `pytest tests/study/test_t13_control_is_not_vacuous.py -k empty` |
+
+Aucun nombre publié ne bouge : les deux corrections ajoutent une colonne et
+une sortie en erreur, et l'artefact `t13_term_ablation_*` existant n'est ni
+relu ni réécrit. La **phrase** de T13 qui affirmait que le contrôle valide la
+chaîne de mesure est corrigée, elle : elle contredisait la mesure.
 
 **Le diagnostic Phase 1B** — en ré-auditant `check_tearing` pendant l'examen
 de D-39 (même fonction, même PR) : son docstring exige un pic « strictement
