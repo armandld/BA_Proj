@@ -309,6 +309,31 @@ def analyze_snapshot(vx, vy, Bx, By, N, n_patches, Re,
     # promising = exact diag F1 > classical F1
     promising = comparison["exact"]["f1"] >= comparison["classical"]["f1"]
 
+    # D-45 — `promising` seul ne dit pas si la comparaison a mesure quoi que
+    # ce soit. Un predicteur CONSTANT (tout-raffiner, ou rien-raffiner) rend
+    # un F1 parfaitement defini, dans le bon intervalle, et ne capture
+    # aucune structure spatiale : compare a une ligne de base classique elle
+    # aussi constante, il rend le MEME F1 par construction, donc `promising`
+    # est vrai par le `>=` sans qu'aucun accord n'ait ete observe.
+    #
+    # Mesure (dim=2 — seule dimension executable, dim=4/8 depassent le
+    # plafond de 20 qubits ; Re=400, N=256, 4 scenarios canoniques,
+    # 40 snapshots) : decision exacte tout-a-1 40/40, ligne de base
+    # classique tout-a-1 40/40, `exact_refine != classical_refine` 0/40,
+    # F1 egaux 40/40 et jamais superieurs. `promising` valait donc True
+    # 40/40 avec `>=` et aurait valu False 40/40 avec le `>` du commentaire
+    # ci-dessus : la porte porte zero bit dans les deux sens.
+    #
+    # On n'y touche PAS le verdict — quel operateur `promising` doit porter
+    # est une question ouverte pour l'humain (voir DEFAUTS.md D-47). On rend
+    # la degenerescence VISIBLE, au lieu de la laisser lire comme un succes.
+    exact_refine = comparison["exact_refine"]
+    classical_refine = comparison["classical_refine"]
+    degenerate_decision = bool(exact_refine.all() or (~exact_refine).all())
+    degenerate_classical = bool(
+        classical_refine.all() or (~classical_refine).all())
+    f1_tie = bool(comparison["exact"]["f1"] == comparison["classical"]["f1"])
+
     return {
         "ground_energy": ground_energy,
         "gap": gap,
@@ -319,6 +344,13 @@ def analyze_snapshot(vx, vy, Bx, By, N, n_patches, Re,
         "score_vqa": score_vqa,
         "comparison": comparison,
         "promising": promising,
+        "degenerate_decision": degenerate_decision,
+        "degenerate_classical": degenerate_classical,
+        "f1_tie": f1_tie,
+        # `promising` gagne par un vrai ecart, pas par une egalite entre deux
+        # predicteurs constants. C'est ce chiffre-la qui selectionne.
+        "promising_informative": bool(promising and not degenerate_decision
+                                      and not f1_tie),
         "n_energies_below_gap": int(np.sum(energies < ground_energy + gap)),
     }
 
@@ -360,6 +392,8 @@ def run_phase4(dns_path, patches_path, n_patches, use_v2=False):
 
     all_results = []
     n_promising = 0
+    n_informative = 0
+    degenerate_snaps = []
 
     for si_idx, si in enumerate(snap_indices):
         t0 = time.time()
@@ -380,14 +414,27 @@ def run_phase4(dns_path, patches_path, n_patches, use_v2=False):
         all_results.append(result)
         if result["promising"]:
             n_promising += 1
+        if result["promising_informative"]:
+            n_informative += 1
+        if result["degenerate_decision"]:
+            degenerate_snaps.append(si)
 
         elapsed = time.time() - t0
         c = result["comparison"]
+        # D-45 : un snapshot degenere ne s'annonce plus PROMISING tout court.
+        if result["degenerate_decision"]:
+            verdict = "DEGENERATE (constant decision)"
+        elif result["promising_informative"]:
+            verdict = "PROMISING"
+        elif result["promising"]:
+            verdict = "promising (tie only)"
+        else:
+            verdict = ""
         print(f"    snap {si:3d}: E0={result['ground_energy']:.4f} "
               f"gap={result['gap']:.4f} "
               f"exact_F1={c['exact']['f1']:.3f} "
               f"class_F1={c['classical']['f1']:.3f} "
-              f"{'PROMISING' if result['promising'] else ''} "
+              f"{verdict} "
               f"({elapsed:.1f}s)")
 
     if not all_results:
@@ -410,6 +457,14 @@ def run_phase4(dns_path, patches_path, n_patches, use_v2=False):
           f"std={np.std(gaps):.4f}")
     print(f"    Promising:      {n_promising}/{len(all_results)} "
           f"({100*n_promising/len(all_results):.0f}%)")
+    # D-45 : le chiffre qui selectionne vraiment, et ce qui a ete exclu.
+    print(f"    ... informative: {n_informative}/{len(all_results)} "
+          f"(ecart reel, hors egalites et decisions constantes)")
+    if degenerate_snaps:
+        print(f"    ... DEGENERATE: {len(degenerate_snaps)}/{len(all_results)}"
+              f" — decision exacte constante sur les snapshots "
+              f"{degenerate_snaps} : le fondamental ne distingue aucune "
+              f"cellule, le F1 ne mesure pas un accord (DEFAUTS.md D-47)")
 
     meta = {
         "scenario": scenario, "Re": Re, "N": N,
@@ -444,6 +499,12 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
     promising = np.array([r["promising"] for r in all_results])
     exact_f1 = np.array([r["comparison"]["exact"]["f1"] for r in all_results])
     class_f1 = np.array([r["comparison"]["classical"]["f1"] for r in all_results])
+    # D-45 : sans ces trois colonnes, un artefact ou `promising` vaut 100 %
+    # est indiscernable d'un artefact ou la porte n'a rien pu rejeter.
+    degenerate = np.array([r["degenerate_decision"] for r in all_results])
+    degenerate_cl = np.array([r["degenerate_classical"] for r in all_results])
+    f1_tie = np.array([r["f1_tie"] for r in all_results])
+    informative = np.array([r["promising_informative"] for r in all_results])
 
     np.savez_compressed(
         path,
@@ -454,6 +515,10 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
         decisions_v=decisions_v,
         gt_refine=gt_refine,
         promising=promising,
+        degenerate_decision=degenerate,
+        degenerate_classical=degenerate_cl,
+        f1_tie=f1_tie,
+        promising_informative=informative,
         exact_f1=exact_f1,
         classical_f1=class_f1,
         snap_indices=meta["snap_indices"],
@@ -528,10 +593,17 @@ def main():
                 d = np.load(ed_path)
                 n_prom = np.sum(d["promising"])
                 n_tot = len(d["promising"])
+                # D-45 : ne jamais afficher `promising` sans le nombre de
+                # decisions degenerees qui le composent.
+                n_deg = (int(np.sum(d["degenerate_decision"]))
+                         if "degenerate_decision" in d else -1)
+                n_inf = (int(np.sum(d["promising_informative"]))
+                         if "promising_informative" in d else -1)
                 print(f"  {sc} Re={re} dim={dim}: "
                       f"exact_F1={np.mean(d['exact_f1']):.3f} "
                       f"class_F1={np.mean(d['classical_f1']):.3f} "
-                      f"promising={n_prom}/{n_tot}")
+                      f"promising={n_prom}/{n_tot} "
+                      f"(informative={n_inf}, degenerate={n_deg})")
 
     print("\nPhase 4 complete.")
 
