@@ -162,6 +162,14 @@ n'arrive qu'à **dim = 1**, absent de `VQA_DIMS = [2, 4, 8]`. Noté, non
 corrigé — corriger un chemin que rien n'emprunte, c'est du risque sans
 mesure.
 
+Deux autres remarques du même module, ni l'une ni l'autre une valeur fausse :
+`main()` prend `--dim [2, 3, 4]` par défaut alors qu'aucun
+`patches_*_dim3.npz` n'existe — le cas part dans la branche `SKIP ... missing
+input`, qui **crie**, donc pas de balayage muet ; et le verdict final
+(« beats / worse / ties ») tranche sur une bande de **±0,02** codée en dur,
+sans provenance écrite. À remesurer le jour où ce verdict devient un nombre
+publié.
+
 
 **Confirmation d'une observation déjà publiée, pas une trouvaille.**
 `RESULTS.md` rapporte, via `diag_hamiltonian_balance.py`, `max|K| = 0
