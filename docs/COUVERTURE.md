@@ -311,6 +311,50 @@ propre `ground_state_mask` ne lit jamais. Détail, options et commande :
 `DEFAUTS.md` D-51 ; épinglé par
 `tests/study/test_xpoint_term_absent_from_study.py`.
 
+### `study/h3_representation/h3_term_ablation.py` — lu en entier
+
+Le module qui produit T13, dont la lecture publiée est que les termes de
+couplage sont **causalement inertes**. Ouvert parce que D-51 y avait déjà
+montré une ablation vide (`no_ZZZZ` annule `K_xpoint`, clé que
+`ground_state_mask` ne lit jamais).
+
+| lu | verdict |
+|---|---|
+| le contrôle `full` | **D-54** — tautologie : `zero_hamiltonian_terms(hp, ())` rend une copie de `hp`, donc le masque comparé sort de la **même fonction sur la même entrée**. Mesuré en sabotant `TERM_KEYS` : contrôle **0,000000 des deux côtés**, et `no_ZZ`/`no_ZZZZ`/`Z_only` **0,0000 des deux côtés** — les trois lignes qui portent la conclusion. Corrigé : colonne `removed_max` (max\|Δ\| de ce que `build_ising_terms` produit réellement), ablation vide imprimée `EMPTY`, contrôle **asserté** |
+| balayage vide | **D-55** — imprimait `no input.` et sortait à **0**, sans artefact, donc en laissant en place celui de la campagne précédente. Le module voisin sortait à **1** sur la même entrée. Corrigé : même `RuntimeError`, même formulation |
+| gardes du module, mesurées par **AST** | **0 `assert`, 0 `raise`, 0 `SystemExit`** avant cette passe — contre 5 et 6 dans `h0_optimiser_equivalence.py`. `CLAUDE.md` exige pourtant que tout script de `study/` porte une assertion. 3 gardes après |
+| `zero_hamiltonian_terms`, non-mutation de l'entrée | **saine** — copie superficielle qui **remplace** les clés au lieu d'écrire dedans ; évidencé par la mesure elle-même, le contrôle restant à 0 après six ablations successives sur le même `hp` |
+| `coefficients_removed`, comparaison des opérateurs | **écrite avec l'opérateur assorti** — `build_ising_terms` n'émet un terme que si \|coefficient\| > 1e−12, donc une ablation **raccourcit** les listes d'index au lieu d'y écrire des zéros. Comparer position par position n'a pas de sens ; la comparaison se fait indexée par le tuple de qubits, sur l'union des deux. Une première version rendait `inf` sur ce cas — c'était la **mesure** qui était fausse, pas le code mesuré |
+| `ground_state_mask`, contrat `dim <= 3` | **sain** — au-delà, `exhaustive_ground_state` lève (32 qubits > le plafond 22) : refus bruyant, pas de repli |
+| nom de sortie et copie « legacy » | **sains** — le mappeur entre dans le nom depuis D9 ; la copie sous le nom historique n'est faite que pour `v1`, le mappeur déployé, et elle est annoncée |
+
+**Deux remarques, aucune n'est une valeur fausse.** `couplings_only` est
+déclaré « alias lisible de `no_Z` » et l'est bien — mesuré, les deux lignes
+sont identiques (1,0000 / 8,3004e−02) : le tableau affiche donc **6** lignes
+pour **5** ablations distinctes, et `aggregate_master_table.rows_t13` n'en
+attend que 5. Et la sélection d'instantanés
+`set(int(round(i)) for i in linspace(…))` collapse silencieusement quand
+`n_dns` est petit devant `--n-snaps` — même forme que dans
+`h0_optimiser_equivalence`, même absence de conséquence aux tailles réelles.
+
+**Ce que la mesure de D-54 dit *en faveur* de T13**, et qu'il faut écrire
+aussi : à la configuration mesurée (orszag_tang, Re=400, N=64, dim=2), les
+couplages ont bien été retirés — `removed_max` vaut **2,6558e+00** pour
+`no_ZZ` et **1,0000e+00** pour `no_ZZZZ`, contre **8,3004e−02** pour le
+biais Z qui, lui, renverse toute la décision. La lecture « causalement
+inertes » **tient** ; elle n'était simplement étayée par rien avant cette
+colonne.
+
+**Axes empruntés** : bras **quantique** (état fondamental exact seulement —
+la décision QAOA que le docstring annonce comme optionnelle n'est **pas**
+implémentée dans ce module) ; backend **aucun** (énumération) ; hamiltonien
+**non nul** *et* **nul** (`no_Z` sur un hamiltonien sans biais laisse un
+ferromagnétique 8 fois dégénéré — c'est le seul module lu à traverser ce
+côté-là de l'axe) ; bord **périodique** ; warm start **absent** ; optimiseur
+**aucun** ; AMR `depth = 0` ; `dim = 2`. Non traversés : `classical_only`,
+bord borné, backend échantillonné, `depth > 0`, `dim = 3 / 4`, et l'axe des
+anomalies avancées (D-51).
+
 ### `study/h3_representation/h3_equivariance.py` — lu en entier
 
 Troisième consommateur du schedule de D-48. Lu pour savoir si un nombre publié
