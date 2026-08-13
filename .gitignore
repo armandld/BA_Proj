@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .venv/
+.venv_vigil/
 env/
 
 # Etat de reprise des campagnes : transitoire, pas un resultat.
