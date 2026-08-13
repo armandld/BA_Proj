@@ -1,6 +1,7 @@
 import optuna
 import argparse
 import os
+import sys
 
 def main():
     parser = argparse.ArgumentParser(description="Upload Local SQLite to Neon")
@@ -20,6 +21,11 @@ def main():
     studies = ["q_has_v2_phase1", "q_has_v2_phase1_agr", "q_has_v2_phase1b", "q_has_v2_phase1b_agr",
                "q_has_v2_phase2", "q_has_v2_phase2_agr", "q_has_v2_phase3",
                "classical_v2_phase1", "classical_v2_phase2","classical_v2_phase3"]
+
+    # D-64 : un import qui n'a rien importe doit etre discernable d'un import
+    # reussi. Les echecs restent per-etude — une etude absente ne doit pas
+    # empecher les neuf autres — mais le processus sort non nul a la fin.
+    failed = []
 
     for study_name in studies:
         db_path = os.path.join(args.train_dir, f"{study_name}.db")
@@ -41,8 +47,32 @@ def main():
             else:
                 if args.LocalToNeon:
                     to_storage = neon_url
+                    from_storage = local_url
                 else:
                     to_storage = local_url
+                    from_storage = neon_url
+
+                # D-64 : charger la SOURCE avant de supprimer la DESTINATION.
+                # L'ordre inverse detruisait l'etude de destination, puis
+                # rattrapait l'echec de la copie par un message et un code de
+                # sortie 0. Mesure : 5 essais dans la destination, source sans
+                # l'etude -> destination effacee, `code 0`. C'est la seule
+                # suppression d'etude du depot, et c'est l'empreinte que
+                # portent 8 des 10 bases gelees : schema complet, zero ligne,
+                # et pour deux d'entre elles 274 ko / 299 ko la ou un schema
+                # neuf pese 114 ko — des pages liberees, donc des lignes
+                # ecrites puis supprimees.
+                try:
+                    local_study = optuna.load_study(study_name=study_name,
+                                                    storage=from_storage)
+                except KeyError:
+                    # Absente de la SOURCE : il n'y a rien a importer. Ce
+                    # n'est pas un echec — mais ce n'est plus une raison de
+                    # supprimer la destination, qui reste intacte.
+                    print(f"⏭️  {study_name}: absente de la source, "
+                          f"destination laissee intacte.")
+                    continue
+
                 try:
                     optuna.delete_study(study_name=study_name, storage=to_storage)
 
@@ -54,13 +84,6 @@ def main():
                     # L'étude n'existait pas encore, c'est parfait
                     pass
 
-                if to_storage == local_url:
-                    from_storage = neon_url
-                elif to_storage == neon_url:
-                    from_storage = local_url
-                
-                local_study = optuna.load_study(study_name=study_name, storage=from_storage)
-                
                 optuna.copy_study(
                     from_study_name=study_name,
                     from_storage=from_storage,
@@ -72,6 +95,12 @@ def main():
 
         except Exception as e:
             print(f"❌ Error with {study_name}: {e}")
+            failed.append(study_name)
+
+    if failed:
+        print(f"❌ {len(failed)}/{len(studies)} etudes en echec : "
+              f"{', '.join(failed)}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
