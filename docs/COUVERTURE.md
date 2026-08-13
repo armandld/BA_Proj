@@ -117,6 +117,39 @@ d'interprétation (D-46) mais pas sur `build_percentile_dataset` /
 entier. Non relu cette passe : `dns_validation.py` (passe concurrente,
 D-42).
 
+**Axes empruntés par `exact_diagonalisation.py`** (D-45,
+`tests/study/test_exact_diag_degenerate_gate.py`) : bras **quantique**,
+backend **state_vector** (diagonalisation exacte, aucun échantillonnage),
+hamiltonien **non nul**, bord **périodique** (`create_period_hamiltonian`),
+warm start **absent**, optimiseur **aucun** (pas de variationnel), AMR
+**depth = 0**. Les côtés opposés de chaque axe restent non traversés — et
+`dim` ne l'est que par **2** : `VQA_DIMS = [2, 4, 8]`, mais 4 et 8 demandent
+32 et 128 qubits contre le plafond de 20 codé dans `exact_diag`, donc les
+deux tiers de la configuration déclarée du module ne s'exécutent pas.
+
+---
+
+## 1b. `study/common/` — vérifié cette passe
+
+Trois modules relus en entier et **croisés contre une référence
+indépendante**, pas seulement lus :
+
+| lu | verdict |
+|---|---|
+| `stats_confirmatory.holm_correction` | **sain** — multiplicateur `(m − j + 1)`, cumul monotone puis plafond à 1, dans cet ordre. Croisé sur **2 000** jeux de p-valeurs arrondies à 1e−3 (donc pleins d'ex aequo, le cas où un `argsort` non stable pourrait mordre) : **2 000/2 000** identiques à une implémentation de référence écrite séparément |
+| `stats_confirmatory.tost_equivalence` | **sain** — les deux tests unilatéraux et le `max` des deux p. Apparié : **500/500** identiques à `scipy.stats.ttest_1samp(d, ∓margin, alternative=…)`. Non apparié : **500/500** identiques au `df` de Welch de `scipy.stats.ttest_ind(equal_var=False)` |
+| `stats.paired_delta_bootstrap`, `stats.bootstrap_by_trajectory` | **sains** — `np.unique` trie les identifiants de la même façon des deux côtés, donc `groups_a[i]` et `groups_b[i]` décrivent bien la même trajectoire : l'appariement tient |
+| `metrics.degeneracy_flag` et ses 2 appelants | **sain** — le piège attendu était une prévalence calculée sur un autre ensemble que le `gt` qui sert au F1 ; vérifié, les deux appelants passent `float(Yva.mean())` avec le même `Yva`. C'est la même famille que D-45 : le protocole v3 sait déjà nommer un plancher de dégénérescence |
+| `provenance.py` | **sain** — `git_hash` reste le hash de **départ**, `head_moved_during_run` et `dirty_at_start` disent quand aucun hash ne décrit l'exécution |
+
+`aggregate_master_table.py` rejoué sur cette branche :
+**180 lignes, OK = 164, DIFF = 16, MISSING = 0** — exactement l'état
+documenté, donc D-45 / D-46 / D-47 n'ont déplacé **aucun** nombre publié.
+
+Non lus dans `study/common/` : `aggregate_v2.py`, `aggregate_v3.py`,
+`ising_terms_and_annealing.py`, `qaoa_inputs.py`,
+`aggregate_master_table.py` (exécuté, pas relu).
+
 ---
 
 ## 2. Ce qui est couvert, et par quel type de test
