@@ -612,6 +612,13 @@ en cours. Ne pas reprendre D-49.
 
 ---
 
+## D-50 — le verdict imprimé de T11b bascule d'une exécution à l'autre de la même commande
+
+**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
+en cours. Ne pas reprendre D-50.
+
+---
+
 ## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et
