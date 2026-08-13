@@ -50,7 +50,6 @@ effectivement relu fonction par fonction.
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
-| `analyze_hyperparams.py` | 918 | analyse de la campagne |
 | `recompute_lambda_scores.py` | 717 | recalcul de scores publiés |
 | `compare_rotor_budget.py` | 481 | comparaison de budget, utilise le pipeline |
 | `visual.py`, `help_visual.py` | 327 | figures |
@@ -126,6 +125,42 @@ warm start **absent**, optimiseur **aucun** (pas de variationnel), AMR
 `dim` ne l'est que par **2** : `VQA_DIMS = [2, 4, 8]`, mais 4 et 8 demandent
 32 et 128 qubits contre le plafond de 20 codé dans `exact_diag`, donc les
 deux tiers de la configuration déclarée du module ne s'exécutent pas.
+
+---
+
+## 1a. `src/analyze_hyperparams.py` — lu en entier
+
+918 lignes, jamais auditées jusqu'ici. C'est le seul module qui relit les
+bases Optuna gelées : ce qu'il montre est ce qu'on sait de la campagne d'une
+semaine qu'on ne relancera pas.
+
+| fonction | verdict |
+|---|---|
+| `plot_threshold_operating_curve` | **D-60** — la figure d'arbitrage précision/coût du bras classique ne pouvait sortir d'aucune étude, pour trois raisons indépendantes (nom de paramètre, schéma d'attributs, garde de l'appelant), et sans un mot |
+| `_add_trend` | **D-61** — dernière classe ouverte à droite : l'essai portant la plus grande valeur du paramètre n'entrait dans aucune médiane |
+| `_pareto_front` | **sain** — croisé contre une implémentation de référence écrite séparément, **300/300** identiques sur des tirages arrondis à 1e−2, donc pleins d'ex aequo, le cas où la clause de non-domination stricte pourrait mordre |
+| `load_study`, filtre des essais | **sain** — `t.value < inf` écarte aussi les `NaN` (`nan < inf` est `False`), ce que le nom ne dit pas mais que le contrat demande |
+| `generate_summary`, perte composite | **sain** — la moyenne des `loss_<scenario>` qu'il imprime coïncide avec `t.value` à **5,6e−17** (quantique, 178 essais) et **2,2e−16** (classique, 125) : le résumé et l'objectif rendent bien la même grandeur |
+| `plot_scenario_correlation_heatmap`, `plot_field_correlation_heatmap` | **sains** d'orientation — lignes = scénarios/champs, colonnes = paramètres, `ax.text(j, i)` assorti à `imshow`. Réserve non corrigée : un écart-type nul laisse la case à **0,00**, indiscernable d'une corrélation mesurée nulle. Aucun paramètre gelé n'apparaît dans `trial.params`, donc le cas ne se produit sur aucune base du dépôt |
+| `plot_scenario_breakdown_bar` | **réserve, non corrigée** — `user_attrs.get(f"loss_{key}", 0)` : un scénario sans perte enregistrée s'empilerait à hauteur nulle, comme s'il n'avait rien coûté. Mesuré : les deux bases ne portent qu'**un seul jeu de clés** sur 303 essais, le repli n'est donc jamais emprunté |
+| `plot_pareto_front`, `plot_score_decomposition`, `plot_per_field_sensitivity`, `plot_field_correlation_heatmap` | **même cécité de schéma que D-60**, non corrigée : elles lisent `phys_score` / `error_<champ>`, que seul l'objectif mono-scénario de `pipeline.py` écrit. Elles restent derrière `has_decomposed_data`, qui **imprime** une ligne `[INFO]` quand elle est fausse — l'absence est donc dite, contrairement à la courbe de seuil. Les rendre composites demanderait de choisir une agrégation par champ qu'aucun artefact ne réclame : mesurer et demander plutôt qu'inventer |
+| `plot_optuna_builtins`, `plot_convergence`, `plot_2d_landscapes`, `plot_scenario_*` restants | **lus, aucun défaut de valeur** — interpolations et tracés ; `griddata(method="cubic")` peut dépasser les données aux bords, ce qui est une propriété de l'interpolant, pas un défaut du module |
+
+**Axes empruntés.** Aucun de ceux de la fiche : ce module ne construit ni
+hamiltonien ni patch, il relit des bases. Les axes qui le concernent sont
+ceux de ses **entrées**, et les deux côtés sont traversés par les tests de
+D-60 : schéma **mono-scénario** (`phys_score` / `patch_ratio`, écrit par
+`pipeline.py`) **et** schéma **composite** (`phys_<scenario>`, écrit par
+`train_hyperparams`) ; bras **quantique** (`q_has_v2_phase1`, 5 paramètres)
+**et** bras **classique** (`classical_v2_phase1`, `threshold_amr` seul) ;
+étude **avec** seuil et étude **sans**.
+
+**Ce que la lecture a montré sans que ce soit un défaut** : sur les dix bases
+de `results/hyperparams/optuna_studies/`, **deux seulement** portent une
+étude — `q_has_v2_phase1` et `classical_v2_phase1`. Les huit autres, phases
+1b, 2 et 3 comprises, sont vides. C'est cohérent avec D-22 et n'ajoute rien
+à ce qu'il dit ; c'est noté ici pour que personne ne les relise en pensant y
+trouver la campagne.
 
 ---
 
