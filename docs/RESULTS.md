@@ -17,7 +17,15 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 45 défauts corrigés
+## Les 46 défauts corrigés
+
+*(46 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 48 corrections en tout. Le titre annonçait **41** pour 42 lignes
+numérotées avant l'ajout de D-52, D-54, D-55 et D-56 : le compte de tête
+était de nouveau faux d'une unité, exactement le défaut de registre que la
+section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
+défauts corrigés ». Compté, pas estimé — la commande est
+`grep -o '^| D-[0-9]*' docs/RESULTS.md | sort -u -t- -k2 -n | wc -l`.)*
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
