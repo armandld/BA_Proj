@@ -608,13 +608,6 @@ python study/common/aggregate_master_table.py         # 180 / 164 / 16 / 0
 
 ---
 
-## D-49 — `aggregate_v3.py` valide contre le baseline V3 archivé, pas contre `RESULTS.md`
-
-**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
-en cours. Ne pas reprendre D-49.
-
----
-
 ## D-50 — le verdict imprimé de T11b bascule d'une exécution à l'autre de la même commande
 
 **Où ça bloque.** `h0_qaoa_displacement.main()` imprime l'une de **deux
