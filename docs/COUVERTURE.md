@@ -103,12 +103,15 @@ verdict « le hamiltonien trouve-t-il les patchs durs » se fabrique.
 | `dns_extension.mean_sq_current_fixed` contre `dns_validation.mean_sq_current` | **sain** — les deux omettent `/dx` de la même façon : la correction porte sur la convention d'axes seule, et le `dx²` commun s'annule dans les rapports que les checks utilisent |
 | `labels_global_threshold.py`, `labels_error_tolerance.py` | **sains** — les deux refusent explicitement un seuil ou une tolérance qui dégénère, et un balayage vide y crie |
 | `exact_diagonalisation.py` | lu, aucun défaut mesuré ; `analyze_snapshot` reçoit `is_hard` sans jamais s'en servir (recalculé à l'identique depuis `l2_threshold`) et `H_mat` est diagonale, donc `eigh` est un argmin coûteux — deux gaspillages, pas des valeurs fausses. **Aucun artefact `exact_diag_*` dans `results/`** : rien à rejouer, la clause `promising = f1_exact >= f1_classique` (le commentaire au-dessus dit `>`) reste **non mesurée** |
+| `label_percentile_sensitivity.py`, message d'interprétation | **D-46** : imprimait « ROBUST … fails for ANY » dès `max(deltas) < 0,05`, alors que le docstring définit la robustesse comme « le gap ne devient jamais positif » (`delta < 0`) — mesuré sur l'artefact réel (dim=4, N=256, 4 scénarios, seed 0) `max(delta) = -0,154`, sous les deux seuils : ce run-ci n'était pas affecté, mais un cas construit (`+0,03` à un percentile) montrait le verdict « ROBUST » imprimé malgré un delta positif |
 
 **Ce module n'est pas « audité » au sens de la fiche.** Il a été **lu en
 entier**, fonction par fonction ; aucun test ne traverse encore ses axes
 (profondeur AMR, bord du patch, bras, backend, warm start, hamiltonien nul,
-optimiseur). Lu en entier et non traversé : `dns_sweep.py`, `config.py`,
-`label_percentile_sensitivity.py`. Non relus cette passe : `dns_validation.py`
+optimiseur). Lu en entier et non traversé : `dns_sweep.py`, `config.py`.
+`label_percentile_sensitivity.py` a désormais un test sur son message
+d'interprétation (D-46) mais pas sur `build_percentile_dataset` /
+`loso_site_vs_class` eux-mêmes. Non relus cette passe : `dns_validation.py`
 (passe concurrente, D-42) et la seconde moitié de `dns_extension.py`.
 
 ---
