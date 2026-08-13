@@ -394,7 +394,19 @@ must change nothing).
   exactly.
 - Removing the Z bias destroys the decision entirely and leaves an
   8-fold degenerate ferromagnet.
-- The control is exactly 0, which validates the measurement chain.
+- The control is exactly 0. ⚠ **It does not validate the measurement
+  chain — D-54.** `zero_hamiltonian_terms(hp, ())` returns a copy of `hp`,
+  so the control compares the *same function on the same input*: it is 0 by
+  construction. Measured by sabotaging the ablation so that nothing is ever
+  zeroed (orszag_tang Re=400 N=64 dim=2): the control still reads
+  **0.000000**, and `no_ZZ` / `no_ZZZZ` / `Z only` still read
+  **0.0000** — the three rows this table's conclusion rests on. What
+  separates a real ablation from an empty one is `removed_max`, now written
+  per row: `no_ZZ` **2.6558e+00**, `no_ZZZZ` **1.0000e+00**, `no_Z`
+  **8.3004e-02** (max over 2 snapshots at N=64), so at that configuration
+  the couplings *were* genuinely removed and the inertness reading stands —
+  it just was not evidenced before. The numbers in the table above are
+  unchanged.
 
 **Reading.** At the deployed grid size the coupling terms — the entire
 motivation for an Ising/quantum formulation — are **causally inert**. This
