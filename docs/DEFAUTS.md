@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **8** |
+| **ouverts** — décision ou campagne requise | **9** |
 | **gelés** volontairement | 2 |
 
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
@@ -26,6 +26,13 @@ même commande — une sur trois donne l'inverse. Aucun nombre publié n'a boug�
 le master table reste à 180 / 164 / 16 / 0 — mais leur lecture demande une
 décision. Les deux se composent et **ne se confondent pas** : D-50 tient même
 si D-48 est tranché en ne changeant rien.
+
+**D-51 est à lire avant de lancer la campagne de D-22.** Tout `study/` code
+`advanced_anomalies_enabled = False` alors que la campagne d'entraînement
+l'active sur 6/6 scénarios : le terme ZZZZ de point X n'entre dans aucune
+mesure de falsification. Mesuré nul à `dim = 2`, donc **aucun nombre publié
+n'en dépend** — mais `beta_xpoint`, que D-22 range parmi les 8 paramètres à
+réoptimiser, est un hyperparamètre qu'aucune mesure de `study/` ne peut voir.
 
 **Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
 encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
@@ -691,8 +698,105 @@ python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
 
 ## D-51 — `study/` teste un Hamiltonien amputé du terme ZZZZ de point X
 
-**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
-en cours. Ne pas reprendre D-51.
+**Où ça bloque.** Pas sur les nombres publiés — la mesure ci-dessous montre
+que le terme est **identiquement nul** à `dim = 2`, la seule résolution d'où
+sortent les nombres publiés. Ça bloque sur la **suite** : `VQA_DIMS = [2, 4, 8]`,
+et à `dim = 4` le terme pèse autant que le ZZZZ déjà présent. Et ça bloque sur
+D-22 : la campagne de réoptimisation prévoit de régler `beta_xpoint`, un
+paramètre qu'**aucune mesure de `study/` ne peut voir**.
+
+**Comment on est tombé dessus.** Question 5 de `VIGIL.md` — *un test emprunte-t-il
+cette configuration ?* — en relisant `h3_term_ablation.zero_hamiltonian_terms`,
+qui met `K_xpoint` à zéro sur l'ablation `no_ZZZZ`. Remonter la chaîne : rien
+ne lit jamais `K_xpoint`.
+
+**Ce qui est établi — l'axe et de quel côté chacun est.**
+
+| | `advanced_anomalies_enabled` |
+|---|---|
+| `PhysicalMapper.compute_coefficients` / `..._v2` | défaut **`False`** |
+| `qaoa_inputs.prepare_qaoa_inputs` | ne passe **jamais** l'argument → `False` |
+| `qaoa_inputs.run_qaoa_on_snapshot` → `mapping(...)` | **`False`** codé en dur |
+| `h0_optimiser_equivalence`, `create_period_hamiltonian(hp, dim, False)` | **`False`** codé en dur |
+| **campagne d'entraînement**, `src/train_hyperparams.py` | **`True`** sur **6/6** scénarios — c'est D-33, déjà corrigé et publié dans `RESULTS.md` |
+
+Ce sont les **deux seuls** sites de `study/` qui mentionnent le drapeau
+(`qaoa_inputs.py:191` et `:350`) ; tout le reste hérite du défaut. Et
+`K_xpoint` n'est produit par le mappeur **que** si le drapeau est vrai : dans
+`study/`, la clé n'existe même pas.
+
+**Ce qui est établi — `build_ising_terms` ne peut pas le représenter.**
+`ising_terms_and_annealing.build_ising_terms` lit `H_edges`, `C_edges`,
+`K_plaquettes` — et rien d'autre : `K_xpoint` n'apparaît pas dans son source.
+Le recuit simulé, la diagonalisation exacte et les ablations sont donc
+**structurellement aveugles** à cette famille, drapeau ou pas. Et
+`h3_term_ablation` met `K_xpoint` à zéro sur `no_ZZZZ` en croyant l'ablater :
+il annule une clé que son propre `ground_state_mask` ne lit jamais.
+
+**Ce qui est établi — la mesure.** Mappeur v1 entraîné (`beta_xpoint = 2,39`),
+N=256, Re=400, dernier instantané des 4 scénarios canoniques, drapeau OFF
+contre ON. Les trois blocs communs sont **identiques à l'octet** dans les huit
+cas : le drapeau n'ajoute que le terme de point X, il n'en modifie aucun autre.
+
+**À `dim = 2` — la résolution de tous les nombres publiés :**
+
+| scénario | `max\|K_xpoint\|` | `max\|K_plaq\|` | termes Pauli OFF → ON | spins changés au fondamental exact |
+|---|---|---|---|---|
+| harris_tearing | **0,0000e+00** | 1,14e−03 | 12 → 12 | **0** |
+| kelvin_helmholtz | **0,0000e+00** | 5,00e+01 | 12 → 12 | **0** |
+| mhd_rotor | **0,0000e+00** | 4,78e+01 | 12 → 12 | **0** |
+| orszag_tang | **0,0000e+00** | 6,60e+01 | 12 → 12 | **0** |
+
+Somme des `|coefficients|` identique dans les quatre cas. **Aucun nombre
+publié ne bouge, et aucun ne pouvait bouger.**
+
+**À `dim = 4` — déclarée dans `VQA_DIMS`, jamais exécutée en phase 4 :**
+
+| scénario | `max\|K_xpoint\|` | `max\|K_plaq\|` | rapport | termes Pauli OFF → ON | Σ\|coeffs\| |
+|---|---|---|---|---|---|
+| harris_tearing | **4,15e+01** | 4,15e+01 | **1,00** | 48 → 56 | 3 997 → 4 329 (+8,3 %) |
+| kelvin_helmholtz | 1,24e+01 | 5,45e+01 | 0,23 | 48 → 52 | 9 922 → 9 944 (+0,2 %) |
+| mhd_rotor | **4,30e+01** | 5,04e+01 | **0,85** | 48 → 58 | 3 932 → 4 356 (+10,8 %) |
+| orszag_tang | **4,35e+01** | 6,96e+01 | **0,63** | 52 → 62 | 5 238 → 5 653 (+7,9 %) |
+
+Le terme de point X est du **même ordre** que le ZZZZ déjà compté, et il
+ajoute jusqu'à 10 termes de Pauli sur 48. Il est absent par construction de
+tout ce que `study/` mesure.
+
+**Ce que cela veut dire, précisément.**
+
+1. Rien de publié n'est faux de ce fait : à `dim = 2` le terme vaut zéro,
+   mesuré, sur 4/4.
+2. La conclusion T13 — *« les couplages ZZ/ZZZZ n'ajoutent aucune valeur
+   mesurable »* — porte, sans le dire, sur **une** des deux familles ZZZZ.
+   L'ablation `no_ZZZZ` ne peut pas ablater ce qui n'a jamais été construit.
+3. `beta_xpoint` est un hyperparamètre **entraîné** (2,39, et 2,341306 dans la
+   base gelée) dont **aucune** mesure de `study/` ne dépend. D-22 le range
+   parmi les 8 à réoptimiser : la campagne réglerait un paramètre que
+   l'étude de falsification ne peut pas percevoir. **C'est le point à trancher
+   avant de la lancer**, pas après.
+4. La fiche `VIGIL_BA_Proj.md` ne liste pas cet axe. Il s'ajoute aux sept.
+
+**Où on en est — non corrigé.** Activer le drapeau dans `study/` déplacerait
+tout à `dim ≥ 4` et demanderait d'implémenter `K_xpoint` dans
+`build_ising_terms` : ce n'est pas une correction, c'est une campagne. Trois
+directions :
+
+1. **Documenter et borner** : écrire que `study/` mesure le Hamiltonien
+   *sans anomalies avancées*, et que la conclusion T13 vaut pour la famille
+   ZZZZ de vorticité seulement. Coût nul, et honnête.
+2. **Implémenter `K_xpoint` dans `build_ising_terms`** puis rejouer à
+   `dim = 2` : le résultat est prévisible — inchangé, le terme y est nul —
+   mais cela rend l'axe traversable et ferme le trou pour `dim ≥ 4`.
+3. **Rejouer la phase 4 et T13 à `dim = 4` drapeau activé.** C'est là que le
+   terme vit. Demande de lever le plafond de 20 qubits de `exact_diag`
+   (32 qubits) ou de passer au recuit.
+
+Rien n'est appliqué : les trois changent ce que l'étude mesure.
+
+```bash
+pytest tests/study/test_xpoint_term_absent_from_study.py
+```
 
 ---
 

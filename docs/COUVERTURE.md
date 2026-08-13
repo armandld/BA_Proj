@@ -233,6 +233,52 @@ optimiseur COBYLA, AMR `depth = 0`, `dim = 2`. Non traversés : `classical_only`
 backend échantillonné, bord borné, hamiltonien nul, autres optimiseurs,
 `depth > 0`, `dim = 4 / 8`.
 
+### Un axe qui manquait à la fiche : les anomalies avancées — D-51
+
+`VIGIL_BA_Proj.md` liste sept axes ; il en manque un huitième, et `study/`
+n'en emprunte qu'un côté :
+
+| axe | les deux valeurs | ce que `study/` emprunte |
+|---|---|---|
+| anomalies avancées | `False` **et** `True` — le second ajoute le ZZZZ de point X | **`False` uniquement**, aux deux seuls sites qui mentionnent le drapeau (`qaoa_inputs.py:191`, `:350`) |
+
+La campagne d'entraînement, elle, l'active sur **6/6** scénarios (D-33,
+`RESULTS.md`). Mesuré, mappeur v1 entraîné (`beta_xpoint = 2,39`), N=256,
+Re=400, 4 scénarios, drapeau OFF contre ON — les trois blocs communs sont
+identiques à l'octet dans les huit cas :
+
+| | `dim = 2` (tous les nombres publiés) | `dim = 4` (déclarée dans `VQA_DIMS`, jamais exécutée) |
+|---|---|---|
+| `max\|K_xpoint\|` | **0,0000e+00 sur 4/4** | 1,24e+01 à 4,35e+01 |
+| rapport à `max\|K_plaq\|` | — | **0,23 à 1,00** |
+| termes de Pauli, OFF → ON | 12 → 12 sur 4/4 | 48 → 52…62 |
+| fondamental exact | **0 spin changé** | non calculable (32 qubits > plafond 20) |
+
+**Rien de publié n'en dépend, et rien ne pouvait en dépendre** : à `dim = 2`
+le terme est exactement nul. Mais `build_ising_terms` ne lit pas `K_xpoint`
+du tout, donc recuit, diagonalisation exacte et ablations y sont aveugles
+même drapeau levé — et l'ablation `no_ZZZZ` de T13 annule une clé que son
+propre `ground_state_mask` ne lit jamais. Détail, options et commande :
+`DEFAUTS.md` D-51 ; épinglé par
+`tests/study/test_xpoint_term_absent_from_study.py`.
+
+### `study/h3_representation/h3_equivariance.py` — lu en entier
+
+Troisième consommateur du schedule de D-48. Lu pour savoir si un nombre publié
+en dépend — **non** : `aggregate_master_table.rows_t12` ne lit que les routes
+`classical` et `ground_state`, jamais `qaoa`. La route QAOA est écrite dans
+l'artefact mais aucune ligne du master table ne la cite.
+
+| lu | verdict |
+|---|---|
+| `SYMMETRY_OPS`, cohérence tableau / composantes | **saine** — `flip0` = réflexion selon `AXIS_X`, matrice `diag(−1, +1)`, signe axial −1 : c'est bien `B_i → det(R)·R_ij·B_j` pour un pseudo-vecteur. `rot180` et `rot90` ont `det = +1`, donc signe axial +1. `rot90` : `np.rot90(f, k=1)` envoie l'ancien `(i,j)` en `(N−1−j, i)`, soit la rotation `(f_x,f_y) → (−f_y, f_x)` que la matrice applique |
+| centre des transformations, sur grille périodique | **sain** — `np.flip`/`np.rot90` opèrent autour de `(N−1)/2`, pas autour de l'origine : c'est une symétrie **composée d'une translation**, et une translation est une symétrie exacte d'un opérateur FD périodique. Le module ne le suppose pas, il le **mesure** (`solver_commutation_defect`) |
+| commutation avec la réduction en patchs | **saine** — `flip0` envoie le bloc `b` sur le bloc `n−1−b` exactement, et `rot90` `(⌊i/P⌋,⌊j/P⌋)` sur `(n−1−⌊j/P⌋,⌊i/P⌋)`, dès que `P` divise `N`. Les frontières de blocs sont préservées, donc décider-puis-transformer et transformer-puis-décider portent sur le même pavage |
+| `solver_commutation_defect` | **sain** — `dt` figé une fois depuis l'état de référence et passé aux deux branches : le piège « le solveur ré-adapte son `dt` » (forme « variable locale non réécrite ») est évité explicitement |
+| convention axiale de `B` | **non postulée, tranchée par la mesure** — les deux variantes sont implémentées et c'est le défaut de commutation qui départage |
+| `solver_noise_floor` | **contrôle réel mais partiel, non mesuré ici** — le plancher d'irreproductibilité est calculé pour la route `ground_state` seulement. La route `qaoa`, que le docstring désigne comme « la route réellement déployée », est **elle aussi** stochastique et n'a pas de plancher. Le principe que le module énonce (« une erreur d'orbite sous le plancher ne mesure pas un défaut d'équivariance ») ne lui est donc pas appliqué. **Non mesuré, donc pas appelé défaut** — et sans conséquence publiée, la route QAOA n'entrant dans aucune ligne du master table |
+| `orbit_error`, ordre des arguments | **sain** — `D(T(U))` puis `T(D(U))`, conforme au docstring, et la fonction est de toute façon symétrique |
+
 ### `aggregate_v2.py`, `aggregate_v3.py` — lus en entier
 
 | lu | verdict |

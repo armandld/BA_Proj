@@ -369,6 +369,21 @@ motivation for an Ising/quantum formulation — are **causally inert**. This
 is a causal statement, unlike the post-hoc ZZ/ZZZZ attributions of the
 manuscript.
 
+> **⚠ Portée à préciser — D-51.** L'énoncé porte sur **une** des deux familles
+> ZZZZ. `study/` code `advanced_anomalies_enabled = False` partout, donc le
+> ZZZZ de **point X** (`K_xpoint`) n'est jamais construit — et
+> `build_ising_terms`, dont dépendent l'ablation, le recuit et la
+> diagonalisation exacte, ne sait pas le lire même s'il l'était. L'ablation
+> `no_ZZZZ` annule une clé que `ground_state_mask` ne consulte jamais.
+> **Le tableau ne bouge pas** : mesuré à `dim = 2`, `max|K_xpoint| = 0,0000e+00`
+> sur 4/4 scénarios, 12 → 12 termes de Pauli, 0 spin changé au fondamental
+> exact — le terme est nul ici, donc l'ablation n'aurait rien retiré. À
+> `dim = 4` en revanche il vaut 0,23 à **1,00** fois `max|K_plaquettes|`. La
+> campagne d'entraînement l'active sur **6/6** scénarios (D-33). Conséquence
+> pratique la plus lourde : `beta_xpoint`, que D-22 range parmi les 8
+> paramètres à réoptimiser, n'influence **aucune** mesure de `study/`.
+> Détail et options : `docs/DEFAUTS.md` D-51.
+
 ---
 
 ## T12 — Equivariance and orbit error (audit P1)
