@@ -399,7 +399,15 @@ def plot_pareto_with_isocost(completed, lambda_cost, output_dir):
 
     ax.set_xlabel("Patch Ratio (computational cost)", fontsize=12)
     ax.set_ylabel("Physics Score (L2 error)", fontsize=12)
-    ax.set_ylim(-0.05, 0.4)
+    # D-62 : la fenêtre était codée en dur à (-0,05 ; 0,40). Sur l'étude
+    # classique, 9 essais sur 125 et **3 des 46 points du front de Pareto**
+    # tombaient hors cadre : la figure montrait un front qui s'arrête sans
+    # rien dire de ce qui continue. On garde la fenêtre quand tout y entre
+    # — la figure de l'étude quantique est inchangée, 0/178 hors cadre — et
+    # on l'élargit aux données sinon. Aucun seuil inventé : les bornes
+    # viennent des points tracés.
+    ax.set_ylim(min(-0.05, float(phys.min()) - 0.05),
+                max(0.4, float(phys.max()) * 1.05))
     ax.set_title(f"Pareto Front with Iso-Score Lines (lambda={lambda_cost:.4f})", fontsize=14)
     ax.legend()
     ax.grid(True, alpha=0.3)
