@@ -104,6 +104,7 @@ verdict « le hamiltonien trouve-t-il les patchs durs » se fabrique.
 | `labels_global_threshold.py`, `labels_error_tolerance.py` | **sains** — les deux refusent explicitement un seuil ou une tolérance qui dégénère, et un balayage vide y crie |
 | `exact_diagonalisation.py` | lu, aucun défaut mesuré ; `analyze_snapshot` reçoit `is_hard` sans jamais s'en servir (recalculé à l'identique depuis `l2_threshold`) et `H_mat` est diagonale, donc `eigh` est un argmin coûteux — deux gaspillages, pas des valeurs fausses. **Aucun artefact `exact_diag_*` dans `results/`** : rien à rejouer, la clause `promising = f1_exact >= f1_classique` (le commentaire au-dessus dit `>`) reste **non mesurée** |
 | `label_percentile_sensitivity.py`, message d'interprétation | **D-46** : imprimait « ROBUST … fails for ANY » dès `max(deltas) < 0,05`, alors que le docstring définit la robustesse comme « le gap ne devient jamais positif » (`delta < 0`) — mesuré sur l'artefact réel (dim=4, N=256, 4 scénarios, seed 0) `max(delta) = -0,154`, sous les deux seuils : ce run-ci n'était pas affecté, mais un cas construit (`+0,03` à un percentile) montrait le verdict « ROBUST » imprimé malgré un delta positif |
+| `dns_extension.py`, seconde moitié (`_band_limited_noise`, `perturb_fields`, `energy_non_increasing`, `presence_matrix`, `validate_one`, `main`) | **sain** — filtre passe-bas spectral en convention `AXIS_X`/`AXIS_Y` correcte (`indexing='ij'`), tolérance de monotonie d'énergie (1e-3) identique à celle de `check_ot` côté `dns_validation.py`. `check_kh_fixed` (ici) et `dns_validation.check_kh(analyse_one(...))` sont **bit-à-bit identiques** sur `kelvin_helmholtz` Re400 N96 et N256 réels — redondant depuis le rebranchement D-21 d'`analyse_one` sur les observables corrigées, pas une divergence de valeur. Les docstrings de `fluctuating_ke_fixed`/`mean_sq_current_fixed` (« phase 1b reste intouchée, réparation côté v3 par copie ») décrivent l'état pré-D-21 et sont datées sans être fausses : les *fonctions* gelées `mean_sq_current`/`fluctuating_KE` restent inchangées, comme `DEFAUTS.md` le documente déjà |
 
 **Ce module n'est pas « audité » au sens de la fiche.** Il a été **lu en
 entier**, fonction par fonction ; aucun test ne traverse encore ses axes
@@ -111,8 +112,9 @@ entier**, fonction par fonction ; aucun test ne traverse encore ses axes
 optimiseur). Lu en entier et non traversé : `dns_sweep.py`, `config.py`.
 `label_percentile_sensitivity.py` a désormais un test sur son message
 d'interprétation (D-46) mais pas sur `build_percentile_dataset` /
-`loso_site_vs_class` eux-mêmes. Non relus cette passe : `dns_validation.py`
-(passe concurrente, D-42) et la seconde moitié de `dns_extension.py`.
+`loso_site_vs_class` eux-mêmes. `dns_extension.py` est maintenant lu en
+entier. Non relu cette passe : `dns_validation.py` (passe concurrente,
+D-42).
 
 ---
 
