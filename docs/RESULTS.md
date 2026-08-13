@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 41 défauts corrigés
+## Les 42 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -118,6 +118,24 @@ et la question de savoir si ce seuil convient aux scénarios lisses
 tearing/KH est une décision physique, pas un défaut de code — voir
 `DEFAUTS.md`). Uniquement le diagnostic `study/` qui ne doit plus confondre
 « aucun signal calculé » avec « chance mesurée ».
+
+**Le critère d'acceptation de H0** — `h0_optimiser_equivalence.py` est le
+script dont le verdict porte le « RÉFUTÉ » de `h0_selection` dans
+`CLAUDE.md`. Trouvé par la question 5 de `VIGIL.md` — *un test emprunte-t-il
+cette configuration ?* — et non en lisant une fonction : la configuration
+non traversée est celle où l'énumération exhaustive est absente.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-52 | sans optimum certifié — `--no-exact`, **ou** `n_q > MAX_ENUM_QUBITS`, ce qui est le cas de tout `dim ≥ 4` (32 qubits contre un plafond de 22) — `solver_panel` écrit `NaN` dans `hit_optimum` et `exact_match`. `check_expected_behaviour` les comparait par `<` à `MIN_HIT` / `MIN_MASK_MATCH`, et `nan < 1.0` vaut **False** : les dictionnaires `missed` et `diverging` restaient vides quoi qu'il arrive. Le critère qui existe pour que le script **puisse échouer** ne pouvait ni échouer ni réussir — il ne mesurait rien — et imprimait « H0 réfutée » sur une campagne où rien n'avait été certifié | run réel `python study/h0_selection/h0_optimiser_equivalence.py --scenario orszag_tang --re 400 --N 64 --dim 2 --n-snaps 1 --no-exact --no-resume --seed 0` : **code de sortie 0**, les 8 solveurs à `hit=nan` / `mask_match=nan`, et **deux verdicts contradictoires dans la même exécution** — `DECISION RULE` : « QAOA **deviates from the certified optimum** », puis trois lignes plus bas `[ACCEPTANCE]` : « **7 optimiseurs atteignent l'optimum certifié** et renvoient un masque identique → H0 réfutée ». Après, même commande : `[INDECIDABLE]`, et la `DECISION RULE` annonce `UNDECIDABLE at this size`. Chemin **certifié** inchangé, vérifié par `diff` sur la même commande sans `--no-exact` : lignes de verdict **bit-à-bit identiques** avant/après (8 solveurs, `mask_match = True`, `[ACCEPTANCE]`) | `pytest tests/study/test_h0_acceptance_uncertified.py` |
+
+Aucun nombre publié ne bouge : `aggregate_master_table.py` ne lit que
+`h0_optimiser_equivalence_N{N}_dim{dim}.npz` — dim=2, donc certifié — et le
+seul artefact non certifié du dépôt
+(`h0_optimiser_equivalence_N64_dim4_orszag_tang_noexact.npz`, `hit` et
+`match` `NaN` sur ses 8 lignes) n'entre dans aucune ligne du master table.
+La correction ne change que ce que le script **affirme** quand il n'a rien
+certifié.
 
 **Le diagnostic Phase 1B** — en ré-auditant `check_tearing` pendant l'examen
 de D-39 (même fonction, même PR) : son docstring exige un pic « strictement
