@@ -216,6 +216,13 @@ question posée par D-39 (quelle observable sépare fond stationnaire et
 reconnexion) reste entière, mais elle ne peut plus s'appuyer sur « ça
 marchait avant » — ça ne marchait pas, au sens où `check_tearing` l'exige.
 
+**Le diagnostic de la campagne** — `src/analyze_hyperparams.py`, jamais
+audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-60 | *(numéro réservé — mesure en cours)* `plot_threshold_operating_curve` ne peut s'exécuter sur aucune étude du dépôt | à mesurer | à écrire |
+
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
 tous rendaient un résultat plausible.
