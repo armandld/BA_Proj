@@ -12,11 +12,20 @@ def main():
     parser.add_argument("--ResetLocal", action="store_true", help="Reset local data instead of importing")
     args = parser.parse_args()
 
-    # Destination : Ton PostgreSQL Neon
-    if args.in_url == "":
-        neon_url = "postgresql://neondb_owner:npg_osTe7ENJpZz5@ep-patient-hall-abitnl4g-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-    else:
-        neon_url = args.in_url
+    # Destination : le PostgreSQL Neon.
+    #
+    # L'URL complete, mot de passe compris, etait ecrite ici en dur. Ce depot
+    # est PUBLIC, et elle est dans son historique git : la retirer d'ici ne
+    # la retire pas de l'historique. Le mot de passe doit etre change cote
+    # Neon — voir `docs/DEFAUTS.md`. Ce changement-ci ne fait qu'empecher que
+    # le suivant soit publie a son tour.
+    neon_url = args.in_url or os.environ.get("NEON_DB_URL", "")
+    if not neon_url:
+        parser.error(
+            "aucune URL de base : passer --in-url, ou exporter NEON_DB_URL. "
+            "Aucune valeur par defaut n'est codee ici — un identifiant en "
+            "dur dans un depot public est publie a chaque clone."
+        )
 
     studies = ["q_has_v2_phase1", "q_has_v2_phase1_agr", "q_has_v2_phase1b", "q_has_v2_phase1b_agr",
                "q_has_v2_phase2", "q_has_v2_phase2_agr", "q_has_v2_phase3",
