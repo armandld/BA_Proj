@@ -17,10 +17,10 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 47 défauts corrigés
+## Les 48 défauts corrigés
 
-*(47 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 49 corrections en tout. Le titre annonçait **41** pour 42 lignes
+*(48 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 50 corrections en tout. Le titre annonçait **41** pour 42 lignes
 numérotées avant l'ajout de D-52, D-54, D-55 et D-56 : le compte de tête
 était de nouveau faux d'une unité, exactement le défaut de registre que la
 section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
@@ -221,7 +221,7 @@ audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
 
 | # | ce qui était faux | avant → après | vérifier |
 |---|---|---|---|
-| D-60 | *(numéro réservé — mesure en cours)* `plot_threshold_operating_curve` ne peut s'exécuter sur aucune étude du dépôt | à mesurer | à écrire |
+| D-60 | `plot_threshold_operating_curve` — la seule figure qui montre l'arbitrage précision/coût du **bras classique**, dont le seuil est le seul paramètre optimisé — ne pouvait sortir d'aucune étude du dépôt, pour **trois raisons indépendantes** : (1) elle exigeait un paramètre nommé `threshold`, alors que `make_classical_composite_objective` échantillonne `threshold_amr` — `"threshold"` n'apparaît dans aucune des 10 bases ni dans aucune ligne de `src/` ; (2) elle lisait `phys_score` / `patch_ratio`, que seul l'objectif mono-scénario de `pipeline.py` écrit, quand la campagne déployée passe par `train_hyperparams._run_one_scenario`, qui écrit `phys_<scenario>` / `patch_<scenario>` et **jamais** les clés globales ; (3) son unique appelant était gardé par `has_decomposed_data`, qui teste `phys_score` : faux pour toute étude composite. Aucun message : une analyse amputée de sa figure de décision était indiscernable d'une analyse complète | `python src/analyze_hyperparams.py --db-path results/hyperparams/optuna_studies/classical_v2_phase1.db --study-name classical_v2_phase1` : **9 figures avant, 10 après** — `12_threshold_operating_curve.png` n'était produit sur **aucune** des deux études non vides. Ce que la figure manquante montre, mesuré sur les 125 essais complets de la base gelée : `r(threshold_amr, taux de patchs) = **−0,9690**`, `r(threshold_amr, erreur physique) = **+0,8369**` ; médianes par quartile de seuil `[0,050–0,089] → phys 0,0173 / patch 0,7240` puis `[0,226–0,800] → phys 0,2758 / patch 0,4809`. L'agrégation composite est la **moyenne** des scénarios, opérateur assorti : c'est celui que `_composite_loop` applique (`total / len(scenario_list)`). Aucun nombre publié ne bouge : aucun artefact, aucune figure du dépôt ne référence cette courbe | `pytest tests/pipeline/test_threshold_curve_reachable.py` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :

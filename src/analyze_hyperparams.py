@@ -562,17 +562,88 @@ def plot_field_correlation_heatmap(completed, param_names, output_dir):
     _save(fig, output_dir, "11_field_correlation_heatmap.png")
 
 
+#: Les noms sous lesquels le seuil de raffinement a réellement été
+#: échantillonné. `train_hyperparams.make_classical_composite_objective`
+#: appelle `trial.suggest_float("threshold_amr", ...)` ; `"threshold"` tout
+#: court n'apparaît dans aucune base du dépôt ni dans aucune ligne de
+#: `src/` — c'est le nom que cette fonction exigeait, d'où D-60.
+THRESHOLD_PARAM_NAMES = ("threshold_amr", "threshold")
+
+
+def _threshold_param_name(trial):
+    """Le nom sous lequel CET essai porte son seuil, ou None."""
+    for name in THRESHOLD_PARAM_NAMES:
+        if name in trial.params:
+            return name
+    return None
+
+
+def _decomposed_series(completed):
+    """`(phys, patch)` par essai, quel que soit le schéma d'attributs.
+
+    Deux écrivains, deux schémas, et cette fonction ne lisait que le
+    premier :
+
+      * `pipeline.py` (objectif mono-scénario) écrit `phys_score` et
+        `patch_ratio` ;
+      * `train_hyperparams._run_one_scenario` — le chemin de la campagne
+        déployée — écrit `phys_<scenario>` et `patch_<scenario>`, un par
+        scénario, et **jamais** les deux clés globales.
+
+    L'agrégation composite est la MOYENNE des scénarios parce que c'est
+    celle que la perte elle-même applique (`_composite_loop` rend
+    `total / len(scenario_list)`) : on mesure avec l'opérateur qui a
+    construit la grandeur, pas avec un autre.
+
+    Rend `(None, None, None)` si aucun des deux schémas n'est présent —
+    c'est l'appelant qui le dit, il ne se tait pas. Le troisième élément
+    nomme la provenance, pour qu'une figure ne puisse pas laisser croire
+    qu'un seul scénario a été mesuré là où quatre ont été moyennés.
+    """
+    if not completed:
+        return None, None, None
+
+    if all("phys_score" in t.user_attrs and "patch_ratio" in t.user_attrs
+           for t in completed):
+        phys  = np.array([t.user_attrs["phys_score"]  for t in completed])
+        patch = np.array([t.user_attrs["patch_ratio"] for t in completed])
+        return phys, patch, "single run"
+
+    keys = _find_available_keys(completed, ALL_SCENARIO_KEYS, prefix="phys_")
+    keys = [k for k in keys
+            if all(f"phys_{k}" in t.user_attrs and f"patch_{k}" in t.user_attrs
+                   for t in completed)]
+    if not keys:
+        return None, None, None
+
+    phys  = np.array([[t.user_attrs[f"phys_{k}"]  for k in keys]
+                      for t in completed]).mean(axis=1)
+    patch = np.array([[t.user_attrs[f"patch_{k}"] for k in keys]
+                      for t in completed]).mean(axis=1)
+    return phys, patch, "mean over " + ", ".join(keys)
+
+
 def plot_threshold_operating_curve(completed, output_dir):
     """
-    If 'threshold' is among the optimized params, plot the threshold
-    operating curve: phys_score and patch_ratio vs threshold.
+    If a refinement threshold is among the optimized params, plot the
+    threshold operating curve: phys_score and patch_ratio vs threshold.
     """
-    if "threshold" not in completed[0].params:
+    name = _threshold_param_name(completed[0]) if completed else None
+    if name is None:
         return
 
-    thresholds = np.array([t.params["threshold"] for t in completed])
-    phys  = np.array([t.user_attrs["phys_score"]  for t in completed])
-    patch = np.array([t.user_attrs["patch_ratio"] for t in completed])
+    completed = [t for t in completed if name in t.params]
+    phys, patch, source = _decomposed_series(completed)
+    if phys is None:
+        # D-60 : un balayage vide doit crier. Sans ce message, une étude
+        # dont le seuil EST le paramètre optimisé rendait une analyse sans
+        # sa figure de décision, indiscernable d'une analyse complète.
+        print("[FIGURE] courbe de seuil indisponible : ni "
+              "(phys_score, patch_ratio) ni (phys_<scenario>, "
+              "patch_<scenario>) dans les user_attrs", file=sys.stderr)
+        return
+
+    thresholds = np.array([t.params[name] for t in completed])
 
     fig, ax1 = plt.subplots(figsize=(10, 6))
     ax2 = ax1.twinx()
@@ -582,9 +653,11 @@ def plot_threshold_operating_curve(completed, output_dir):
     _add_trend(ax1, thresholds, phys,  color="tab:blue",   n_bins=20)
     _add_trend(ax2, thresholds, patch, color="tab:orange", n_bins=20)
 
-    ax1.set_xlabel("Threshold", fontsize=13)
-    ax1.set_ylabel("Physics Score (L2 error)", color="tab:blue", fontsize=12)
-    ax2.set_ylabel("Patch Ratio (cost)",       color="tab:orange", fontsize=12)
+    ax1.set_xlabel(name, fontsize=13)
+    ax1.set_ylabel(f"Physics Score (L2 error, {source})",
+                   color="tab:blue", fontsize=12)
+    ax2.set_ylabel(f"Patch Ratio (cost, {source})",
+                   color="tab:orange", fontsize=12)
     ax1.set_title("Threshold Operating Curve\n"
                   "Higher threshold \u2192 fewer patches \u2192 cheaper but less accurate",
                   fontsize=13)
@@ -888,10 +961,16 @@ def main():
             plot_score_decomposition(completed, param_names, args.output_dir)
             plot_per_field_sensitivity(completed, param_names, args.output_dir)
             plot_field_correlation_heatmap(completed, param_names, args.output_dir)
-            plot_threshold_operating_curve(completed, args.output_dir)
         else:
             print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
             print("       Sections 1–3 are available from existing trials.")
+
+        # D-60 : hors de la garde `has_decomposed_data`. Celle-ci teste
+        # `phys_score`, que seul l'objectif mono-scénario de `pipeline.py`
+        # écrit — donc la courbe de seuil ne pouvait pas sortir sur une
+        # étude composite, y compris l'étude classique dont le seuil EST
+        # le seul paramètre optimisé. La fonction porte ses propres gardes.
+        plot_threshold_operating_curve(completed, args.output_dir)
 
         # Section 5: Per-scenario analysis (Phase 2 composite)
         if has_scenario_data(completed):
