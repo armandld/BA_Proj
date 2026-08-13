@@ -487,6 +487,13 @@ pytest tests/study/test_no_private_curl_survives.py tests/study/test_t8_dns_exte
 
 ---
 
+## D-48 — le « warm start classique » du QAOA ne lit pas la décision classique
+
+**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
+en cours. Ne pas reprendre D-48.
+
+---
+
 ## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et
