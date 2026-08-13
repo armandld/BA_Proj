@@ -24,6 +24,129 @@ DIVERGENCE_PENALTY = 10.0  # Finite penalty for diverged trials (replaces inf)
 # locales qui masquaient celle-ci : changer la valeur ici n'aurait eu
 # d'effet que dans un cas sur quatre. Definition unique desormais.
 
+# ══════════════════════════════════════════════════════════════════
+#  Configuration par scenario — la table qui fait foi
+# ══════════════════════════════════════════════════════════════════
+#
+# Sortie du corps de `main()` pour etre TESTABLE : c'est de la donnee,
+# pas de la logique, et c'est elle qui decide ce qu'une campagne mesure.
+# Un test verifie que chaque entree porte T_MAX > T_START — l'invariant
+# dont la violation faisait D-66.
+
+N_TRAINING         = 256
+MAX_DEPTH_TRAINING = 4
+
+PHASE={
+    "orszag_tang": {
+        "scenario": "orszag_tang",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 2.8,
+        "T_START": 2.3,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        # Etait absent ici aussi : Orszag-Tang tournait sans anomalies
+        # avancees, donc sans terme ZZZZ de point X, alors que les six
+        # autres scenarios les activaient.
+        "AdvAnomaliesEnable": True,
+    },
+
+    "kelvin_helmholtz": {
+        "scenario": "kelvin_helmholtz",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.7,
+        "T_START": 1.3,      # KH instability develops around t~1.0-1.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "lamb_oseen_vortex": {
+        "scenario": "lamb_oseen_vortex",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.0,
+        "T_START": 0.6,       # Vortex is present from t=0, start early
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "harris_tearing" : {
+        "scenario": "harris_tearing",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.1,
+        "T_START": 0.7,       # Tearing mode develops around t~0.5-1.0
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "island_coalescence" : {
+        "scenario": "island_coalescence",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 0.8,
+        "T_START": 0.4,       # Shock develops around t~0.2-0.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,    # Reconnection is fast — frequent VQA calls
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,  # X-point detection requires advanced anomalies
+    },
+
+    "mhd_rotor" : {
+        "scenario": "mhd_rotor",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 0.7,
+        "T_START": 0.3,       # Rotor winds up B-field around t~0.2-0.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "ghost_twisting" : {
+        "scenario": "ghost_twisting",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 0.8,
+        "T_START": 0.0,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+}
+
+
 def main():
     sys.stdout.reconfigure(line_buffering=True) # Pour un affichage immédiat des print() à enlever pour une meilleure perf
 
@@ -31,12 +154,15 @@ def main():
     parser.add_argument("--out-dir", default="../data", help="Output directory for mapping")
     parser.add_argument("--in-file", default="../input/mapping_input.json", help="Input directory for mapping")
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--AdvAnomaliesEnable", action="store_true")
+    # D-66 : ces sept options valent `None` par defaut et sont resolues
+    # depuis `PHASE[scenario]`. Elles valaient auparavant des constantes de
+    # CLI qui ECRASAIENT la configuration du scenario -- voir `_resolve`.
+    parser.add_argument("--AdvAnomaliesEnable", action="store_true", default=None)
     parser.add_argument("--grid-size", type=int, default=2, help="Coarse grid dimension N (NxN)")
-    parser.add_argument("--dns-resolution", type=int, default=256, help="High-Res Grid for Ground Truth")
-    parser.add_argument("--t-max", type=float, default=1.0, help="Simulation end time")
-    parser.add_argument("--dt", type=float, default=1e-4, help="Time step size")
-    parser.add_argument("--hybrid-dt", type=float, default=0.1, help="Hybrid simulation time step size")
+    parser.add_argument("--dns-resolution", type=int, default=None, help="High-Res Grid for Ground Truth (defaut : celle du scenario)")
+    parser.add_argument("--t-max", type=float, default=None, help="Simulation end time (defaut : celle du scenario)")
+    parser.add_argument("--dt", type=float, default=None, help="Time step size (defaut : celui du scenario)")
+    parser.add_argument("--hybrid-dt", type=float, default=None, help="Hybrid simulation time step size (defaut : celui du scenario)")
     parser.add_argument("--reps", type=int, default=-1, required=False, help="Number of repetitions for the QAOA ansatz.")
     # `hardware` retire des choix : aucun backend IBM reel n'est cable, et
     # un run demande en materiel s'executait sur simulateur sans le signaler
@@ -44,165 +170,105 @@ def main():
     # credible.
     parser.add_argument("--mode", default="simulator", choices=["simulator"])
     parser.add_argument("--backend", default="state_vector", choices=["aer", "estimator","state_vector"])
-    parser.add_argument("--shots", type=int, default=1024)
+    parser.add_argument("--shots", type=int, default=None, help="(defaut : celui du scenario)")
     parser.add_argument("--method", default="L-BFGS-B", choices=["COBYLA", "L-BFGS-B", "Powell"])
     parser.add_argument("--opt-level", type=int, default=1, choices=[0,1,2,3], help="Optimization level for transpilation.")
-    parser.add_argument("--K-opt", type=int, default=80, help="Maximum number of iterations for the optimizer.")
+    parser.add_argument("--K-opt", type=int, default=None, help="Maximum number of iterations for the optimizer (defaut : celui du scenario)")
     parser.add_argument("--eps", type=float, default=1e-2, help="Convergence tolerance for the optimizer.")
+    # Les choix sont DERIVES de `PHASE`, pas recopies a cote.
+    #
+    # La liste ecrite a la main en annoncait dix quand `PHASE` en porte
+    # sept : `magnetic_twist`, `noisy_uniform` et `double_tearing` etaient
+    # acceptes par la CLI puis levaient `KeyError` sur `PHASE[scenario]`.
+    # Meme famille que D-48 : une option affichee dans l'aide est une
+    # promesse.
     parser.add_argument("--scenario", default="orszag_tang",
-                        choices=["orszag_tang", "kelvin_helmholtz",
-                                 "magnetic_twist", "noisy_uniform",
-                                 "harris_tearing", "double_tearing",
-                                 "lamb_oseen_vortex", "island_coalescence",
-                                 "mhd_rotor", "ghost_twisting"],
+                        choices=sorted(PHASE),
                         help="Initial condition scenario")
 
     args = parser.parse_args()
 
     verbose = args.verbose
-
-    N = args.dns_resolution                   # Résolution moyenne (DNS)
     VQA_N = args.grid_size                    # Résolution Grossière
-    T_MAX = args.t_max                        # Temps final
-    DT = args.dt                              # Pas de temps
-    HYBRID = int(args.hybrid_dt / DT)         # Fréquence de mise à jour hybride
 
-    Re = 1000
-    Rm = 1000
+    cfg = PHASE[args.scenario]
+
+    # ── D-66 : la configuration du scenario fait foi ──────────────────
+    #
+    # `main` precalculait le DNS avec `PHASE[scenario]` puis passait a
+    # `pipeline()` les DEFAUTS DE LA CLI. Sept des neuf cles etaient
+    # ignorees, et le DNS tournait sous une physique quand la boucle
+    # hybride tournait sous une autre :
+    #
+    #     T_MAX  2.8 (PHASE) contre 1.0 (CLI)
+    #     DT     1e-3        contre 1e-4
+    #     Re/Rm  800         contre 1000
+    #     shots  256         contre 1024
+    #     K_opt  30          contre 80
+    #     AdvAnomaliesEnable True contre False
+    #
+    # Le hot start place `t_current` a T_START = 2.3 ; avec T_MAX = 1.0 la
+    # condition `while t_current < T_MAX` est fausse d'entree. La boucle ne
+    # s'executait JAMAIS. L'etat final restait l'etat DNS, d'ou une erreur
+    # exactement nulle sur les cinq champs et un `combined = 0.333333`
+    # parfaitement plausible -- pour un run qui n'avait rien calcule.
+    #
+    # Mesure apres correction, orszag_tang, N=256, profondeur 4 :
+    #   Q-HAS      combined 0.228928  phys 0.140052  patch 0.4067
+    #   Classique  combined 0.212591  phys 0.117626  patch 0.4025
+    #
+    # `_resolve` : la valeur du scenario, sauf si la CLI l'a passee
+    # EXPLICITEMENT (defaut `None`).
+    def _resolve(cli_value, cle, defaut=None):
+        if cli_value is not None:
+            return cli_value
+        return cfg.get(cle, defaut)
+
+    N     = _resolve(args.dns_resolution, "N")
+    T_MAX = _resolve(args.t_max,          "T_MAX")
+    DT    = _resolve(args.dt,             "DT")
+    hybrid_dt = _resolve(args.hybrid_dt,  "HYBRID_DT")
+    HYBRID = int(hybrid_dt / DT)          # Fréquence de mise à jour hybride
 
     argus = SimpleNamespace(
         reps=args.reps if args.reps > 0 else (VQA_N-1) * 2, # 2 for 2D, 3 for 3D
         mode=args.mode,
         backend=args.backend,
-        shots=args.shots,
+        shots=_resolve(args.shots, "shots"),
         method=args.method,
         opt_level=args.opt_level,
-        AdvAnomaliesEnable=args.AdvAnomaliesEnable,
-        K_opt=args.K_opt,
+        AdvAnomaliesEnable=_resolve(args.AdvAnomaliesEnable, "AdvAnomaliesEnable", False),
+        K_opt=_resolve(args.K_opt, "K_opt"),
         eps=args.eps,
         eta=0.001,       # Faible résistivité pour laisser l'instabilité grandir
         Bz_guide=0.1,    # Faible champ guide pour la stabilité
         c_s=1.0,         # Référence de vitesse acoustique
-        Re= Re,          # Reynolds number
-        Rm= Rm           # Magnetic Reynolds number
+        Re=_resolve(None, "Re"),
+        Rm=_resolve(None, "Rm"),
     )
 
-    N_TRAINING         = 256
-    MAX_DEPTH_TRAINING = 4
+    # Le hot start demarre a T_START : un T_MAX anterieur rend la boucle
+    # vide, ce qui produisait un score plausible sans aucun calcul.
+    t_start = cfg.get("T_START", 0.0)
+    if T_MAX <= t_start:
+        raise ValueError(
+            f"T_MAX={T_MAX} <= T_START={t_start} pour le scenario "
+            f"'{args.scenario}' : le hot start place t_current a T_START, "
+            f"donc `while t_current < T_MAX` serait faux des l'entree et la "
+            f"boucle ne tournerait pas. Le run rendrait une erreur nulle et "
+            f"un score plausible sans rien calculer. Voir D-66.")
 
-    PHASE={
-        "orszag_tang": {
-            "scenario": "orszag_tang",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 2.8,
-            "T_START": 2.3,
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            # Etait absent ici aussi : Orszag-Tang tournait sans anomalies
-            # avancees, donc sans terme ZZZZ de point X, alors que les six
-            # autres scenarios les activaient.
-            "AdvAnomaliesEnable": True,
-        },
+    dns_trace, hot_start_state = precompute_dns(cfg)
 
-        "kelvin_helmholtz": {
-            "scenario": "kelvin_helmholtz",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.7,
-            "T_START": 1.3,      # KH instability develops around t~1.0-1.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "lamb_oseen_vortex": {
-            "scenario": "lamb_oseen_vortex",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.0,
-            "T_START": 0.6,       # Vortex is present from t=0, start early
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "harris_tearing" : {
-            "scenario": "harris_tearing",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.1,
-            "T_START": 0.7,       # Tearing mode develops around t~0.5-1.0
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "island_coalescence" : {
-            "scenario": "island_coalescence",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.8,
-            "T_START": 0.4,       # Shock develops around t~0.2-0.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,    # Reconnection is fast — frequent VQA calls
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,  # X-point detection requires advanced anomalies
-        },
-
-        "mhd_rotor" : {
-            "scenario": "mhd_rotor",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.7,
-            "T_START": 0.3,       # Rotor winds up B-field around t~0.2-0.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "ghost_twisting" : {
-            "scenario": "ghost_twisting",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.8,
-            "T_START": 0.0,
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-    }
-    dns_trace, hot_start_state = precompute_dns(PHASE[args.scenario])
+    if verbose:
+        print(f"Configuration resolue pour '{args.scenario}' : "
+              f"N={N}, T_START={t_start}, T_MAX={T_MAX}, DT={DT}, "
+              f"HYBRID_DT={hybrid_dt}, Re={argus.Re}, Rm={argus.Rm}, "
+              f"shots={argus.shots}, K_opt={argus.K_opt}, "
+              f"AdvAnomalies={argus.AdvAnomaliesEnable}")
 
     print(f"Starting pipeline... saved in{args.out_dir}")
-    pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, lambda_cost=0.5, trial= None, classic_AMR_comp=True, dns_trace=dns_trace, hot_start_state=hot_start_state, max_depth_override= 4, scenario=args.scenario, save_dir=args.out_dir)
+    pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, lambda_cost=0.5, trial= None, classic_AMR_comp=True, dns_trace=dns_trace, hot_start_state=hot_start_state, max_depth_override=cfg.get("max_depth_override", 4), scenario=args.scenario, save_dir=args.out_dir)
 
 
 
@@ -816,11 +882,19 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
 
     phys_score = total_error / len(variables)
 
-    if total_steps > 0:
-        avg_pixel_used = total_pixel_used / total_steps
-    else:
-        avg_pixel_used = N_square
+    # D-67 : `total_steps == 0` signifie qu'AUCUN pas n'a ete integre.
+    # Le repli `avg_pixel_used = N_square` transformait cela en
+    # `patch_ratio = 1.0`, donc en `combined = lambda/(1+lambda)` -- un
+    # nombre parfaitement plausible (0.333333 a lambda=0.5) pour un run qui
+    # n'avait rien calcule. C'est ainsi que D-66 est reste invisible.
+    # Un run vide doit crier, pas se noter.
+    if total_steps <= 0:
+        raise ValueError(
+            f"score() appele avec total_steps={total_steps} : aucun pas de "
+            f"temps n'a ete integre, il n'y a rien a noter. Verifier que "
+            f"T_MAX est posterieur a T_START (voir D-66 et D-67).")
 
+    avg_pixel_used = total_pixel_used / total_steps
     patch_ratio = avg_pixel_used / N_square
 
     if verbose:
