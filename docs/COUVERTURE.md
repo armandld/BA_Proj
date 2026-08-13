@@ -50,7 +50,6 @@ effectivement relu fonction par fonction.
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
-| `recompute_lambda_scores.py` | 717 | recalcul de scores publiés |
 | `compare_rotor_budget.py` | 481 | comparaison de budget, utilise le pipeline |
 | `visual.py`, `help_visual.py` | 327 | figures |
 | `import_Neon_data_to_local.py` | 76 | import de données |
@@ -161,6 +160,45 @@ de `results/hyperparams/optuna_studies/`, **deux seulement** portent une
 1b, 2 et 3 comprises, sont vides. C'est cohérent avec D-22 et n'ajoute rien
 à ce qu'il dit ; c'est noté ici pour que personne ne les relise en pensant y
 trouver la campagne.
+
+---
+
+## 1a bis. `src/recompute_lambda_scores.py` — lu en entier
+
+717 lignes. Il rejoue le score d'un essai sous un autre `lambda_cost` :
+c'est le seul chemin par lequel un arbitrage précision/coût déjà payé peut
+être relu sans relancer la campagne.
+
+**Son contrat central tient.** Au `LAMBDA_COST_SOFT = 0,4` de
+l'entraînement, `recompute_score` rend exactement ce que la campagne a
+mesuré : écart maximal **5,6e−17** sur les 178 essais quantiques et
+**2,2e−16** sur les 125 classiques, **303/303**. La formule
+`(phys + λ·patch)/(1+λ)` et la moyenne des sous-pertes coïncident des deux
+côtés (`pipeline.score` et `_composite_loop` contre `recompute_score`).
+Verrouillé par `tests/pipeline/test_rescore_reproduces_training_loss.py`,
+qui vérifie aussi que le lambda **agit** — à λ=0 le score vaut la physique
+seule, et le sens du déplacement suit `signe(phys − patch)` essai par
+essai : 118 baissent, 7 montent.
+
+| fonction | verdict |
+|---|---|
+| `main`, rattrapage des erreurs | **D-63** — tout le corps dans un `except Exception` sans sortie non nulle : le script ne pouvait pas échouer, et un échec tardif s'annonçait « erreur de chargement » |
+| `plot_pareto_with_isocost`, fenêtre | **D-62** — `set_ylim(-0,05 ; 0,40)` en dur : 9 essais sur 125 et 3 des 46 points du front hors cadre sur l'étude classique |
+| `_add_trend` | **D-61**, second site — copie mot pour mot de celle d'`analyze_hyperparams` |
+| `recompute_score`, `_recompute_global`, `build_trial_table` | **sains** — voir le contrat ci-dessus. Le repli global→moyenne des scénarios est le même dans les trois (`_get_global_phys_patch`, `build_trial_table`, `recompute_score`), et rend la même valeur |
+| `save_summary`, changements de rang | **sain** — rangs d'origine et rangs nouveaux calculés sur la même liste, `orig_rank − new_rank` positif = montée, cohérent avec l'étiquette `UP` |
+| `plot_lambda_sweep` | **sain** — orientation de la carte `imshow` assortie à ses étiquettes et à `ax.text(j, i)` ; la ligne d'iso-score est coupée à `iso ≥ 0`, ce qui est voulu |
+| `_pareto_front` | **sain** — copie identique à celle d'`analyze_hyperparams`, croisée contre une référence indépendante (300/300) |
+| `save_summary`, `original_lambda` | **réserve, non corrigée** — le paramètre existe mais `run_single_lambda` ne le passe jamais : le résumé compare `new_score` à `original_score` sans jamais dire quel λ a produit le second. Rien de faux n'est imprimé ; il manque une ligne. Signalé plutôt que corrigé — écrire « 0,4 » ici serait le recopier depuis `train_hyperparams` sans que l'artefact le porte, exactement la valeur sans provenance que D-22 reproche au JSON déployé |
+| `plot_scenario_reranked` | **réserve, non corrigée** — `user_attrs.get(f"phys_{key}", 0)` : un scénario sans mesure s'empilerait à zéro. Non emprunté sur les bases du dépôt (un seul jeu de clés, 303 essais) |
+
+**Axes empruntés** : schéma **composite** (`phys_<scenario>`) **et**
+schéma **mono-scénario** (`phys_score`, par `_recompute_global`) ; bras
+**quantique** et **classique** ; λ **de l'entraînement (0,4)**, λ **nul**
+et λ **unitaire** ; sortie **saine** et sortie **en échec** (étude absente,
+base absente, écriture impossible). Non traversé : le mode `--lambda-sweep`
+à plus d'un λ n'est vérifié par aucun test — il écrit `lambda_sweep_results.json`
+et deux figures de plus, tous produits par les mêmes fonctions déjà couvertes.
 
 ---
 
