@@ -15,7 +15,7 @@ couvert à **100 %** : ses tests vérifiaient des valeurs, partageaient le
 modèle mental du code, donc son erreur. Un module à 95 % peut être un piège ;
 un module à 60 % peut être sain.
 
-**1 827 tests**, 73 fichiers. Commandes dans `tests/README.md`.
+**1 971 tests**, 77 fichiers. Commandes dans `tests/README.md`.
 
 ---
 
@@ -23,30 +23,60 @@ un module à 60 % peut être sain.
 
 ### Lignes jamais exécutées
 
-Mesuré par `coverage`, suites QAOA et mesures `slow` exclues *(elles
-exercent `pipeline.py`, `call_vqa_shell.py` et `hyperparams_loader.py` : les
-chiffres de ces trois-là sont donc faux par défaut)*.
+Remesuré le 13 août, **suites QAOA comprises** — seules les mesures `slow`
+sont exclues. La mesure précédente les excluait aussi, ce qui rendait faux
+par construction les chiffres de `pipeline.py`, `call_vqa_shell.py` et
+`solver.py`. **Les deux séries ne sont pas comparables** : ce qui a bougé,
+c'est le périmètre de mesure, pas la couverture. 36 min.
+
+```bash
+python -m coverage run --source=src -m pytest tests/ -q -m "not slow"
+python -m coverage report --include="src/*"
+```
+
+**Le chemin scientifique déployé — 85 %** (2 658 instructions) :
 
 | module | couverture | ce qui manque |
 |---|---|---|
-| `pipeline.py` | **14 %** | la boucle fermée elle-même — exercée par les suites QAOA, non comptée ici |
-| `train_hyperparams.py` | **89 %** | le mode Colab, l'analyse des CSV de rescore en erreur |
-| `hyperparams_loader.py` | **28 %** | les sélecteurs par scénario, combo, phase, rang |
-| `VQA/execute.py` | **49 %** | les branches matériel, MPS, et la boucle COBYLA |
-| `Simulation/solver.py` | **52 %** | `step_layered` en profondeur, le sous-cyclage |
-| `call_vqa_shell.py` | **63 %** | la normalisation des coefficients, le warm-start |
-| `VQA/optimize.py` | **65 %** | les backends autres que `state_vector` |
+| `cost_hamiltonian`, `init_qbits_state`, `mapping`, `call_vqa_shell`, `HamiltParams_v2`, `PhysToAngle` | **100 %** | — |
+| `Simulation/solver.py` | **99 %** | 2 instructions |
+| `HamiltParams.py` | **99 %** | 2 instructions |
+| `VQA/runtime.py` | **98 %** | 1 instruction |
+| `pre_compute_dns.py` | **98 %** | 1 instruction |
+| `RescaleArrays.py` | **97 %** | 3 instructions |
+| `VQA/postprocess.py` | **95 %** | 1 instruction |
+| `train_hyperparams.py` | **90 %** | le mode Colab (non exécutable ici), l'analyse des CSV de rescore en erreur |
+| `Simulation/grid.py` | **90 %** | 13 instructions |
+| `VQA/optimize.py` | **88 %** | les backends autres que `state_vector` |
+| `Simulation/refinement.py` | **82 %** | le sondage de bord, la reprise de campagne |
 | `Simulation/utils.py` | **65 %** | `slice_hamiltonian_params`, non appelé par le chemin déployé |
-| `Simulation/refinement.py` | **73 %** | le TTL, le sondage de bord, la reprise |
+| `VQA/execute.py` | **64 %** | la boucle COBYLA à plusieurs redémarrages, les chemins hérités |
+| `hyperparams_loader.py` | **55 %** | les sélecteurs par scénario, combo, phase, rang |
+| `pipeline.py` | **52 %** | le corps de `main()` et sa CLI — le module s'exécute par sa bibliothèque, pas par sa ligne de commande |
 
-**Total mesuré : 55 %** sur `src/`, chiffre à lire avec la réserve ci-dessus.
+**Le reste de `src/` — 0 à 12 %**, et ce sont exactement les cinq fichiers
+jamais audités : `analyze_hyperparams.py`, `recompute_lambda_scores.py`,
+`compare_rotor_budget.py` et `import_Neon_data_to_local.py` à **0 %**,
+`visual.py` à 12 %, `help_visual.py` à 7 %.
+
+*Chiffres déjà dépassés pour `recompute_lambda_scores.py` et
+`analyze_hyperparams.py` : les 13 tests de D-49 et les 11 de D-50 sont
+postérieurs à cette mesure. À remesurer à la prochaine passe — noté ici
+plutôt que corrigé au jugé, parce qu'un nombre non mesuré n'a pas sa place
+dans ce tableau.*
+
+**Total sur tout `src/` : 56 %** (4 102 instructions). Ce chiffre unique
+cachait deux populations. **1 429 des 1 822 instructions jamais exécutées —
+78 % — sont dans les cinq fichiers jamais audités.** Les deux listes
+coïncident : ce qui n'est pas relu n'est pas exécuté non plus. C'est la
+raison de fond pour finir V1 avant de réoptimiser.
 
 ### Fonctions dont le contrat n'a jamais été audité
 
 Pas mesurable automatiquement. Liste tenue à la main, depuis ce qui a été
 effectivement relu fonction par fonction.
 
-**Jamais audité** — aucune des quatre questions n'y a été posée :
+**Jamais audité** — aucune des cinq questions n'y a été posée :
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
@@ -54,14 +84,26 @@ effectivement relu fonction par fonction.
 | `visual.py`, `help_visual.py` | 327 | figures |
 
 `analyze_hyperparams.py`, `recompute_lambda_scores.py` et
-`import_Neon_data_to_local.py` figuraient ici : lus en entier le 13 août,
-D-60 à D-65. Leurs verdicts sont dans les sections 1a ci-dessous.
+`import_Neon_data_to_local.py` figuraient ici. Ils ont été audités **deux
+fois le 13 août, par deux passes qui s'ignoraient** : D-49 et D-50 d'abord
+(chemin de données et chemin d'échec), puis D-60 à D-65 (les figures et le
+chemin de sortie). La seconde a re-trouvé D-49 sous le numéro D-63 — voir
+« Deux passes sur les mêmes fichiers » ci-dessous.
 
 **~810 lignes restantes**, en aval du chemin scientifique : elles lisent des
-résultats, elles n'en produisent pas. Réserve apprise cette passe : « en
-aval » ne veut pas dire « sans conséquence ». `import_Neon_data_to_local.py`
+résultats, elles n'en produisent pas. Réserve apprise à la seconde passe :
+« en aval » ne veut pas dire « sans conséquence ». `import_Neon_data_to_local.py`
 fait 76 lignes, ne calcule rien — et c'est le seul code du dépôt qui peut
 détruire les bases de la campagne (D-64).
+
+Les deux fichiers qui **décident la lecture** des nombres publiés ont été
+audités le 13 août — chemin de données et chemin d'échec, pas la mise en
+page :
+
+| fichier | lignes | verdict |
+|---|---|---|
+| `recompute_lambda_scores.py` | 717 | cœur **sain** — à `lambda` égal il reproduit `trial.value` à **2,2e−16** sur les 303 essais réels, classement identique. **D-49** : son chemin d'échec rendait 0 |
+| `analyze_hyperparams.py` | 918 | **D-50** : chemin d'échec à 0, message accusant une base distante. Détection de scénarios qui en annonçait **7** pour **4** — corrigée, sortie prouvée identique au SHA-256 |
 
 `TrainHyperParam_v1/v3/v4.py` (1 641 lignes) figuraient ici. **Supprimés** :
 quatre variantes du même script d'entraînement coexistaient sans qu'aucune ne
@@ -74,11 +116,14 @@ fonctions seulement :
 
 | fichier | ce qui reste |
 |---|---|
-| `Simulation/refinement.py` | le TTL, la reprise de campagne |
-| `train_hyperparams.py` | le mode Colab (non testable ici) |
-| `VQA/execute.py` | les branches **matériel** (`mode != "simulator"`, session IBM) |
-| `pipeline.py` | le mode `classical_only` de bout en bout |
+| `recompute_lambda_scores.py` | ses six fonctions de tracé — chemin de données audité, voir D-49 |
+| `analyze_hyperparams.py` | ses treize fonctions de tracé — chemin de données audité, voir D-50 |
 | `study/` | **en totalité** — c'est le chantier suivant |
+
+Les quatre poches partielles de V1 (`Simulation/refinement.py`, le mode Colab
+de `train_hyperparams.py`, les branches matériel de `VQA/execute.py`, le bras
+`classical_only` de `pipeline.py`) ont été fermées le 13 août — section
+suivante.
 
 **Audité le 12 août, sur le chemin d'entraînement** — parce que ces
 fonctions décident le nombre qu'une campagne d'une semaine minimise :
@@ -175,20 +220,19 @@ trouver la campagne.
 c'est le seul chemin par lequel un arbitrage précision/coût déjà payé peut
 être relu sans relancer la campagne.
 
-**Son contrat central tient.** Au `LAMBDA_COST_SOFT = 0,4` de
-l'entraînement, `recompute_score` rend exactement ce que la campagne a
-mesuré : écart maximal **5,6e−17** sur les 178 essais quantiques et
-**2,2e−16** sur les 125 classiques, **303/303**. La formule
-`(phys + λ·patch)/(1+λ)` et la moyenne des sous-pertes coïncident des deux
-côtés (`pipeline.score` et `_composite_loop` contre `recompute_score`).
-Verrouillé par `tests/pipeline/test_rescore_reproduces_training_loss.py`,
-qui vérifie aussi que le lambda **agit** — à λ=0 le score vaut la physique
-seule, et le sens du déplacement suit `signe(phys − patch)` essai par
-essai : 118 baissent, 7 montent.
+**Son contrat central tient**, et il a été mesuré **deux fois par deux
+passes indépendantes, au même nombre** : à `LAMBDA_COST_SOFT = 0,4`,
+`recompute_score` rend exactement ce que la campagne a mesuré — écart
+maximal **5,551e−17** sur les 178 essais quantiques et **2,220e−16** sur les
+125 classiques, **303/303**. La formule `(phys + λ·patch)/(1+λ)` et la
+moyenne des sous-pertes coïncident des deux côtés (`pipeline.score` et
+`_composite_loop` contre `recompute_score`). Verrouillé par
+`tests/pipeline/test_recompute_lambda_scores.py` (D-49), qui sépare aussi à
+λ = 0,41 : l'écart passe à 9,839e−03.
 
 | fonction | verdict |
 |---|---|
-| `main`, rattrapage des erreurs | **D-63** — tout le corps dans un `except Exception` sans sortie non nulle : le script ne pouvait pas échouer, et un échec tardif s'annonçait « erreur de chargement » |
+| `main`, rattrapage des erreurs | **D-49** — tout le corps dans un `except Exception` sans sortie non nulle. **Trouvé deux fois** : la seconde passe l'a re-signalé sous le numéro **D-63**, retiré depuis. La correction retenue est celle de D-49 |
 | `plot_pareto_with_isocost`, fenêtre | **D-62** — `set_ylim(-0,05 ; 0,40)` en dur : 9 essais sur 125 et 3 des 46 points du front hors cadre sur l'étude classique |
 | `_add_trend` | **D-61**, second site — copie mot pour mot de celle d'`analyze_hyperparams` |
 | `recompute_score`, `_recompute_global`, `build_trial_table` | **sains** — voir le contrat ci-dessus. Le repli global→moyenne des scénarios est le même dans les trois (`_get_global_phys_patch`, `build_trial_table`, `recompute_score`), et rend la même valeur |
@@ -197,6 +241,26 @@ essai : 118 baissent, 7 montent.
 | `_pareto_front` | **sain** — copie identique à celle d'`analyze_hyperparams`, croisée contre une référence indépendante (300/300) |
 | `save_summary`, `original_lambda` | **réserve, non corrigée** — le paramètre existe mais `run_single_lambda` ne le passe jamais : le résumé compare `new_score` à `original_score` sans jamais dire quel λ a produit le second. Rien de faux n'est imprimé ; il manque une ligne. Signalé plutôt que corrigé — écrire « 0,4 » ici serait le recopier depuis `train_hyperparams` sans que l'artefact le porte, exactement la valeur sans provenance que D-22 reproche au JSON déployé |
 | `plot_scenario_reranked` | **réserve, non corrigée** — `user_attrs.get(f"phys_{key}", 0)` : un scénario sans mesure s'empilerait à zéro. Non emprunté sur les bases du dépôt (un seul jeu de clés, 303 essais) |
+
+### Deux passes sur les mêmes fichiers, le même jour
+
+`analyze_hyperparams.py` et `recompute_lambda_scores.py` ont été audités le
+13 août par **deux passes qui ne se voyaient pas** : D-49/D-50 sur la
+branche `claude/kind-babbage-927g10`, puis D-60 à D-63 sur la branche Vigil,
+ouverte **avant** que la première ne soit poussée et jamais rebasée dessus.
+
+Ce que ça a coûté : **un défaut sur quatre re-trouvé** (D-63 = D-49), et
+deux jeux de tests qui mesurent la même chose — les doublons de la seconde
+passe ont été supprimés, la version D-49 est celle qui reste.
+
+Ce que ça a rapporté, involontairement : **le contrat central mesuré deux
+fois, aux mêmes chiffres, par deux chemins écrits séparément** — 5,551e−17
+et 2,220e−16. Une reproduction, pas une répétition.
+
+**La règle qui manquait** : une branche Vigil se rebase (ou fusionne) sur sa
+base **avant** de lire un fichier, pas seulement avant de pousser. Lire le
+fil de la PR ne suffit pas : la première passe avait poussé son travail sans
+encore le commenter.
 
 **Axes empruntés** : schéma **composite** (`phys_<scenario>`) **et**
 schéma **mono-scénario** (`phys_score`, par `_recompute_global`) ; bras
@@ -646,6 +710,49 @@ AMR **depth = 0**, `dim = 2` seulement. Restent non traversés : le bras
 nul, les autres optimiseurs, `depth > 0`, et `dim = 4 / 8`. `aggregate_v3.py`
 ne peut plus être traversé structurellement (D-49) au-delà de
 `upper_bound_loso_*`, seul artefact d'entrée encore présent.
+### Audité le 13 août — les quatre poches partielles de V1
+
+Ces quatre-là restaient ouvertes parce qu'aucun test ne **traversait leur
+configuration** : le mode matériel, le mode Colab, le bras `classical_only`,
+la mémoire TTL. Un module dont chaque fonction a été relue reste partiellement
+audité tant qu'un axe de configuration n'a jamais été exécuté.
+
+| poche | verdict |
+|---|---|
+| branches matériel de `VQA/execute.py` | **D-48** — `mode="hardware"` s'exécutait sur un simulateur sans le signaler |
+| mémoire TTL de `Simulation/refinement.py` | **vérifiée et trouvée saine** |
+| bras `classical_only` de `pipeline.py` | **vérifié et trouvé sain** |
+| mode Colab de `train_hyperparams.py` | **vérifié et trouvé sain** |
+
+**D-48.** `self.mode` était **stocké et lu nulle part** : `_init_backend` ne
+dispatche que sur `backend_name`. Mesuré, `mode="hardware"` rend
+`AerSimulator` pour `state_vector` / `matrix_product_state` / `aer` et
+`FakeFez` pour `estimator` — identique à `mode="simulator"` dans les quatre
+cas. Le piège n'est pas que ça casse : `Session(backend=AerSimulator)` est
+**acceptée** par qiskit-ibm-runtime. Un run demandé en matériel ouvrait donc
+une session autour d'un simulateur, y construisait un estimateur avec
+découplage dynamique et twirling, et rendait des nombres plausibles. Refus
+posé aux trois sites (`VQARuntime._validate_mode`, `execute`, et les choix
+`--mode` de `pipeline.main`).
+
+**TTL** — contrat d'**un pas de grâce** confirmé sur l'arbre entier : 20
+entrées passent 1 → 0 → 0. L'hypothèse « une entrée périmée survit parce que
+le TTL du parent maintient ses enfants visités » a été **mesurée et
+réfutée** ; elle est épinglée par un test, pas abandonnée en silence. Carte
+bornée à 20 entrées sur 5 pas.
+
+**`classical_only`** — déterministe jusqu'au dernier chiffre, insensible à
+`classic_AMR_comp`, et porte `sigma_source = "loaded"` comme les autres
+sorties (D-36). *Observation à refaire à l'échelle : dans la configuration
+réduite, `patch_ratio = 1,0` au seuil déployé.*
+
+**Colab** — les **trois** copies vers Drive sont sous `if IN_COLAB`, vérifié
+sur l'**AST** et non par proximité de texte : la lecture par proximité en
+comptait deux. `ensure_dirs` idempotent et silencieux. *Risque opérationnel,
+sorti en décision dans `DEFAUTS.md` : hors mode distribué, la base Optuna
+n'atteint Drive qu'un essai sur dix, et elle vit sur un disque éphémère.*
+
+Couvert par `tests/pipeline/test_v1_partial_pockets.py` — **18 tests**.
 
 ---
 
@@ -658,10 +765,21 @@ Champ construit pour que la bonne réponse soit calculable à la main.
 *Exemple : une rotation solide doit donner ω = +2,0 ; l'enstrophie d'un
 cisaillement `vx = sin y` vaut 2π².*
 
-**Audits de contrat** — pour chaque fonction : pourquoi existe-t-elle, que
-promet sa docstring, consomme-t-elle ce que sa signature annonce, et deux
-chemins censés coïncider coïncident-ils encore ? **Douze des 27 défauts
-viennent de la quatrième question.**
+**Audits de contrat** — cinq questions, posées à chaque fonction :
+
+1. pourquoi existe-t-elle ?
+2. que promet sa docstring ?
+3. consomme-t-elle ce que sa signature annonce ?
+4. deux chemins censés coïncider coïncident-ils encore ?
+5. **un test traverse-t-il cette configuration ?**
+
+**Douze des 37 défauts viennent de la quatrième question** — c'est de loin la
+plus rentable. La cinquième a été ajoutée le 13 août, après D-48 : un module
+dont chaque fonction a été relue reste partiellement audité tant qu'un axe de
+configuration n'a jamais été exécuté. Les axes de ce dépôt : profondeur AMR
+0 / >0, patch périodique / borné, quantique / `classical_only`,
+`state_vector` / échantillonné, warm start absent / présent, hamiltonien nul /
+non nul, COBYLA / autre optimiseur.
 
 **Tests de trace** — on force une valeur connue à l'entrée et on vérifie
 qu'elle ressort à la bonne place, en passant par le vrai chemin. *Exemple :
@@ -679,18 +797,18 @@ résolutions temporelles. Quelques minutes chacune.
 
 | dossier | modules | couverture de ligne | contrat audité |
 |---|---|---|---|
-| `tests/solver/` | `solver.py`, `grid.py`, `pre_compute_dns.py` | 52 / 90 / 98 % | opérateurs, projection, scénarios, trace DNS |
-| `tests/mapping/` | `PhysToAngle`, `HamiltParams`, `HamiltParams_v2`, `RescaleArrays` | **100 / 98 / 100 / 97 %** | **complet** |
-| `tests/quantum/` | `VQA/*` | 90–100 % sauf `execute` (49 %) | hamiltonien, chaîne de décision, runtime |
-| `tests/amr/` | `refinement.py`, `utils.py` | 73 / 65 % | pavage, rééchantillonnage |
-| `tests/pipeline/` | `pipeline.py`, `hyperparams_loader.py`, `train_hyperparams.py` | 14 / 28 / **89 %** | provenance des hyperparamètres, espace de recherche, budget d'essais, routage des 8 phases, campagne miniature de bout en bout |
-| `tests/study/` | tout `study/` | non mesuré | **aucun** |
+| `tests/solver/` | `solver.py`, `grid.py`, `pre_compute_dns.py` | **99 / 90 / 98 %** | opérateurs, projection, scénarios, trace DNS |
+| `tests/mapping/` | `PhysToAngle`, `HamiltParams`, `HamiltParams_v2`, `RescaleArrays` | **100 / 99 / 100 / 97 %** | **complet** |
+| `tests/quantum/` | `VQA/*` | 88–100 % sauf `execute` (64 %) | hamiltonien, chaîne de décision, runtime, refus du mode matériel |
+| `tests/amr/` | `refinement.py`, `utils.py` | 82 / 65 % | pavage, rééchantillonnage, encodage du patch, mémoire TTL |
+| `tests/pipeline/` | `pipeline.py`, `hyperparams_loader.py`, `train_hyperparams.py` | 52 / 55 / **90 %** | provenance des hyperparamètres, espace de recherche, budget d'essais, routage des 8 phases, campagne miniature, bras `classical_only` |
+| `tests/study/` | tout `study/` | non mesuré | **en cours** — l'agent tient `study/pipeline/` et `study/common/` |
 
 ---
 
 ## 3. Ce qui rend un test digne de confiance
 
-Un test peut passer sans rien prouver. Quatre pièges rencontrés dans ce
+Un test peut passer sans rien prouver. Six pièges rencontrés dans ce
 dépôt, chacun ayant coûté du temps :
 
 **Le champ qui ne sépare pas.** Sur Taylor-Green, deux conventions de
@@ -709,6 +827,20 @@ rien sort en vert. Vérifier le **nombre de tests sélectionnés**, pas le code
 de retour. *Trois commandes sur vingt-deux d'un registre de vérification ne
 sélectionnaient rien — dans le fichier même censé détecter ce piège.*
 
+**Le contrat lu à moitié.** Une fonction dont le contrat inclut déjà une
+transformation, et un appelant qui l'applique une seconde fois. Testée seule,
+la fonction est correcte ; testé seul, l'appelant est correct ; c'est leur
+composition qui est fausse. *D-37 : `_process_score` ajoutait le halo, son
+appelant le redemandait — écart de 41 % à toute profondeur > 0.* Le test qui
+le voit exerce la **paire**, pas les deux moitiés.
+
+**Le test qui demande seulement si ça passe.** Un appel qui n'explose pas ne
+prouve rien sur ce qu'il a fait. *scipy accepte Powell puis jette
+silencieusement ses `constraints` ; `Session(AerSimulator)` est acceptée par
+qiskit-ibm-runtime.* Dans les deux cas l'exécution réussit et rend des
+nombres plausibles. Il faut assertir la **grandeur** — `max|β| ≤ π/(4·reps)`,
+le backend réellement résolu — pas le code de retour.
+
 **Le seuil périmé.** Un test calibré sur la mesure du jour cesse de mesurer
 dès que le code change légitimement. Il ne s'actualise pas : il se
 **remesure**, avec l'ancienne et la nouvelle valeur consignées. Et si la
@@ -720,7 +852,7 @@ grandeur s'avère non reproductible, on change de **grandeur**, pas de seuil.
 
 | | état |
 |---|---|
-| tests | **1 827**, déterministes sauf les suites QAOA |
+| tests | **1 971**, déterministes sauf les suites QAOA |
 | nombres publiés recalculés depuis leur artefact | **164 / 180** |
 | écarts en attente | **16** — les nombres déplacés par les corrections |
 | artefacts portant hash git + arguments CLI | tous les `.npz` |
@@ -744,9 +876,15 @@ d'un facteur 3,5.
 « jamais audité ». Quand un module est fini, écrire qu'il a été **vérifié et
 trouvé sain** — c'est un résultat, et cela évite de le relire deux fois.
 
-Remesurer la couverture :
+Remesurer la couverture — **sur tout `src/`**, et sans exclure les suites
+QAOA : les exclure fausse `pipeline.py`, `call_vqa_shell.py` et `solver.py`,
+et c'est ce qui rendait la mesure précédente incomparable à celle-ci.
 
 ```bash
-python -m coverage run --source=src -m pytest tests/ -q -m "not slow"
-python -m coverage report --include="src/Simulation/*,src/VQA/*,src/pipeline.py"
+python -m coverage run --source=src -m pytest tests/ -q -m "not slow"   # ~36 min
+python -m coverage report --include="src/*"
 ```
+
+Quand un chiffre bouge, dire **ce qui a changé : le code ou le périmètre de
+mesure.** Publier deux séries non comparables comme si elles l'étaient est
+la façon la plus simple de fabriquer un progrès qui n'a pas eu lieu.

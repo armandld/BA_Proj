@@ -693,21 +693,32 @@ def main():
 
     if args.lambda_cost is None and args.lambda_sweep is None:
         parser.error("Provide either --lambda-cost or --lambda-sweep (or both)")
-    # D-63 : le `try` couvrait TOUT le corps de `main` et n'a jamais rendu
-    # autre chose que 0. Un échec d'écriture ou de tracé, survenu bien après
-    # le chargement, s'annonçait « Erreur lors du chargement » — mesuré :
-    # l'étude se charge (« 178 completed »), puis `os.makedirs` échoue, et le
-    # script sort **0** en laissant en place les artefacts du run précédent.
-    # `CLAUDE.md` : un balayage vide doit crier. Seul le chargement est
-    # rattrapé ici ; le reste remonte avec sa trace et son code non nul.
+
+    # D-49 : `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
+    # code 1.
+    #
+    # Avant, un unique `except Exception` enveloppait tout le corps de
+    # `main` -- chargement, rescore, ecriture CSV, chaque figure, le
+    # balayage -- imprimait « Erreur lors du chargement : ... » et laissait
+    # la fonction rendre la main. Deux consequences mesurees :
+    #
+    #   base inexistante        -> « Erreur lors du chargement »,  code 0
+    #   repertoire non ecrivable-> « Erreur lors du chargement »,  code 0
+    #                              alors que l'etude etait chargee (125
+    #                              essais annonces juste avant)
+    #
+    # Un script de campagne qui teste `$?` voyait donc un succes, et le
+    # message accusait le chargement pour une panne survenue bien apres.
     try:
         study, completed = load_completed_trials(args.db_path, args.study_name)
     except Exception as e:
-        print(f"Erreur lors du chargement : {e}", file=sys.stderr)
+        print(f"[ERREUR] chargement de '{args.study_name}' depuis "
+              f"{args.db_path} : {e}", file=sys.stderr)
         sys.exit(1)
 
     if not completed:
-        print("[ERROR] No completed trials with finite score.")
+        print(f"[ERREUR] '{args.study_name}' ne contient aucun essai COMPLETE "
+              f"a valeur finie — rien a rescorer.", file=sys.stderr)
         sys.exit(1)
 
     base_dir = args.output_dir or os.path.dirname(os.path.abspath(args.db_path))
@@ -726,7 +737,10 @@ def main():
             seen.add(l)
             unique_lambdas.append(l)
 
-    # Run per-lambda analysis
+    # Run per-lambda analysis. Rien n'est rattrape ici : une ecriture qui
+    # echoue, une figure qui casse, un repertoire non ecrivable doivent
+    # remonter avec leur trace et un code de retour non nul. Un rescore a
+    # moitie ecrit qui s'annonce « Done » est pire qu'un rescore absent.
     for lam in unique_lambdas:
         out = os.path.join(base_dir, f"rescore_{args.study_name}_lambda{lam:.4f}")
         run_single_lambda(completed, lam, out)

@@ -9,7 +9,8 @@ l'auteur.
 
 Ce document annonçait « environ une semaine » de calcul. Les bases ne le
 soutiennent pas. Compté directement dans les SQLite
-(`tests/v4/test_hyperparams_provenance.py` refait le calcul) :
+(`pytest tests/study/test_hyperparams_provenance.py` refait le calcul —
+10 tests) :
 
 | base | essais | états | début → fin | mur |
 |---|---|---|---|---|
@@ -36,11 +37,14 @@ Trois faits de plus, tous vérifiables dans les fichiers :
 
 1. **Seule `phase1` a tourné.** `train_hyperparams.PHASES` déclare 600 /
    600 / 400 essais pour `phase1_composite`, `phase2_complex` et
-   `phase3_validation` ; les bases phase2 et phase3 sont vides.
+   `phase3_validation`, et 300 / 300 / 300 pour les trois phases
+   classiques ; les bases phase2 et phase3 sont vides des deux côtés.
    `best_hyperparams.json` le confirme : `best_per_phase` ne contient que
    `phase1` pour les deux bras.
-2. **Aucune phase n'a atteint son quota.** 143 et 202 essais contre 600
-   déclarés.
+2. **Aucune phase n'a atteint son quota.** Le bras classique s'est arrêté à
+   **143 essais sur 300 déclarés** (48 %), le bras quantique à **202 sur
+   600** (34 %). *Cette ligne annonçait « 143 et 202 contre 600 » : le quota
+   classique vaut 300, pas 600. Corrigé après lecture de `PHASES`.*
 3. **Les deux campagnes ont été interrompues**, pas menées à terme : 18 et
    24 essais restent à l'état `RUNNING`.
 
@@ -56,8 +60,12 @@ C'est ce qu'il faut écrire, parce que c'est ce qu'on peut vérifier.
 | `optuna_studies/analysis_*` | les tableaux d'analyse par phase produits à l'époque |
 | `optuna_studies/GOOD_RESERVE` | une copie de sauvegarde des meilleures études |
 
-Les scripts d'entraînement correspondants sont `src/TrainHyperParam_v1.py`
-à `_v4.py`. Leurs phases déclarent 200 à 600 essais chacune.
+Le script d'entraînement correspondant était `src/TrainHyperParam_v2.py`,
+depuis renommé `src/train_hyperparams.py` et audité (D-27 à D-36). Les
+variantes `_v1`, `_v3` et `_v4` qui coexistaient sans qu'aucune ne soit
+désignée ont été **supprimées** ; aucune ne peut donc plus être confondue
+avec celle qui a produit ces bases. Les phases déclarent 600 / 600 / 400
+essais.
 
 ## Pourquoi ils ne sont pas régénérés ici
 
@@ -101,4 +109,4 @@ Deux points, tous deux vérifiables dans les fichiers ci-dessus :
 
 Ce dossier est le seul du dépôt qui ne soit pas reproductible par une
 commande. Tout le reste de `results/` se recalcule depuis `study/`, et
-`study/common/t16_aggregate_v4.py` le vérifie ligne par ligne.
+`study/common/aggregate_master_table.py` le vérifie ligne par ligne.

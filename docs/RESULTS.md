@@ -17,10 +17,10 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 52 défauts corrigés
+## Les 53 défauts corrigés
 
-*(52 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 54 corrections en tout. Le titre annonçait **41** pour 42 lignes
+*(53 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 55 corrections en tout. Le titre annonçait **41** pour 42 lignes
 numérotées avant l'ajout de D-52, D-54, D-55 et D-56 : le compte de tête
 était de nouveau faux d'une unité, exactement le défaut de registre que la
 section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
@@ -90,6 +90,22 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-34 | budget d'essais calculé une fois, par worker | 4 workers, cible 12 : **48 essais → 12** | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k budget` |
 | D-35 | le JSON final ne portait que les paramètres **échantillonnés** | `threshold_amr` absent → **9/9 valeurs** + hash git + argv | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k redeploy` |
 | D-36 | 3 des 4 sorties détaillées de `pipeline` sans provenance de `sigma` | trace présente **seulement sur les runs divergés** → sur les 4 | `pytest tests/solver/test_solver_guards_and_objective.py -k sigma` |
+
+**Les quatre poches partielles de V1** — auditées avant la réoptimisation
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-48 | `mode="hardware"` s'exécutait sur un **simulateur** sans le signaler | `Session(AerSimulator)` **acceptée** → **lève** à la construction | `pytest tests/pipeline/test_v1_partial_pockets.py -k mode` |
+
+*(D-39 à D-47 sont sur la branche `vigil/…` de l'agent, en attente de
+fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
+
+**Les fichiers jamais audités de V1** — le dernier chantier avant la réoptimisation
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
+| D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -223,7 +239,7 @@ audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
 |---|---|---|---|
 | D-60 | `plot_threshold_operating_curve` — la seule figure qui montre l'arbitrage précision/coût du **bras classique**, dont le seuil est le seul paramètre optimisé — ne pouvait sortir d'aucune étude du dépôt, pour **trois raisons indépendantes** : (1) elle exigeait un paramètre nommé `threshold`, alors que `make_classical_composite_objective` échantillonne `threshold_amr` — `"threshold"` n'apparaît dans aucune des 10 bases ni dans aucune ligne de `src/` ; (2) elle lisait `phys_score` / `patch_ratio`, que seul l'objectif mono-scénario de `pipeline.py` écrit, quand la campagne déployée passe par `train_hyperparams._run_one_scenario`, qui écrit `phys_<scenario>` / `patch_<scenario>` et **jamais** les clés globales ; (3) son unique appelant était gardé par `has_decomposed_data`, qui teste `phys_score` : faux pour toute étude composite. Aucun message : une analyse amputée de sa figure de décision était indiscernable d'une analyse complète | `python src/analyze_hyperparams.py --db-path results/hyperparams/optuna_studies/classical_v2_phase1.db --study-name classical_v2_phase1` : **9 figures avant, 10 après** — `12_threshold_operating_curve.png` n'était produit sur **aucune** des deux études non vides. Ce que la figure manquante montre, mesuré sur les 125 essais complets de la base gelée : `r(threshold_amr, taux de patchs) = **−0,9690**`, `r(threshold_amr, erreur physique) = **+0,8369**` ; médianes par quartile de seuil `[0,050–0,089] → phys 0,0173 / patch 0,7240` puis `[0,226–0,800] → phys 0,2758 / patch 0,4809`. L'agrégation composite est la **moyenne** des scénarios, opérateur assorti : c'est celui que `_composite_loop` applique (`total / len(scenario_list)`). Aucun nombre publié ne bouge : aucun artefact, aucune figure du dépôt ne référence cette courbe | `pytest tests/pipeline/test_threshold_curve_reachable.py` |
 | D-61 | `_add_trend`, la médiane par classe qui porte la **tendance** de quatre figures : ses bornes sortent de `linspace(x.min(), x.max())`, donc la dernière borne **est** `x.max()` — et le masque `x < bins[k+1]` en excluait la valeur. L'essai portant la plus grande valeur du paramètre n'entrait dans aucune classe, précisément là où la pente au bord du domaine échantillonné se décide | mesuré sur `q_has_v2_phase1` (178 essais complets), dernière médiane de la tendance contre la perte composite : `beta` **0,258164 → 0,258670**, `sigma` **0,261774 → 0,264327**, `beta_curl` **0,271467 → 0,276550**, `beta_xpoint` **0,254415 → 0,258812** ; `w_z_frac` inchangé (ses classes hautes n'atteignaient déjà pas deux points). Sur une entrée qui sépare — deux essais au maximum, valeur extrême — l'ancienne version ne trace **aucune** ligne, faute des trois classes exigées  La fonction existe en **deux exemplaires mot pour mot**, `analyze_hyperparams.py` et `recompute_lambda_scores.py` : les deux portaient le défaut, les deux sont corrigés, et un test compare ce qu'elles **tracent** pour qu'elles ne divergent pas | `pytest tests/pipeline/test_trend_last_bin_closed.py` |
-| D-63 | `recompute_lambda_scores.main` : le corps **entier** vivait dans un `try / except Exception` qui imprimait « Erreur lors du chargement » et **ne sortait pas**. Le script qui recalcule les scores publiés ne pouvait donc pas échouer — et un échec survenu bien après le chargement portait quand même le nom de « chargement ». Même forme que D-55 et D-56, corrigée onze fois dans `study/` : « un balayage vide doit crier » | mesuré, trois entrées, `--output-dir` vide au départ : étude inexistante **code 0 → code 1**, aucun fichier écrit dans les deux cas ; base absente **code 0 → code 1** ; échec **après** chargement (dossier de sortie occupé par un fichier) **code 0 → code 1**, et le message passe de « Erreur lors du chargement » — imprimé juste après `Loaded study ... 178 completed` — à la vraie `NotADirectoryError` avec sa trace. Le chemin sain est inchangé : code 0, CSV et résumé écrits | `pytest tests/pipeline/test_rescore_failure_is_loud.py` |
+| ~~D-63~~ | **numéro retiré — doublon de D-49.** La passe Vigil du 13 août a re-trouvé le `except Exception` de `recompute_lambda_scores.main` que D-49 avait corrigé le matin même sur la branche de base, et lui a donné un numéro neuf. La correction retenue est celle de **D-49** ; les tests de la seconde passe, qui mesuraient la même chose, ont été supprimés. Cause : la branche Vigil avait été ouverte avant D-49 et n'a fusionné sa base qu'après coup — voir « Deux passes sur les mêmes fichiers » dans `COUVERTURE.md`. Le numéro reste brûlé : il a été publié, il ne sera pas réattribué | — | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
 | D-62 | `plot_pareto_with_isocost` fixait sa fenêtre verticale à **(-0,05 ; 0,40) en dur**. C'est la figure qui porte le front de Pareto et les lignes d'iso-score du rescore : un point hors cadre ne se signale pas, il disparaît, et le front semble s'arrêter là où le cadre s'arrête | mesuré sur les deux bases gelées, erreur physique moyennée sur les scénarios : `q_has_v2_phase1` **0/178** hors cadre (phys ∈ [0,0348 ; 0,2997]) — figure **inchangée** — et `classical_v2_phase1` **9/125** hors cadre (phys ∈ [0,0114 ; **2,2749**]), dont **3 des 46 points du front de Pareto**. Après : la fenêtre reste (-0,05 ; 0,40) quand tout y entre et s'élargit aux données sinon. Aucun seuil inventé — les bornes viennent des points tracés | `pytest tests/pipeline/test_pareto_window_hides_nothing.py` |
 | D-64 | `import_Neon_data_to_local.py` — le **seul** code du dépôt qui supprime une étude Optuna — supprimait l'étude de **destination** avant d'avoir lu la **source**, puis rattrapait tout échec par un message ❌ et un code de sortie **0**. Un import qui n'a rien importé était indiscernable d'un import réussi, et la destination était déjà détruite | mesuré, deux SQLite (`--in-url` remplace Neon) : destination à **5 essais**, source ne portant pas l'étude → avant, `KeyError`, **code 0**, et **l'étude locale n'existe plus** ; après, **5 essais intacts**, code 0, ligne « destination laissée intacte ». Échec réel de copie (destination inouvrable) : **code 0 → code 1**. Import réel : inchangé, 2 → **7** essais copiés. **L'empreinte est dans le dépôt** : 8 des 10 bases de `results/hyperparams/optuna_studies/` portent le schéma Optuna complet et **zéro ligne**, et `classical_v2_phase2` / `classical_v2_phase3` pèsent **274 432** et **299 008** octets là où un schéma neuf en pèse **114 688** — des pages libérées, donc des lignes écrites puis supprimées. Ce n'est pas une preuve que ce script les a vidées ; c'est la fermeture du chemin qui le fait | `pytest tests/pipeline/test_import_never_destroys_destination.py` |
 
@@ -4856,3 +4872,362 @@ quantique (`prep is None`, `result is None`) sont **inatteignables** :
 ni `_prepare_vqa_input` ni `call_vqa_shell` ne rendent `None`. Elles auraient
 fait disparaître un patch du pavage, donc laissé une région sans traitement ;
 elles ne le font pas.
+
+---
+
+# D-48 et les quatre poches partielles de V1
+
+**Commande.** `pytest tests/pipeline/test_v1_partial_pockets.py -q` (18 tests, ~2 s)
+
+`COUVERTURE.md` listait quatre modules « partiellement audités » : des
+fonctions jamais soumises aux cinq questions, dans du code par ailleurs
+relu. Trois d'entre elles décident ce que la campagne va mesurer. Une seule
+trouvaille en est sortie — les trois autres poches sont **saines**, et le
+dire est un résultat : sans cela, la passe suivante relit le même code.
+
+## D-48 — `mode="hardware"` s'exécutait sur un simulateur sans le dire
+
+**Ce qui se passait.** `VQARuntime.__init__` prend `mode`, l'assigne à
+`self.mode`, et `_init_backend()` **ne le lit jamais** : le dispatch porte
+uniquement sur `backend_name`. Aucun chemin du dépôt ne résout un backend
+IBM réel.
+
+| `backend_name` | `mode="simulator"` | `mode="hardware"` |
+|---|---|---|
+| `state_vector` | `AerSimulator` | **`AerSimulator`** |
+| `matrix_product_state` | `AerSimulator` | **`AerSimulator`** |
+| `aer` | `AerSimulator` | **`AerSimulator`** |
+| `estimator` | `FakeFez` | **`FakeFez`** |
+
+Identiques dans les quatre cas. `self.mode` est assigné à la ligne 43 de
+`runtime.py` et **lu nulle part dans tout `src/`**.
+
+**Ma prédiction était fausse, et c'est ce qui rend le défaut grave.**
+J'attendais que `execute` lève : son chemin `mode != "simulator"` ouvre
+`Session(backend=backend)` sur ce qui est toujours un simulateur. Mesuré :
+
+```
+Session(AerSimulator) : ACCEPTEE
+```
+
+`qiskit-ibm-runtime` l'accepte. Le run ne plantait donc pas — il ouvrait
+une Session autour d'un simulateur, y construisait un estimateur avec
+**découplage dynamique et twirling activés** (des options qui ne veulent
+rien dire sur un simulateur), et rendait des nombres parfaitement
+plausibles. Un résultat demandé « sur matériel » était un résultat de
+simulateur, sans le moindre signalement.
+
+`pipeline.main()` annonçait par ailleurs `--mode hardware` dans les choix
+de sa CLI : une option affichée dans l'aide est une promesse.
+
+**Correction.** Refus à trois endroits, dans l'ordre où on les rencontre :
+`VQARuntime` lève à la construction, `execute` couvre le chemin hérité où
+`vqa_runtime is None`, et `--mode` ne propose plus que `simulator`. Le
+message nomme la cause — aucun backend matériel n'est câblé — au lieu de
+laisser deviner.
+
+## Vérifié et trouvé sain — la mémoire TTL
+
+*Axes empruntés : détection fraîche, signal perdu, plusieurs pas hybrides
+d'affilée, les deux bras.*
+
+Le contrat annoncé est « survit 1 pas hybride après la dernière
+détection ». Mesuré sur l'arbre entier (N=8, dim=2, profondeur 2) : après
+un pas chaud, les 20 entrées valent `DEFAULT_TTL = 1` ; après un pas
+froid, **les 20 valent 0** ; après un second pas froid, elles y restent.
+Le sursis ne se réarme que sur une détection, jamais sur une visite.
+
+**Une hypothèse mesurée et réfutée**, consignée pour qu'on ne la reforme
+pas : je soupçonnais qu'un patch dont le parent cesse d'être raffiné ne
+serait jamais visité, donc jamais décrémenté — sa TTL survivrait un nombre
+arbitraire de pas. C'est faux : la TTL du **parent** le maintient dans
+`next_level`, donc l'enfant est visité et décrémenté avec lui. Tout
+l'arbre passe de 1 à 0 au même pas.
+
+La mémoire ne croît pas non plus : les clés sont les bornes du pavage,
+déterministes, donc leur nombre est borné par l'arbre et non par la durée
+de la campagne — 20 entrées stables sur 5 pas consécutifs.
+
+## Vérifié et trouvé sain — le bras `classical_only`
+
+*Axes empruntés : `classical_only` seul, avec `classic_AMR_comp`, deux
+exécutions identiques.*
+
+C'est le bras de comparaison : un défaut ici ne fausse pas le quantique,
+il fausse la référence. Trois questions, trois mesures sur `kelvin_helmholtz`
+réduit :
+
+| | mesure |
+|---|---|
+| déterminisme | deux exécutions, `combined` **identique au dernier chiffre** |
+| interférence entre les deux sites d'appel | `classical_only=True` seul et avec `classic_AMR_comp=True` : **identique** |
+| provenance de `sigma` (D-36) | `sigma_source = "loaded"` sur cette sortie aussi |
+
+Le même détecteur est appelé depuis deux endroits de `pipeline`, avec deux
+mémoires TTL distinctes (`ttl_map` / `ttl_map_classical`). Elles ne se
+contaminent pas.
+
+**Une observation à refaire à l'échelle**, qui n'est pas un défaut : dans
+cette configuration réduite, le bras classique au seuil déployé rend
+`patch_ratio = 1.0` — il raffine tout le domaine, donc n'économise rien.
+À N=32 et profondeur 1 cela peut n'être qu'un effet de taille. À vérifier
+sur la configuration de campagne avant d'en tirer quoi que ce soit.
+
+## Vérifié et trouvé sain — le mode Colab
+
+*Axe **non empruntable** ici : `google.colab` n'est pas importable dans cet
+environnement. Ce qui est vérifiable l'est ; le reste est nommé.*
+
+Hors Colab, `drive_dir` et `local_dir` valent `None` — une recopie non
+gardée lèverait `TypeError` sur toute machine ordinaire. Les **trois**
+recopies Drive (`ensure_dirs`, le rappel de sauvegarde de `run_phase`,
+`_save_results`) sont chacune dans un `if IN_COLAB`, vérifié sur l'AST et
+non par voisinage textuel. `ensure_dirs` est idempotente et n'écrit rien à
+l'import.
+
+**Risque opérationnel documenté, non corrigé** : sous Colab non distribué,
+la base n'est recopiée vers Drive qu'un essai sur dix. Une session
+interrompue peut perdre jusqu'à neuf essais — le disque local de Colab est
+éphémère. C'est un compromis de conception, pas un défaut ; il devient une
+décision le jour où la campagne tourne sur Colab plutôt que sur des cœurs
+loués. Sorti en entrée de décision dans `DEFAUTS.md`.
+
+## Ce que le refus a fait tomber — D-48 en miniature
+
+Le refus posé dans `VQARuntime` a fait échouer un test existant :
+`tests/pipeline/test_v1_guards.py::test_runtime_path_accepts_the_shot_option`
+construisait un runtime avec `mode="local"`.
+
+`"local"` **n'existe nulle part dans `src/`** : ce n'est ni un mode déployé,
+ni un mode documenté, ni une valeur qu'un appelant produit. `pipeline` passe
+`args.mode`, dont le défaut est `simulator` ; `train_hyperparams` écrit
+`mode="simulator"` en dur. La chaîne inventée était acceptée pour la seule
+raison qui faisait D-48 — `mode` n'était jamais lu.
+
+C'est la meilleure confirmation qu'on pouvait avoir : le défaut avait déjà
+contaminé un test, et ce test passait. Le caller est corrigé en
+`mode="simulator"`, avec la raison écrite sur place.
+
+**Et c'est la suite complète qui l'a trouvé, pas la suite ciblée.** Les 18
+tests de la poche passaient ; les fichiers que la correction touchait
+passaient. L'échec est apparu à 33 % d'un `pytest tests/` intégral, dans un
+fichier qu'aucune des deux lectures ne désignait. Troisième occurrence du
+même piège : **ne pas annoncer avant d'avoir lu la ligne de résumé d'un run
+complet.**
+
+## Un test qui mesurait la machine, pas le dépôt
+
+**Commande.** `pytest tests/test_suite_integrity.py -q` (80 tests, < 1 s)
+
+La même exécution complète a fait tomber un troisième test :
+`test_every_package_directory_carries_its_init` signalait `tests/v3` et
+`tests/v4` comme des paquets sans `__init__.py`.
+
+Les deux dossiers ne contiennent **rien d'autre qu'un `__pycache__`** : ce
+sont les résidus de la réorganisation de `tests/` par sous-système. Les
+sources ont été déplacées, le bytecode est resté. Git ne suit pas les
+dossiers vides — **un clone neuf ne les a jamais eus**, et les effacer ne
+tient pas : ils reviennent avec le répertoire de travail. Le test rapportait
+donc quelque chose de vrai localement et inexistant à l'arrivée.
+
+C'est un cousin du balayage vide, dans l'autre sens : au lieu de passer sans
+rien vérifier, il échouait sans que le dépôt ait quoi que ce soit à se
+reprocher. Un test qui dépend de l'état d'une machine ne mesure pas le code.
+
+**Correction.** Le critère porte désormais sur les dossiers qui portent
+effectivement du `.py`. Un vrai sous-dossier de test ajouté sans
+`__init__.py` en contient par construction : il reste attrapé.
+
+**Et le garde-fou de l'assouplissement.** Relâcher un critère peut rendre un
+test incapable d'échouer — c'est ce que ce dépôt s'interdit. Un second test,
+`test_the_init_check_can_still_fail`, construit dans un `tmp_path` un vrai
+dossier fautif *et* un résidu, puis exige que le premier soit signalé et le
+second ignoré. Sans lui, l'assouplissement serait invérifiable.
+
+---
+
+# D-49 — `recompute_lambda_scores` : le chemin d'échec rendait 0
+
+**Commande.** `pytest tests/pipeline/test_recompute_lambda_scores.py -q`
+(12 tests, ~10 s)
+
+Premier des cinq fichiers « jamais audités » de V1. Il ne produit aucun
+nombre publié — il décide comment on **lit** les nombres publiés, en
+recalculant le score combiné des essais Optuna avec un autre `lambda_cost`.
+
+## Le cœur du script est sain — et c'est la mesure qui compte
+
+Question 4, sur les données réelles : à `lambda = 0,4`, la valeur avec
+laquelle les bases gelées ont été produites, `recompute_score` doit rendre
+exactement `trial.value`.
+
+| base | essais finis | écart max | classement |
+|---|---|---|---|
+| `classical_v2_phase1` | 125 | **2,220e−16** | identique |
+| `q_has_v2_phase1` | 178 | **5,551e−17** | identique |
+
+**303 essais, écart médian 0,000e+00.** Le script recalcule bien la fonction
+objectif de la campagne, et pas une autre qui lui ressemble.
+
+Le test sépare : à `lambda = 0,41` — 2,5 % d'écart — l'erreur passe à
+**9,839e−03**, treize ordres de grandeur plus haut. Ce n'est donc pas un test
+qui passerait quoi qu'il arrive.
+
+Deux contrôles de sens, également passés : à `lambda = 0` le score vaut la
+physique seule, et augmenter `lambda` déplace le score vers le coût dans le
+bon sens sur les deux populations (`patch > phys` et `patch < phys`, toutes
+deux non vides — un balayage dégénéré échoue).
+
+## D-49 — un échec total sortait en succès
+
+`main()` enveloppait **tout son corps** dans un unique `except Exception` :
+chargement, rescore, écriture CSV, chacune des six figures, le balayage. Le
+gestionnaire imprimait `Erreur lors du chargement : ...` puis laissait la
+fonction rendre la main.
+
+Mesuré, avant :
+
+```
+base inexistante         → « Erreur lors du chargement »   code 0
+répertoire non écrivable → « Erreur lors du chargement »   code 0
+```
+
+Le second cas est le plus trompeur : l'étude **était chargée** — le script
+venait d'annoncer `125 completed (finite)` — et c'est l'écriture qui
+échouait. Le message accusait quand même le chargement. Un lanceur de
+campagne qui teste `$?` voyait un succès dans les deux cas.
+
+Après :
+
+```
+base inexistante         → [ERREUR] chargement de 'bidon' depuis ...   code 1
+répertoire non écrivable → FileNotFoundError, trace sur makedirs       code 1
+chemin nominal           → CSV + résumé + 4 figures produits           code 0
+```
+
+Le `try` ne couvre plus que le chargement. Le reste remonte avec sa trace :
+un rescore à moitié écrit qui s'annonce « Done » est pire qu'un rescore
+absent.
+
+## Un piège armé, mesuré, non déclenché
+
+`recompute_score` détecte les scénarios **par essai** ; `build_trial_table`
+les détecte sur l'**ensemble**, et seulement sur `completed[:10]`. Si un
+essai portait un jeu de clés différent de ses voisins, son score serait
+moyenné sur un autre dénominateur — puis classé avec eux, sans signalement.
+
+Mesuré sur les deux bases gelées : les deux chemins **coïncident sur 100 %
+des 303 essais**. Le piège est armé, pas déclenché. Il est figé par un test
+qui tombera sur la première campagne produisant des essais hétérogènes,
+plutôt que dans un classement silencieusement faussé.
+
+La limite de l'échantillon à dix essais est figée de la même façon : le test
+n'exige pas qu'on la corrige, il exige qu'elle reste **connue**.
+
+## Reste à lire dans ce fichier
+
+Les six fonctions de tracé (`plot_pareto_with_isocost`,
+`plot_convergence_reranked`, `plot_decomposition_rescored`,
+`plot_scenario_reranked`, `plot_lambda_sweep`, `_pareto_front`) n'ont pas
+encore été relues ligne à ligne. Elles ne rendent aucune valeur consommée
+par un autre script — elles écrivent des `.png`. Le chemin de données, lui,
+est audité de bout en bout.
+
+---
+
+# D-50 — `analyze_hyperparams` : même piège, diagnostic qui désigne la mauvaise cause
+
+**Commande.** `pytest tests/pipeline/test_analyze_hyperparams.py -q`
+(11 tests, ~18 s)
+
+Deuxième des cinq fichiers jamais audités. Il ne produit aucun nombre
+publié — il produit le résumé et les seize figures **à partir desquels on
+décide**. Un diagnostic faux y coûte autant qu'un nombre faux ailleurs.
+
+## D-50 — l'échec rendait 0, et accusait une base distante
+
+`main()` enveloppait tout son corps dans **deux** gestionnaires :
+
+```python
+except KeyError:
+    print(f"⚠️  Skipping {study}: Study does not exist on Neon yet.")
+except Exception as e:
+    print(f"❌ Error loading study: {e}")
+    return
+```
+
+Mesuré sur un `.db` local inexistant :
+
+```
+⚠️  Skipping bidon: Study does not exist on Neon yet.     code 0
+```
+
+Deux erreurs dans une seule ligne. Le code de retour annonce un succès. Et
+le message accuse **Neon** — une base distante qui n'intervient nulle part
+dans ce chemin — pour un fichier local absent : il envoie chercher la panne
+au mauvais endroit.
+
+La branche `KeyError` est le piège le plus fin : elle enveloppait aussi les
+**treize fonctions de tracé**. Une clé d'attribut manquante dans n'importe
+quelle figure était donc annoncée comme « l'étude n'existe pas », alors que
+l'étude venait d'être chargée et résumée.
+
+Après : le `try` ne couvre plus que le chargement, les deux gestionnaires
+généraux disparaissent, et l'échec sort en **code 1** avec la cause réelle.
+Chemin nominal revérifié : **10 fichiers produits, code 0**.
+
+## Corrigé au passage — une détection qui inventait trois scénarios
+
+`_detect_scenario_keys` existe en **deux copies**, une par script d'analyse.
+Elles avaient divergé — préfixe différent (`loss_` contre `phys_`) et
+surtout sémantique différente : la copie d'`analyze_hyperparams` rendait
+**toute la famille** dès qu'**une** clé était trouvée, sans vérifier que les
+autres existent.
+
+Mesuré sur les deux bases gelées, qui portent quatre scénarios :
+
+| | scénarios annoncés |
+|---|---|
+| données réelles | `kh`, `tearing`, `ot`, `rotor` — **4** |
+| `recompute_lambda_scores._detect_scenario_keys` | les mêmes 4 |
+| `analyze_hyperparams._detect_scenario_keys` | **7** — plus `vortex`, `coalescence`, `gt` |
+
+Trois scénarios qu'**aucune campagne n'a jamais exécutés**.
+
+**Aucun nombre faux n'en sortait, et c'est la mesure qui le dit.** Les
+quatre appelants filtrent tous par `if f"loss_{k}" in attrs` ; le résumé
+imprime bien quatre lignes, et « Lamb-Oseen », « Island Coalescence » et
+« Ghost Twisting » n'y figurent pas. Ma première lecture concluait au
+défaut ; la mesure l'a corrigée. Le piège était **armé, non déclenché** —
+le premier appelant qui ferait confiance à la liste obtiendrait un
+`KeyError`, ou pire une moyenne sur sept termes dont trois `NaN`.
+
+La correction rend la docstring vraie sans rien changer en sortie :
+**empreinte SHA-256 du résumé complet identique avant et après**, sur les
+deux bases.
+
+```
+classical_v2_phase1   8bf8d878…3018   identique
+q_has_v2_phase1       dc746ee4…1d36   identique
+```
+
+Un test compare désormais les deux copies sur la même base : elles doivent
+en tirer les mêmes scénarios, sans quoi les deux analyses d'une même
+campagne ne parlent pas du même sous-ensemble.
+
+## Deux corrections de `PROVENANCE.md`
+
+En vérifiant les quotas de la campagne gelée contre `PHASES` :
+
+- « 143 et 202 essais contre **600** déclarés » — le quota classique vaut
+  **300**, pas 600. Le bras classique s'est arrêté à 143/300 (48 %), le
+  quantique à 202/600 (34 %).
+- deux chemins morts : `tests/v4/test_hyperparams_provenance.py` (déplacé
+  vers `tests/study/`) et `src/TrainHyperParam_v1.py à _v4.py` (supprimés).
+  Une commande de vérification qui ne peut plus être lancée ne vérifie rien.
+
+## Reste à lire dans ce fichier
+
+Les treize fonctions de tracé. Comme pour `recompute_lambda_scores`, elles
+n'écrivent que des `.png` : le chemin de données et le chemin d'échec sont
+audités, la mise en page ne l'est pas.

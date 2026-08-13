@@ -209,7 +209,10 @@ class TestSamplerShotOption:
     def test_runtime_path_accepts_the_shot_option(self):
         from VQA.runtime import VQARuntime
 
-        rt = VQARuntime(backend_name="matrix_product_state", mode="local",
+        # `mode="local"` auparavant : une valeur qui n'existe nulle part dans
+        # `src/`, acceptee parce que `mode` n'etait jamais lu. C'est D-48 en
+        # miniature. Le seul mode que ce depot sait honorer est "simulator".
+        rt = VQARuntime(backend_name="matrix_product_state", mode="simulator",
                         shots=4096, opt_level=1)
         assert rt.sampler.options.default_shots == 4096
 

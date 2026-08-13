@@ -120,16 +120,36 @@ SCENARIO_COLORS = {
 
 
 def _detect_scenario_keys(completed):
-    """Auto-detect which scenario keys are present in user_attrs."""
+    """Rend les cles de scenario REELLEMENT presentes dans `user_attrs`.
+
+    Auparavant, trouver UNE cle faisait rendre toute sa famille — les sept
+    non-`_predict`, ou les sept `_predict` — sans verifier qu'elles
+    existent. La docstring annoncait « which scenario keys are present » ;
+    la fonction rendait des cles absentes.
+
+    Mesure sur les deux bases gelees, qui portent quatre scenarios
+    (`kh`, `tearing`, `ot`, `rotor`) : la fonction en annoncait **sept**,
+    inventant `vortex`, `coalescence` et `gt` — trois scenarios qu'aucune
+    campagne n'a jamais executes.
+
+    Aucun nombre faux n'en sortait : les quatre appelants filtrent tous par
+    `if f"loss_{k}" in attrs`, et le resume imprime bien quatre lignes. Le
+    piege etait **arme, non declenche** — le premier appelant qui ferait
+    confiance a la liste obtiendrait un `KeyError`, ou pire une moyenne sur
+    sept termes dont trois `NaN`.
+
+    La correction ne change donc aucune sortie : verifie par empreinte
+    SHA-256 du resume complet, identique avant et apres sur les deux bases.
+    C'est le comportement qu'a deja la copie de `recompute_lambda_scores`,
+    dont cette fonction avait diverge.
+    """
+    trouvees = set()
     for t in completed[:10]:
         for key in ALL_SCENARIO_KEYS:
             if f"loss_{key}" in t.user_attrs:
-                # Found one key format, return all keys of same format
-                if "_predict" in key:
-                    return [k for k in ALL_SCENARIO_KEYS if "_predict" in k]
-                else:
-                    return [k for k in ALL_SCENARIO_KEYS if "_predict" not in k]
-    return []
+                trouvees.add(key)
+    # Ordre canonique d'ALL_SCENARIO_KEYS, comme dans recompute_lambda_scores.
+    return [k for k in ALL_SCENARIO_KEYS if k in trouvees]
 
 
 def has_scenario_data(completed):
@@ -944,64 +964,79 @@ def main():
     if args.show:
         matplotlib.use("TkAgg")
 
+    # D-50 : le `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
+    # code 1.
+    #
+    # Avant, deux gestionnaires enveloppaient tout le corps de `main` --
+    # chargement, resume, et les treize fonctions de trace :
+    #
+    #   except KeyError    -> « Skipping X: Study does not exist on Neon yet »
+    #   except Exception   -> « Error loading study: ... » puis `return`
+    #
+    # Mesure sur une base locale inexistante : le message accusait **Neon**,
+    # une base distante qui n'intervient pas, et le script rendait **0**.
+    # Pire, un `KeyError` leve par n'importe laquelle des treize figures --
+    # une cle d'attribut absente, un scenario manquant -- etait annonce
+    # comme une etude introuvable. Le diagnostic imprime designait la
+    # mauvaise cause dans les deux branches.
     try:
         study, completed = load_study(args.db_path, args.study_name)
-        param_names = get_param_names(completed)
-
-        if not completed:
-            print("[ERROR] No completed trials with finite score.")
-            return
-
-        # Summary
-        generate_summary(study, completed, param_names, args.output_dir)
-
-        # Section 1: Optuna built-in
-        plot_optuna_builtins(study, args.output_dir, param_names, args.full)
-
-        # Section 2: Convergence
-        plot_convergence(study, completed, args.output_dir)
-
-        # Section 3: 2D Landscapes
-        if args.full:
-            plot_2d_landscapes(completed, param_names, args.output_dir)
-
-        # Section 4: Decomposed analysis (only with user_attrs)
-        if has_decomposed_data(completed):
-            print("\n=== Section 4: Decomposed Score Analysis ===")
-            plot_pareto_front(completed, args.output_dir)
-            plot_score_decomposition(completed, param_names, args.output_dir)
-            plot_per_field_sensitivity(completed, param_names, args.output_dir)
-            plot_field_correlation_heatmap(completed, param_names, args.output_dir)
-        else:
-            print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
-            print("       Sections 1–3 are available from existing trials.")
-
-        # D-60 : hors de la garde `has_decomposed_data`. Celle-ci teste
-        # `phys_score`, que seul l'objectif mono-scénario de `pipeline.py`
-        # écrit — donc la courbe de seuil ne pouvait pas sortir sur une
-        # étude composite, y compris l'étude classique dont le seuil EST
-        # le seul paramètre optimisé. La fonction porte ses propres gardes.
-        plot_threshold_operating_curve(completed, args.output_dir)
-
-        # Section 5: Per-scenario analysis (Phase 2 composite)
-        if has_scenario_data(completed):
-            print("\n=== Section 5: Per-Scenario Analysis (Composite) ===")
-            plot_scenario_breakdown_bar(completed, args.output_dir)
-            plot_scenario_sensitivity(completed, param_names, args.output_dir)
-            plot_scenario_correlation_heatmap(completed, param_names, args.output_dir)
-            plot_scenario_pairwise(completed, args.output_dir)
-
-        print(f"\nAll plots saved to: {args.output_dir}")
-
-        if args.show:
-            plt.show()
-
-    except KeyError:
-        # This triggers if the study name isn't found in the Neon DB
-        print(f"⚠️  Skipping {args.study_name}: Study does not exist on Neon yet.")
     except Exception as e:
-        print(f"❌ Error loading study: {e}")
-        return
+        print(f"[ERREUR] chargement de '{args.study_name}' depuis "
+              f"{args.db_path} : {e}", file=sys.stderr)
+        sys.exit(1)
+
+    param_names = get_param_names(completed)
+
+    if not completed:
+        print(f"[ERREUR] '{args.study_name}' ne contient aucun essai COMPLETE "
+              f"a valeur finie — rien a analyser.", file=sys.stderr)
+        sys.exit(1)
+
+    # Summary
+    generate_summary(study, completed, param_names, args.output_dir)
+
+    # Section 1: Optuna built-in
+    plot_optuna_builtins(study, args.output_dir, param_names, args.full)
+
+    # Section 2: Convergence
+    plot_convergence(study, completed, args.output_dir)
+
+    # Section 3: 2D Landscapes
+    if args.full:
+        plot_2d_landscapes(completed, param_names, args.output_dir)
+
+    # Section 4: Decomposed analysis (only with user_attrs)
+    if has_decomposed_data(completed):
+        print("\n=== Section 4: Decomposed Score Analysis ===")
+        plot_pareto_front(completed, args.output_dir)
+        plot_score_decomposition(completed, param_names, args.output_dir)
+        plot_per_field_sensitivity(completed, param_names, args.output_dir)
+        plot_field_correlation_heatmap(completed, param_names, args.output_dir)
+    else:
+        print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
+        print("       Sections 1–3 are available from existing trials.")
+
+    # D-60 : hors de la garde `has_decomposed_data`. Celle-ci teste
+    # `phys_score`, que seul l'objectif mono-scénario de `pipeline.py`
+    # écrit — donc la courbe de seuil ne pouvait pas sortir sur une étude
+    # composite, y compris l'étude classique dont le seuil EST le seul
+    # paramètre optimisé. La fonction porte ses propres gardes.
+    plot_threshold_operating_curve(completed, args.output_dir)
+
+    # Section 5: Per-scenario analysis (Phase 2 composite)
+    if has_scenario_data(completed):
+        print("\n=== Section 5: Per-Scenario Analysis (Composite) ===")
+        plot_scenario_breakdown_bar(completed, args.output_dir)
+        plot_scenario_sensitivity(completed, param_names, args.output_dir)
+        plot_scenario_correlation_heatmap(completed, param_names, args.output_dir)
+        plot_scenario_pairwise(completed, args.output_dir)
+
+    print(f"\nAll plots saved to: {args.output_dir}")
+
+    if args.show:
+        plt.show()
+
 
 
 if __name__ == "__main__":

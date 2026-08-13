@@ -23,7 +23,7 @@ dépendant d'un réglage sans provenance. Ce document trie.
 
 Ce qui tient aujourd'hui, et sur quoi le papier peut s'appuyer.
 
-**Les 36 défauts corrigés, chacun mesuré avant/après.** C'est le matériau le
+**Les 37 défauts corrigés, chacun mesuré avant/après.** C'est le matériau le
 plus solide du travail. Chaque mesure est déterministe, refaite par une
 commande, et verrouillée par un test qui échoue sur l'ancienne version.
 → `RESULTS.md`, `COUVERTURE.md`
@@ -42,10 +42,12 @@ indépendants de tout réglage :
 **Les mesures d'ordre du solveur.** Grille fixe, quatre résolutions
 temporelles, chaque schéma contre sa propre référence. Reproductible.
 
-**La méthode d'audit elle-même.** Les quatre questions, les huit patrons, les
-proportions — 12 défauts sur 36 par une seule question, et deux trouvés
-en retirant une couche plutôt qu'en posant une question. C'est une
-contribution à part entière, et elle ne dépend d'aucune campagne.
+**La méthode d'audit elle-même.** Les cinq questions, les huit patrons, les
+proportions — 12 défauts sur 37 par une seule question, deux trouvés
+en retirant une couche plutôt qu'en posant une question, et un (D-48) par la
+cinquième question seule, celle qui demande si un test **traverse** la
+configuration. C'est une contribution à part entière, et elle ne dépend
+d'aucune campagne.
 
 ---
 

@@ -85,13 +85,52 @@ def test_every_cross_test_import_resolves(path):
         f"n'existent pas — {manquants}")
 
 
-def test_every_package_directory_carries_its_init():
-    """Les imports croises passent par le paquet `tests.` : un dossier sans
-    `__init__.py` les rendrait irresolvables."""
+def _dirs_missing_init(racine):
+    """Dossiers portant du `.py` mais pas d'`__init__.py`, sous `racine`."""
     sans = []
-    for base, dirs, _ in os.walk(_TESTS):
+    for base, dirs, files in os.walk(racine):
         dirs[:] = [d for d in dirs
                    if d not in ("__pycache__", "tools") and not d.startswith(".")]
+        if not any(f.endswith(".py") for f in files):
+            continue          # residu, pas un paquet manquant — voir ci-dessous
         if not os.path.exists(os.path.join(base, "__init__.py")):
-            sans.append(os.path.relpath(base, _REPO_ROOT))
+            sans.append(base)
+    return sans
+
+
+def test_every_package_directory_carries_its_init():
+    """Les imports croises passent par le paquet `tests.` : un dossier sans
+    `__init__.py` les rendrait irresolvables.
+
+    Un dossier qui ne contient AUCUN `.py` n'est pas un paquet manquant :
+    c'est un residu. Apres la reorganisation de `tests/` par sous-systeme,
+    `tests/v3/` et `tests/v4/` sont restes sur les copies de travail avec
+    leur seul `__pycache__`. Git ne suit pas les dossiers vides : un clone
+    neuf ne les a jamais eus, et les effacer ne tient pas — ils reviennent
+    avec le repertoire de travail.
+
+    Le test echouait donc sur l'etat d'une machine et non sur le contenu du
+    depot : vrai localement, inexistant a l'arrivee. Le critere porte
+    desormais sur les dossiers qui portent effectivement du code. Un vrai
+    sous-dossier de test ajoute sans `__init__.py` en contient par
+    construction : il reste attrape — c'est ce que verifie le test suivant.
+    """
+    sans = [os.path.relpath(d, _REPO_ROOT) for d in _dirs_missing_init(_TESTS)]
     assert not sans, f"dossiers de test sans __init__.py : {sans}"
+
+
+def test_the_init_check_can_still_fail(tmp_path):
+    """Garde-fou : sans lui, l'assouplissement ci-dessus pourrait rendre le
+    test precedent incapable d'echouer, et personne ne le verrait."""
+    vrai_manque = tmp_path / "sous_dossier"
+    vrai_manque.mkdir()
+    (vrai_manque / "test_quelque_chose.py").write_text("def test_x():\n    pass\n")
+
+    residu = tmp_path / "residu" / "__pycache__"
+    residu.mkdir(parents=True)
+    (residu / "vieux.cpython-311.pyc").write_bytes(b"\x00")
+
+    trouves = _dirs_missing_init(tmp_path)
+    assert trouves == [str(vrai_manque)], (
+        "un dossier portant un .py sans __init__.py doit etre signale, et le "
+        f"residu sans .py doit etre ignore ; obtenu {trouves}")
