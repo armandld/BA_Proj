@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 40 défauts corrigés
+## Les 41 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -106,6 +106,7 @@ résultat au hasard.
 | # | ce qui était faux | avant → après | vérifier |
 |---|---|---|---|
 | D-40 | la moyenne agrégée de `pipeline_verification.py` incluait des lignes à énergie constante (E≡0) comme si c'étaient de vraies mesures au hasard, tirant le verdict vers le bas en silence | sur les 4 scénarios canoniques (Re=400, N=256, dim=4) : AUC(E) **0,687 → 0,874**, F1(E) **0,364 → 0,729** — le verdict F1(E) vs F1(classique) passe de WARN (0,364 < 0,603) à PASS (0,729 > 0,654) une fois les 2 lignes dégénérées exclues et annotées plutôt que moyennées | `pytest tests/study/test_pipeline_verification_degenerate.py` |
+| D-44 | `sanity_check.run_qaoa` décidait la convergence du QAOA sur `np.std(marg) > 0.01` — la **dispersion** des marginales — alors que le critère annoncé par son propre commentaire est « marginals should not all be 0.5 », c'est-à-dire la **distance à 0,5** | sur les défauts du script (Re=400, N=32, dim=2, 4 scénarios) le verdict s'inversait aux deux extrêmes : harris_tearing v1, marginales 0,976–0,980, `max|m−0,5| = 0,480` — le run le plus tranché des huit — était **« NOT converged (flat) »** (std 0,0019) ; kelvin_helmholtz v1 idem (0,239 contre std 0,0014). À l'inverse orszag_tang v1, déclaré convergé (std 0,0585), porte une marginale à **0,0169** de 0,5. Le bras QAOA n'étant pas déterministe, mesure refaite : 2ᵉ exécution identique en substance — harris_tearing v1 `0,473` contre std `0,0081`, kelvin_helmholtz v1 `0,249` contre std `0,0009`, l'inversion tient aux deux fois. Après : **4/4 → 8/8 convergés**, tolérance 0,01 inchangée mais portée sur la bonne grandeur | `pytest tests/study/test_sanity_check_convergence_criterion.py` |
 | D-43 | `find_optimal_threshold` balayait ses seuils avec `flat_e >= thr` : sur une énergie **constante**, les 100 percentiles sont égaux et chaque candidat prédit **tous** les patchs durs — le F1 rendu était celui du classifieur tout-positif, `2p/(p+1)`, présenté comme un pouvoir de séparation | mêmes artefacts : harris_tearing **0,400 → NaN**, kelvin_helmholtz **0,376 → NaN** (`E.ptp = 0` sur les deux) ; mhd_rotor **0,950** et orszag_tang **0,519** inchangés. 0,400 se lisait comme un signal réel un peu plus faible que le 0,519 authentique d'OT — et identique à tous les Re, donc comme un **seuil parfaitement stable**, la conclusion même que `threshold_stability_report` existe pour produire | `pytest tests/study/test_find_optimal_threshold_degenerate.py` |
 
 Pas une correction du calcul de l'énergie hamiltonienne elle-même (`src/`
