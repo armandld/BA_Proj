@@ -233,6 +233,55 @@ optimiseur COBYLA, AMR `depth = 0`, `dim = 2`. Non traversés : `classical_only`
 backend échantillonné, bord borné, hamiltonien nul, autres optimiseurs,
 `depth > 0`, `dim = 4 / 8`.
 
+### `study/h0_selection/h0_optimiser_equivalence.py` — lu en entier
+
+Le second et dernier fichier de `h0_selection` : **le module est clos**.
+C'est le script dont le verdict porte le `RÉFUTÉ` de `h0_selection` dans
+`CLAUDE.md`.
+
+| lu | verdict |
+|---|---|
+| `check_expected_behaviour`, sans optimum certifié | **D-52** — `hit_optimum` et `exact_match` valent `NaN`, comparés par `<` à `MIN_HIT`/`MIN_MASK_MATCH` : `nan < 1.0` est **False**, donc `missed` et `diverging` restaient vides quoi qu'il arrive. Le critère qui existe pour que le script *puisse* échouer ne pouvait ni échouer ni réussir. Run réel `--N 64 --dim 2 --n-snaps 1 --no-exact` : code de sortie **0**, `[ACCEPTANCE] … H0 refutee` imprimé trois lignes sous une `DECISION RULE` disant *« QAOA deviates from the certified optimum »*. Corrigé : `[INDECIDABLE]`, chemin certifié bit-à-bit identique |
+| `MIN_HIT` / `MIN_MASK_MATCH`, la référence de leur commentaire | **D-53** — *« les huit solveurs … atteignent l'optimum certifié sur 100 % des instantanés »* est vrai à `dim = 2` et **faux à `dim = 3`** : sur les 32 instantanés de `..._N96_dim3.npz` (18 qubits, donc certifié) le QAOA atteint l'optimum sur **0,062 à 0,156**, sous la règle classique elle-même (0,500). Le critère, rejoué dessus, lève : *« H0 redevient plausible »*. Rapport seul — la décision touche une lecture publiée |
+| `exhaustive_ground_state`, comptage de `n_optima` en deux passes | **sain, et la correction qu'annonce son commentaire tient** — croisé contre une énumération de référence écrite séparément, **60** hamiltoniens à coefficients **entiers** (donc pleins d'ex aequo, le cas où le comptage en une passe mordait) × **4** tailles de bloc (`1<<16`, 64, 7, **1**, la dernière forçant un bloc par configuration) : **0 désaccord** sur `(E_min, n_optima)` |
+| énergie de l'énumération contre `total_energy` | **saines et assorties** — c'est la question 4 sur ce module : l'optimum certifié et les énergies enregistrées par `_record` doivent sortir du même opérateur, sinon `hit_optimum` compare deux échelles. 400 configurations aléatoires, écart max **1,78e−15** ; et `E_exact` est **exactement** `min(total_energy)` sur les 2⁸ configurations (écart 0,0e+00, `n_optima` confirmé par un comptage indépendant) |
+| `classical_init_spins` contre le bloc en ligne d'`analyze_snapshot_sa` | **sain** — la docstring annonce une convention « identique » ; vérifié sur données réelles, tableaux **égaux**. `.ravel()` ici, `.flatten()` là : même ordre C, même résultat |
+| aller-retour spins → `(dh, dv)` → spins du bras QAOA | **sain** — `_record` reconstruit les spins depuis les décisions QAOA ; 200 tirages, **identique** à chaque fois : pas d'inversion d'ordre entre les deux blocs de qubits |
+| `greedy_local_search`, énergie accumulée | **saine** — `E += dEs[q]` pourrait dériver de l'énergie vraie (forme « variable locale non réécrite ») ; mesuré, accumulée et recalculée coïncident à la 9ᵉ décimale. Sans conséquence de toute façon : `_record` recalcule par `total_energy` et ignore la valeur rendue |
+| `_output_path` / `_checkpoint_path`, signature de reprise | **sains** — le point de reprise dérive du nom de l'artefact, donc les deux ne peuvent pas diverger ; `_run_signature` couvre tous les arguments sauf `scenario` (déjà dans le nom du fichier) et refuse explicitement une reprise issue d'autres réglages plutôt que de panacher deux campagnes |
+| balayage vide | **crie** — `RuntimeError` explicite listant les artefacts attendus |
+| `f1_from_masks`, `decision_agreement` | **sains** — F1 = `2tp/(2tp+fp+fn)`, dénominateur nul rendu 0 ; convention de décision `dec_h | dec_v` identique à la phase 7 |
+
+**Trois remarques, aucune n'est une valeur fausse** — non corrigées faute de
+conséquence mesurée :
+
+- le critère range le **QAOA parmi les solveurs déterministes** et exige de
+  lui `hit = 1,000`, alors que la fiche établit que le bras QAOA n'est pas
+  déterministe. À `dim = 2` l'assertion ne tire jamais (le fondamental est
+  constant, D-47) ; à `dim = 3` elle tire, et c'est D-53. Le classement
+  lui-même n'a donc jamais été exercé là où il pourrait être faux ;
+- la sélection d'instantanés `set(int(round(i)) for i in linspace(…))`
+  **collapse silencieusement** quand `n_dns` est petit devant `--n-snaps` :
+  on obtient moins d'instantanés que demandé, sans un mot. Aux tailles
+  réelles (`n_dns` ≈ 20, `n_snaps` ≤ 3) le cas ne se produit pas, et le
+  commentaire voisin — « la sélection commence à 1 » — n'est faux que dans
+  ce même régime ;
+- l'artefact **n'écrit pas** `certified` : la seule trace qu'une campagne
+  n'a pas certifié son optimum est que `hit`/`match` y sont `NaN`. Dérivable,
+  donc pas une valeur sans provenance — mais une colonne explicite coûterait
+  une ligne. Non ajoutée : changer le schéma d'un artefact n'est pas une
+  correction minimale.
+
+**Axes empruntés.** Bras **quantique** ; backend **`state_vector` *et*
+échantillonné** (`aer`, 4096 tirs — les deux côtés de cet axe, ce qu'aucun
+module lu jusqu'ici ne faisait) ; warm start **présent *et* absent** (`sa`
+froid contre `sa_warm`/`greedy` amorcés — mais **pas** côté QAOA, qui reçoit
+le schedule constant de D-48) ; hamiltonien **non nul** ; bord
+**périodique** ; optimiseur **COBYLA** ; AMR **`depth = 0`** ; `dim` **2 et
+3** par les artefacts, **4** par la mesure de D-52. Non traversés :
+`classical_only`, bord **borné**, hamiltonien **nul**, autres optimiseurs,
+`depth > 0`, et l'axe des **anomalies avancées** (`False` codé en dur, D-51).
+
 ### Un axe qui manquait à la fiche : les anomalies avancées — D-51
 
 `VIGIL_BA_Proj.md` liste sept axes ; il en manque un huitième, et `study/`
