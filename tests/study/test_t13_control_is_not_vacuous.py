@@ -1,6 +1,7 @@
-"""D-54 : le controle de T13 ne validait rien.
+"""D-54 / D-55 : le controle de T13 ne validait rien, et son balayage vide
+sortait avec le code 0.
 
- `zero_hamiltonian_terms(hp, ())` rend une copie de `hp` : le masque du
+D-54. `zero_hamiltonian_terms(hp, ())` rend une copie de `hp` : le masque du
 controle sort de la MEME fonction sur la MEME entree que la reference. Le
 controle vaut 0 par construction. `RESULTS.md` en tirait pourtant « The
 control is exactly 0, which validates the measurement chain ».
@@ -111,3 +112,31 @@ def test_control_is_now_checked_not_merely_printed():
 def test_missing_control_row_raises():
     with pytest.raises(RuntimeError, match="aucune ligne de controle"):
         t13.control_and_reading(_rows({"no_Z": (1.0, 0.083)}))
+
+
+def test_module_now_carries_an_assertion():
+    """`CLAUDE.md` : « Un test qui ne peut pas echouer est un defaut. Tout
+    script de study/ ou de tests/ porte une assertion. » Mesure par AST, pas
+    par recherche de chaine : le module en portait **0** (0 assert, 0 raise,
+    0 SystemExit) contre 5 et 6 pour son voisin."""
+    import ast
+    with open(t13.__file__, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    guards = [n for n in ast.walk(tree)
+              if isinstance(n, (ast.Assert, ast.Raise))]
+    assert len(guards) >= 3, (
+        f"h3_term_ablation.py ne porte plus que {len(guards)} garde(s) : "
+        "le controle de T13 et le cri du balayage vide ont ete retires")
+
+
+# ------------------------------------------------------------------ D-55
+def test_empty_sweep_raises_instead_of_returning_zero(monkeypatch, capsys):
+    """Le balayage vide doit crier. Verifie sur le vrai `main()`, avec un
+    scenario sans artefact — c'est-a-dire exactement la commande qui rendait
+    le code 0."""
+    argv = ["h3_term_ablation.py", "--scenario", "no_such_scenario",
+            "--N", "64", "--dim", "2", "--n-snaps", "1"]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(RuntimeError, match="balayage vide"):
+        t13.main()
+    assert "SKIP no_such_scenario" in capsys.readouterr().out

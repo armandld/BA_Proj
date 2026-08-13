@@ -179,7 +179,19 @@ def main():
                       f"base_uniform={base_uni}")
 
     if not rows:
-        print("no input."); return
+        # D-55 : le script imprimait « no input. » et sortait avec le code 0,
+        # sans ecrire d'artefact — donc en laissant en place celui d'une
+        # campagne precedente, indiscernable d'une campagne reussie. Meme
+        # defaut, meme formulation que la correction deja faite dans
+        # `h0_optimiser_equivalence.main`.
+        raise RuntimeError(
+            f"balayage vide : aucun des scenarios {args.scenario} n'a "
+            f"d'artefacts d'entree a N={args.N} dim={args.dim} "
+            f"(dns_*_N{args.N}.npz et patches_*_N{args.N}_dim{args.dim}.npz "
+            f"dans {RESULTS_DIR}). La tache sortait ici avec le code 0, sans "
+            "artefact : celui de la campagne precedente restait en place et "
+            "une campagne qui n'avait rien mesure etait indiscernable d'une "
+            "campagne reussie.")
 
     names = [n for n, _ in ABLATIONS]
     print("\n  " + "=" * 92)
