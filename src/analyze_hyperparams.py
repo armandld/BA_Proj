@@ -148,14 +148,25 @@ def _find_available_keys(completed, candidates, prefix=""):
 
 
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
-    """Binned median trend line."""
+    """Binned median trend line.
+
+    D-60/D-61 : la derniere classe est FERMEE. Les bornes viennent de
+    `linspace(x.min(), x.max())`, donc le dernier bord EST `x.max()` : avec
+    un `<` strict, l'essai qui porte la plus grande valeur du parametre
+    n'entrait dans aucune classe. La tendance omettait silencieusement le
+    point extreme — celui qui decide justement du sens de la pente au bord
+    du domaine echantillonne.
+    """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
         return
     bins = np.linspace(x.min(), x.max(), n_bins + 1)
     centers, medians = [], []
     for k in range(n_bins):
-        mask = (x >= bins[k]) & (x < bins[k + 1])
+        if k == n_bins - 1:
+            mask = (x >= bins[k]) & (x <= bins[k + 1])
+        else:
+            mask = (x >= bins[k]) & (x < bins[k + 1])
         if mask.sum() >= 2:
             centers.append((bins[k] + bins[k + 1]) / 2)
             medians.append(np.median(y[mask]))
