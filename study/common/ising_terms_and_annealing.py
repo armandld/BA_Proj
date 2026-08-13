@@ -74,6 +74,16 @@ def build_ising_terms(hamilt_params, dim):
         (coeff columns are float inside a 2D object; we actually return
          a tuple (edge_idx, edge_coeff) and (plaq_idx, plaq_coeff) to
          keep integer/float separation.)
+
+    Déviation connue partagée avec `create_period_hamiltonian` (D-59,
+    docs/DEFAUTS.md de BA_Proj) : à dim = 2, l'anneau périodique dégénère et
+    le lien ZZ `(i, 0)->(i, 1)` coïncide avec `(i, 1)->(i, 0 mod 2)` -- deux
+    entrées `edge_idx` pour la même paire de qubits, poids effectif doublé.
+    Les deux chemins (celui-ci, SA/exhaustif ; `create_period_hamiltonian`,
+    QAOA/diag exacte) partagent la même dégénérescence, donc restent
+    cohérents entre eux (COUVERTURE.md). Mesuré : aucune décision de
+    fondamental exact publiée n'en dépend. Rapport seul, ne pas corriger
+    sans remesurer.
     """
     n_q = 2 * dim * dim
     h_bias = np.zeros(n_q, dtype=np.float64)

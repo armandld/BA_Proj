@@ -1012,7 +1012,77 @@ python3 study/common/aggregate_master_table.py | grep DIFF   # 16 lignes, 12 = T
 python3 study/h3_representation/h3_uncertainty_window.py --N 64 --steps 30 --seed 0
 ```
 
-## D-59 — réservé, mesure en cours
+## D-59 — à dim = 2, la topologie périodique double le lien ZZ shear (pas le ZZZZ), sans conséquence mesurée sur les décisions publiées
+
+**Où ça bloque.** Pas sur une décision publiée aujourd'hui — mesuré
+ci-dessous sur les 4 scénarios canoniques. Ça bloque une lecture **future** :
+la campagne de réoptimisation D-22 rééquilibre les poids qui font
+aujourd'hui du biais Z le terme dominant (facteur 2 à 6,6×, D-47). Si ce
+rapport se resserre, ce doublement structurel n'a plus de raison de rester
+invisible, et rien ne le surveille.
+
+**Comment on est tombé dessus.** Question 4 de `VIGIL.md`, en lisant
+`study/h3_representation/h3_depth_report.py` (dernier fichier non lu de
+`study/h3_representation/`, avec `h3_window_counterfactual.py` — voir
+`COUVERTURE.md`) : le décompte des termes du `SparsePauliOp` produit par
+`create_period_hamiltonian` affichait des libellés Pauli **dupliqués**, à
+coefficient identique au bit près — `"IIIIIIZZ"` apparaissait deux fois avec
+exactement `-2.4290271580758453` dans les deux cas (orszag_tang, Re=400,
+N=256, mappeur v1, instantané médian).
+
+**Ce qui est établi.** `create_period_hamiltonian`
+(`src/VQA/cost_hamiltonian.py:309`, chemin QAOA/diagonalisation exacte) et
+`build_ising_terms` (`study/common/ising_terms_and_annealing.py:65`, chemin
+SA/exhaustif — déjà vérifiés « identiques entre eux » dans `COUVERTURE.md`)
+itèrent tous deux sur les `dim` cellules pour émettre un lien ZZ horizontal
+`(i, j) → (i, j+1 mod dim)` et vertical `(i, j) → (i+1 mod dim, j)`. À
+`dim ≥ 3` cela produit `dim` liens **distincts** par direction (vérifié à
+`dim = 3` : aucun label ZZ ne se répète). À **`dim = 2`** l'anneau périodique
+dégénère : `(i, 0) → (i, 1)` et `(i, 1) → (i, 0 mod 2)` relient la **même**
+paire de qubits, et les deux itérations ajoutent chacune une entrée ZZ à
+l'opérateur au lieu d'être fusionnées.
+
+Vérifié sur les coefficients réels (4 scénarios canoniques, Re=400, N=256,
+mappeur v1) : `C_edges[0][i,0] == C_edges[0][i,1]` **au bit près** pour
+chaque ligne `i`, de même pour `C_edges[1]` par colonne — la formule de
+`HamiltParams` (symétrique par construction du saut de cellule) rend donc
+les deux entrées dupliquées **identiques**, et l'opérateur applique deux
+fois le même couplage shear entre la même paire de qubits : poids effectif
+**×2**. `K_plaquettes` (ZZZZ) **n'a pas** ce défaut — vérifié, les 4
+quadruplets de qubits produits par les 4 cellules à `dim = 2` sont distincts
+deux à deux (la topologie de plaquette ne dégénère pas de la même façon que
+celle des liens).
+
+**Mesure d'impact.** État fondamental exact (énumération, même méthode que
+D-47), 4 scénarios canoniques × 3 instantanés (Re=400, N=256, dim=2,
+mappeur v1, `threshold_amr=0,15`), comparant l'Hamiltonien tel quel contre
+une version diagnostique où la seconde occurrence du lien dupliqué est mise
+à zéro (retire le doublon, ne touche à rien d'autre) :
+
+| | |
+|---|---|
+| décisions changées | **0 / 12** |
+| fondamental (les deux versions) | `raffiner partout` (biais Z dominant, D-47) |
+| `max\|C\|` mesuré | 2,04 à 3,99 selon scénario/instantané |
+
+**Où on en est — non corrigé, rapport seul.** `src/` est l'objet d'étude
+gelé (`CLAUDE.md`) ; corriger la topologie périodique changerait la
+définition de l'Hamiltonien à `dim = 2` — la **seule** résolution dont sort
+un nombre publié — donc tout nombre qui en dépend. Aucun nombre publié ne
+bouge (mesuré 0/12), donc rien n'exige de correction aujourd'hui. La
+déviation est écrite dans les deux fichiers qui la partagent
+(`cost_hamiltonian.py`, `ising_terms_and_annealing.py`) pour ne pas se faire
+« recorriger » sans mesure, et pinguée par un test qui échouerait si la
+dégénérescence disparaissait sans que ce fichier soit mis à jour. À
+surveiller explicitement **avant** de publier tout nombre issu de la
+campagne D-22 : si le biais Z retrouvé pèse moins que le couplage ZZ
+doublé, le fondamental peut cesser d'être insensible à ce doublon.
+
+```bash
+pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py
+```
+
+## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et
 entre dans `RESULTS.md`.

@@ -310,6 +310,16 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
     """
     Construit l'Hamiltonien MHD sur une grille torique (Périodique).
     Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
+
+    Déviation connue, non corrigée (D-59, docs/DEFAUTS.md sur BA_Proj) : à
+    dim = 2, l'anneau périodique dégénère et le lien ZZ (i,0)->(i,1) coïncide
+    avec (i,1)->(i,0 mod 2) -- la même paire de qubits reçoit deux entrées
+    ZZ au lieu d'une, doublant le couplage shear effectif. Mesuré sur les 4
+    scénarios canoniques : aucune décision de fondamental exact n'en dépend
+    (le biais Z domine déjà le couplage doublé, D-47), donc rapport seul --
+    corriger changerait la définition de l'Hamiltonien à la seule résolution
+    publiée. Ne pas "réparer" sans remesurer : voir D-59 pour le protocole.
+    Pinné par tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py.
     """
     sparse_list = []
     

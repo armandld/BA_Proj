@@ -405,6 +405,51 @@ seul module lu à traverser cet axe-là aux deux valeurs. Non traversés : bras
 `classical_only`, backend échantillonné, bord borné, hamiltonien nul, warm
 start, optimiseurs, `depth > 0`.
 
+### `study/h3_representation/h3_window_counterfactual.py` (T18) — lu en entier
+
+Le contrefactuel de T13/T17 : la fenêtre gaussienne neutralisée
+(`sigma → 1e9`), l'ablation ZZ change-t-elle encore une décision ?
+
+| lu | verdict |
+|---|---|
+| `prepare_both_arms`, substitution de `TRAINED_SIGMA` | **saine** — la valeur est relue depuis le module (`qaoa_inputs.py:244`, `sigma=TRAINED_SIGMA` à l'intérieur du corps de fonction, pas un défaut par défaut) à chaque appel, donc la substitution du module-global prend effet ; restauration **assertée**, pas seulement faite dans un `finally` |
+| l'assertion de neutralisation (`a_nw >= a_w·(1 − 1e−9)`) | **saine, et elle mord** — vérifie que la substitution a réellement affaibli la fenêtre plutôt que de le supposer |
+| le contrôle `full` (`ctrl != 0.0` → WARNING) | **compare le Hamiltonien à lui-même, comme D-54 avant sa correction** — mais `tests/study/test_t18_window_counterfactual.py` le documente explicitement comme un contrôle de chaîne de mesure (« il doit rendre exactement 0 »), pas comme une validation du mécanisme d'ablation, et porte un vrai contrôle positif (`test_ablation_detects_a_real_change`) à côté. Moins sévère que la forme originale de D-54 : signalé, pas rouvert |
+| lecture finale (« ZZ existe et la fenêtre le détruit » / « ZZ reste inerte ») | **conforme à la mesure** — `zz_nw` (ZZ ablation, fenêtre neutralisée) tranche entre les deux branches sans ambiguïté |
+| l'effet propre de la fenêtre (`cross`), mesuré entre les deux bras sur le Hamiltonien complet | **sain et bien distingué** — le commentaire explique correctement que `|C|` entre dans `C_scale`, qui fixe l'échelle du biais Z : éteindre `C` n'agit donc pas seulement « comme un couplage » |
+
+**Axes empruntés** : bras quantique (état fondamental exact), hamiltonien
+**non nul**, bord périodique, mappeur **v1** (déployé), fenêtre **présente
+*et* neutralisée** — c'est l'axe que le module existe pour traverser. Non
+traversés : `classical_only`, backend échantillonné, bord borné, `dim > 2`,
+warm start, optimiseurs, anomalies avancées (D-51).
+
+### `study/h3_representation/h3_depth_report.py` (phase 8) — lu en entier
+
+Dernier fichier non lu de `study/h3_representation/` — **le module est
+maintenant lu en entier**. Script de reporting pur (profondeur de circuit,
+nombre de portes) pour le manuscrit ; jamais exécuté jusqu'à publication —
+`results/depth_report_N*.csv` n'existe dans aucun commit, et aucune ligne de
+`RESULTS.md`/`EVALUATION.md` ne cite une profondeur de circuit ou un compte
+de portes.
+
+| lu | verdict |
+|---|---|
+| `_count_terms` (Z/ZZ/ZZZZ) | **sain** — classification par poids du label Pauli, cohérente avec `create_period_hamiltonian` |
+| `report_row`, comptage avant/après élagage | **sain sur les cas rejoués** (orszag_tang, Re=400, N=256, dim 2 et 4, eps 0 à 5,0) — `prune_hamilt_params` retire bien des termes à `eps` suffisant, l'opérateur lève `NullHamiltonianError` si tout est élagué |
+| liste blanche des portes à 2 qubits (`cx,cz,ecr,cp,rzz,rzx,swap`) | **vérifiée exhaustive sur les cas rejoués** — la cible réelle du backend (`AerSimulator(method='matrix_product_state')`, `opt_level=0`) ne produit que `cx`/`rzz` en pratique sur ces Hamiltoniens diagonaux ; le compte `two_q_gates` coïncide avec `gate_counts` filtré à la main |
+| **découverte en le rejouant, pas en le lisant** : labels ZZ dupliqués dans `create_period_hamiltonian` à `dim = 2` | **D-59** (`DEFAUTS.md`) — sans conséquence mesurée sur les décisions publiées, mais une topologie qui n'avait jamais été testée avec des coefficients non uniformes (`tests/quantum/test_vqa_stack_analytic.py` n'utilise que `np.full`, donc ne peut pas la révéler) |
+| `threshold_amr=0.15` codé en dur dans `report_row` | **valeur sans provenance, sans conséquence** — proche de `TRAINED_THRESHOLD` (0,1496…) mais pas la valeur exacte ; sans conséquence puisque rien de ce script n'est publié |
+
+**Axes empruntés** : hamiltonien non nul, bord périodique, mappeur **v2**
+(imposé par le docstring), `dim` **2 et 4**, élagage **présent et absent**
+(`prune_eps` de 0 à 5,0 — le seul module à balayer cet axe). Non traversés :
+bras `classical_only`, backend échantillonné, hamiltonien nul, mappeur v1,
+warm start, optimiseurs.
+
+`study/h3_representation/` **est maintenant lu en entier**, les sept
+fichiers du dossier couverts module par module.
+
 ### `study/h3_representation/h3_uncertainty_window.py` — lu en entier
 
 Lu tout de suite après T13, parce que c'est lui qui donne le **mécanisme**
