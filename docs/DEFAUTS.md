@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **11** |
+| **ouverts** — décision ou campagne requise | **12** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1012,7 +1012,7 @@ python3 study/common/aggregate_master_table.py | grep DIFF   # 16 lignes, 12 = T
 python3 study/h3_representation/h3_uncertainty_window.py --N 64 --steps 30 --seed 0
 ```
 
-## Ajouter une entrée
+## D-59 — réservé, mesure en cours
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et
 entre dans `RESULTS.md`.
