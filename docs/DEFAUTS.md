@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **4** |
+| **ouverts** — décision ou campagne requise | **5** |
 | **gelés** volontairement | 2 |
 
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
@@ -246,6 +246,96 @@ for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
     m = re.search(r'Re(\d+)_N(\d+)', path)
     print(m.group(0), 'fixed', cf['ok'], round(cf['amplification'],3),
           '| raw', cr['ok'], round(cr['amplification'],3))
+"
+```
+
+---
+
+## D-41 — le seuil critique du hamiltonien v1 n'est jamais franchi sur 2 scénarios canoniques / 4
+
+**Où ça bloque.** Toute comparaison "hamiltonien quantique vs score
+classique" sur `harris_tearing`/`kelvin_helmholtz` porte en réalité sur un
+hamiltonien identiquement nul (voir D-40, `RESULTS.md`) : `PhysicalMapper`
+(v1) ne produit **aucun** coefficient non nul sur ces deux scénarios, à
+Re=400 comme à N=256, du premier au dernier snapshot. Toute campagne future
+qui réoptimiserait ou publierait un résultat comparatif sur ces scénarios à
+cette résolution comparerait en réalité "hasard construit" contre le score
+classique, pas un vrai hamiltonien.
+
+**Comment on est tombé dessus.** En auditant `study/pipeline/hamiltonian_coefficients.py`
+(FOCUS `pipeline/`) : les 4 fichiers `coefficients_*_Re400_N256_dim4.npz`
+existants montrent `E_patch` non nul pour `mhd_rotor` (100 % des cellules
+actives) et `orszag_tang` (70 %), mais **0 %** pour `harris_tearing` et
+`kelvin_helmholtz` — rejoué indépendamment avec le code actuel
+(`compute_patch_coefficients`), pas seulement lu depuis l'artefact.
+
+**Ce qui est établi.** Dans `PhysicalMapper.compute_coefficients`
+(`src/Simulation/HamiltParams.py`), le terme ZZ (`C_edges`) est nul dès que
+`v_jump`/`B_jump` (saut de cellule entre voisins) reste sous
+`v_jump_crit = RE_CRIT·ν/dx` / `B_jump_crit = RM_CRIT·η/dx`. Mesuré sur
+`dns_harris_tearing_Re400_N256.npz`, snapshot médian (t≈1,0) :
+
+| | v_jump max | v_jump_crit | rapport |
+|---|---|---|---|
+| harris_tearing Re400 N256 | 4,56e−4 | 0,102 | **0,004** |
+| B_jump max | 0,085 | 0,102 | **0,83** (proche, jamais franchi) |
+
+Le terme ZZZZ (`K_plaquettes`) dépend du même type de seuil sur la
+vorticité/le courant ; `omega_mag`/`jz_mag` y restent aussi, mesuré, sous
+`omega_crit`/`jz_crit` sur toute la trace (`v0` s'annule algébriquement du
+rapport — vérifié, ce n'est pas un artefact de normalisation par `v0`).
+
+**Ce que ce n'est probablement pas** : le commentaire du fichier explique
+que `RE_CRIT` est passé de 10 à 1,0 précisément pour éviter « un hamiltonien
+vide pour la plupart des grilles de résolution de simulation » — mesuré ici,
+le seuil à 1,0 laisse malgré tout `harris_tearing`/`kelvin_helmholtz`
+complètement vides à la résolution de production (N=256). Les deux
+scénarios à discontinuités (`mhd_rotor`, `orszag_tang`) franchissent le
+seuil sans peine.
+
+**Hypothèse de cause, non tranchée.** `harris_tearing`/`kelvin_helmholtz`
+sont des instabilités **lisses** (pas de choc) : leurs sauts inter-cellules
+restent proportionnels à `gradient physique × dx`, qui s'écrase avec la
+résolution, alors que `v_jump_crit` croît en `1/dx`. `mhd_rotor`/
+`orszag_tang` contiennent de vrais chocs (saut ≈ constant, indépendant de
+`dx`), d'où un rapport qui ne s'écrase pas à N=256. Si c'est le cas,
+`RE_CRIT`/`RM_CRIT` mesurent une vraie propriété physique (pas de structure
+à l'échelle de la cellule) et le hamiltonien vide serait un résultat
+correct, pas un défaut — mais alors les scénarios lisses ne peuvent
+structurellement jamais bénéficier du terme ZZ/ZZZZ v1 à résolution DNS,
+ce qui n'est écrit nulle part et devrait l'être avant toute réoptimisation
+qui inclurait ces scénarios.
+
+**Où on en est.** Pas corrigé : changer `RE_CRIT`/`RM_CRIT` change un
+paramètre physique du hamiltonien étudié dans `src/`, donc un nombre
+publié — décision humaine, pas un défaut de code à corriger seul. Deux
+issues possibles, à trancher : (a) documenter que le hamiltonien v1 est
+structurellement vide sur les scénarios lisses à résolution DNS, et exclure
+`harris_tearing`/`kelvin_helmholtz` de toute comparaison quantique/classique
+tant que ce n'est pas vrai ; (b) abaisser encore `RE_CRIT`/`RM_CRIT`, ou
+changer leur normalisation pour qu'ils réagissent au gradient plutôt qu'au
+saut brut, et remesurer si cela casse la calibration sur `mhd_rotor`/
+`orszag_tang`.
+
+```bash
+python3 -c "
+import sys, numpy as np
+sys.path.insert(0, 'src'); sys.path.insert(0, 'study/pipeline')
+from hamiltonian_coefficients import compute_patch_coefficients
+from config import (TRAINED_THRESHOLD, TRAINED_SIGMA, TRAINED_BETA_CURL,
+    TRAINED_BETA_XPOINT, TRAINED_W_Z_FRAC, TRAINED_GAMMA_HYDRO,
+    TRAINED_GAMMA_MAG, TRAINED_KAPPA)
+for sc in ['harris_tearing', 'kelvin_helmholtz', 'mhd_rotor', 'orszag_tang']:
+    dns = np.load(f'results/dns_{sc}_Re400_N256.npz')
+    si = len(dns['t']) // 2
+    vx=dns['vx'][si].astype(float); vy=dns['vy'][si].astype(float)
+    Bx=dns['Bx'][si].astype(float); By=dns['By'][si].astype(float)
+    N = vx.shape[0]
+    res = compute_patch_coefficients(vx, vy, Bx, By, N, 4, 400, TRAINED_THRESHOLD,
+        sigma=TRAINED_SIGMA, beta_curl=TRAINED_BETA_CURL, beta_xpoint=TRAINED_BETA_XPOINT,
+        w_z_frac=TRAINED_W_Z_FRAC, gamma_hydro=TRAINED_GAMMA_HYDRO,
+        gamma_mag=TRAINED_GAMMA_MAG, kappa=TRAINED_KAPPA)
+    print(sc, 'E max =', res['E_patch'].max())
 "
 ```
 
