@@ -207,6 +207,26 @@ Le module qui fabrique les entrées QAOA de la phase 5 et des études h0 / h3.
 | `run_phase5`, absence de patch prometteur | **crie** — `No promising patches -- skipping QAOA`, pas de balayage muet |
 | `prune_hamilt_params` | **incohérence docstring / code, sans conséquence mesurable** — la docstring annonce un élagage « par bloc » sur `H_edges`, `C_edges`, `K_plaquettes` (3 blocs) ; le code prend un maximum séparé pour `H0` et `H1`, `C0` et `C1` (5 groupes). Non corrigé : **aucun artefact `*depth*` n'existe dans `results/`** et aucune ligne de `RESULTS.md` ne cite l'élagage, donc aucun nombre publié n'en dépend — corriger sans mesure serait du risque sans gain |
 
+### `study/h0_selection/h0_qaoa_displacement.py` — lu en entier
+
+Rouvert par D-48, qui vient de son initialisation.
+
+| lu | verdict |
+|---|---|
+| ligne `READING` de `main()` | **D-50** — tranche sur `\|progress\| < 0,1`, seuil sans provenance, sur une grandeur dont la dispersion mesurée (0,018) dépasse la marge au seuil (0,0146) : **1 exécution sur 3** imprime la conclusion inverse. Extrait en `reading_message()` pour être testable, texte et seuil **inchangés** |
+| `variational_progress` | **sain** — projection scalaire correcte, `den > eps` sinon `NaN` : une progression indéfinie ne devient pas 0 |
+| moyenne et pente, traitement des indéfinis | **sains, et c'est un point fin déjà réglé** — la pente est **appariée par instantané** entre `p_min` et `p_max`, avec un commentaire disant pourquoi deux `nanmean` indépendants compareraient deux populations différentes ; `n_undefined_progress` est écrit dans l'artefact au lieu d'être absorbé |
+| `check_expected_behaviour` | **garde réelle mais incomplète** — `MAX_FRAC_UNDEFINED` et `MIN_PAIRED` mordent ; rien ne garde la distance au seuil du verdict (D-50) |
+| `theta_marginals`, `ground_state_marginals`, `mask_uniformity` | **sains** — `P(\|1⟩) = sin²(θ/2) = score`, convention `Z = −1 → raffiner` identique à celle de `ising_terms_and_annealing` |
+| balayage vide | **crie** — `raise SystemExit` explicite si aucun instantané n'est traité |
+| provenance | **saine** — hash git, `--seed`, CLI complet écrits dans le `.npz` |
+
+**Axes empruntés** : bras quantique, backend `state_vector`, hamiltonien non
+nul, bord périodique, warm start **présent et absent** (mesure D-48),
+optimiseur COBYLA, AMR `depth = 0`, `dim = 2`. Non traversés : `classical_only`,
+backend échantillonné, bord borné, hamiltonien nul, autres optimiseurs,
+`depth > 0`, `dim = 4 / 8`.
+
 ### `aggregate_v2.py`, `aggregate_v3.py` — lus en entier
 
 | lu | verdict |

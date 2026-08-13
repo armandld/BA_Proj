@@ -131,6 +131,38 @@ MAX_FRAC_UNDEFINED = 0.50   # au-dela, la moyenne ne decrit plus l'ensemble
 MIN_PAIRED = 1              # une pente sans paire appariee n'est pas une pente
 
 
+READING_FLAT = ("the circuit stays at the classical encoding; the deployed "
+                "decision is not a minimiser of its declared cost.")
+READING_MOVES = "the circuit moves substantially toward its own optimum."
+READING_THRESHOLD = 0.1
+
+
+def reading_message(prog_all):
+    """La phrase de conclusion de T11b, extraite pour etre testable.
+
+    D-50 — texte et seuil INCHANGES, seule l'extraction est nouvelle : la
+    logique vivait dans un `print` de `main()`, donc elle n'etait pas
+    verifiable sans rejouer tout le balayage. Meme geste que D-46 sur
+    `label_percentile_sensitivity.interpretation_message`.
+
+    Le seuil `0.1` n'a aucune provenance ecrite, et il s'applique a une
+    grandeur qui n'est PAS reproductible a cette precision. Mesure : trois
+    executions de la commande publiee (`--N 256 --dim 2 --n-snaps 2`,
+    reps 1-4) rendent 0.1034 / 0.0850 / 0.0859. La premiere est au-dessus du
+    seuil et les deux autres en dessous : **une execution sur trois imprime la
+    conclusion inverse**. La valeur publiee, 0.0854, est a 0.0146 du seuil
+    pour une dispersion mesuree de 0.018.
+
+    NON CORRIGE : retoucher le seuil ferait passer la suite sans rien mesurer
+    de plus, et `VIGIL.md` demande de changer de GRANDEUR, pas de seuil. Les
+    trois options chiffrees sont dans `docs/DEFAUTS.md` D-50 ; le choix
+    change ce que le script publie, donc il revient a USER.
+    `tests/study/test_t11b_reading_verdict_unstable.py` epingle l'instabilite.
+    """
+    return (READING_FLAT if abs(prog_all) < READING_THRESHOLD
+            else READING_MOVES)
+
+
 def check_expected_behaviour(rows, frac_undef, prog_all, paired, slope):
     assert rows, "aucun instantane : rien a juger"
 
@@ -274,11 +306,7 @@ def main():
     print(f"  change in progress from reps={p_min} to {p_max}: {slope:+.4f}"
           f"   [apparie sur {len(paired)} instantanes definis aux deux "
           f"profondeurs]")
-    print("\n  READING: " + (
-        "the circuit stays at the classical encoding; the deployed decision "
-        "is not a minimiser of its declared cost."
-        if abs(prog_all) < 0.1 else
-        "the circuit moves substantially toward its own optimum."))
+    print("\n  READING: " + reading_message(prog_all))
 
     out = os.path.join(
         RESULTS_DIR, f"h0_qaoa_displacement_N{args.N}_dim{args.dim}"
