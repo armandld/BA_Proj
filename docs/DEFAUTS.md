@@ -230,6 +230,19 @@ et c'est la scène (ou `t_max`) qu'il faut revoir. Ne pas rebrancher
 faire retomber `ok=True`, exactement la « recorrection par erreur » que ce
 fichier existe pour empêcher.
 
+**Mise à jour (D-42, `RESULTS.md`).** Le tableau ci-dessus, colonne
+« ancien (brut) », doit se relire : `check_tearing` portait un second
+défaut indépendant — sa clause « pic pas à la fin de la trace » se
+comparait à elle-même quand le pic tombait sur le dernier échantillon, donc
+ne pouvait jamais échouer. Sur les 6 fichiers ci-dessus, le pic (câblage
+brut comme câblage corrigé) tombe justement sur le dernier échantillon —
+une croissance qui ne retombe jamais dans la fenêtre simulée, pas un pic
+observé. Une fois D-42 appliqué, les deux câblages rendent `ok=False` sur
+les 6/6 : le câblage brut ne « marchait » que grâce à ce défaut, pas parce
+qu'il observait un vrai pic. La question posée ici (quelle observable
+sépare fond stationnaire et reconnexion) reste ouverte, mais sans l'appui
+de « l'ancien câblage passait ».
+
 ```bash
 python3 -c "
 import sys, glob, re, numpy as np

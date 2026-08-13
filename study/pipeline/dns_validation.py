@@ -234,14 +234,24 @@ def check_tearing(res):
     j = res["J2"]
     t = res["t"]
     i_peak = int(np.argmax(j))
-    # require peak strictly inside the run (not at t=0, not at the end)
-    growing = (j[min(i_peak+1, len(j)-1)] <= j[i_peak] * 1.01)
+    # require peak strictly inside the run (not at t=0, not at the end).
+    #
+    # D-42 : cette clause comparait j[i_peak] a j[min(i_peak+1, len(j)-1)] --
+    # quand le pic tombe sur le DERNIER echantillon, min(...) retombe sur
+    # i_peak lui-meme et la comparaison devient j[i_peak] <= j[i_peak]*1.01,
+    # toujours vraie. Une trace encore strictement croissante a la fin de la
+    # fenetre (donc jamais observee redescendre : pas un pic, une croissance
+    # non bornee) passait quand meme. Mesure sur les 6 fichiers DNS
+    # harris_tearing reels de results/ : cablage gele, pic au dernier
+    # echantillon sur 6/6, ok True->False une fois la clause corrigee.
+    not_pinned_at_end = i_peak < len(j) - 1
+    decaying_after_peak = not_pinned_at_end and (j[i_peak + 1] <= j[i_peak] * 1.01)
     growing_from_start = (j[i_peak] > j[0] * 1.2) if len(j) > 1 else False
     return dict(t_peak=float(t[i_peak]),
                 j_peak=float(j[i_peak]),
                 j_start=float(j[0]),
                 amplification=float(j[i_peak] / max(j[0], 1e-30)),
-                ok=bool(growing_from_start and growing))
+                ok=bool(growing_from_start and decaying_after_peak))
 
 
 def check_kh(res):

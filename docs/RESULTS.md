@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 36 défauts corrigés
+## Les 39 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -113,6 +113,37 @@ et la question de savoir si ce seuil convient aux scénarios lisses
 tearing/KH est une décision physique, pas un défaut de code — voir
 `DEFAUTS.md`). Uniquement le diagnostic `study/` qui ne doit plus confondre
 « aucun signal calculé » avec « chance mesurée ».
+
+**Le diagnostic Phase 1B** — en ré-auditant `check_tearing` pendant l'examen
+de D-39 (même fonction, même PR) : son docstring exige un pic « strictement
+à l'intérieur de la trace (pas à t=0, pas à la fin) », et la clause « pas à
+t=0 » (`growing_from_start`) est bien vérifiée — mais la clause « pas à la
+fin » (`growing`) compare `j[i_peak]` à `j[min(i_peak+1, len(j)-1)]` : quand
+le pic tombe sur le **dernier** échantillon, `min(...)` retombe sur
+`i_peak` lui-même, et la comparaison devient `j[i_peak] <= j[i_peak]*1.01`
+— toujours vraie. La clause ne peut jamais échouer : une croissance qui ne
+retombe jamais avant la fin de la fenêtre (donc jamais observée en train de
+« piquer ») passe quand même.
+
+Mesuré sur les 6 fichiers DNS `harris_tearing` réels de `results/` : avec
+`J2` = `mean_sq_current` (câblage gelé), le pic tombe sur le **dernier**
+échantillon (`i_peak = 19/20`) sur les **6/6** fichiers — la trace est
+encore strictement croissante à la fin de la fenêtre simulée, ce n'est pas
+un pic observé. `check_tearing` rendait pourtant `ok=True` (amplification
+1,53–2,65×) sur les 6, exactement à cause du défaut ci-dessus.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-42 | `check_tearing` : la clause « pic pas à la fin de la trace » se comparait à elle-même quand le pic tombait sur le dernier échantillon, donc ne pouvait jamais échouer | 6/6 fichiers `harris_tearing` (câblage gelé) : pic au dernier échantillon, `ok` **True → False** | `pytest tests/study/test_check_tearing_end_pinned_peak.py` |
+
+**Conséquence pour D-39** (voir `DEFAUTS.md`) : la comparaison « ancien
+câblage `ok=True` contre câblage corrigé `ok=False` » qui motivait D-39 est
+maintenant à relire — sur les 6 fichiers disponibles, le câblage gelé ne
+passait que grâce à ce défaut, pas parce qu'il observait un vrai pic. Une
+fois D-42 appliqué, les deux câblages rendent `ok=False` sur les 6 : la
+question posée par D-39 (quelle observable sépare fond stationnaire et
+reconnexion) reste entière, mais elle ne peut plus s'appuyer sur « ça
+marchait avant » — ça ne marchait pas, au sens où `check_tearing` l'exige.
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
