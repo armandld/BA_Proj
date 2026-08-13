@@ -148,9 +148,28 @@ def find_optimal_threshold(energy_values, is_hard):
     separates hard from easy patches. Uses F1 score as the objective.
 
     Returns: (best_threshold, best_f1, all_thresholds, all_f1s)
+
+    Si `energy_values` est CONSTANT, aucun seuil ne separe quoi que ce
+    soit : la fonction rend NaN, pas un F1.
     """
     flat_e = energy_values.flatten()
     flat_h = is_hard.flatten()
+
+    # D-43 : sur une entree constante, les 100 percentiles valent tous la
+    # meme chose, et `flat_e >= thr` predit alors TOUS les patchs durs. Le
+    # F1 rendu etait celui du classifieur tout-positif, 2p/(p+1) : mesure
+    # 0.400 sur harris_tearing (prevalence 0.250) et 0.376 sur
+    # kelvin_helmholtz (0.231) a partir des artefacts reels
+    # coefficients_*_Re400_N256_dim4.npz, ou l'energie v1 est
+    # identiquement nulle (D-40/D-41). A cote du 0.519 authentique
+    # d'orszag_tang, 0.400 se lit comme un signal reel un peu plus faible.
+    # `labels_global_threshold.py` nomme deja 0.400 comme la signature du
+    # classifieur constant tout-positif ; le sibling de cette fonction
+    # dans pipeline_verification.py rend 0.000 et signale la degenerescence
+    # sur exactement les memes donnees.
+    if np.ptp(flat_e) < 1e-12:
+        nan_sweep = np.full(100, np.nan)
+        return np.nan, np.nan, nan_sweep, nan_sweep.copy()
 
     # sweep thresholds from 5th to 95th percentile
     thresholds = np.percentile(flat_e, np.linspace(5, 95, 100))
@@ -275,8 +294,16 @@ def analyze_one(dns_path, patches_path, n_patches,
         frac_C_active = np.mean(all_C.flatten() > 1e-10)
         frac_K_active = np.mean(all_K.flatten() > 1e-10)
 
+        # D-43 : une energie constante ne classe rien ; le dire au lieu de
+        # laisser un NaN passer pour un accident de calcul.
+        degenerate_E = bool(np.ptp(all_E) < 1e-12)
+
         label = "v2" if use_v2 else f"sigma={sigma:.3f}"
         print(f"    {label}:")
+        if degenerate_E:
+            print(f"      DEGENERATE: E is constant over all patches and "
+                  f"snapshots -- no threshold separates anything "
+                  f"(no coefficient crossed a critical threshold)")
         print(f"      Spearman E vs L2:     rho={rho_e:.3f} (p={p_e:.1e})")
         print(f"      Spearman C(ZZ) vs L2: rho={rho_c:.3f} (p={p_c:.1e})")
         print(f"      Spearman K(ZZZZ) vs L2: rho={rho_k:.3f} (p={p_k:.1e})")
@@ -293,6 +320,7 @@ def analyze_one(dns_path, patches_path, n_patches,
             "best_thr_e": best_thr_e, "best_f1_e": best_f1_e,
             "best_thr_s": best_thr_s, "best_f1_s": best_f1_s,
             "frac_C_active": frac_C_active, "frac_K_active": frac_K_active,
+            "degenerate_E": degenerate_E,
         }
 
     return results, {"scenario": scenario, "Re": Re, "N": N, "n_patches": n_patches}
@@ -329,10 +357,15 @@ def threshold_stability_report(all_results):
                 if sigma not in results:
                     continue
                 r = results[sigma]
+                # D-43 : une ligne degeneree affichait thr=0.0000 / F1=0.400
+                # identiques a tous les Re, ce qui se lisait comme un seuil
+                # PARFAITEMENT STABLE — la conclusion meme que cette table
+                # existe pour produire.
+                flag = "  <- DEGENERATE (E constant)" if r.get("degenerate_E") else ""
                 print(f"  {re:>6}  {sigma:>6.3f}  {r['best_thr_e']:>8.4f}  "
                       f"{r['best_f1_e']:>6.3f}  "
                       f"{r['best_thr_s']:>10.4f}  {r['best_f1_s']:>9.3f}  "
-                      f"{r['rho_e']:>9.3f}  {100*r['frac_C_active']:>7.1f}%")
+                      f"{r['rho_e']:>9.3f}  {100*r['frac_C_active']:>7.1f}%{flag}")
 
 
 def main():
