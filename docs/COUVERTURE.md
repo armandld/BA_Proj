@@ -50,12 +50,18 @@ effectivement relu fonction par fonction.
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
-| `compare_rotor_budget.py` | 481 | comparaison de budget, utilise le pipeline |
+| `compare_rotor_budget.py` | 481 | comparaison de budget — **ne s'exécute pas**, voir plus bas |
 | `visual.py`, `help_visual.py` | 327 | figures |
-| `import_Neon_data_to_local.py` | 76 | import de données |
 
-**~2 520 lignes**, toutes en aval du chemin scientifique : elles lisent des
-résultats, elles n'en produisent pas.
+`analyze_hyperparams.py`, `recompute_lambda_scores.py` et
+`import_Neon_data_to_local.py` figuraient ici : lus en entier le 13 août,
+D-60 à D-65. Leurs verdicts sont dans les sections 1a ci-dessous.
+
+**~810 lignes restantes**, en aval du chemin scientifique : elles lisent des
+résultats, elles n'en produisent pas. Réserve apprise cette passe : « en
+aval » ne veut pas dire « sans conséquence ». `import_Neon_data_to_local.py`
+fait 76 lignes, ne calcule rien — et c'est le seul code du dépôt qui peut
+détruire les bases de la campagne (D-64).
 
 `TrainHyperParam_v1/v3/v4.py` (1 641 lignes) figuraient ici. **Supprimés** :
 quatre variantes du même script d'entraînement coexistaient sans qu'aucune ne
@@ -199,6 +205,42 @@ et λ **unitaire** ; sortie **saine** et sortie **en échec** (étude absente,
 base absente, écriture impossible). Non traversé : le mode `--lambda-sweep`
 à plus d'un λ n'est vérifié par aucun test — il écrit `lambda_sweep_results.json`
 et deux figures de plus, tous produits par les mêmes fonctions déjà couvertes.
+
+---
+
+## 1a ter. `src/import_Neon_data_to_local.py` — lu en entier
+
+76 lignes, et le seul code du dépôt qui **supprime** une étude Optuna.
+
+| ligne | verdict |
+|---|---|
+| la boucle d'import | **D-64** — suppression de la destination avant lecture de la source, échec rattrapé en code 0 |
+| l'URL par défaut | **D-65** — identifiant Neon complet publié dans un dépôt public (ouvert : rotation) |
+| `--ResetNeon` contre `--ResetLocal` | **asymétrie non corrigée, mesurée** — `--ResetNeon` ne supprime que `q_has_v2_phase1` (garde codée en dur), `--ResetLocal` supprime les **dix**. Aucune des deux n'est documentée dans l'aide au-delà de « Reset … data ». Ce n'est pas une valeur fausse : c'est un drapeau destructeur dont la portée ne se lit que dans le code. Signalé, à trancher par USER |
+| le message de fin | **réserve, non corrigée** — `Successfully uploaded {study} to Neon` est imprimé **dans les deux sens**, y compris quand la copie va de Neon vers le local, et le compte d'essais qu'il donne est celui de la **source**, pas de ce qui a été écrit |
+
+**Axes empruntés** : les deux sens (`--LocalToNeon` et le défaut), source
+**présente** et **absente**, destination **peuplée** et **absente**, échec
+d'écriture réel. Tous traversés avec **deux SQLite** — `--in-url` accepte
+n'importe quelle URL de stockage, donc le chemin « Neon » se teste hors
+ligne. Non traversé : un vrai PostgreSQL.
+
+## `src/compare_rotor_budget.py` — revérifié, toujours mort
+
+Non audité fonction par fonction : il ne s'exécute pas. Le `TypeError` que
+la note « Defect D10 » de `RESULTS.md` décrit est **toujours là, au même
+endroit** — `PhysicalMapper(beta=0.5, …)` à la ligne 108, alors que la
+signature actuelle n'a pas de `beta` (elle porte `beta_curl`,
+`beta_xpoint`, `beta_grad`). Vérifié le 13 août 2026 en le lançant :
+`--resolution 32 --n-blocks 2 --budget 1` s'arrête là.
+
+**Ce que la lecture de son en-tête ajoute** : même réparé, ce script
+comparerait un bras Q-HAS dont les hyperparamètres sont écrits en dur
+(`beta=0.5`, `gamma_hydro=0.5`, `gamma_mag=0.5`, `kappa=5.0`,
+`threshold_amr=0.0`) et non chargés depuis `best_hyperparams.json`. Aucun
+nombre publié n'en vient — il n'a jamais tourné — mais quiconque le
+réparerait obtiendrait une comparaison qui n'oppose pas la configuration
+déployée. À dire avant, pas après.
 
 ---
 
