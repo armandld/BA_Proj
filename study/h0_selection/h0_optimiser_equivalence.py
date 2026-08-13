@@ -516,6 +516,61 @@ MIN_HIT = 1.0
 MIN_MASK_MATCH = 1.0
 
 
+def is_certified(summary, solvers):
+    """True si le panel dispose d'un optimum certifie pour CHAQUE solveur.
+
+    Sans reference exacte — `--no-exact`, ou `n_q > MAX_ENUM_QUBITS`, ce qui
+    est le cas de TOUT `dim >= 4` : 32 qubits contre le plafond de 22 —
+    `solver_panel` ecrit NaN dans `hit_optimum` et `exact_match`. Les tester
+    par `<` ou `>=` repond silencieusement « non » : c'est la comparaison,
+    pas la mesure, qui tranchait.
+    """
+    optimisers = [s for s in solvers if s != "classical_init"]
+    return bool(optimisers) and all(
+        np.isfinite(summary[s]["hit"]) and np.isfinite(summary[s]["match"])
+        for s in optimisers)
+
+
+def decision_rule_lines(summary, solvers):
+    """Les lignes DECISION RULE, extraites pour etre testables sans rejouer
+    la campagne (meme decoupage que `interpretation_message` en D-46 et
+    `reading_message` en D-50). Textes du cas certifie inchanges."""
+    certified = is_certified(summary, solvers)
+    qaoa = [s for s in solvers if s.startswith("qaoa")]
+    out = ["  DECISION RULE:"]
+    if not certified:
+        # Avant : `hit >= 1.0` sur NaN valait False, donc cette ligne
+        # annoncait « none » — lisible comme « tous les solveurs ont echoue »
+        # alors qu'aucun optimum n'avait ete certifie ; et la ligne suivante
+        # affirmait « QAOA deviates from the certified optimum » en parlant
+        # d'un optimum qui n'existait pas.
+        out.append("  * certified optimum: NOT AVAILABLE (exhaustive "
+                   "enumeration skipped) -- hit_optimum / mask_match are "
+                   "undefined, so neither can be read as a failure")
+        if qaoa:
+            out.append("  * QAOA masks identical to the exact ground state: "
+                       "UNDECIDABLE at this size")
+            out.append("  * => H0a undecidable here; only the energy spread "
+                       "and the F1 (H0b) are comparable between solvers.")
+        return out
+
+    opt_solvers = [s for s in solvers
+                   if s not in ("classical_init",) and summary[s]["hit"] >= 1.0]
+    all_match = all(summary[s]["match"] >= 1.0 for s in qaoa) if qaoa else None
+    out.append("  * solvers reaching the certified optimum on every snapshot: "
+               f"{', '.join(opt_solvers) if opt_solvers else 'none'}")
+    if qaoa:
+        out.append("  * QAOA masks identical to the exact ground state on "
+                   f"every snapshot: {all_match}")
+        out.append("  * => " + (
+            "quantum optimisation is NOT the source of any gain; value is "
+            "attributable to the Hamiltonian."
+            if all_match else
+            "QAOA deviates from the certified optimum; the deviation is an "
+            "approximation artefact, not a controllable advantage."))
+    return out
+
+
 def check_expected_behaviour(summary, solvers, diag_flags):
     assert diag_flags and all(diag_flags), (
         "l'enumeration exhaustive n'est licite que si le hamiltonien de cout "
@@ -525,6 +580,32 @@ def check_expected_behaviour(summary, solvers, diag_flags):
     assert len(optimisers) >= 4, (
         f"seulement {len(optimisers)} solveurs compares : le panel ne teste "
         "plus l'equivalence qu'il pretend tester")
+
+    # Controle deplace AVANT le critere : sans bras QAOA, H0 n'est pas
+    # testee, certifie ou non. Le laisser plus bas le rendait inatteignable
+    # des que le retour anticipe ci-dessous s'appliquait.
+    qaoa = [s for s in solvers if s.startswith("qaoa")]
+    assert qaoa, "aucun bras QAOA dans le panel : H0 n'est pas testee"
+
+    # D-52 : sans optimum certifie, `hit` et `match` valent NaN pour tous les
+    # solveurs, et `nan < MIN_HIT` comme `nan < MIN_MASK_MATCH` valent False :
+    # `missed` et `diverging` restaient vides quoi qu'il arrive, et la ligne
+    # [ACCEPTANCE] annoncait « H0 refutee » sur une campagne ou RIEN n'avait
+    # ete certifie. Mesure (run reel, `--scenario orszag_tang --re 400 --N 64
+    # --dim 2 --n-snaps 1 --no-exact`, code de sortie 0) : les 8 solveurs a
+    # hit=nan / mask_match=nan, [ACCEPTANCE] « 7 optimiseurs atteignent
+    # l'optimum certifie » imprime — trois lignes sous une DECISION RULE qui
+    # disait l'inverse. Le critere ne pouvait pas echouer ; il ne pouvait pas
+    # non plus reussir, il ne mesurait rien. L'aide de `--no-exact` le dit
+    # deja : H0a est INDECIDABLE sans optimum certifie, pas refutee.
+    if not is_certified(summary, solvers):
+        print("\n  [INDECIDABLE] aucun optimum certifie sur cette campagne "
+              "(hit_optimum / mask_match indefinis) : H0a ne peut y etre ni "
+              "refutee ni confirmee. Le critere MIN_HIT / MIN_MASK_MATCH ne "
+              "s'applique pas -- il n'est PAS satisfait, il est sans objet. "
+              "Relancer sans --no-exact, a dim <= 3 "
+              f"({MAX_ENUM_QUBITS} qubits au plus), pour trancher H0a.")
+        return
 
     # Les solveurs DETERMINISTES doivent atteindre l'optimum a chaque fois.
     # Le recuit simule ne l'est pas (il n'est pas amorce), et son taux
@@ -547,9 +628,7 @@ def check_expected_behaviour(summary, solvers, diag_flags):
 
     # Le coeur de H0 : le masque du QAOA est celui de l'etat fondamental
     # exact. C'est cette egalite, et elle seule, qui retire a l'optimiseur
-    # quantique tout role explicatif.
-    qaoa = [s for s in solvers if s.startswith("qaoa")]
-    assert qaoa, "aucun bras QAOA dans le panel : H0 n'est pas testee"
+    # quantique tout role explicatif. (`qaoa` est controle plus haut.)
     diverging = {s: summary[s]["match"] for s in qaoa
                  if summary[s]["match"] < MIN_MASK_MATCH}
     assert not diverging, (
@@ -740,22 +819,9 @@ def main():
               f"{v['wall']:>8.3f}")
     print("  " + "-" * 84)
 
-    opt_solvers = [s for s in solvers
-                   if s not in ("classical_init",) and summary[s]["hit"] >= 1.0]
-    qaoa = [s for s in solvers if s.startswith("qaoa")]
-    all_match = all(summary[s]["match"] >= 1.0 for s in qaoa) if qaoa else None
-    print("\n  DECISION RULE:")
-    print(f"  * solvers reaching the certified optimum on every snapshot: "
-          f"{', '.join(opt_solvers) if opt_solvers else 'none'}")
-    if qaoa:
-        print(f"  * QAOA masks identical to the exact ground state on every "
-              f"snapshot: {all_match}")
-        print("  * => " + (
-            "quantum optimisation is NOT the source of any gain; value is "
-            "attributable to the Hamiltonian."
-            if all_match else
-            "QAOA deviates from the certified optimum; the deviation is an "
-            "approximation artefact, not a controllable advantage."))
+    print()
+    for _line in decision_rule_lines(summary, solvers):
+        print(_line)
 
 
     out = _output_path(args)
