@@ -141,6 +141,27 @@ indépendante**, pas seulement lus :
 | `stats.paired_delta_bootstrap`, `stats.bootstrap_by_trajectory` | **sains** — `np.unique` trie les identifiants de la même façon des deux côtés, donc `groups_a[i]` et `groups_b[i]` décrivent bien la même trajectoire : l'appariement tient |
 | `metrics.degeneracy_flag` et ses 2 appelants | **sain** — le piège attendu était une prévalence calculée sur un autre ensemble que le `gt` qui sert au F1 ; vérifié, les deux appelants passent `float(Yva.mean())` avec le même `Yva`. C'est la même famille que D-45 : le protocole v3 sait déjà nommer un plancher de dégénérescence |
 | `provenance.py` | **sain** — `git_hash` reste le hash de **départ**, `head_moved_during_run` et `dirty_at_start` disent quand aucun hash ne décrit l'exécution |
+| `ising_terms_and_annealing.build_ising_terms` contre `create_period_hamiltonian` | **sain** — la docstring promet « the EXACT SAME Hamiltonian that QAOA minimises », et les deux n'ont pourtant pas le même seuil d'encodage : **1e−12** côté SA, `COEFF_MIN = 1e−6` côté QAOA. Mesuré sur les 800 coefficients des 40 snapshots (dim=2, Re=400, N=256) : **0** tombe dans la bande `[1e−12, 1e−6)`, donc les deux encodent bien le même opérateur. Écart latent, pas un défaut mesuré — le rejouer si `sigma` ou `w_z_frac` bougent |
+| `ising_terms_and_annealing`, convention de spin | **saine** — `Z = −1 → raffiner` côté SA et `P(q=1) > 0,5 → raffiner` côté diagonalisation exacte décrivent le même état ; topologies `_idx_H`/`_idx_V` identiques à celles de `create_period_hamiltonian` |
+
+**Une piste écartée par la mesure, à ne pas re-suivre.** La phase 7
+(`analyze_snapshot_sa`) compare SA à `score_vqa > thr_amr`, exactement la
+forme de comparaison non gardée que D-45 a trouvée dégénérée en phase 4.
+Vérifié avant d'accuser, à l'usage documenté (`--dim 4 --v2`, Re=400,
+N=256, 3 snapshots × 4 scénarios, sweeps=2000, restarts=10) : décision SA
+constante **9/12**, décision classique constante **10/12**, SA identique au
+classique **7/12**, F1 à égalité **8/12**. Ce n'est **pas** la dégénérescence
+totale de la phase 4 (40/40) : la phase 7 porte du signal, et il n'y a pas
+de défaut ici. Elle gagnerait le même drapeau que D-45, mais c'est une
+amélioration de rapport, pas une correction — non faite, pas mesurée comme
+nécessaire.
+
+`delta_energy` double la contribution d'une plaquette dont deux sommets
+coïncident (`_build_incidence` ajoute l'index une fois par sommet) : cela
+n'arrive qu'à **dim = 1**, absent de `VQA_DIMS = [2, 4, 8]`. Noté, non
+corrigé — corriger un chemin que rien n'emprunte, c'est du risque sans
+mesure.
+
 
 **Confirmation d'une observation déjà publiée, pas une trouvaille.**
 `RESULTS.md` rapporte, via `diag_hamiltonian_balance.py`, `max|K| = 0
