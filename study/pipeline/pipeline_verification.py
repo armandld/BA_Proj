@@ -222,8 +222,14 @@ def main():
                       f"{r.get('recall_c_topK', np.nan):>13.3f}{flag}")
 
     if not rows:
-        print("  No coefficient files found. Run Phase 3 first.")
-        return
+        # D-56 : ce garde imprimait un message et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui
+        # de la campagne precedente. Une campagne qui n'avait rien mesure
+        # etait indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            "balayage vide : aucun fichier de coefficients trouve, lancer "
+            "la phase 3 d'abord. Le script sortait ici avec le code 0 et "
+            "sans artefact, donc sans se distinguer d'une campagne reussie.")
 
     print()
     print("=" * 78)

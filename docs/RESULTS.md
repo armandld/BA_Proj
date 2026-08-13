@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 44 défauts corrigés
+## Les 45 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -150,6 +150,18 @@ Aucun nombre publié ne bouge : les deux corrections ajoutent une colonne et
 une sortie en erreur, et l'artefact `t13_term_ablation_*` existant n'est ni
 relu ni réécrit. La **phrase** de T13 qui affirmait que le contrôle valide la
 chaîne de mesure est corrigée, elle : elle contredisait la mesure.
+
+**Le balayage vide, dans tout `study/`** — D-55 l'a trouvé dans un module ;
+la même forme vivait dans onze autres.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-56 | **11 modules** de `study/` gardaient la fin de leur balayage par `if not <accumulateur>: print(...); return` : sans artefact d'entrée, ils sortaient avec le **code 0 sans rien écrire**, laissant en place l'artefact de la campagne précédente. `CLAUDE.md` exige pourtant qu'« un balayage vide doit crier ». Onze autres modules levaient déjà — la règle était appliquée à moitié, et rien ne le signalait | mesuré sur trois d'entre eux, `--scenario no_such_scenario --N 64` : `h3_locality_proposition`, `h3_equivariance`, `h2b_learned_meanfield_h` — **code 0 → code 1** avec un `RuntimeError` nommant ce qui manque. Les onze sites : `h3_equivariance`, `h3_locality_proposition`, `h2b_ceiling_random_split`, `h2b_scenario_specialisation`, `h2b_variational_classifier`, `h2b_blocked_split`, `h2b_analytical_solution`, `h2b_learned_meanfield_h`, `h2b_train_linear_hamiltonian`, `closed_loop_campaign`, `pipeline_verification`. **Trois d'entre eux ont été trouvés par l'AST, pas par la recherche de « no input. »** : leur message était différent (`no completed fold.`, `no input found.`, `No coefficient files found.`) — chercher la chaîne en aurait manqué un quart | `pytest tests/study/test_empty_sweep_never_silent.py` |
+
+Le test est paramétré sur **les 63 modules** de `study/` : un douzième site
+apparaîtra tout seul. Il interroge l'AST, pas le texte du source — une
+reformulation du message ne doit pas le casser — et il porte son propre
+garde de balayage vide, puisque c'est exactement le piège qu'il traque.
 
 **Le diagnostic Phase 1B** — en ré-auditant `check_tearing` pendant l'examen
 de D-39 (même fonction, même PR) : son docstring exige un pic « strictement

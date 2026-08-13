@@ -442,8 +442,15 @@ def main():
                 print(f"  SKIP {sc} Re={re}: missing input")
 
     if not configs:
-        print("no input found.")
-        return
+        # D-56 : ce garde imprimait un message et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui
+        # de la campagne precedente. Une campagne qui n'avait rien mesure
+        # etait indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            "balayage vide : aucune configuration n'a d'artefact d'entree "
+            "pour les arguments donnes. Le script sortait ici avec le code "
+            "0 et sans artefact, donc sans se distinguer d'une campagne "
+            "reussie.")
 
     # load once
     snaps_all = [load_snapshots(dp, pp) for _, _, dp, pp in configs]

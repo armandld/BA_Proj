@@ -200,7 +200,15 @@ def main():
     print(f"  built {len(rows)} (config, dim, mapper) entries "
           f"in {time.time() - t0:.1f}s\n")
     if not rows:
-        print("no input."); return
+        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
+        # la campagne precedente. Une campagne qui n'avait rien mesure etait
+        # indiscernable d'une campagne reussie. Onze autres modules de
+        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        raise RuntimeError(
+            "balayage vide : aucune verifications de la Proposition 2 n'a d'artefact d'entree pour les "
+            "arguments donnes. Le script sortait ici avec le code 0 et sans "
+            "artefact, donc sans se distinguer d'une campagne reussie.")
 
     # ---- tables par dim ----
     for dim in args.dim:

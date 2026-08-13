@@ -453,7 +453,14 @@ def main():
         records.append(rec)
 
     if not records:
-        print("\nno completed fold."); return
+        # D-56 : ce garde imprimait un message et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui
+        # de la campagne precedente. Une campagne qui n'avait rien mesure
+        # etait indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            "balayage vide : aucun fold n'est alle au bout. Le script "
+            "sortait ici avec le code 0 et sans artefact, donc sans se "
+            "distinguer d'une campagne reussie.")
 
     s = summarise(records)
     print("\n" + "=" * 88)
