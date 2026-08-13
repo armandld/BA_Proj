@@ -355,6 +355,26 @@ côté-là de l'axe) ; bord **périodique** ; warm start **absent** ; optimiseur
 bord borné, backend échantillonné, `depth > 0`, `dim = 3 / 4`, et l'axe des
 anomalies avancées (D-51).
 
+### `study/h3_representation/h3_locality_proposition.py` — lu en entier
+
+Le **livrable théorique** du protocole v3 (Proposition 2). Un seul défaut, et
+il appartient à la famille D-56 (balayage vide). La proposition elle-même a
+été **vérifiée par la mesure**, pas seulement relue.
+
+| lu | verdict |
+|---|---|
+| **la Proposition 2 elle-même** — si `Σ 2\|C_ij\| + Σ 4\|K_p\| < \|h_i\|` sur **tous** les sites, alors le fondamental exact vaut `s_i* = −sign(h_i)` | **vérifiée, 300/300** — hamiltoniens tirés au sort à `dim = 2` (8 qubits) jusqu'à en obtenir 300 satisfaisant la condition **stricte** partout, puis fondamental **énuméré** (`exhaustive_ground_state`) comparé au champ moyen : **0 désaccord**. Marge `min(\|h\| − lhs)` médiane 0,0855, minimum **6,08e−04** — la condition est donc testée près de sa frontière, pas seulement loin d'elle |
+| le **contrôle** de cette vérification | **il sépare** — sans lui la mesure ne dirait rien. Sur 300 hamiltoniens **violant** la condition, le fondamental exact diffère du champ moyen dans **95 %** des cas. L'accord n'est donc pas automatique : c'est bien la condition qui le produit |
+| topologie, « miroir exact de `create_period_hamiltonian` » | **cohérente avec `build_ising_terms`** — c'est ce que la vérification ci-dessus emprunte de bout en bout : `per_site_condition` et `build_ising_terms` indexent les mêmes qubits, sinon les 300 accords seraient impossibles |
+| `include_xpoint=True` par défaut | **divergence réelle avec le reste de `study/`, sans conséquence publiée** — ce module **lit** `K_xpoint` ; `build_ising_terms` ne le lit pas (D-51). Deux chemins qui décrivent le même hamiltonien ne comptent donc pas les mêmes termes. À `dim = 2`, `max\|K_xpoint\| = 0` (mesuré en D-51), donc `lhs` est identique des deux côtés et rien de publié n'en dépend. À `dim = 4` les deux divergeraient. **Noté, pas corrigé** : c'est le même arbitrage que D-51, et il est déjà ouvert |
+| balayage vide | **D-56** — `if not rows: print("no input."); return`, code 0. Corrigé |
+
+**Axes empruntés** : hamiltonien **non nul**, bord **périodique**, `dim` **2
+et 4** (les deux valeurs par défaut du CLI), mappeurs **v1 *et* v2** — le
+seul module lu à traverser cet axe-là aux deux valeurs. Non traversés : bras
+`classical_only`, backend échantillonné, bord borné, hamiltonien nul, warm
+start, optimiseurs, `depth > 0`.
+
 ### `study/h3_representation/h3_uncertainty_window.py` — lu en entier
 
 Lu tout de suite après T13, parce que c'est lui qui donne le **mécanisme**
