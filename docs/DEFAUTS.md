@@ -689,6 +689,13 @@ python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
 
 ---
 
+## D-51 — `study/` teste un Hamiltonien amputé du terme ZZZZ de point X
+
+**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
+en cours. Ne pas reprendre D-51.
+
+---
+
 ## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et
