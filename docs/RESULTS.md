@@ -17,10 +17,10 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 46 défauts corrigés
+## Les 47 défauts corrigés
 
-*(46 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 48 corrections en tout. Le titre annonçait **41** pour 42 lignes
+*(47 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 49 corrections en tout. Le titre annonçait **41** pour 42 lignes
 numérotées avant l'ajout de D-52, D-54, D-55 et D-56 : le compte de tête
 était de nouveau faux d'une unité, exactement le défaut de registre que la
 section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
@@ -170,6 +170,20 @@ Le test est paramétré sur **les 63 modules** de `study/` : un douzième site
 apparaîtra tout seul. Il interroge l'AST, pas le texte du source — une
 reformulation du message ne doit pas le casser — et il porte son propre
 garde de balayage vide, puisque c'est exactement le piège qu'il traque.
+
+**T26, la validation du proxy** — la tâche écrite pour répondre à
+l'objection « à 8 qubits, évidemment qu'il ne se passe rien ».
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-57 | `h3_size_scan.py` remplace l'état fondamental exact par une descente gloutonne dès que `2·dim² > 22`, et son en-tête annonce « warm-started greedy (**validated at dim=2**) ». La validation était bien **calculée** (`greedy_agrees_with_exhaustive`) — puis rangée dans le JSON, **jamais imprimée, jamais contrôlée**. C'est pourtant ce seul nombre qui autorise à lire `dim = 4` et `dim = 8` | mesuré (N=96 et N=256, 4 scénarios canoniques, 12 instantanés) : `--mapper v1`, **le défaut de la tâche**, rend **0,7500** à dim=2 ; `--mapper v2` rend 1,0000. Le 0,75 figure **déjà** dans `results/t26_size_scan_N256_v1.json`, où rien ne le montre. Après : la table de synthèse porte une colonne `proxy=exact`, les dimensions portées par le proxy sont nommées, et un avertissement dit que l'en-tête se contredit — sans qu'aucun seuil ne soit inventé, l'alerte ne portant que sur `< 1` | `pytest tests/study/test_t26_proxy_validation_surfaced.py` |
+
+**Ce que D-57 ne dit pas.** La conclusion de T26 n'est **pas** contaminée.
+Le contrôle `--force-greedy` que le module prévoit lui-même a été rejoué à
+dim=2, mappeurs v1 **et** v2 : le glouton rend `changed = 0,0000` sur les
+quatre ablations, exactement comme l'exhaustif. Le proxy ne fabrique pas les
+changements qu'il rapporte. Le risque que le module nomme dans sa propre
+docstring était réel ; il ne s'est pas réalisé — et rien ne le disait.
 
 **Le diagnostic Phase 1B** — en ré-auditant `check_tearing` pendant l'examen
 de D-39 (même fonction, même PR) : son docstring exige un pic « strictement

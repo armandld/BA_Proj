@@ -83,6 +83,49 @@ ABLATIONS = [("full", ()), ("no_ZZ", ("ZZ",)),
 EXHAUSTIVE_MAX_Q = 22
 
 
+def proxy_validation_message(summary):
+    """D-57 : ce que vaut vraiment la validation du proxy, imprime.
+
+    L'en-tete de la tache annonce « warm-started greedy (validated at
+    dim=2) », et `greedy_agrees_with_exhaustive` etait bien calcule — puis
+    range dans le JSON sans jamais etre imprime ni controle. Or c'est ce
+    nombre, et lui seul, qui autorise a lire les dimensions ou l'exhaustif
+    est hors de portee.
+
+    Mesure (N=96 et N=256, 12 instantanes, 4 scenarios canoniques) :
+    `--mapper v1`, le defaut de la tache, rend **0,7500** a dim=2 ;
+    `--mapper v2` rend 1,0000. Le 0,75 figure deja dans
+    `results/t26_size_scan_N256_v1.json`.
+
+    Aucun seuil n'est invente ici : la fonction rapporte, et n'avertit que
+    sur `< 1`, la seule valeur que « valide » puisse vouloir dire.
+    """
+    checked = [s for s in summary if s.get("greedy_agreement") is not None]
+    unchecked = [s for s in summary if s.get("greedy_agreement") is None]
+    if not checked:
+        return ("  PROXY: no dimension in this scan could validate the "
+                "warm-started greedy against the exact ground state "
+                "(none is under the enumeration limit). Every line above "
+                "rests on an UNVALIDATED proxy.")
+    worst = min(s["greedy_agreement"] for s in checked)
+    out = ["  PROXY VALIDATION (greedy warm start vs exact ground state):"]
+    for s in checked:
+        out.append(f"    dim={s['dim']:<2d} ({s['n_qubits']:3d} q): "
+                   f"{s['greedy_agreement']:.4f} of patches agree")
+    if unchecked:
+        out.append("    carried over to, unvalidated: "
+                   + ", ".join(f"dim={s['dim']} ({s['n_qubits']} q)"
+                               for s in unchecked))
+    if worst < 1.0:
+        out.append(f"  WARNING: the greedy proxy does NOT reproduce the exact "
+                   f"decision where both are computable ({worst:.4f} < 1). "
+                   f"The header calls it 'validated at dim=2'; it is not. "
+                   f"Re-read every line whose method is greedy_warm, and run "
+                   f"--force-greedy to check the proxy is not fabricating the "
+                   f"changes it reports.")
+    return "\n".join(out)
+
+
 def decide(hp, dim, use_exhaustive, init_spins):
     """(masque de decision, uniformite, methode) pour un jeu de parametres.
 
@@ -208,7 +251,7 @@ def main():
     print("=" * 88)
     print(f"  {'dim':>4s} {'qubits':>7s} {'Z_only chg':>11s} "
           f"{'F1 full':>8s} {'F1 Z-only':>10s} {'F1 classic':>11s} "
-          f"{'uniform':>8s}")
+          f"{'uniform':>8s} {'proxy=exact':>12s}")
     summary = []
     for dim in args.dims:
         sub = [r for r in rows if r["dim"] == dim]
@@ -224,9 +267,15 @@ def main():
         f1 = lambda a: float(np.mean([r["f1"] for r in sub
                                       if r["ablation"] == a]))
         f1c = float(np.mean([r["f1_classical"] for r in sub]))
+        # D-57 : `agree` etait calcule, range dans le JSON, et jamais
+        # imprime ni controle — alors que c'est LUI qui autorise a lire les
+        # dimensions ou seul le glouton tourne. Mesure : a `--mapper v1`
+        # (le defaut) et dim=2, il vaut 0,7500, valeur deja presente dans
+        # `t26_size_scan_N256_v1.json` sans que rien ne la montre.
         print(f"  {dim:4d} {sub[0]['n_qubits']:7d} {g('Z_only'):11.4f} "
               f"{f1('full'):8.4f} {f1('Z_only'):10.4f} {f1c:11.4f} "
-              f"{uni:8.2f}")
+              f"{uni:8.2f} "
+              + (f"{agree:12.4f}" if agree is not None else f"{'n/a':>12s}"))
         summary.append(dict(dim=dim, n_qubits=sub[0]["n_qubits"],
                             method=meth, no_ZZ=g("no_ZZ"),
                             no_ZZZZ=g("no_ZZZZ"), Z_only=g("Z_only"),
@@ -264,6 +313,9 @@ def main():
         print(f"  WARNING: the `full` control is non-zero somewhere "
               f"({ctrl}) — the comparison itself is unsound and nothing "
               f"above should be read.")
+
+    print()
+    print(proxy_validation_message(summary))
 
     out = dict(rows=rows, summary=summary, cli_args=vars(args))
     out.update(provenance.finish(prov))
