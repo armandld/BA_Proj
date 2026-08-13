@@ -142,6 +142,23 @@ indépendante**, pas seulement lus :
 | `metrics.degeneracy_flag` et ses 2 appelants | **sain** — le piège attendu était une prévalence calculée sur un autre ensemble que le `gt` qui sert au F1 ; vérifié, les deux appelants passent `float(Yva.mean())` avec le même `Yva`. C'est la même famille que D-45 : le protocole v3 sait déjà nommer un plancher de dégénérescence |
 | `provenance.py` | **sain** — `git_hash` reste le hash de **départ**, `head_moved_during_run` et `dirty_at_start` disent quand aucun hash ne décrit l'exécution |
 
+**Confirmation d'une observation déjà publiée, pas une trouvaille.**
+`RESULTS.md` rapporte, via `diag_hamiltonian_balance.py`, `max|K| = 0
+exactement` — « aucun ZZZZ ne survit au sous-échantillonnage ». Mesuré ici à
+la résolution de **production** (`compute_patch_coefficients`, Re=400,
+N=256, dim=4, 3 snapshots × 4 scénarios) : `max|K_cell| = 0` sur **12/12**,
+donc le terme ZZZZ ne franchit son seuil ni après réduction ni à pleine
+grille. Le ZZ, lui, vit : `max|C_cell|` vaut 26–73 sur `orszag_tang` et
+`mhd_rotor`, 0 sur `harris_tearing`/`kelvin_helmholtz` (c'est D-41).
+Vérifié contre le registre **avant** de l'écrire : rien de neuf à signaler,
+la portée de l'énoncé publié s'élargit seulement.
+
+Symétriquement, à la résolution VQA de la phase 4 (dim=2) c'est l'inverse :
+`|K|` vaut jusqu'à 65,9 et `|C|` s'effondre sous 2,4e−120 — les deux termes
+multi-corps ne sont jamais vivants **en même temps** aux deux résolutions
+que le dépôt emprunte. Non mesuré : s'il existe une résolution où les deux
+franchissent leur seuil ensemble.
+
 `aggregate_master_table.py` rejoué sur cette branche :
 **180 lignes, OK = 164, DIFF = 16, MISSING = 0** — exactement l'état
 documenté, donc D-45 / D-46 / D-47 n'ont déplacé **aucun** nombre publié.
