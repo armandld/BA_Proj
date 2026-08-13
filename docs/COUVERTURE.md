@@ -89,6 +89,28 @@ fonctions décident le nombre qu'une campagne d'une semaine minimise :
 | `_run_level_classical` contre `_run_level` | **sain** — bloc de décision identique, correction D-16 comprise |
 | garde CFL (`check_cfl > 1.0`) | **sain** — marge mesurée **2,5×** sur les six scénarios |
 
+**Lu en entier le 13 août, `study/pipeline/`** — parce que c'est là que le
+verdict « le hamiltonien trouve-t-il les patchs durs » se fabrique.
+
+| fichier / fonction | verdict |
+|---|---|
+| `hamiltonian_coefficients.find_optimal_threshold` | **D-43** : sur une énergie constante, rendait le F1 tout-positif `2p/(p+1)` — 0,400 / 0,376 — comme un pouvoir de séparation |
+| `sanity_check.run_qaoa`, drapeau de convergence | **D-44** : mesurait `np.std(marg)`, pas la distance à 0,5 que son commentaire annonce ; verdict inversé aux deux extrêmes |
+| `hard_patch_labels.patch_classical_scores`, `Jz` écrit à la main | **sain** — stencil et convention d'axes **identiques** à `solver.get_fluxes` (`AXIS_X=0`, centré, `/2dx`) : pas d'opérateur dépareillé entre le score classique des artefacts `patches_*` et celui du chemin coefficients |
+| `hard_patch_labels.coarsen_field`, `patch_l2_errors` | **sain** — moyenne de bloc exacte, normalisation RMS interne à l'instantané |
+| réduction en patchs : `E_all` par **moyenne**, `score_all` par **max** | **choix de conception, non corrigé** — le max reproduit la décision AMR de production (un patch chaud suffit), la moyenne une densité d'énergie. Écart non mesuré ; à trancher si une comparaison E-contre-score devient un résultat publié |
+| `pipeline_verification.analyze`, reconstruction des `snap_indices` | **saine** — vérifié sur les 59 couples `dns_*` / `patches_*` de `results/` : `n_snaps` identique des deux côtés partout, donc E et `is_hard` restent appariés |
+| `dns_extension.mean_sq_current_fixed` contre `dns_validation.mean_sq_current` | **sain** — les deux omettent `/dx` de la même façon : la correction porte sur la convention d'axes seule, et le `dx²` commun s'annule dans les rapports que les checks utilisent |
+| `labels_global_threshold.py`, `labels_error_tolerance.py` | **sains** — les deux refusent explicitement un seuil ou une tolérance qui dégénère, et un balayage vide y crie |
+| `exact_diagonalisation.py` | lu, aucun défaut mesuré ; `analyze_snapshot` reçoit `is_hard` sans jamais s'en servir (recalculé à l'identique depuis `l2_threshold`) et `H_mat` est diagonale, donc `eigh` est un argmin coûteux — deux gaspillages, pas des valeurs fausses. **Aucun artefact `exact_diag_*` dans `results/`** : rien à rejouer, la clause `promising = f1_exact >= f1_classique` (le commentaire au-dessus dit `>`) reste **non mesurée** |
+
+**Ce module n'est pas « audité » au sens de la fiche.** Il a été **lu en
+entier**, fonction par fonction ; aucun test ne traverse encore ses axes
+(profondeur AMR, bord du patch, bras, backend, warm start, hamiltonien nul,
+optimiseur). Lu en entier et non traversé : `dns_sweep.py`, `config.py`,
+`label_percentile_sensitivity.py`. Non relus cette passe : `dns_validation.py`
+(passe concurrente, D-42) et la seconde moitié de `dns_extension.py`.
+
 ---
 
 ## 2. Ce qui est couvert, et par quel type de test
