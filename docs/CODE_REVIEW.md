@@ -12,26 +12,46 @@ classe qui compte : un plantage se voit, un NaN se voit. Ce qui ne se voit
 pas, c'est un tableau de la bonne forme, aux valeurs finies, dans le bon
 intervalle — et faux.
 
-Les 27 défauts de ce dépôt appartiennent tous à cette classe.
+Les 37 défauts de ce dépôt appartiennent tous à cette classe.
 
-## Les quatre questions, par rentabilité mesurée
+## Les cinq questions, par rentabilité mesurée
 
 1. **Pourquoi cette fonction existe-t-elle ?** Que se passerait-il si on la
    supprimait ?
 2. **Que promet-elle ?** Lire la docstring comme un contrat.
 3. **Consomme-t-elle ce que sa signature annonce ?**
 4. **Deux chemins censés coïncider coïncident-ils encore ?**
-   → **12 défauts sur 27.** Commencer par là.
+   → **12 défauts sur 37.** Commencer par là.
+5. **Un test traverse-t-il cette configuration ?** Relire chaque fonction ne
+   suffit pas : un module reste partiellement audité tant qu'un axe de
+   configuration n'a jamais été exécuté. Les axes d'ici : profondeur AMR
+   0 / >0, patch périodique / borné, quantique / `classical_only`,
+   `state_vector` / échantillonné, warm start absent / présent, hamiltonien
+   nul / non nul, COBYLA / autre optimiseur.
+   → **D-48**, trouvé par cette question seule : `mode="hardware"` tournait
+   sur un simulateur sans le dire, parce qu'aucun test n'avait jamais
+   demandé ce mode.
 
 ## Ce qui m'a pris du temps
 
-**L'opérateur non assorti — quatre fois.** Mesurer une grandeur avec un
+**L'opérateur non assorti — cinq fois.** Mesurer une grandeur avec un
 stencil différent de celui qui l'a produite ne mesure pas la grandeur, mais
 l'écart entre deux opérateurs. Une fois, un défaut de huit ordres restait
-invisible au spectral et sautait aux yeux en FD4.
+invisible au spectral et sautait aux yeux en FD4. Une autre fois, c'est une
+**correction juste** qui paraissait fausse (2,1e−05) : la mesure employait
+des dérivées analytiques là où le champ venait d'un stencil FD4 — assortie,
+elle rend 1,08e−16.
 
-**Annoncer avant d'avoir lancé la suite complète.** Deux fois. Une correction
-juste sur `step_full` cassait l'AMR : huit tests, dont six préexistants.
+**Croire qu'un appel réussi prouve quelque chose.** scipy accepte Powell puis
+jette silencieusement ses `constraints` ; qiskit-ibm-runtime accepte
+`Session(backend=AerSimulator)`. Dans les deux cas le run va au bout et rend
+des nombres plausibles. Assertir la **grandeur**, jamais le code de retour.
+
+**Annoncer avant d'avoir lancé la suite complète.** Trois fois. Une correction
+juste sur `step_full` cassait l'AMR : huit tests, dont six préexistants. Le
+refus de D-48 a fait tomber un test de `test_v1_guards.py` qui passait un mode
+inventé — invisible aux 18 tests de la poche comme aux fichiers touchés, il
+n'est apparu qu'à 33 % d'un `pytest tests/` intégral.
 
 **Calibrer un seuil sur la mesure du jour.** Mes tests de vortex étaient
 périmés trois tours plus tard. La grandeur elle-même n'était pas
@@ -51,19 +71,19 @@ fichier, que je n'avais pas lue. C'est un test qui me l'a rappelée.
 - **Un test qui épingle l'ancien comportement.** Sans lui, une correction se
   défait en silence.
 - **Retirer une couche peut révéler ce qu'elle cachait.** D-26 et D-27 n'ont
-  été vus qu'en cessant de projeter B. Aucune des quatre questions ne les
+  été vus qu'en cessant de projeter B. Aucune des cinq questions ne les
   aurait trouvés.
 
 ## L'ordre dans lequel je relis
 
-Un module, les quatre questions, **jusqu'au bout**. Mieux vaut un module
+Un module, les cinq questions, **jusqu'au bout**. Mieux vaut un module
 épuisé que dix survolés. Quand il est fini, écrire ce qui a été vérifié et
 trouvé sain — c'est un résultat, et cela évite de le relire deux fois.
 
 ## Le réglage à ne pas rater
 
 **La majorité du code est juste** : 164 des 180 nombres publiés inchangés
-après 27 défauts trouvés. Un relecteur qui rapporte un défaut par fonction se
+après 37 défauts trouvés. Un relecteur qui rapporte un défaut par fonction se
 trompe, et un faux positif coûte plus cher qu'un défaut manqué — il envoie
 corriger du code correct.
 

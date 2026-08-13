@@ -15,7 +15,7 @@ couvert à **100 %** : ses tests vérifiaient des valeurs, partageaient le
 modèle mental du code, donc son erreur. Un module à 95 % peut être un piège ;
 un module à 60 % peut être sain.
 
-**1 827 tests**, 73 fichiers. Commandes dans `tests/README.md`.
+**1 944 tests**, 75 fichiers. Commandes dans `tests/README.md`.
 
 ---
 
@@ -46,7 +46,7 @@ chiffres de ces trois-là sont donc faux par défaut)*.
 Pas mesurable automatiquement. Liste tenue à la main, depuis ce qui a été
 effectivement relu fonction par fonction.
 
-**Jamais audité** — aucune des quatre questions n'y a été posée :
+**Jamais audité** — aucune des cinq questions n'y a été posée :
 
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
@@ -70,11 +70,12 @@ fonctions seulement :
 
 | fichier | ce qui reste |
 |---|---|
-| `Simulation/refinement.py` | le TTL, la reprise de campagne |
-| `train_hyperparams.py` | le mode Colab (non testable ici) |
-| `VQA/execute.py` | les branches **matériel** (`mode != "simulator"`, session IBM) |
-| `pipeline.py` | le mode `classical_only` de bout en bout |
 | `study/` | **en totalité** — c'est le chantier suivant |
+
+Les quatre poches partielles de V1 (`Simulation/refinement.py`, le mode Colab
+de `train_hyperparams.py`, les branches matériel de `VQA/execute.py`, le bras
+`classical_only` de `pipeline.py`) ont été fermées le 13 août — section
+suivante.
 
 **Audité le 12 août, sur le chemin d'entraînement** — parce que ces
 fonctions décident le nombre qu'une campagne d'une semaine minimise :
@@ -89,6 +90,50 @@ fonctions décident le nombre qu'une campagne d'une semaine minimise :
 | `_run_level_classical` contre `_run_level` | **sain** — bloc de décision identique, correction D-16 comprise |
 | garde CFL (`check_cfl > 1.0`) | **sain** — marge mesurée **2,5×** sur les six scénarios |
 
+### Audité le 13 août — les quatre poches partielles de V1
+
+Ces quatre-là restaient ouvertes parce qu'aucun test ne **traversait leur
+configuration** : le mode matériel, le mode Colab, le bras `classical_only`,
+la mémoire TTL. Un module dont chaque fonction a été relue reste partiellement
+audité tant qu'un axe de configuration n'a jamais été exécuté.
+
+| poche | verdict |
+|---|---|
+| branches matériel de `VQA/execute.py` | **D-48** — `mode="hardware"` s'exécutait sur un simulateur sans le signaler |
+| mémoire TTL de `Simulation/refinement.py` | **vérifiée et trouvée saine** |
+| bras `classical_only` de `pipeline.py` | **vérifié et trouvé sain** |
+| mode Colab de `train_hyperparams.py` | **vérifié et trouvé sain** |
+
+**D-48.** `self.mode` était **stocké et lu nulle part** : `_init_backend` ne
+dispatche que sur `backend_name`. Mesuré, `mode="hardware"` rend
+`AerSimulator` pour `state_vector` / `matrix_product_state` / `aer` et
+`FakeFez` pour `estimator` — identique à `mode="simulator"` dans les quatre
+cas. Le piège n'est pas que ça casse : `Session(backend=AerSimulator)` est
+**acceptée** par qiskit-ibm-runtime. Un run demandé en matériel ouvrait donc
+une session autour d'un simulateur, y construisait un estimateur avec
+découplage dynamique et twirling, et rendait des nombres plausibles. Refus
+posé aux trois sites (`VQARuntime._validate_mode`, `execute`, et les choix
+`--mode` de `pipeline.main`).
+
+**TTL** — contrat d'**un pas de grâce** confirmé sur l'arbre entier : 20
+entrées passent 1 → 0 → 0. L'hypothèse « une entrée périmée survit parce que
+le TTL du parent maintient ses enfants visités » a été **mesurée et
+réfutée** ; elle est épinglée par un test, pas abandonnée en silence. Carte
+bornée à 20 entrées sur 5 pas.
+
+**`classical_only`** — déterministe jusqu'au dernier chiffre, insensible à
+`classic_AMR_comp`, et porte `sigma_source = "loaded"` comme les autres
+sorties (D-36). *Observation à refaire à l'échelle : dans la configuration
+réduite, `patch_ratio = 1,0` au seuil déployé.*
+
+**Colab** — les **trois** copies vers Drive sont sous `if IN_COLAB`, vérifié
+sur l'**AST** et non par proximité de texte : la lecture par proximité en
+comptait deux. `ensure_dirs` idempotent et silencieux. *Risque opérationnel,
+sorti en décision dans `DEFAUTS.md` : hors mode distribué, la base Optuna
+n'atteint Drive qu'un essai sur dix, et elle vit sur un disque éphémère.*
+
+Couvert par `tests/pipeline/test_v1_partial_pockets.py` — **18 tests**.
+
 ---
 
 ## 2. Ce qui est couvert, et par quel type de test
@@ -100,10 +145,21 @@ Champ construit pour que la bonne réponse soit calculable à la main.
 *Exemple : une rotation solide doit donner ω = +2,0 ; l'enstrophie d'un
 cisaillement `vx = sin y` vaut 2π².*
 
-**Audits de contrat** — pour chaque fonction : pourquoi existe-t-elle, que
-promet sa docstring, consomme-t-elle ce que sa signature annonce, et deux
-chemins censés coïncider coïncident-ils encore ? **Douze des 27 défauts
-viennent de la quatrième question.**
+**Audits de contrat** — cinq questions, posées à chaque fonction :
+
+1. pourquoi existe-t-elle ?
+2. que promet sa docstring ?
+3. consomme-t-elle ce que sa signature annonce ?
+4. deux chemins censés coïncider coïncident-ils encore ?
+5. **un test traverse-t-il cette configuration ?**
+
+**Douze des 37 défauts viennent de la quatrième question** — c'est de loin la
+plus rentable. La cinquième a été ajoutée le 13 août, après D-48 : un module
+dont chaque fonction a été relue reste partiellement audité tant qu'un axe de
+configuration n'a jamais été exécuté. Les axes de ce dépôt : profondeur AMR
+0 / >0, patch périodique / borné, quantique / `classical_only`,
+`state_vector` / échantillonné, warm start absent / présent, hamiltonien nul /
+non nul, COBYLA / autre optimiseur.
 
 **Tests de trace** — on force une valeur connue à l'entrée et on vérifie
 qu'elle ressort à la bonne place, en passant par le vrai chemin. *Exemple :
@@ -132,7 +188,7 @@ résolutions temporelles. Quelques minutes chacune.
 
 ## 3. Ce qui rend un test digne de confiance
 
-Un test peut passer sans rien prouver. Quatre pièges rencontrés dans ce
+Un test peut passer sans rien prouver. Six pièges rencontrés dans ce
 dépôt, chacun ayant coûté du temps :
 
 **Le champ qui ne sépare pas.** Sur Taylor-Green, deux conventions de
@@ -151,6 +207,20 @@ rien sort en vert. Vérifier le **nombre de tests sélectionnés**, pas le code
 de retour. *Trois commandes sur vingt-deux d'un registre de vérification ne
 sélectionnaient rien — dans le fichier même censé détecter ce piège.*
 
+**Le contrat lu à moitié.** Une fonction dont le contrat inclut déjà une
+transformation, et un appelant qui l'applique une seconde fois. Testée seule,
+la fonction est correcte ; testé seul, l'appelant est correct ; c'est leur
+composition qui est fausse. *D-37 : `_process_score` ajoutait le halo, son
+appelant le redemandait — écart de 41 % à toute profondeur > 0.* Le test qui
+le voit exerce la **paire**, pas les deux moitiés.
+
+**Le test qui demande seulement si ça passe.** Un appel qui n'explose pas ne
+prouve rien sur ce qu'il a fait. *scipy accepte Powell puis jette
+silencieusement ses `constraints` ; `Session(AerSimulator)` est acceptée par
+qiskit-ibm-runtime.* Dans les deux cas l'exécution réussit et rend des
+nombres plausibles. Il faut assertir la **grandeur** — `max|β| ≤ π/(4·reps)`,
+le backend réellement résolu — pas le code de retour.
+
 **Le seuil périmé.** Un test calibré sur la mesure du jour cesse de mesurer
 dès que le code change légitimement. Il ne s'actualise pas : il se
 **remesure**, avec l'ancienne et la nouvelle valeur consignées. Et si la
@@ -162,7 +232,7 @@ grandeur s'avère non reproductible, on change de **grandeur**, pas de seuil.
 
 | | état |
 |---|---|
-| tests | **1 827**, déterministes sauf les suites QAOA |
+| tests | **1 944**, déterministes sauf les suites QAOA |
 | nombres publiés recalculés depuis leur artefact | **164 / 180** |
 | écarts en attente | **16** — les nombres déplacés par les corrections |
 | artefacts portant hash git + arguments CLI | tous les `.npz` |

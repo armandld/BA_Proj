@@ -17,7 +17,7 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 36 défauts corrigés
+## Les 37 défauts corrigés
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
 refait par une commande, et verrouillé par un test qui échoue sur l'ancienne
@@ -82,6 +82,15 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-34 | budget d'essais calculé une fois, par worker | 4 workers, cible 12 : **48 essais → 12** | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k budget` |
 | D-35 | le JSON final ne portait que les paramètres **échantillonnés** | `threshold_amr` absent → **9/9 valeurs** + hash git + argv | `pytest tests/pipeline/test_train_hyperparams_contracts.py -k redeploy` |
 | D-36 | 3 des 4 sorties détaillées de `pipeline` sans provenance de `sigma` | trace présente **seulement sur les runs divergés** → sur les 4 | `pytest tests/solver/test_solver_guards_and_objective.py -k sigma` |
+
+**Les quatre poches partielles de V1** — auditées avant la réoptimisation
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-48 | `mode="hardware"` s'exécutait sur un **simulateur** sans le signaler | `Session(AerSimulator)` **acceptée** → **lève** à la construction | `pytest tests/pipeline/test_v1_partial_pockets.py -k mode` |
+
+*(D-39 à D-47 sont sur la branche `vigil/…` de l'agent, en attente de
+fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -4658,3 +4667,145 @@ quantique (`prep is None`, `result is None`) sont **inatteignables** :
 ni `_prepare_vqa_input` ni `call_vqa_shell` ne rendent `None`. Elles auraient
 fait disparaître un patch du pavage, donc laissé une région sans traitement ;
 elles ne le font pas.
+
+---
+
+# D-48 et les quatre poches partielles de V1
+
+**Commande.** `pytest tests/pipeline/test_v1_partial_pockets.py -q` (18 tests, ~2 s)
+
+`COUVERTURE.md` listait quatre modules « partiellement audités » : des
+fonctions jamais soumises aux cinq questions, dans du code par ailleurs
+relu. Trois d'entre elles décident ce que la campagne va mesurer. Une seule
+trouvaille en est sortie — les trois autres poches sont **saines**, et le
+dire est un résultat : sans cela, la passe suivante relit le même code.
+
+## D-48 — `mode="hardware"` s'exécutait sur un simulateur sans le dire
+
+**Ce qui se passait.** `VQARuntime.__init__` prend `mode`, l'assigne à
+`self.mode`, et `_init_backend()` **ne le lit jamais** : le dispatch porte
+uniquement sur `backend_name`. Aucun chemin du dépôt ne résout un backend
+IBM réel.
+
+| `backend_name` | `mode="simulator"` | `mode="hardware"` |
+|---|---|---|
+| `state_vector` | `AerSimulator` | **`AerSimulator`** |
+| `matrix_product_state` | `AerSimulator` | **`AerSimulator`** |
+| `aer` | `AerSimulator` | **`AerSimulator`** |
+| `estimator` | `FakeFez` | **`FakeFez`** |
+
+Identiques dans les quatre cas. `self.mode` est assigné à la ligne 43 de
+`runtime.py` et **lu nulle part dans tout `src/`**.
+
+**Ma prédiction était fausse, et c'est ce qui rend le défaut grave.**
+J'attendais que `execute` lève : son chemin `mode != "simulator"` ouvre
+`Session(backend=backend)` sur ce qui est toujours un simulateur. Mesuré :
+
+```
+Session(AerSimulator) : ACCEPTEE
+```
+
+`qiskit-ibm-runtime` l'accepte. Le run ne plantait donc pas — il ouvrait
+une Session autour d'un simulateur, y construisait un estimateur avec
+**découplage dynamique et twirling activés** (des options qui ne veulent
+rien dire sur un simulateur), et rendait des nombres parfaitement
+plausibles. Un résultat demandé « sur matériel » était un résultat de
+simulateur, sans le moindre signalement.
+
+`pipeline.main()` annonçait par ailleurs `--mode hardware` dans les choix
+de sa CLI : une option affichée dans l'aide est une promesse.
+
+**Correction.** Refus à trois endroits, dans l'ordre où on les rencontre :
+`VQARuntime` lève à la construction, `execute` couvre le chemin hérité où
+`vqa_runtime is None`, et `--mode` ne propose plus que `simulator`. Le
+message nomme la cause — aucun backend matériel n'est câblé — au lieu de
+laisser deviner.
+
+## Vérifié et trouvé sain — la mémoire TTL
+
+*Axes empruntés : détection fraîche, signal perdu, plusieurs pas hybrides
+d'affilée, les deux bras.*
+
+Le contrat annoncé est « survit 1 pas hybride après la dernière
+détection ». Mesuré sur l'arbre entier (N=8, dim=2, profondeur 2) : après
+un pas chaud, les 20 entrées valent `DEFAULT_TTL = 1` ; après un pas
+froid, **les 20 valent 0** ; après un second pas froid, elles y restent.
+Le sursis ne se réarme que sur une détection, jamais sur une visite.
+
+**Une hypothèse mesurée et réfutée**, consignée pour qu'on ne la reforme
+pas : je soupçonnais qu'un patch dont le parent cesse d'être raffiné ne
+serait jamais visité, donc jamais décrémenté — sa TTL survivrait un nombre
+arbitraire de pas. C'est faux : la TTL du **parent** le maintient dans
+`next_level`, donc l'enfant est visité et décrémenté avec lui. Tout
+l'arbre passe de 1 à 0 au même pas.
+
+La mémoire ne croît pas non plus : les clés sont les bornes du pavage,
+déterministes, donc leur nombre est borné par l'arbre et non par la durée
+de la campagne — 20 entrées stables sur 5 pas consécutifs.
+
+## Vérifié et trouvé sain — le bras `classical_only`
+
+*Axes empruntés : `classical_only` seul, avec `classic_AMR_comp`, deux
+exécutions identiques.*
+
+C'est le bras de comparaison : un défaut ici ne fausse pas le quantique,
+il fausse la référence. Trois questions, trois mesures sur `kelvin_helmholtz`
+réduit :
+
+| | mesure |
+|---|---|
+| déterminisme | deux exécutions, `combined` **identique au dernier chiffre** |
+| interférence entre les deux sites d'appel | `classical_only=True` seul et avec `classic_AMR_comp=True` : **identique** |
+| provenance de `sigma` (D-36) | `sigma_source = "loaded"` sur cette sortie aussi |
+
+Le même détecteur est appelé depuis deux endroits de `pipeline`, avec deux
+mémoires TTL distinctes (`ttl_map` / `ttl_map_classical`). Elles ne se
+contaminent pas.
+
+**Une observation à refaire à l'échelle**, qui n'est pas un défaut : dans
+cette configuration réduite, le bras classique au seuil déployé rend
+`patch_ratio = 1.0` — il raffine tout le domaine, donc n'économise rien.
+À N=32 et profondeur 1 cela peut n'être qu'un effet de taille. À vérifier
+sur la configuration de campagne avant d'en tirer quoi que ce soit.
+
+## Vérifié et trouvé sain — le mode Colab
+
+*Axe **non empruntable** ici : `google.colab` n'est pas importable dans cet
+environnement. Ce qui est vérifiable l'est ; le reste est nommé.*
+
+Hors Colab, `drive_dir` et `local_dir` valent `None` — une recopie non
+gardée lèverait `TypeError` sur toute machine ordinaire. Les **trois**
+recopies Drive (`ensure_dirs`, le rappel de sauvegarde de `run_phase`,
+`_save_results`) sont chacune dans un `if IN_COLAB`, vérifié sur l'AST et
+non par voisinage textuel. `ensure_dirs` est idempotente et n'écrit rien à
+l'import.
+
+**Risque opérationnel documenté, non corrigé** : sous Colab non distribué,
+la base n'est recopiée vers Drive qu'un essai sur dix. Une session
+interrompue peut perdre jusqu'à neuf essais — le disque local de Colab est
+éphémère. C'est un compromis de conception, pas un défaut ; il devient une
+décision le jour où la campagne tourne sur Colab plutôt que sur des cœurs
+loués. Sorti en entrée de décision dans `DEFAUTS.md`.
+
+## Ce que le refus a fait tomber — D-48 en miniature
+
+Le refus posé dans `VQARuntime` a fait échouer un test existant :
+`tests/pipeline/test_v1_guards.py::test_runtime_path_accepts_the_shot_option`
+construisait un runtime avec `mode="local"`.
+
+`"local"` **n'existe nulle part dans `src/`** : ce n'est ni un mode déployé,
+ni un mode documenté, ni une valeur qu'un appelant produit. `pipeline` passe
+`args.mode`, dont le défaut est `simulator` ; `train_hyperparams` écrit
+`mode="simulator"` en dur. La chaîne inventée était acceptée pour la seule
+raison qui faisait D-48 — `mode` n'était jamais lu.
+
+C'est la meilleure confirmation qu'on pouvait avoir : le défaut avait déjà
+contaminé un test, et ce test passait. Le caller est corrigé en
+`mode="simulator"`, avec la raison écrite sur place.
+
+**Et c'est la suite complète qui l'a trouvé, pas la suite ciblée.** Les 18
+tests de la poche passaient ; les fichiers que la correction touchait
+passaient. L'échec est apparu à 33 % d'un `pytest tests/` intégral, dans un
+fichier qu'aucune des deux lectures ne désignait. Troisième occurrence du
+même piège : **ne pas annoncer avant d'avoir lu la ligne de résumé d'un run
+complet.**

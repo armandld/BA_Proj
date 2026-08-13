@@ -52,7 +52,39 @@ class VQARuntime:
         # Circuit cache: (num_qubits, period_bound) -> transpiled QAOAAnsatz
         self._ansatz_cache = {}
 
+        self._validate_mode()
         self._init_backend()
+
+    #: Les seuls modes que ce depot sait executer.
+    SUPPORTED_MODES = ("simulator",)
+
+    def _validate_mode(self):
+        """Refuse un mode que le depot ne sait pas honorer.
+
+        `mode` etait STOCKE et lu NULLE PART : `_init_backend` ne
+        dispatche que sur `backend_name`, et rend le meme `AerSimulator`
+        pour `mode='simulator'` et pour `mode='hardware'`. Aucun chemin de
+        ce depot ne resout un backend IBM reel.
+
+        Le mode materiel ne levait donc pas : `execute` ouvrait
+        `Session(backend=AerSimulator)` — que qiskit-ibm-runtime ACCEPTE —
+        puis y construisait un estimateur avec decouplage dynamique et
+        twirling. Un run demande en `hardware` s'executait sur un
+        simulateur, avec des options qui n'y veulent rien dire, et rendait
+        des nombres parfaitement plausibles sans jamais le signaler.
+
+        Mesure : `VQARuntime(backend_name=b, mode='hardware')._backend`
+        rend `AerSimulator` pour state_vector / matrix_product_state / aer
+        et `FakeFez` pour estimator — identique a `mode='simulator'` dans
+        les quatre cas. Voir D-48.
+        """
+        if self.mode not in self.SUPPORTED_MODES:
+            raise ValueError(
+                f"mode={self.mode!r} non supporte : aucun backend materiel "
+                f"n'est cable dans ce depot, et `_init_backend` rend un "
+                f"simulateur quel que soit le mode. Un run demande en "
+                f"'{self.mode}' tournerait sur simulateur sans le dire. "
+                f"Attendu l'un de {list(self.SUPPORTED_MODES)}.")
 
     # ------------------------------------------------------------------
     #  Backend / primitive initialization

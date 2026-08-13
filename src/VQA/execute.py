@@ -175,6 +175,21 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             return common
 
         # 6. Optimization
+        #
+        # Le chemin `else` ouvre `Session(backend=backend)`. `backend` vient
+        # de `vqa_runtime._backend`, qui est TOUJOURS un simulateur — aucun
+        # chemin du depot ne resout un backend IBM reel. Et
+        # `Session(AerSimulator)` est ACCEPTE par qiskit-ibm-runtime : le
+        # run ne levait pas, il tournait sur simulateur en se declarant
+        # materiel. `VQARuntime` refuse desormais a la construction ; ce
+        # garde couvre le chemin herite ou `vqa_runtime is None`. Voir D-48.
+        if mode != "simulator":
+            raise ValueError(
+                f"mode={mode!r} non supporte : aucun backend materiel n'est "
+                "cable dans ce depot. Le chemin materiel ouvrirait une "
+                "Session sur un simulateur et rendrait des nombres presentes "
+                "comme materiels. Utiliser mode='simulator'.")
+
         if mode == "simulator":
             result = minimize(**_build_minimize_kwargs(estimator))
         else:

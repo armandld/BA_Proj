@@ -8,12 +8,12 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **3** |
+| **ouverts** — décision ou campagne requise | **4** |
 | **gelés** volontairement | 2 |
 
-Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
-qu'on peut prendre après. D-27 et D-37 sont sortis d'ici : corrigés, mesurés,
-verrouillés — ils vivent dans `RESULTS.md`.
+Un seul demande la campagne elle-même (D-22) ; les trois autres sont des
+décisions, dont deux à prendre **avant** de lancer. D-27, D-37 et D-48 sont
+sortis d'ici : corrigés, mesurés, verrouillés — ils vivent dans `RESULTS.md`.
 
 **Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
 encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
@@ -152,6 +152,40 @@ seconde option est défendable — mais alors il faut le dire.
 
 ```bash
 python src/train_hyperparams.py --print-space
+```
+
+---
+
+## La persistance Colab — décision avant de lancer
+
+**Où ça bloque.** Nulle part si la campagne tourne sur cœurs loués avec un
+stockage Optuna distant. Sur Colab **non distribué**, une déconnexion perd
+jusqu'à **9 essais** — sur une campagne d'une semaine, c'est du temps payé.
+
+**Comment on est tombé dessus.** En auditant la poche « mode Colab », le
+dernier axe de configuration qu'aucun test ne traversait.
+
+**Ce qui est établi.** Trois copies vers Drive, toutes sous `if IN_COLAB`
+(vérifié sur l'AST, `train_hyperparams.py:145, 457, 1164`) :
+
+| site | quand |
+|---|---|
+| `ensure_dirs` | au démarrage — rapatrie les `.db` du Drive |
+| `callback_save` | `IN_COLAB and not DISTRIBUTED and trial.number % 10 == 0` |
+| fin de `_save_results` | une fois, à la toute fin |
+
+La base vit sur `/content/Train_results_local`, éphémère. En mode
+**distribué**, `db_path` vaut `None` et il n'y a **aucune** synchronisation
+intermédiaire — sans conséquence, puisque les essais vivent alors dans le
+stockage distant. C'est le chemin **non distribué** qui expose les 9 essais.
+
+**Décision attendue.** Soit lancer en distribué avec stockage distant — ce
+que le périmètre « cœurs loués » implique de toute façon — soit descendre le
+pas de synchronisation à 1 si la campagne doit tourner sur Colab seul. Ne
+rien changer est défendable, mais alors il faut savoir ce qu'on risque.
+
+```bash
+pytest tests/pipeline/test_v1_partial_pockets.py -k colab
 ```
 
 ---

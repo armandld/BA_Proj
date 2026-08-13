@@ -38,7 +38,11 @@ def main():
     parser.add_argument("--dt", type=float, default=1e-4, help="Time step size")
     parser.add_argument("--hybrid-dt", type=float, default=0.1, help="Hybrid simulation time step size")
     parser.add_argument("--reps", type=int, default=-1, required=False, help="Number of repetitions for the QAOA ansatz.")
-    parser.add_argument("--mode", default="simulator", choices=["simulator", "hardware"])
+    # `hardware` retire des choix : aucun backend IBM reel n'est cable, et
+    # un run demande en materiel s'executait sur simulateur sans le signaler
+    # (D-48). L'annoncer dans l'aide de la CLI en faisait une option
+    # credible.
+    parser.add_argument("--mode", default="simulator", choices=["simulator"])
     parser.add_argument("--backend", default="state_vector", choices=["aer", "estimator","state_vector"])
     parser.add_argument("--shots", type=int, default=1024)
     parser.add_argument("--method", default="L-BFGS-B", choices=["COBYLA", "L-BFGS-B", "Powell"])

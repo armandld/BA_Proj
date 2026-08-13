@@ -32,10 +32,15 @@ des cœurs :
 python src/train_hyperparams.py --print-space              # l'espace réel
 pytest tests/pipeline/test_train_hyperparams_contracts.py -q   # 60 tests, 14 s
 pytest tests/pipeline/test_train_hyperparams_smoke.py -q       #  7 tests, 16 s
+pytest tests/pipeline/test_v1_partial_pockets.py -q            # 18 tests,  2 s
 ```
 
-Le second fichier ne simule rien : vrai solveur, vrai circuit, vraie base
+Le deuxième fichier ne simule rien : vrai solveur, vrai circuit, vraie base
 Optuna, vrai JSON de déploiement, sur les six scénarios — à N=32.
+
+Le troisième vérifie les axes de configuration qu'aucun test ne traversait :
+refus du mode matériel (D-48), sémantique du TTL, déterminisme du bras
+`classical_only`, gardes Colab.
 
 ## Chemins
 
