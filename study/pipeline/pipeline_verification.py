@@ -129,6 +129,14 @@ def analyze(scenario, Re, dim, N, use_v2=True):
     overlap_E = len(set(topK_E) & set(topK_hard))
     recall_E = overlap_E / max(n_hard, 1)
 
+    # D-40: a constant E (no patch ever crosses the v1 Hamiltonian's
+    # critical thresholds) makes every ranking metric tied at its
+    # chance value (AUC=0.5, F1=0.0) -- indistinguishable at a glance
+    # from a genuine "no discrimination" result, but it means no signal
+    # was computed at all. Flag it so it isn't averaged in as if it
+    # were a real chance-level measurement.
+    degenerate_E = bool(np.ptp(E_flat) < 1e-12)
+
     result = {
         "scenario": scenario, "Re": Re, "dim": dim,
         "n_snaps": n_snaps_sub,
@@ -136,6 +144,7 @@ def analyze(scenario, Re, dim, N, use_v2=True):
         "n_hard": int(n_hard),
         "auc_E": auc_E, "f1_E": f1_E,
         "recall_E_topK": recall_E,
+        "degenerate_E": degenerate_E,
     }
 
     # classical for comparison (from the saved scores)
@@ -154,6 +163,19 @@ def analyze(scenario, Re, dim, N, use_v2=True):
         })
 
     return result
+
+
+def split_degenerate(rows):
+    """
+    Separate rows whose Hamiltonian energy never crossed a critical
+    threshold (E constant, AUC/F1 tied at their chance value by
+    construction -- see D-40) from rows with a genuine ranking.
+
+    Returns (clean_rows, degenerate_rows).
+    """
+    clean = [r for r in rows if not r["degenerate_E"]]
+    degenerate = [r for r in rows if r["degenerate_E"]]
+    return clean, degenerate
 
 
 def main():
@@ -191,12 +213,13 @@ def main():
                 if r is None:
                     continue
                 rows.append(r)
+                flag = "  <- DEGENERATE (E constant, no signal)" if r["degenerate_E"] else ""
                 print(f"  {sc:<18} {re:>5} {dim:>4} {r['n_hard']:>7} "
                       f"{r['auc_E']:>7.3f} {r['f1_E']:>7.3f} "
                       f"{r['recall_E_topK']:>12.3f} "
                       f"{r.get('auc_c', np.nan):>8.3f} "
                       f"{r.get('f1_c', np.nan):>7.3f} "
-                      f"{r.get('recall_c_topK', np.nan):>13.3f}")
+                      f"{r.get('recall_c_topK', np.nan):>13.3f}{flag}")
 
     if not rows:
         print("  No coefficient files found. Run Phase 3 first.")
@@ -207,13 +230,30 @@ def main():
     print("  INTERPRETATION")
     print("=" * 78)
 
-    mean_auc_E = np.nanmean([r['auc_E'] for r in rows])
-    mean_f1_E = np.nanmean([r['f1_E'] for r in rows])
-    mean_recall_E = np.nanmean([r['recall_E_topK'] for r in rows])
+    # D-40: rows where the Hamiltonian energy never crossed the v1
+    # critical thresholds are tied at AUC=0.5/F1=0.0 by construction --
+    # not a measurement of chance-level discrimination. Averaging them
+    # in silently changes the PASS/FAIL verdict below. Report them
+    # separately instead of dropping them without a trace.
+    clean_rows, degenerate_rows = split_degenerate(rows)
+    if degenerate_rows:
+        names = ", ".join(f"{r['scenario']}(Re={r['Re']})" for r in degenerate_rows)
+        print(f"\n  NOTE: {len(degenerate_rows)}/{len(rows)} row(s) excluded from "
+              f"the Hamiltonian-energy averages below -- E was constant\n"
+              f"        (no coefficient ever crossed a critical threshold): {names}")
+    if not clean_rows:
+        print("\n  All rows are degenerate: no Hamiltonian-energy verdict can be computed.")
+        return
 
-    auc_c = [r.get('auc_c', np.nan) for r in rows]
-    f1_c = [r.get('f1_c', np.nan) for r in rows]
-    recall_c = [r.get('recall_c_topK', np.nan) for r in rows]
+    mean_auc_E = np.nanmean([r['auc_E'] for r in clean_rows])
+    mean_f1_E = np.nanmean([r['f1_E'] for r in clean_rows])
+    mean_recall_E = np.nanmean([r['recall_E_topK'] for r in clean_rows])
+
+    # same row set as the Hamiltonian averages above, so PASS/FAIL/TIE
+    # compares both sides on identical scenarios.
+    auc_c = [r.get('auc_c', np.nan) for r in clean_rows]
+    f1_c = [r.get('f1_c', np.nan) for r in clean_rows]
+    recall_c = [r.get('recall_c_topK', np.nan) for r in clean_rows]
     mean_auc_c = np.nanmean(auc_c)
     mean_f1_c = np.nanmean(f1_c)
     mean_recall_c = np.nanmean(recall_c)

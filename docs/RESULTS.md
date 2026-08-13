@@ -90,6 +90,30 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-37 | à **toute profondeur > 0**, le biais Z et les couplages décrivaient des grilles différentes | `H_edges` (6,6) contre `C_edges` (4,4) ; écart **0,05814 sur une échelle de 0,14107**, soit 41 % | `pytest tests/amr/test_patch_encoding_shapes.py` |
 | D-38 | trois gardes de `execute` qui ne tenaient que sur le chemin habituellement testé | marginales **0,5535 → 0,700** ; Powell borné ; tirs MPS restaurés | `pytest tests/quantum/test_runtime_contracts.py -k "bound or null_hamiltonian or optimizer"` |
 
+**Le diagnostic Phase 6** — `pipeline_verification.py` compare le classement
+par énergie hamiltonienne v1 aux patchs durs. Sur les artefacts réels
+`results/coefficients_{harris_tearing,kelvin_helmholtz}_Re400_N256_dim4.npz`,
+l'énergie v1 est **identiquement nulle sur toute la simulation** — aucun
+saut de cellule (`v_jump`, `B_jump`) n'y franchit jamais le seuil critique
+de `PhysicalMapper` (`RE_CRIT`/`RM_CRIT` = 1.0), vérifié en rejouant
+`compute_patch_coefficients` sur les 20 snapshots des deux scénarios,
+contre `mhd_rotor`/`orszag_tang` où le seuil est franchi (E non nul,
+100 %/70 % des cellules actives). Une énergie constante rend AUC/F1 égaux
+à leur valeur de hasard (0,5/0,0) **par construction du calcul**, pas par
+une mesure de non-discrimination — indiscernable à la lecture d'un vrai
+résultat au hasard.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-40 | la moyenne agrégée de `pipeline_verification.py` incluait des lignes à énergie constante (E≡0) comme si c'étaient de vraies mesures au hasard, tirant le verdict vers le bas en silence | sur les 4 scénarios canoniques (Re=400, N=256, dim=4) : AUC(E) **0,687 → 0,874**, F1(E) **0,364 → 0,729** — le verdict F1(E) vs F1(classique) passe de WARN (0,364 < 0,603) à PASS (0,729 > 0,654) une fois les 2 lignes dégénérées exclues et annotées plutôt que moyennées | `pytest tests/study/test_pipeline_verification_degenerate.py` |
+
+Pas une correction du calcul de l'énergie hamiltonienne elle-même (`src/`
+n'est pas touché : `RE_CRIT`/`RM_CRIT` restent ceux du contrat en vigueur,
+et la question de savoir si ce seuil convient aux scénarios lisses
+tearing/KH est une décision physique, pas un défaut de code — voir
+`DEFAUTS.md`). Uniquement le diagnostic `study/` qui ne doit plus confondre
+« aucun signal calculé » avec « chance mesurée ».
+
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
 tous rendaient un résultat plausible.
