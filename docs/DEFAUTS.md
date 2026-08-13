@@ -8,15 +8,21 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **6** |
+| **ouverts** — décision ou campagne requise | **7** |
 | **gelés** volontairement | 2 |
 
 Des deux qui restent, l'un demande la campagne elle-même, l'autre une décision
 qu'on peut prendre après. D-27 et D-37 sont sortis d'ici : corrigés, mesurés,
 verrouillés — ils vivent dans `RESULTS.md`.
 
-D-47 est le dernier arrivé : il ne bloque pas la réoptimisation mais il bloque
-la phase 4 et tout ce qui s'appuie sur sa sélection.
+D-47 bloque la phase 4 et tout ce qui s'appuie sur sa sélection, sans bloquer
+la réoptimisation.
+
+**D-48 est le dernier arrivé, et c'est le seul qui touche une lecture
+publiée** : la tendance décroissante de T11b est mesurée comme une propriété
+du schedule d'initialisation, pas du circuit. Aucun nombre publié n'a bougé —
+le master table reste à 180 / 164 / 16 / 0 — mais leur lecture demande une
+décision.
 
 **Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
 encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
@@ -489,8 +495,113 @@ pytest tests/study/test_no_private_curl_survives.py tests/study/test_t8_dns_exte
 
 ## D-48 — le « warm start classique » du QAOA ne lit pas la décision classique
 
-**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
-en cours. Ne pas reprendre D-48.
+**Où ça bloque.** La lecture publiée de T11b — *« mean progress 0.0854,
+monotonically decreasing with depth and negative by reps = 4 »* — et
+l'interprétation pré-spécifiée que le module en tire (*« une progression qui
+n'augmente pas avec la profondeur signifie que l'objectif déclaré n'est pas
+l'objectif optimisé »*) sont mesurées ici comme une propriété du **schedule
+constant**, pas du bras QAOA. Sous l'initialisation par défaut du dépôt — la
+rampe en `π/E_max` d'`execute()`, celle que `refinement.py` emprunte tant que
+son `warm_start_cache` est vide — la progression moyenne double et la
+tendance en profondeur s'annule. Tant que la question n'est pas tranchée, on
+ne sait pas si T11b décrit le circuit ou son point de départ.
+
+**Comment on est tombé dessus.** Question 3 de `VIGIL.md`, en lisant
+`study/common/qaoa_inputs.py` en entier : `classical_warm_start_params(score_vqa,
+threshold_amr, reps)` ne consomme aucun de ses deux premiers arguments.
+
+**Ce qui est établi — le contrat.** Six entrées couvrant tout l'intervalle
+(score nul, score unité, score aléatoire, seuil 0 / 1 / 1e9), `reps = 2` :
+
+| | |
+|---|---|
+| sorties identiques bit-à-bit | **6/6** |
+| écart maximal | **0,0e+00** |
+| valeur rendue | `beta = (0,05 ; 0,05)`, `gamma = (0,15 ; 0,075)` |
+
+Les deux arguments sont morts. Le nom, la docstring (« from the classical AMR
+decision ») et l'aide CLI de `--warm-start` (« classical-score-derived »)
+annonçaient l'inverse. Ils sont corrigés dans le code ; **le schedule, lui,
+est inchangé bit-à-bit.**
+
+Ce qui aggrave la lecture : les appelants passent ces deux arguments **à côté
+de warm starts qui, eux, sont réels**. Dans `h0_optimiser_equivalence.solver_panel`,
+`sa_warm` et `greedy` démarrent sur `classical_init_spins(score_vqa, thr_amr, dim)`.
+Le bras QAOA, à trois lignes de là, reçoit un appel de forme identique qui ne
+lit rien. Et **aucun chemin déployé n'utilise ce schedule** : `refinement.py`
+enchaîne `warm_start_cache` (les paramètres optimaux du patch précédent), à
+défaut `None` → rampe `E_max`. La phase 5 (`run_phase5`) fait de même et ne
+sert le schedule constant qu'au **premier** instantané, sous `--warm-start`.
+Ce sont les études h0 / h3 qui l'appliquent à **chaque** appel.
+
+**Ce qui est établi — la conséquence sur un nombre publié.** Configuration
+publiée de `h0_qaoa_displacement` : `N=256`, `dim=2`, mapper v2, `k_opt=100`,
+`shots=4096`, `--n-snaps 2` (8 instantanés, 4 scénarios), reps 1 à 4. Le bras
+QAOA n'étant pas déterministe, **trois répétitions par bras et par
+profondeur** ; « séparé » veut dire que les enveloppes des trois répétitions
+ne se recouvrent pas.
+
+| reps | warm — schedule constant (ce que le code fait) | cold — rampe `E_max` (défaut du dépôt) | séparé ? |
+|---|---|---|---|
+| 1 | +0,1674  +0,1670  +0,1515 | +0,1884  +0,1775  +0,1836 | **oui** |
+| 2 | +0,1320  +0,0881  +0,1304 | +0,1939  +0,1983  +0,1876 | **oui** |
+| 3 | +0,0670  +0,0320  +0,0226 | +0,1689  +0,1980  +0,1856 | **oui** |
+| 4 | +0,0472  +0,0527  +0,0391 | +0,1934  +0,1697  +0,1858 | **oui** |
+
+| | warm | cold | publié |
+|---|---|---|---|
+| moyenne sur reps 1–4 | **+0,0914** | **+0,1859** | +0,0854 |
+| tendance reps 1 → 4 | −0,1202 / −0,1143 / −0,1124 → **−0,116** | +0,0050 / −0,0078 / +0,0022 → **−0,0002** | −0,172 |
+| décroît sur les 3 répétitions ? | **oui, 3/3** | **non** — deux tendances sur trois sont *positives* | « still decreasing » |
+
+Le bras warm **reproduit** la lecture publiée : moyenne du même ordre,
+tendance négative aux trois répétitions. Le bras cold ne la reproduit pas :
+progression **2,0×** plus haute et tendance nulle à ±0,006, de signe variable.
+L'écart entre bras dépasse la dispersion intra-bras aux **quatre**
+profondeurs.
+
+**Ce que cela ne dit pas.** Les décisions, elles, ne bougent pas : mesurées
+sur les 4 scénarios canoniques (`N=256`, `dim=2`, `reps=2`, 2 répétitions par
+bras), **0 différence de décision** entre warm et cold, masques tous à
+« raffiner partout » — c'est-à-dire la dégénérescence de D-45 / D-47. Les
+lignes T11 du master table (`QAOA p1/p2 mask match`, référence 1,000) sont
+donc **insensibles** à ce choix. Seules les **trois lignes T11b** en
+dépendent. Le master table reste à **180 / OK 164 / DIFF 16 / MISSING 0**.
+
+**Conséquence secondaire, mesurée, non numérotée.** `aggregate_master_table.rows_t11b`
+épingle `mean variational progress` à `0,0854` avec la tolérance globale
+`TOL = 0,002`. Les trois répétitions du bras warm rendent **0,1034 / 0,0850 /
+0,0859** — une dispersion de **0,018, soit 9× la tolérance**. Cette ligne ne
+peut pas discriminer à sa propre précision : son statut OK/DIFF est décidé
+par le tirage. C'est le piège du seuil calibré sur une grandeur non
+reproductible que `VIGIL.md` décrit ; la règle y répond « changer de
+**grandeur**, pas de seuil ». Non fait : choisir la grandeur de remplacement
+est une décision, pas une correction mécanique.
+
+**Où on en est — trois options, aucune appliquée.**
+
+1. **Laisser tel quel, en le nommant.** Le schedule reste constant, T11b garde
+   ses nombres, et la lecture publiée est requalifiée : elle décrit le circuit
+   *partant d'un schedule fixe*, pas le circuit en général. Coût : la phrase
+   « l'objectif déclaré n'est pas l'objectif optimisé » perd sa portée
+   générale.
+2. **Rejouer T11b sur la rampe `E_max`**, c'est-à-dire l'initialisation que le
+   pipeline déployé emprunte réellement. Déplace les trois lignes T11b
+   (+0,0854 → ≈ +0,186 ; −0,172 → ≈ 0). C'est la seule option qui fait dire à
+   T11b ce que son titre annonce — « où se situe la décision réellement prise
+   par le pipeline ».
+3. **Rendre le warm start réellement dérivé du score**, ce que son nom promet.
+   Nouvelle mesure à faire de bout en bout ; ni les nombres de l'option 1 ni
+   ceux de l'option 2 ne s'y transportent.
+
+Rien n'est appliqué : les trois déplacent ou requalifient un nombre publié, et
+`VIGIL.md` réserve cela à USER. Le code porte désormais la déviation là où
+elle vit, et un test l'épingle.
+
+```bash
+pytest tests/study/test_warm_start_is_constant.py     # 10 tests
+python study/common/aggregate_master_table.py         # 180 / 164 / 16 / 0
+```
 
 ---
 

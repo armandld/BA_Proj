@@ -540,6 +540,27 @@ does not start from the classical answer.
 Mean progress 0.0854, monotonically decreasing with depth and negative by
 reps = 4. The ground state is uniform on 100% of snapshots.
 
+> **⚠ Lecture à requalifier — D-48.** Ces quatre lignes ont été obtenues avec
+> `warm_start_params = classical_warm_start_params(...)`, un schedule
+> **constant** `(β = 0,05 ; γ = 0,15/k)` qui, malgré son nom, ne lit ni le
+> score classique ni le seuil (écart mesuré **0,0e+00** sur 6 entrées) et
+> qu'**aucun chemin déployé n'emprunte**. Rejoué à la configuration publiée
+> avec l'initialisation par défaut du dépôt (rampe `π/E_max` d'`execute()`,
+> celle que `refinement.py` prend quand son cache est vide), 3 répétitions
+> par profondeur : progression moyenne **+0,186** au lieu de +0,091, et
+> tendance reps 1 → 4 de **−0,0002** au lieu de −0,116 — plate, de signe
+> variable d'une répétition à l'autre. Les deux bras sont séparés aux quatre
+> profondeurs.
+>
+> **Les nombres ci-dessus ne sont pas retirés et n'ont pas bougé** : ils
+> décrivent exactement ce que le code exécute. Ce qui est en cause est la
+> phrase qu'on en tire — « une progression qui n'augmente pas avec la
+> profondeur signifie que l'objectif déclaré n'est pas l'objectif optimisé ».
+> Mesurée, elle vaut pour ce schedule-là, pas pour le circuit. Les décisions,
+> elles, ne bougent pas (0 différence sur 4 scénarios), donc les lignes T11
+> `QAOA p1/p2 mask match` sont intactes. Trois options et leur coût :
+> `docs/DEFAUTS.md` D-48.
+
 ### T12 at N=256
 
 dim=8 orbit error: classical route **0.0146** (flip0 0.0078, flip1 0.0156,
