@@ -355,6 +355,36 @@ côté-là de l'axe) ; bord **périodique** ; warm start **absent** ; optimiseur
 bord borné, backend échantillonné, `depth > 0`, `dim = 3 / 4`, et l'axe des
 anomalies avancées (D-51).
 
+### `study/h3_representation/h3_size_scan.py` — lu en entier
+
+T26, la tâche écrite pour répondre à l'objection que sa propre docstring
+nomme comme « la faiblesse centrale de toute l'étude » : *à 8 qubits,
+évidemment qu'il ne se passe rien*. **Un module d'une honnêteté inhabituelle,
+et un défaut de reporting.**
+
+| lu | verdict |
+|---|---|
+| `greedy_agrees_with_exhaustive` | **D-57** — calculé, rangé dans le JSON, **jamais imprimé ni contrôlé**, alors que l'en-tête annonce « validated at dim=2 » et que c'est le seul nombre qui autorise à lire `dim = 4` et `dim = 8`. Mesuré : **0,7500** au mappeur **v1**, le défaut de la tâche ; 1,0000 en v2. Le 0,75 est **déjà** dans `t26_size_scan_N256_v1.json`. Corrigé : colonne `proxy=exact`, dimensions non validées nommées, avertissement sur `< 1` |
+| le contrôle `--force-greedy` | **conçu correctement, et il passe** — c'est le module lui-même qui écrit que si le glouton rend des changements non nuls là où l'exhaustif rend 0, « le scan en taille ne mesure rien ». Rejoué à dim=2 sur les **deux** mappeurs : `changed = 0,0000` sur les quatre ablations des deux côtés. **Le proxy ne fabrique pas les changements qu'il rapporte** — donc D-57 est un défaut de reporting, pas une conclusion fausse |
+| nommage de l'artefact de contrôle (`_forcegreedy`) | **sain** — le mode de contrôle porte un nom distinct, avec en commentaire la raison : sans cela il écraserait le scan qu'il sert à valider (D9) |
+| distinction « changer une décision » / « mieux détecter » | **saine et explicite** — le F1 contre la vérité terrain L2 est calculé à côté de `changed`, et le module imprime le rappel lui-même |
+| balayage vide | **crie déjà** — `SystemExit("no input for any requested dim")` |
+| contrôle `full` non nul | **imprimé en WARNING**, non asserté — mais contrairement à T13 (D-54) il est ici comparé entre ablations et non à lui-même, donc il n'est pas tautologique |
+
+**Le point qui relie T26 à D-53.** Les deux tâches bornent leur validation à
+`dim = 2`, et `dim = 3` — 18 qubits, **encore énumérable** — n'est dans les
+`--dims` par défaut d'aucune des deux. C'est pourtant là que le fondamental
+exact cesse d'être uniforme : mesuré, **6/12** instantanés uniformes à
+`dim = 3` en mappeur v1, contre **12/12** à `dim = 2`. `dim = 3` est la
+mesure la moins chère du dépôt qui ferait bouger l'une ou l'autre question.
+
+**Axes empruntés** : `dim` **2, 4, 8** (c'est l'objet même de la tâche) ;
+mappeurs **v1 *et* v2** ; hamiltonien **non nul** ; bord **périodique** ;
+warm start **présent** (le glouton part de la décision classique, comme le
+pipeline déployé) ; solveur **exhaustif *et* glouton**, avec le contrôle qui
+les compare. Non traversés : bras `classical_only`, backend échantillonné,
+bord borné, `depth > 0`, anomalies avancées (D-51).
+
 ### `study/h3_representation/h3_locality_proposition.py` — lu en entier
 
 Le **livrable théorique** du protocole v3 (Proposition 2). Un seul défaut, et
