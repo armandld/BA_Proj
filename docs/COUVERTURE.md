@@ -451,11 +451,29 @@ l'artefact mais aucune ligne du master table ne la cite.
 | `aggregate_v2.py`, motifs `glob` de `p5_qaoa`/`p7_sa` | **sains** — vérifiés caractère par caractère contre les noms réellement écrits par `qaoa_inputs.save_results` / `ising_terms_and_annealing.save_results` ; aucun n'a jamais produit d'artefact (phase 5/7 jamais exécutées), donc jamais exercés en pratique, mais corrects |
 | `aggregate_v2`, verdict « ZZ/ZZZZ add NO measurable value » | **bande codée en dur sans provenance** (`d_sten < 0.02`), même famille que le ±0,02 déjà noté dans `ising_terms_and_annealing`, et jamais cité dans `RESULTS.md`/`EVALUATION.md` (aucun `results/SUMMARY_*` n'existe — le script n'a jamais tourné jusqu'au bout). Le bloc entier est en outre imbriqué sous `d_site is not None` : une exécution où `d_sten` existe mais pas `d_site` n'imprime **aucun** verdict. Signalé, pas corrigé — ni l'un ni l'autre n'est une valeur fausse, et inventer une provenance serait pire que l'absence |
 
-Il ne reste **plus qu'un** fichier non relu dans `study/common/` :
-`aggregate_master_table.py` (exécuté à chaque passe, jamais relu
-fonction par fonction).
+### `aggregate_master_table.py` — lu en entier
 
-**Aucun de ces trois modules n'est « audité » au sens de la fiche** : ils
+Dernier fichier non relu de `study/common/` ; exécuté à chaque passe
+(`180 / 164 / 16 / 0`) mais jamais relu fonction par fonction avant cette
+passe.
+
+| lu | verdict |
+|---|---|
+| `_mean_where`, `collect`, `to_markdown`, sorties `.md`/`.csv`/`.npz` | **sains** — délèguent `status_of`/`make_row` à `aggregate_v3` (déjà audité), pas de logique de comparaison réimplémentée ici |
+| `TOL = 0.002` en tête de fichier | **mort, sans conséquence** — jamais référencé ailleurs dans le module ; `make_row` importé utilise son propre défaut (`aggregate_v3.TOL`, également 0,002). Les deux valeurs coïncidant, aucune ligne n'en dépend ; noté, pas corrigé |
+| les 12 lignes T17 (`spearman C/w`, `ZZ mass kept`), dictionnaires `ref` codés en dur | **D-58** — recopient le défaut que D-9 a corrigé, pas son résultat : la moitié des lignes `DIFF` du master table (12 sur 16) vient de ces deux dictionnaires, jamais mis à jour après `107c1cf` |
+| les autres extracteurs (`rows_t11`, `rows_t11b`, `rows_t12`, `rows_t13`, `rows_t13_degeneracy`, `rows_t14`, `rows_level3`, `rows_t18`, `rows_t20`, `rows_t22`, `rows_t23`, `rows_t24`, `rows_t25`, `rows_t26`, `rows_t15c`) | **sains** — rejoués contre les artefacts réels de `results/`, chacun retombe sur la valeur affichée par le master table (164 OK sur 180, dont les 4 explicables par D-48/T12-dim8/D-58 restent DIFF pour la raison déjà connue) |
+
+**Axes empruntés.** Aucun — ce module ne construit ni circuit ni décision,
+il relit des artefacts déjà produits par 15 tâches différentes et compare à
+des constantes. Le rejouer against `results/` (Re=400, N=256 et N=64 selon
+la tâche, 4 folds Level-3, dim 2/4/8 selon `t26`) est la seule forme de test
+qui s'applique ici, et c'est celle utilisée pour trouver D-58.
+
+`study/common/` **est maintenant lu en entier**, module par module.
+
+**Aucun de ces trois modules (`qaoa_inputs.py`, `aggregate_v2.py`,
+`aggregate_v3.py`) n'est « audité » au sens de la fiche** : ils
 ont été lus en entier et, pour `qaoa_inputs.py`, mesurés là où une mesure
 tranchait — mais aucun test ne traverse leurs axes avec des données réelles
 (seuls les extracteurs purs de `aggregate_v3.py` le sont, sur données
