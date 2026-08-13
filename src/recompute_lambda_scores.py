@@ -310,13 +310,24 @@ def _pareto_front(points):
 
 
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
+    """Médiane par classe. Copie de celle d'`analyze_hyperparams`.
+
+    D-61, second site : la dernière classe est FERMEE. Le dernier bord vaut
+    `x.max()`, donc un `<` strict excluait de toute classe l'essai portant
+    la plus grande valeur du paramètre. Les deux copies doivent rendre la
+    même chose — `tests/pipeline/test_trend_last_bin_closed.py` le vérifie
+    en les comparant sur la même entrée.
+    """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
         return
     bins = np.linspace(x.min(), x.max(), n_bins + 1)
     centers, medians = [], []
     for k in range(n_bins):
-        mask = (x >= bins[k]) & (x < bins[k + 1])
+        if k == n_bins - 1:
+            mask = (x >= bins[k]) & (x <= bins[k + 1])
+        else:
+            mask = (x >= bins[k]) & (x < bins[k + 1])
         if mask.sum() >= 2:
             centers.append((bins[k] + bins[k + 1]) / 2)
             medians.append(np.median(y[mask]))

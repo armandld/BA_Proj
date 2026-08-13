@@ -52,6 +52,11 @@ def analyzer():
     return pytest.importorskip("analyze_hyperparams")
 
 
+@pytest.fixture(scope="module")
+def rescorer():
+    return pytest.importorskip("recompute_lambda_scores")
+
+
 def _trend_points(analyzer, x, y, **kw):
     """Ce que la fonction TRACE, pas ce que son source dit."""
     fig, ax = plt.subplots()
@@ -103,6 +108,26 @@ def test_too_few_points_still_draws_nothing(analyzer):
     """Garde inchangee : moins de 5 essais, pas de tendance."""
     assert _trend_points(analyzer, [0.0, 1.0, 2.0, 3.0],
                          [0.0, 1.0, 2.0, 3.0]) is None
+
+
+def test_both_copies_agree(analyzer, rescorer):
+    """`_add_trend` existe en DEUX exemplaires, mot pour mot.
+
+    D-61 vivait dans les deux. Corriger une copie et pas l'autre laisse le
+    défaut en place là où on ne le cherche plus — et rien ne le dirait. Ce
+    test compare ce que les deux TRACENT sur l'entrée qui sépare, pas leur
+    source : une réécriture de l'une reste permise tant que le résultat
+    tient.
+    """
+    x = [0.0, 1.0, 4.0, 5.0, 8.0, 12.0, 12.0]
+    y = [0.0, 0.0, 1.0, 1.0, 1.0, 100.0, 100.0]
+
+    a = _trend_points(analyzer, x, y, n_bins=3)
+    b = _trend_points(rescorer, x, y, n_bins=3)
+    assert a is not None and b is not None
+    np.testing.assert_allclose(a[0], b[0])
+    np.testing.assert_allclose(a[1], b[1])
+    assert b[1][-1] == pytest.approx(100.0)
 
 
 def test_frozen_study_last_median(analyzer):
