@@ -192,9 +192,30 @@ franchissent leur seuil ensemble.
 **180 lignes, OK = 164, DIFF = 16, MISSING = 0** — exactement l'état
 documenté, donc D-45 / D-46 / D-47 n'ont déplacé **aucun** nombre publié.
 
-Non lus dans `study/common/` : `aggregate_v2.py`, `aggregate_v3.py`,
-`ising_terms_and_annealing.py`, `qaoa_inputs.py`,
-`aggregate_master_table.py` (exécuté, pas relu).
+Non lus dans `study/common/` : `aggregate_master_table.py` (exécuté, pas
+relu). `ising_terms_and_annealing.py` était marqué « non lu » ici alors que
+la section précédente le couvre déjà en entier — mention corrigée, pas une
+nouvelle lecture.
+
+**Lus en entier cette passe : `qaoa_inputs.py`, `aggregate_v2.py`,
+`aggregate_v3.py`.**
+
+| fichier / fonction | verdict |
+|---|---|
+| `qaoa_inputs._psi_from_pipeline` | **sain** — `angles` reçu de `_prepare_vqa_input` est déjà le 4-tuple `(theta_h, theta_v, psi_h, psi_v)` (`PhysToAngle.map_to_angles`), donc son dépaquetage à 4 variables par l'appelant est correct malgré l'apparence d'un retour à une seule valeur |
+| `qaoa_inputs.prepare_qaoa_inputs`, réduction en patchs | **même opérateur dépareillé que D-47** (champs moyennés par bloc, score max-poolé) : c'est le même calcul que `exact_diagonalisation.build_patch_hamiltonian`, déjà mesuré « réel mais pas la cause » — pas une nouvelle piste, la dégénérescence D-47 couvre aussi ce chemin |
+| `qaoa_inputs.run_phase5`, `is_hard_all` chargé puis jamais lu | **gaspillage, pas une valeur fausse** — `gt_refine` recalcule `l2_all >= l2_threshold`, exactement la formule qui a produit `is_hard` dans `hard_patch_labels.py:209` |
+| `aggregate_v2.py`, motifs `glob` de `p5_qaoa`/`p7_sa` | **sains** — vérifiés caractère par caractère contre les noms réellement écrits par `qaoa_inputs.save_results` / `ising_terms_and_annealing.save_results` ; aucun n'a jamais produit d'artefact (phase 5/7 jamais exécutées), donc jamais exercés en pratique, mais corrects |
+| `aggregate_v2.py`, seuil `d_sten < 0.02` du verdict | **valeur sans provenance, non corrigée** — jamais cité dans `RESULTS.md`/`EVALUATION.md`, aucun `results/SUMMARY_*` n'existe : le script n'a jamais tourné jusqu'au bout. Signalé, pas corrigé — inventer une provenance serait pire que l'absence |
+| `aggregate_v3.py` | **D-49** : les `ref` codés en dur sont le baseline V3 archivé (`docs/archive/RESULTS_V3.md`), pas `docs/RESULTS.md` — corrigé (étiquetage), voir `RESULTS.md` |
+
+**Axes empruntés par cette lecture : aucun** — les trois fichiers sont lus
+fonction par fonction, mais `qaoa_inputs.py` et `aggregate_v2.py` n'ont
+jamais produit d'artefact réel (phase 5/7/10/11/12 absentes de `results/`)
+et `aggregate_v3.py` ne le peut plus structurellement (D-49). Aucun test ne
+les traverse avec des données réelles ; seuls leurs extracteurs purs
+(`aggregate_v3.py`) sont couverts par `tests/study/test_t10_aggregate.py`
+sur données synthétiques.
 
 ---
 

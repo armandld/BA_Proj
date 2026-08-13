@@ -494,13 +494,6 @@ en cours. Ne pas reprendre D-48.
 
 ---
 
-## D-49 — `aggregate_v3.py` valide contre le baseline V3 archivé, pas contre `RESULTS.md`
-
-**Réservation du numéro.** Entrée en cours d'écriture — mesure faite, rédaction
-en cours. Ne pas reprendre D-49.
-
----
-
 ## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et

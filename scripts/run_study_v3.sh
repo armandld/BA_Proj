@@ -2,20 +2,29 @@
 # ============================================================
 # V3 Task 10 - Orchestration (protocole v3, section 5.4)
 #
+# NE FONCTIONNE PLUS (D-49, docs/DEFAUTS.md). Ce script invoque neuf
+# generateurs (t1_feature_selection.py, t1b_cone_curve.py,
+# t4_blocked_split.py, t5_v1_psi_loso.py, t6_dynamic_gt.py,
+# t7_horizon.py, t9_prop2_check.py, phase11_upper_bound.py,
+# phase11b_loso.py) qui n'existent plus dans ce depot, sous un chemin
+# `study/v3/` qui n'existe plus non plus (voir CLAUDE.md pour
+# l'arborescence actuelle : les generateurs restants vivent dans
+# `study/<hypothese>/`, la table dans `study/common/aggregate_v3.py`).
+# Le garde-fou ci-dessous echoue avant meme d'atteindre ce probleme,
+# `study/results/` n'existant pas non plus (les donnees sont a la
+# racine, `results/`).
+#
+# Conserve pour l'historique de la commande documentee au protocole ;
+# ne pas debugger les chemins en pensant le remettre en etat sans lire
+# D-49 d'abord — la question qu'il pose (reconstruire les 9 generateurs,
+# ou archiver ce script et aggregate_v3.py) n'est pas tranchee.
+#
 # `bash study/v3/run_study_v3.sh --all` regenere chaque chiffre
 # titre depuis le commit tague, puis produit la table maitresse
-# auto-verifiante (t10_aggregate.py, statut OK/DIFF/MISSING par
-# ligne contre les references de study/v3/RESULTS.md).
+# (statut OK/DIFF/MISSING par ligne contre le baseline V3 ARCHIVE,
+# pas contre docs/RESULTS.md — voir D-49).
 #
-# NB chemin : la section 5.4 cite `study/run_study_v3.sh` ; la
-# tache 10 (section 8.3) et le garde-fou "tout nouveau code dans
-# study/v3/" placent le script ici. Resolution : study/v3/.
-#
-# Pre-requis : study/results/ contient les donnees phases 1-2
-# (dns_*.npz + patches_*.npz). La regeneration des DONNEES n'est
-# pas incluse (heures de DNS) : utiliser study/v3/dns_extension.py.
-#
-# Usage :
+# Usage (documentaire seulement) :
 #   bash study/v3/run_study_v3.sh --all          # tout (~30-40 min)
 #   bash study/v3/run_study_v3.sh --skip-t6      # sans le pilote t6
 #   bash study/v3/run_study_v3.sh --only t4 t9   # sous-ensemble
