@@ -325,7 +325,7 @@ def analyze_snapshot(vx, vy, Bx, By, N, n_patches, Re,
     # ci-dessus : la porte porte zero bit dans les deux sens.
     #
     # On n'y touche PAS le verdict — quel operateur `promising` doit porter
-    # est une question ouverte pour l'humain (voir DEFAUTS.md D-46). On rend
+    # est une question ouverte pour l'humain (voir DEFAUTS.md D-47). On rend
     # la degenerescence VISIBLE, au lieu de la laisser lire comme un succes.
     exact_refine = comparison["exact_refine"]
     classical_refine = comparison["classical_refine"]
@@ -464,7 +464,7 @@ def run_phase4(dns_path, patches_path, n_patches, use_v2=False):
         print(f"    ... DEGENERATE: {len(degenerate_snaps)}/{len(all_results)}"
               f" — decision exacte constante sur les snapshots "
               f"{degenerate_snaps} : le fondamental ne distingue aucune "
-              f"cellule, le F1 ne mesure pas un accord (DEFAUTS.md D-46)")
+              f"cellule, le F1 ne mesure pas un accord (DEFAUTS.md D-47)")
 
     meta = {
         "scenario": scenario, "Re": Re, "N": N,

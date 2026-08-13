@@ -16,7 +16,7 @@ un plafond de 20 ; Re=400, N=256, 4 scenarios canoniques, 40 snapshots) :
 
 Deux predicteurs constants rendent le MEME F1 par construction : la porte ne
 peut ni retenir ni rejeter, elle porte zero bit. `promising` reste inchange
-— quel operateur il doit porter est une decision humaine ouverte (D-46) —
+— quel operateur il doit porter est une decision humaine ouverte (D-47) —
 mais la degenerescence est desormais annoncee.
 
 Ces tests echouent sur la version d'avant : `degenerate_decision`,
