@@ -426,6 +426,13 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     _record("classical_init", init, 0.0)
 
     # --- QAOA a profondeurs croissantes ------------------------------
+    # D-48 : malgre son nom et sa signature, `classical_warm_start_params`
+    # ne lit ni `score_vqa` ni `thr_amr` (mesure : sortie identique
+    # bit-a-bit sur 6 entrees, ecart 0,0e+00). Le bras QAOA n'est donc PAS
+    # warm-starte sur la decision classique comme le sont `sa_warm` et
+    # `greedy` ci-dessus — il part d'un schedule constant. Ce qui porte la
+    # decision classique dans le bras QAOA, c'est theta = 2 asin(sqrt(score)),
+    # pas ces (beta, gamma).
     if run_qaoa:
         for reps in qaoa_reps:
             ws = classical_warm_start_params(score_vqa, thr_amr, reps)

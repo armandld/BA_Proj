@@ -192,30 +192,54 @@ franchissent leur seuil ensemble.
 **180 lignes, OK = 164, DIFF = 16, MISSING = 0** — exactement l'état
 documenté, donc D-45 / D-46 / D-47 n'ont déplacé **aucun** nombre publié.
 
-Non lus dans `study/common/` : `aggregate_master_table.py` (exécuté, pas
-relu). `ising_terms_and_annealing.py` était marqué « non lu » ici alors que
-la section précédente le couvre déjà en entier — mention corrigée, pas une
-nouvelle lecture.
+`ising_terms_and_annealing.py` était marqué « non lu » plus haut alors que
+la section 1b le couvre déjà en entier — mention corrigée, pas une nouvelle
+lecture.
 
-**Lus en entier cette passe : `qaoa_inputs.py`, `aggregate_v2.py`,
-`aggregate_v3.py`.**
+### `qaoa_inputs.py` — lu en entier
 
-| fichier / fonction | verdict |
+Le module qui fabrique les entrées QAOA de la phase 5 et des études h0 / h3.
+Deux passes concurrentes l'ont lu cette nuit ; verdicts fusionnés ici.
+
+| lu | verdict |
 |---|---|
-| `qaoa_inputs._psi_from_pipeline` | **sain** — `angles` reçu de `_prepare_vqa_input` est déjà le 4-tuple `(theta_h, theta_v, psi_h, psi_v)` (`PhysToAngle.map_to_angles`), donc son dépaquetage à 4 variables par l'appelant est correct malgré l'apparence d'un retour à une seule valeur |
-| `qaoa_inputs.prepare_qaoa_inputs`, réduction en patchs | **même opérateur dépareillé que D-47** (champs moyennés par bloc, score max-poolé) : c'est le même calcul que `exact_diagonalisation.build_patch_hamiltonian`, déjà mesuré « réel mais pas la cause » — pas une nouvelle piste, la dégénérescence D-47 couvre aussi ce chemin |
-| `qaoa_inputs.run_phase5`, `is_hard_all` chargé puis jamais lu | **gaspillage, pas une valeur fausse** — `gt_refine` recalcule `l2_all >= l2_threshold`, exactement la formule qui a produit `is_hard` dans `hard_patch_labels.py:209` |
-| `aggregate_v2.py`, motifs `glob` de `p5_qaoa`/`p7_sa` | **sains** — vérifiés caractère par caractère contre les noms réellement écrits par `qaoa_inputs.save_results` / `ising_terms_and_annealing.save_results` ; aucun n'a jamais produit d'artefact (phase 5/7 jamais exécutées), donc jamais exercés en pratique, mais corrects |
-| `aggregate_v2.py`, seuil `d_sten < 0.02` du verdict | **valeur sans provenance, non corrigée** — jamais cité dans `RESULTS.md`/`EVALUATION.md`, aucun `results/SUMMARY_*` n'existe : le script n'a jamais tourné jusqu'au bout. Signalé, pas corrigé — inventer une provenance serait pire que l'absence |
-| `aggregate_v3.py` | **D-49** : les `ref` codés en dur sont le baseline V3 archivé (`docs/archive/RESULTS_V3.md`), pas `docs/RESULTS.md` — corrigé (étiquetage), voir `RESULTS.md` |
+| `classical_warm_start_params` | **D-48** — schedule **constant** : ni `score_vqa` ni `threshold_amr` n'entrent dans le résultat. Sortie identique bit-à-bit sur 6 entrées couvrant tout l'intervalle, écart **0,0e+00**. Le nom, la docstring et l'aide CLI annonçaient un warm start dérivé de la décision classique |
+| `prepare_qaoa_inputs`, réduction `block_avg` des champs / `block_max` du score | **déjà mesuré par D-47, ne pas y revenir** — l'écart d'opérateur est réel et n'est *pas* la cause de la dégénérescence (39/40 contre 40/40 avec le score assorti) ; c'est le même calcul que `exact_diagonalisation.build_patch_hamiltonian` |
+| `_psi_from_pipeline` | **sain** — délègue à `refinement._prepare_vqa_input`, l'encodeur réellement déployé, au lieu de le réimplémenter ; lève si l'encodeur refuse le patch plutôt que de fabriquer un psi. `angles` reçu est déjà le 4-tuple `(theta_h, theta_v, psi_h, psi_v)` (`PhysToAngle.map_to_angles`), donc son dépaquetage par l'appelant est correct malgré l'apparence d'un retour à une seule valeur |
+| `prepare_qaoa_inputs`, garde `with_psi` sans `prev_fields` | **saine** — lève explicitement : psi est une dérivée temporelle, il ne peut pas naître d'un instantané isolé |
+| `full_comparison.metrics` | **sain** — dénominateurs gardés par `max(·, 1)` ; sur un prédicteur vide `tp = 0` rend F1 = 0, pas une division par zéro |
+| `run_phase5`, chaînage du warm start | **sain et conforme au déployé** — enchaîne `optimal_params` d'un instantané au suivant, comme `refinement.py` le fait via `warm_start_cache`. Le schedule constant de D-48 n'y sert **que** pour le premier instantané, et seulement sous `--warm-start`. C'est h0 / h3 qui l'appliquent à **chaque** appel |
+| `run_phase5`, absence de patch prometteur | **crie** — `No promising patches -- skipping QAOA`, pas de balayage muet |
+| `run_phase5`, `is_hard_all` chargé puis jamais lu | **gaspillage, pas une valeur fausse** — `gt_refine` recalcule `l2_all >= l2_threshold`, exactement la formule qui a produit `is_hard` dans `hard_patch_labels.py:209` |
+| `prune_hamilt_params` | **incohérence docstring / code, sans conséquence mesurable** — la docstring annonce un élagage « par bloc » sur `H_edges`, `C_edges`, `K_plaquettes` (3 blocs) ; le code prend un maximum séparé pour `H0` et `H1`, `C0` et `C1` (5 groupes). Non corrigé : **aucun artefact `*depth*` n'existe dans `results/`** et aucune ligne de `RESULTS.md` ne cite l'élagage, donc aucun nombre publié n'en dépend — corriger sans mesure serait du risque sans gain |
 
-**Axes empruntés par cette lecture : aucun** — les trois fichiers sont lus
-fonction par fonction, mais `qaoa_inputs.py` et `aggregate_v2.py` n'ont
-jamais produit d'artefact réel (phase 5/7/10/11/12 absentes de `results/`)
-et `aggregate_v3.py` ne le peut plus structurellement (D-49). Aucun test ne
-les traverse avec des données réelles ; seuls leurs extracteurs purs
-(`aggregate_v3.py`) sont couverts par `tests/study/test_t10_aggregate.py`
-sur données synthétiques.
+### `aggregate_v2.py`, `aggregate_v3.py` — lus en entier
+
+| lu | verdict |
+|---|---|
+| `aggregate_v3.status_of` / `make_row` / `collect` | **sains** — `None` devient MISSING, `--strict` sort non nul sur DIFF ou MISSING, provenance (hash git + CLI) écrite dans le `.npz`. Les extracteurs indexent par `names.index(...)`, qui lève sur un nom absent : pas de repli silencieux |
+| `aggregate_v3.rows_t9`, sélection vide | **saine** — `mask.any()` faux donne `None`, donc MISSING, donc visible |
+| `aggregate_v3.py`, les 44 valeurs `ref` codées en dur | **D-49** — copiées verbatim de `docs/archive/RESULTS_V3.md` / `v3_master_table_ca7f815.md` (obsolètes par déclaration du dépôt lui-même), présentées comme « single source of truth » contre `docs/RESULTS.md` : **41/44 absentes** du fichier courant. Les 9 générateurs que `scripts/run_study_v3.sh` invoque pour regénérer ces chiffres n'existent plus. Corrigé — étiquetage seul, aucun nombre touché, voir `RESULTS.md` |
+| `aggregate_v2.py`, motifs `glob` de `p5_qaoa`/`p7_sa` | **sains** — vérifiés caractère par caractère contre les noms réellement écrits par `qaoa_inputs.save_results` / `ising_terms_and_annealing.save_results` ; aucun n'a jamais produit d'artefact (phase 5/7 jamais exécutées), donc jamais exercés en pratique, mais corrects |
+| `aggregate_v2`, verdict « ZZ/ZZZZ add NO measurable value » | **bande codée en dur sans provenance** (`d_sten < 0.02`), même famille que le ±0,02 déjà noté dans `ising_terms_and_annealing`, et jamais cité dans `RESULTS.md`/`EVALUATION.md` (aucun `results/SUMMARY_*` n'existe — le script n'a jamais tourné jusqu'au bout). Le bloc entier est en outre imbriqué sous `d_site is not None` : une exécution où `d_sten` existe mais pas `d_site` n'imprime **aucun** verdict. Signalé, pas corrigé — ni l'un ni l'autre n'est une valeur fausse, et inventer une provenance serait pire que l'absence |
+
+Il ne reste **plus qu'un** fichier non relu dans `study/common/` :
+`aggregate_master_table.py` (exécuté à chaque passe, jamais relu
+fonction par fonction).
+
+**Aucun de ces trois modules n'est « audité » au sens de la fiche** : ils
+ont été lus en entier et, pour `qaoa_inputs.py`, mesurés là où une mesure
+tranchait — mais aucun test ne traverse leurs axes avec des données réelles
+(seuls les extracteurs purs de `aggregate_v3.py` le sont, sur données
+synthétiques, via `tests/study/test_t10_aggregate.py`). Axes empruntés par
+les mesures de D-48 (`qaoa_inputs.py`) : bras **quantique**, backend
+**state_vector**, hamiltonien **non nul**, bord **périodique**, warm start
+**présent *et* absent** (c'est la mesure elle-même), optimiseur **COBYLA**,
+AMR **depth = 0**, `dim = 2` seulement. Restent non traversés : le bras
+`classical_only`, le backend échantillonné, le bord borné, l'hamiltonien
+nul, les autres optimiseurs, `depth > 0`, et `dim = 4 / 8`. `aggregate_v3.py`
+ne peut plus être traversé structurellement (D-49) au-delà de
+`upper_bound_loso_*`, seul artefact d'entrée encore présent.
 
 ---
 
