@@ -579,11 +579,38 @@ d'entraînement, et localisation temporelle de l'ordre 1 (D-25).
 | `to_common_grid`, `relative_l2`, `observed_order` | **sains** — coarsening par bloc réutilisé de la phase 2 (pas réimplémenté), norme L2 relative symétrique, `log2` protégé contre une erreur nulle ou négative (`NaN` explicite) |
 | `splitting_order_diagnostic` | **sain** — rejoue `_rk4_step` et `enforce_incompressibility` de V1 sans réimplémentation ; le diagnostic (ordre ≈4 sans projection, ≈1 avec) confirme mécaniquement D-25, déjà mesuré et corrigé ailleurs |
 | **la commande de reproduction elle-même**, ainsi que celle de 15 autres scripts `study/` et 2 lanceurs `scripts/` | **D-71** — `study/v4/t14_numerical_validation.py` (et 15 chemins frères) n'existent plus depuis la réorganisation `17d983d` ; corrigé, `RESULTS.md` |
+| l'**opérateur** qui mesure `max\|div B\|/rms\|B\|` dans `evolve_to` | **D-72** — `dns_validation.div_B` est spectrale ; depuis D-25 le solveur ne projette plus B et le garantit **en FD4**. La ligne avait été lue, l'opérateur non : mesuré 3,9029e−02 contre 2,0266e−14 sur la configuration publiée, `all_checks_pass` True → False. Corrigé, `RESULTS.md` |
+
+**La même question posée à tous les consommateurs de l'opérateur — D-73.**
+D-72 trouvé, la question qui l'a produit a été passée à chaque site qui
+mesure une divergence : *depuis D-25, qui mesure B avec un opérateur que le
+solveur ne garantit plus ?* Six sites importent de `dns_validation` ; un
+seul autre pesait sur une décision, et c'était le plus coûteux —
+`validate_one`, la porte de **chaque DNS nouvellement générée**. Mesuré de
+bout en bout : elle rejetait une trajectoire saine (`divB 1,6e-02` contre un
+seuil de 1e−3 ; assorti **5,0573e−06**). Corrigé dans `dns_extension`, le
+fichier gelé intact, `RESULTS.md`. Les deux autres sites sont sains :
+`tests/study/test_t8_dns_extension.py` mesure la **vitesse**, qui est bien
+projetée spectralement (opérateur assorti), et `dns_validation.main` est le
+chemin gelé lui-même.
+
+**Ce que la passe précédente avait manqué, et pourquoi.** La ligne du haut
+déclarait `evolve_to` **sain** après avoir vérifié la forme « variable locale
+non réécrite » — vérification juste, et toujours valable. Mais elle portait
+sur le `dt`, pas sur l'**opérateur** de l'autre moitié de la même ligne. Un
+module se relit aussi par les grandeurs qu'il mesure et par l'opérateur qui
+les produit, pas seulement par ses fonctions : c'est exactement ce que la
+fiche appelle regarder « par les configurations ». D-72 est le second défaut
+de ce dépôt trouvé dans du code déclaré audité.
 
 **Axes empruntés** : aucun de la fiche — ce module ne construit ni circuit
 ni décision, il valide le solveur MHD lui-même sur `orszag_tang`, grilles
 32/64/128 (et 64/128/256 à N=256), Re dans et hors grille d'entraînement
-({200, 3200} contre {400, 800, 1200, 1600}).
+({200, 3200} contre {400, 800, 1200, 1600}). **Ajoutés par D-72** : l'axe
+**projection de B** (`PROJECT_B` False — le défaut — et True, qui referme
+l'écart entre les deux opérateurs et que le test d'épinglage surveille), et
+le scénario `mhd_rotor`, qui sépare onze ordres de grandeur là où
+`orszag_tang` n'en sépare que quatre à N=128.
 
 ### Un axe qui manquait à la fiche : les anomalies avancées — D-51
 
