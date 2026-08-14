@@ -1144,6 +1144,8 @@ contrats ont été lus et qu'un test emprunte ses configurations.
 | `reference_evolution` (T6) contre le défaut-modèle de `VIGIL.md` | `dt = min(sim.dt, reste)` **puis `sim.dt = dt`** : le solveur relit bien la valeur tronquée, ce n'est pas la « variable locale non réécrite » |
 | `coarsen_patch_window` (T6) ↔ `coarsen_field` de la phase 2 | moyenne de bloc restreinte à une fenêtre, identique |
 | `Jz` écrit à la main dans `hard_patch_labels` ↔ `solver.get_fluxes` | stencils identiques à l'octet — c'est le rotationnel **interne** à `classical_score` qui diverge, voir D-77 |
+| `fit_learned_h` : le champ en unités physiques ↔ le champ standardisé | `x·w_raw + b_raw` et `z·w_std + b_std` coïncident à **3,6e−15** sur 400 points ; la colonne à variance nulle (`Re` à un seul Reynolds) donne `scale_ = 1`, pas une division par zéro. **Réserve levée au passage** : la docstring annonçait `h = w·φ − b` alors que l'intercepte rendu est **additif** — appliquée telle quelle elle décale le champ de `2·b_raw` (mesuré : 2,01). Aucun consommateur du dépôt n'était touché (`h2b_blocked_split` et `h2b_scenario_specialisation` passent par `predict_h`) ; le contrat est aligné sur le calcul |
+| `rng.shuffle(Xp[:, k])` de l'importance par permutation | une tranche de base est une **vue** : la colonne est bien permutée dans le parent, les huit autres intactes (vérifié) — pas le piège du `copy()` implicite |
 
 **Configurations empruntées** — ce qui a réellement tourné pendant la passe :
 
@@ -1164,19 +1166,28 @@ existe, leur sortie non. À savoir avant de citer un de leurs nombres.
 **Défauts trouvés** : D-75 (12 sites ici sur 15), D-77, D-78, D-79, D-80,
 D-81, D-82 — détail et mesures dans `RESULTS.md`.
 
-**Une discipline vérifiée sur tout `study/`, pas seulement ici** : les 30
-appels de `best_threshold_f1` ont été relus un par un. **27 prennent leur
-seuil sur le train** — c'est la règle du dépôt, celle de `fit_eval`. Les
-**trois** exceptions étaient `h2b_variational_classifier` (D-81),
-`h2b_scenario_ablation` (D-82) et `h2b_random_split_bootstrap` (D-83),
-toutes trois sur le bras dont le script cherche à mesurer l'avantage ou la
-chute.
+**Une discipline vérifiée sur tout `study/` — et mon premier balayage était
+faux, il est corrigé ici.** J'avais écrit « 30 appels de `best_threshold_f1`,
+deux exceptions ». Les deux chiffres étaient faux, et une session concurrente
+l'a montré en réservant **D-83** sur un site que j'avais manqué.
 
-Ce document annonçait « 28 sur 30, deux exceptions » pendant une passe :
-D-83 était dans le balayage et lui a échappé, son appel étant enfermé dans
-une fermeture aux noms génériques (`best_thr(P_list, Y_list)`) sous un
-commentaire qui affirmait le contraire du code. Même motif que D-75 et
-D-76 — un balayage ne voit que la forme qu'on lui a apprise.
+La cause est exactement le piège que `VIGIL.md` décrit : j'avais balayé au
+**`grep`**, qui coupe les appels écrits sur plusieurs lignes. Refait à
+l'**AST**, en dépliant chaque appel et en lisant ses deux premiers arguments :
+
+| | |
+|---|---|
+| appels de `best_threshold_f1` dans `study/` | **37**, pas 30 |
+| seuil pris sur le **train** (la règle du dépôt, celle de `fit_eval`) | **32** |
+| seuil pris sur la **validation**, avant cette passe | **3** — `h2b_variational_classifier` ×2 (D-81), `h2b_scenario_ablation` (D-82), `h2b_random_split_bootstrap` (**D-83**, session concurrente) |
+| faux positifs de mon balayage `grep` | `h2b_learned_meanfield_h:245,247` — `Yt` y désigne les folds d'**entraînement** du LOSO, pas un jeu de test ; sains |
+| appels sur validation **délibérés**, ajoutés par D-81/D-82 | 4, sous le nom `f1_*_thr_on_val` : ce sont les anciens nombres, gardés pour que le biais reste mesurable |
+
+Les trois sites fautifs sont tous sur le bras dont le script cherche à
+mesurer l'avantage ou la chute. **Un balayage au `grep` ne suffit pas pour
+ce genre d'audit** — c'est la troisième fois que ce dépôt le paie (D-56 :
+« trois des onze sites ont été trouvés par l'AST, pas par la recherche de
+chaîne »).
 
 **Reste à faire sur ce module**, dans cet ordre : les 13 fichiers non lus,
 en commençant par ceux qui portent un artefact (`h2b_ceiling_random_split`
