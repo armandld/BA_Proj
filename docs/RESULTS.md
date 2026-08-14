@@ -5115,6 +5115,24 @@ hyperparamètres non réoptimisés.
 D-66 invisible pendant tout ce temps : un run qui n'a rien calculé rendait un
 nombre plausible. Il lève désormais.
 
+**Ce que le test d'épinglage a révélé.** La correction a fait tomber
+`test_zero_steps_silently_scores_the_worst_possible_cost` — un test qui
+figeait l'ancien comportement en le nommant « choix visible », et dont la
+docstring notait déjà le risque : *« exploitable par Optuna au lieu
+d'échouer »*. Il a fait exactement son travail : rendre le changement
+visible au lieu de le laisser passer.
+
+Le risque se chiffre. Avec les valeurs mesurées du run de référence
+(`phys = 0,140052`, `patch = 0,4067`), un run vide bat un run réel dès que
+
+    λ < phys / (1 − patch) = 0,2361
+
+À `LAMBDA_COST_SOFT = 0,4` le run vide perd (0,2857 contre 0,2162). Mais
+`recompute_lambda_scores` rescore les essais à λ = 0,0 / 0,1 / 0,2 — et sous
+ces trois valeurs, **un essai dégénéré devient le meilleur essai de la
+campagne**. Le test est remesuré, pas ajusté : l'ancienne valeur et la
+nouvelle sont toutes deux consignées.
+
 ## Ce que la vérification quantitative a confirmé
 
 Le pavage AMR, sur deux cartes successives du run réel : **aire cumulée
