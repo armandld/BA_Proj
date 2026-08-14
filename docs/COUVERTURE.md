@@ -1106,6 +1106,60 @@ sur une reproduction de la campagne depuis zéro.
 les artefacts `t22_unseen_*`) reste **non lu** : hors périmètre de cette
 passe, qui portait sur `closed_loop/` seul.
 
+## `study/h2b_prediction/` — passe du 14 août, lu en partie, et le partiel est dit
+
+19 fichiers, **6 549 lignes**, terrain neuf : le module n'apparaissait ni ici
+ni dans `DEFAUTS.md`. `closed_loop/` s'était fermé la veille sans entrée
+ouverte, donc c'était le suivant dans l'ordre de la fiche.
+
+**Lu en entier, fonction par fonction — 6 fichiers, ~2 100 lignes :**
+`h2b_ceiling_random_split.py` (461), `h2b_loso_transfer.py` (239),
+`h2b_loso_delta_ci.py` (240), `h2b_dynamic_ground_truth.py` (295),
+`h2b_feature_selection.py` (270), `h2b_train_linear_hamiltonian.py` (545).
+
+**Les 13 autres n'ont PAS été lus fonction par fonction.** Ils n'ont été
+traversés que par deux balayages mécaniques : l'audit AST des gardes
+d'entrée (D-75) et la vérification que chaque script accepte encore les
+drapeaux que les lanceurs lui passent (D-76). Dire « module audité » ici
+serait faux — au sens de ce document, un fichier n'est audité que quand ses
+contrats ont été lus et qu'un test emprunte ses configurations.
+
+**Vérifié et trouvé sain**, mesuré et non supposé :
+
+| ce qui a été vérifié | comment |
+|---|---|
+| alignement instantanés DNS ↔ `patches_*` | 20 instantanés de part et d'autre, vecteur `t` identique — un décalage aurait étiqueté chaque cellule avec le label d'un autre temps |
+| ordre de raveling `patch_l2_errors` ↔ `_block_avg` | même ordre C sur `(dim, dim)` : les labels et les features décrivent la même cellule |
+| `fit_eval` : seuil choisi sur **train**, appliqué sur val | pas de fuite du seuil ; la même discipline dans les quatre scripts qui l'importent |
+| `bootstrap_by_trajectory` tel que T29 l'utilise | bloc = instantané ; les indices passés comme valeurs flottantes et re-castés dans la statistique — le contrat est respecté |
+| `reference_evolution` (T6) contre le défaut-modèle de `VIGIL.md` | `dt = min(sim.dt, reste)` **puis `sim.dt = dt`** : le solveur relit bien la valeur tronquée, ce n'est pas la « variable locale non réécrite » |
+| `coarsen_patch_window` (T6) ↔ `coarsen_field` de la phase 2 | moyenne de bloc restreinte à une fenêtre, identique |
+| `Jz` écrit à la main dans `hard_patch_labels` ↔ `solver.get_fluxes` | stencils identiques à l'octet — c'est le rotationnel **interne** à `classical_score` qui diverge, voir D-77 |
+
+**Configurations empruntées** — ce qui a réellement tourné pendant la passe :
+
+| axe | emprunté | non emprunté |
+|---|---|---|
+| `dim` | 2, 4, 16 | 3, 8, 32, 64 |
+| variante de label | par scénario | `_globalthr`, `tau*` |
+| folds LOSO | les 4 scénarios canoniques | — |
+| `src/` | HEAD **et** `bb6a387^` (avant D-1) | — |
+| optimiseur de la phase 10 | la branche de **repli** Nelder-Mead (`cma` absent du conteneur) | la branche CMA-ES |
+| balayage vide | les 13 scripts mesurés code 0 → 1 | les 2 gardes non atteignables en ligne de commande (D-75) |
+
+**Ce que le module produit réellement** : sur 19 scripts, **deux seulement**
+ont un artefact dans `results/` — `upper_bound_*` (8 fichiers) et `t29_*`
+(4). Les tâches T1, T1b, T4, T5, T6, T7 n'ont laissé aucun `.npz` : leur code
+existe, leur sortie non. À savoir avant de citer un de leurs nombres.
+
+**Défauts trouvés** : D-75 (12 sites ici sur 15), D-77, D-78, D-79, D-80 —
+détail et mesures dans `RESULTS.md`.
+
+**Reste à faire sur ce module**, dans cet ordre : les 13 fichiers non lus,
+en commençant par ceux qui portent un artefact (`h2b_ceiling_random_split`
+est fait, restent les consommateurs de `upper_bound_*`) ; puis la variante
+`_globalthr` de T29, jamais rejouée ici.
+
 ---
 
 ## Tenir ce document à jour
