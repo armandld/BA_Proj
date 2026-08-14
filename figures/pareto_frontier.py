@@ -16,7 +16,7 @@ vision normale dE 33.6, contraste >= 3:1).
 
 Sortie : results/figures/pareto_frontier_{fold}.pdf et .png (+ .csv des points)
 Usage :
-  python study/v4/make_pareto_figure.py --fold ot
+  python figures/pareto_frontier.py --fold ot
 """
 import argparse, json, os, sys
 

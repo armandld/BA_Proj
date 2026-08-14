@@ -17,12 +17,12 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 58 défauts corrigés
+## Les 59 défauts corrigés
 
-*(58 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 60 corrections en tout. Le titre annonçait **56** avant l'ajout
-de D-68 et D-70 (D-69 n'entre pas ici : rapport seul, il vit dans
-`DEFAUTS.md`) ; il annonçait **53** avant que la fusion de la base n'apporte
+*(59 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 61 corrections en tout. Le titre annonçait **58** avant l'ajout
+de D-71 ; **56** avant l'ajout de D-68 et D-70 (D-69 n'entre pas ici : rapport
+seul, il vit dans `DEFAUTS.md`) ; **53** avant que la fusion de la base n'apporte
 D-10, D-66 et D-67 ; **41** pour 42 lignes numérotées avant l'ajout de D-52,
 D-54, D-55 et D-56. Le compte de tête est faux à chaque fusion — c'est
 exactement le défaut de registre que la section « Compte de tête inexact »
@@ -250,7 +250,7 @@ audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
 | D-64 | `import_Neon_data_to_local.py` — le **seul** code du dépôt qui supprime une étude Optuna — supprimait l'étude de **destination** avant d'avoir lu la **source**, puis rattrapait tout échec par un message ❌ et un code de sortie **0**. Un import qui n'a rien importé était indiscernable d'un import réussi, et la destination était déjà détruite | mesuré, deux SQLite (`--in-url` remplace Neon) : destination à **5 essais**, source ne portant pas l'étude → avant, `KeyError`, **code 0**, et **l'étude locale n'existe plus** ; après, **5 essais intacts**, code 0, ligne « destination laissée intacte ». Échec réel de copie (destination inouvrable) : **code 0 → code 1**. Import réel : inchangé, 2 → **7** essais copiés. **L'empreinte est dans le dépôt** : 8 des 10 bases de `results/hyperparams/optuna_studies/` portent le schéma Optuna complet et **zéro ligne**, et `classical_v2_phase2` / `classical_v2_phase3` pèsent **274 432** et **299 008** octets là où un schéma neuf en pèse **114 688** — des pages libérées, donc des lignes écrites puis supprimées. Ce n'est pas une preuve que ce script les a vidées ; c'est la fermeture du chemin qui le fait | `pytest tests/pipeline/test_import_never_destroys_destination.py` |
 | D-68 | `plot_amr_state` — la **seule** fonction de `src/visual.py` et `src/help_visual.py` qui s'exécute en production : `pipeline.py` l'appelle 4× par pas de verrouillage et sauve un PNG à chaque fois — étiquetait `Grid X` l'axe horizontal et `Grid Y` le vertical. `imshow` place l'axe 0 du tableau en **vertical** ; `Jz` étant indexé `[X, Y]` (`grid.py` : `AXIS_X = 0`, `AXIS_Y = 1`, et `get_fluxes` forme bien `dBy/dX − dBx/dY` avec `axis=0` pour X), l'axe horizontal porte **Y**. Les deux étiquettes nommaient donc l'axe de l'autre. La cause est écrite trois lignes plus haut : un commentaire annonçait « axis=1 est d/dx (colonnes), axis=0 est d/dy (lignes) », la convention `indexing='xy'` que `grid.py` désigne explicitement comme n'étant pas celle du dépôt. La figure **paraissait juste** — les cadres d'attention tombent bien sur les structures qu'ils désignent, vérifié — seule la lecture des positions était transposée | champ d'essai qui **sépare** (une cellule brillante hors diagonale, `Jz ≠ Jzᵀ`) : structure posée en **X=10, Y=40** au sens de `grid.py`, **relue sur la figure X=40, Y=10** avant, **X=10, Y=40** après. Seules les **étiquettes** changent : le tableau passé à `imshow` et les cadres sont bit-à-bit identiques, un test l'épingle. Aucun nombre publié ne bouge ; la géométrie des PNG déjà publiés non plus | `pytest tests/pipeline/test_amr_figure_axes.py` |
 | D-70 | `_hard_patches` (`study/h1_solver/h1_curl_convention_gap.py`) — la « vérité terrain » de durété utilisée par les métriques de classement de T31 (Spearman, F1 à budget apparié) : sa docstring promettait « même définition que `study/pipeline/hard_patch_labels.py` » (l'erreur L2 de reconstruction par grossissement en bloc, sommée sur les 4 champs, normalisée par le RMS global). Le corps calculait autre chose — l'écart-type intra-patch de la **norme** du champ (`sqrt(vx²+vy²+Bx²+By²)`) — une formule qui coïncide avec la canonique sur un champ lisse mais **s'inverse** dès qu'un patch oscille à magnitude constante : l'écart-type y est nul (rien ne « varie » en norme) alors que l'information fine y est totalement détruite par le grossissement en bloc, donc l'erreur de reconstruction canonique y est maximale | champ d'essai qui **sépare** : un patch en damier `vx=±1` (les 3 autres champs nuls dans ce patch, magnitude rigoureusement constante `= 1`), sur fond de bruit lisse. Ancienne formule : `0,0000` — **minimum** du champ entier, patch jugé le plus facile. `patch_l2_errors` (canonique) : `1,0314` — **maximum** du champ, patch le plus difficile. Classement inversé, pas seulement décalé. Nouvelle formule : identique à `patch_l2_errors` à **1,1e−16** près sur un champ aléatoire quelconque (4 champs, 32×32, 4×4 patches), et retrouve le damier comme patch le plus dur. Aucun nombre publié ne bouge — les artefacts `.npz` de T31 sont déjà signalés non reproductibles pour une autre raison (D-69, `DEFAUTS.md`), donc rien de publié aujourd'hui ne dépendait de cette version | `pytest tests/study/test_hard_patches_matches_canonical.py` |
-| D-71 | *(en cours — passe Vigil du 14 août, commandes de reproduction pointant sur `study/v4/...` : le dossier n'existe plus depuis la réorganisation `17d983d`. Numéro réservé avant rédaction)* | — | — |
+| D-71 | La réorganisation `17d983d` a déplacé **et** renommé chaque script de `study/v4/tNN_xxx.py` vers `study/<module>/<module>_xxx.py`, sans toucher les commandes de reproduction qui les citent : 16 chemins distincts dans `docs/RESULTS.md` (21 occurrences), les docstrings d'usage de 21 scripts, et surtout **deux lanceurs `scripts/` qui invoquaient réellement ces chemins** — `run_fold.sh` et `run_leak_free_campaign.sh` auraient échoué dès le premier appel Python. Le second portait un défaut composé, invisible tant qu'on ne regarde que la chaîne `study/v4/` : `$HERE`/`$ROOT` étaient calculés pour une profondeur de deux niveaux sous la racine (`study/v4/`, vraie au moment où le script a été écrit) et n'ont pas été réajustés pour `scripts/` (un seul niveau) — `ROOT` résolvait au **parent du dépôt**, `RESULTS="$ROOT/study/results"` à un chemin qui n'a plus existé après l'aplatissement de `study/results/` vers `results/`, et l'invocation Python utilisait `$HERE/t22_unseen_conditions.py`, un fichier qui n'a jamais vécu dans `scripts/` | mesuré, chaque script isolément : `run_fold.sh`, `root` résolvait à un dossier **hors du dépôt** (existant, donc `cd` réussissait, mais sans `study/` dedans) ; `run_leak_free_campaign.sh`, `fold_status()` sur un artefact réel (`results/t22_unseen_leak-free_ot.json`, `status=completed`) rendait **`absent`** avant correction (le chemin `RESULTS` ne menait nulle part), **`completed`** après. Les 21 fichiers `study/`/`figures/` : substitution mécanique vérifiée fichier par fichier contre l'arborescence réelle, flags CLI de chaque script inchangés (spot-check exhaustif des `add_argument` contre les commandes historiques) — aucune régénération d'artefact conservée, seul le git-hash de provenance aurait bougé. Exclus délibérément : `docs/archive/*` (déclaré obsolète, jamais cité), `results/v4_master_table.md` (artefact déjà généré, se corrige à la prochaine régénération réelle), et les citations narratives d'une campagne passée (`tests/study/test_silent_failure_sweep.py`, le paragraphe « Trap sweep » de ce fichier) — elles décrivent un fait vrai au moment où il a été écrit, pas une commande à rejouer | `pytest tests/study/test_repro_commands_point_to_real_files.py` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :
@@ -380,7 +380,7 @@ corriger sans la mesure, règle de `VIGIL.md`.
 
 ## T11 — Quantum-contribution attribution (audit P0)
 
-`study/v4/h0_optimiser_equivalence.py --N 64 --dim 2 --n-snaps 2`
+`study/h0_selection/h0_optimiser_equivalence.py --N 64 --dim 2 --n-snaps 2`
 
 At the **deployed size** (`VQA_N = 2` → 8 qubits, periodic root scan, i.e.
 exactly the configuration `refinement.py` solves at depth 0).
@@ -412,7 +412,7 @@ itself is uniform, so the solvers agree on a trivial problem.
 
 ## T11b — Does the QAOA optimise its own Hamiltonian? (audit P0)
 
-`study/v4/h0_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4`
+`study/h0_selection/h0_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4`
 
 Position of three points in marginal space: `m_theta` (amplitude encoding of
 the classical score alone), `m_qaoa` (optimised circuit), `m_gs` (exact
@@ -445,7 +445,7 @@ function. It is a ≤4%-in-norm perturbation of the amplitude encoding
 
 ## T13 — Causal ablation of term families (audit P1)
 
-`study/v4/t13_term_ablation.py --N 64 --dim 2 --n-snaps 2`
+`study/h3_representation/h3_term_ablation.py --N 64 --dim 2 --n-snaps 2`
 
 Exact ground state recomputed after zeroing each family (control `full`
 must change nothing).
@@ -502,7 +502,7 @@ manuscript.
 
 ## T12 — Equivariance and orbit error (audit P1)
 
-`study/v4/t12_equivariance.py` (dim=2 exact; dim=8 with annealed ground
+`study/h3_representation/h3_equivariance.py` (dim=2 exact; dim=8 with annealed ground
 state and a mandatory reproducibility control).
 
 Step 1 — the transformation must be a symmetry of the discrete solver:
@@ -547,7 +547,7 @@ annealing seeds disagree on 14–37% of patches. A decision defined as
 
 ## T14 — Numerical validation of the V1 solver (audit P1)
 
-`study/v4/t14_numerical_validation.py`
+`study/h1_solver/h1_solver_convergence.py`
 
 **(A) Self-convergence**, all solutions restricted to the coarsest grid:
 
@@ -731,7 +731,7 @@ divergence-free projection in `solver.py::step_full`.
 
 ## T15 — Level 3, closed-loop LOSO (audit P0, decisive experiment)
 
-`study/v4/t15_level3_closed_loop.py`
+`study/closed_loop/closed_loop_campaign.py`
 
 ### Status when this entry was written: driver built, campaign not yet run
 
@@ -796,7 +796,7 @@ protocol §1.1) and a single physics seed per fold.
 ### Recommended command for a one-day run
 
 ```
-nohup python study/v4/t15_level3_closed_loop.py \
+nohup python study/closed_loop/closed_loop_campaign.py \
       --n-trials 10 --n-trials-classical 5 \
       > logs/v4/level3.log 2>&1 &
 ```
@@ -834,7 +834,7 @@ to optimise.
 
 ### T15, fold `ot` (Orszag–Tang excluded from all tuning)
 
-`study/v4/t15_level3_closed_loop.py --folds ot --n-trials 4 --n-trials-classical 2`
+`study/closed_loop/closed_loop_campaign.py --folds ot --n-trials 4 --n-trials-classical 2`
 
 | endpoint | Q-HAS | tuned classical | Δ (Q−C) |
 |---|---|---|---|
@@ -861,7 +861,7 @@ to V1's own closed-loop numbers, not only to this fold.
 
 ### T15b, budget-matched classical arm (same fold)
 
-`study/v4/t15b_budget_matched.py --fold ot --max-iter 4` — bisection on the
+`study/closed_loop/closed_loop_budget_matched.py --fold ot --max-iter 4` — bisection on the
 classical threshold to reproduce the Q-HAS compute budget, everything else
 (DNS trace, hot start, hybrid budget, depth) held fixed.
 
@@ -915,7 +915,7 @@ the audit's budget-matched control on the fold measured.
 ## T17 — ZZ uncertainty window: the mechanism behind causal inertness
 
 ```
-python study/v4/t17_uncertainty_window.py --N 64 --steps 30
+python study/h3_representation/h3_uncertainty_window.py --N 64 --steps 30
 ```
 git hash: see `results/t17_uncertainty_window.npz`  ·  runtime ≈ 1 s
 (the four DNS spin-ups dominate; N=64, 30 steps each)
@@ -1022,7 +1022,7 @@ Tests: `tests/study/test_t17_uncertainty_window.py` (9).
 ## T18 — counterfactual: are the ZZ terms inert *without* the window?
 
 ```
-python study/v4/t18_window_counterfactual.py --N 256 --dim 2 --n-snaps 2
+python study/h3_representation/h3_window_counterfactual.py --N 256 --dim 2 --n-snaps 2
 ```
 runtime ≈ 2 s (reuses the stored DNS/patch inputs) · deployed v1 mapper
 
@@ -1193,7 +1193,7 @@ in its committed form could not have produced it.
 ## T15 — Level-3 fold `kh` (Kelvin–Helmholtz held out)
 
 ```
-bash study/v4/run_fold.sh kh
+bash scripts/run_fold.sh kh
 ```
 tuning: QAOA 4 trials (best train loss 0.2590), classical 2 trials (0.3841)
 
@@ -1289,7 +1289,7 @@ deviation. A gap smaller than ~2 standard deviations means a single run per
 arm cannot support a directional claim on that fold.
 
 ```
-python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
+python study/closed_loop/closed_loop_run_variance.py --fold kh --repeats 5
 ```
 
 **This is the strongest methodological caveat in the V4 set, and it applies
@@ -1416,7 +1416,7 @@ has to guess which one a number came from.
 ## T20 — Q-HAS run-to-run variance on fold `kh` (D11 quantified)
 
 ```
-python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
+python study/closed_loop/closed_loop_run_variance.py --fold kh --repeats 5
 ```
 5 Q-HAS runs + 2 classical controls, identical inputs, 3216 s.
 
@@ -1517,7 +1517,7 @@ point, whose completion the T19 trace audit verified.
 ### The robust statement
 
 ```bash
-python study/v4/t23_headline_counts.py     # recomputes the table below
+python study/closed_loop/closed_loop_headline_counts.py     # recomputes the table below
 ```
 
 | fold | n | aborted | less faithful | costlier | strictly dominated |
@@ -2043,9 +2043,9 @@ deserving its own line in the manuscript.
 ## T22 leak-free — D13 removed, and Q-HAS does not survive it
 
 ```bash
-python study/v4/t22_unseen_conditions.py --fold <f> --mode leak-free \
+python study/h4_transfer/h4_unseen_conditions.py --fold <f> --mode leak-free \
     --repeats 5 --matched-reference
-python study/v4/t24_leak_free_summary.py
+python study/closed_loop/closed_loop_leak_free_summary.py
 ```
 
 `--mode leak-free` replaces the QAOA arm's leaked threshold
@@ -2271,8 +2271,8 @@ numbers (`t24/*` rows).
 ## T25 — robustness to the physics, and the "≥ 3 seeds" requirement
 
 ```bash
-python study/v4/t25_physics_robustness.py --fold <f> --repeats 3
-python study/v4/t25_physics_robustness.py --fold <f> --recompute
+python study/h4_transfer/h4_physics_robustness.py --fold <f> --repeats 3
+python study/h4_transfer/h4_physics_robustness.py --fold <f> --recompute
 ```
 
 ### First: there is no physics seed to vary
@@ -2358,8 +2358,8 @@ this study makes.
 ## T26 — l'inertie des couplages est un artefact de PETITE TAILLE
 
 ```bash
-python study/v4/t26_size_scan.py --dims 2 4 8 --n-snaps 3 --mapper v1
-python study/v4/t26_size_scan.py --dims 2 --force-greedy   # contrôle
+python study/h3_representation/h3_size_scan.py --dims 2 4 8 --n-snaps 3 --mapper v1
+python study/h3_representation/h3_size_scan.py --dims 2 --force-greedy   # contrôle
 ```
 
 ### Pourquoi cette tâche existe

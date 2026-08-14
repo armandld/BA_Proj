@@ -39,9 +39,9 @@ DEVIATIONS PAR RAPPORT AU PROTOCOLE (a journaliser dans RESULTS) :
 Sortie : results/t15_level3_fold_{scenario}.json (incremental, resumable)
          results/t15_level3_summary.npz
 Usage :
-  python study/v4/t15_level3_closed_loop.py --list
-  python study/v4/t15_level3_closed_loop.py --folds OT --n-trials 12
-  nohup python study/v4/t15_level3_closed_loop.py --n-trials 40 \
+  python study/closed_loop/closed_loop_campaign.py --list
+  python study/closed_loop/closed_loop_campaign.py --folds OT --n-trials 12
+  nohup python study/closed_loop/closed_loop_campaign.py --n-trials 40 \
         > logs/v4/level3.log 2>&1 &
 """
 import argparse, json, os, sys, time

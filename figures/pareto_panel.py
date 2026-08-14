@@ -43,8 +43,8 @@ lecteur n'ait pas a deviner lequel il regarde.
 
 Sortie : results/figures/pareto_panel.pdf / .png / .csv
 Usage :
-  python study/v4/make_pareto_panel.py
-  python study/v4/make_pareto_panel.py --folds ot kh rotor tearing
+  python figures/pareto_panel.py
+  python figures/pareto_panel.py --folds ot kh rotor tearing
 """
 import argparse, json, os, sys
 

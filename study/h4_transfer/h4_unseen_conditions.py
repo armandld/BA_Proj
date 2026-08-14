@@ -56,7 +56,7 @@ un nombre de Reynolds different, ce qui est declare comme tel.
 
 Sortie : results/t22_unseen_{mode}_{fold}.json
 Usage :
-  python study/v4/t22_unseen_conditions.py --fold kh --mode unseen-ic
+  python study/h4_transfer/h4_unseen_conditions.py --fold kh --mode unseen-ic
 """
 import argparse, contextlib, io, json, os, sys, time
 

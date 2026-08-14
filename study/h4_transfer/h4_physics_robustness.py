@@ -47,7 +47,7 @@ magnitude, elle, reste hors de portee (n petit, cf. T20).
 
 Sortie : results/t25_physics_robustness_{fold}.json
 Usage :
-  python study/v4/t25_physics_robustness.py --fold kh --repeats 3
+  python study/h4_transfer/h4_physics_robustness.py --fold kh --repeats 3
 """
 import argparse, contextlib, io, json, os, sys, time
 

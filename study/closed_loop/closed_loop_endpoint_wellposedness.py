@@ -40,7 +40,7 @@ remplace pas le critere pre-enregistre, elle en teste la robustesse.
 
 Sortie : results/t21_endpoint_wellposedness.json
 Usage :
-  python study/v4/t21_endpoint_wellposedness.py
+  python study/closed_loop/closed_loop_endpoint_wellposedness.py
 """
 import argparse, json, os, sys
 

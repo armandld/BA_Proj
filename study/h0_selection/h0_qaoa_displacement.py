@@ -40,7 +40,7 @@ telle : elle signifie que l'objectif declare n'est pas l'objectif optimise.
 # artefacts (defaut D9, deja rencontre sur t13 et t19).
 Sortie : results/h0_qaoa_displacement_N{N}_dim{D}.npz
 Usage :
-  python study/v4/h0_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4
+  python study/h0_selection/h0_qaoa_displacement.py --N 64 --dim 2 --reps 1 2 3 4
 """
 import argparse, json, os, sys, time
 import numpy as np

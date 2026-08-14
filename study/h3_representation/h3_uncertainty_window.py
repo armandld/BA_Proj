@@ -41,7 +41,7 @@ V1 est lu, jamais modifie.
 
 Sortie : results/t17_uncertainty_window.npz
 Usage :
-  python study/v4/t17_uncertainty_window.py --N 64 --steps 30
+  python study/h3_representation/h3_uncertainty_window.py --N 64 --steps 30
 """
 import argparse, json, os, sys, time
 

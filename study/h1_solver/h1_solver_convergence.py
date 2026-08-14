@@ -27,7 +27,7 @@ solveur V1 (`MHDSolver`, importe, jamais reimplemente).
 
 Sortie : results/t14_numerical_validation.npz
 Usage :
-  python study/v4/t14_numerical_validation.py --scenario orszag_tang \
+  python study/h1_solver/h1_solver_convergence.py --scenario orszag_tang \
       --grids 32 64 128 --t-end 0.5 --re-out 200 3200
 """
 import argparse, json, os, sys, time

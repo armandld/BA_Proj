@@ -35,8 +35,8 @@ V1 n'est ni modifie ni contourne : on lit sa propre trace d'execution.
 
 Sortie : results/t19_arm_divergence_audit.json
 Usage :
-  python study/v4/t19_arm_divergence_audit.py --folds ot kh rotor tearing
-  python study/v4/t19_arm_divergence_audit.py --folds rotor --arms classical
+  python study/closed_loop/closed_loop_divergence_audit.py --folds ot kh rotor tearing
+  python study/closed_loop/closed_loop_divergence_audit.py --folds rotor --arms classical
 """
 import argparse, contextlib, io, json, os, re, sys, time
 

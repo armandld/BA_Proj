@@ -554,7 +554,7 @@ s'appuie.
 | `bootstrap_delta_ci` | **sain** — le bloc est le **scénario**, pas l'instantané (les instantanés d'une même trajectoire ne sont pas indépendants) ; refuse un seul scénario (`NaN`) plutôt qu'un intervalle vide de sens |
 | `verdict` | **sain** — n'affirme un sens que si l'IC95 exclut zéro des deux côtés ; `indécidable` sinon |
 | `_hard_patches` | **D-70** — docstring « même définition que `hard_patch_labels.py` », corps : une autre formule (écart-type intra-patch de la norme, pas l'erreur L2 de reconstruction par grossissement en bloc). Corrigé, `RESULTS.md` |
-| **la table publiée elle-même**, rejouée par sa propre commande | **D-70** — ne se reproduit plus à HEAD ; le verdict « dégrade » à dim=16 devient « indécidable ». Cause identifiée : le solveur a changé sous les 4 scénarios canoniques après l'écriture de T31 (D-25, D-26/D-27). Rapport seul, `DEFAUTS.md` |
+| **la table publiée elle-même**, rejouée par sa propre commande | **D-69** — ne se reproduit plus à HEAD ; le verdict « dégrade » à dim=16 devient « indécidable ». Cause identifiée : le solveur a changé sous les 4 scénarios canoniques après l'écriture de T31 (D-25, D-26/D-27). Rapport seul, `DEFAUTS.md` |
 | balayage vide | **crie** — `RuntimeError` explicite |
 
 **Axes empruntés** : bord **périodique** uniquement (le script n'instancie
@@ -566,8 +566,24 @@ mappeur **v2** publié, bras **classical_only** (le script ne construit que
 des scores, pas de décision QAOA), backend, warm start, optimiseur — aucun
 de ces axes n'entre dans ce que ce script mesure.
 
-`study/h1_solver/h1_solver_convergence.py` — **non encore lu**, laissé pour
-la prochaine passe sur ce module.
+### `study/h1_solver/h1_solver_convergence.py` (T14) — lu en entier
+
+`study/h1_solver/` **est maintenant lu en entier**, les deux fichiers du
+module couverts. T14 valide numériquement le solveur V1 : auto-convergence
+en maillage, conservation/contrainte solénoïdale, comportement hors grille
+d'entraînement, et localisation temporelle de l'ordre 1 (D-25).
+
+| lu | verdict |
+|---|---|
+| `evolve_to` — `sim.dt = min(sim.adapt_dt(cfl_target=cfl), t_end - t)` puis `sim.step_full()` | **sain** — question 4, forme « variable locale non réécrite » vérifiée explicitement : `adapt_dt` écrit `self.dt` ET le retourne, la ré-affectation qui suit (clip sur `t_end - t`) est bien relue par `step_full`, qui lit `self.dt` (pas un argument séparé). Pas le défaut-modèle de `VIGIL.md` |
+| `to_common_grid`, `relative_l2`, `observed_order` | **sains** — coarsening par bloc réutilisé de la phase 2 (pas réimplémenté), norme L2 relative symétrique, `log2` protégé contre une erreur nulle ou négative (`NaN` explicite) |
+| `splitting_order_diagnostic` | **sain** — rejoue `_rk4_step` et `enforce_incompressibility` de V1 sans réimplémentation ; le diagnostic (ordre ≈4 sans projection, ≈1 avec) confirme mécaniquement D-25, déjà mesuré et corrigé ailleurs |
+| **la commande de reproduction elle-même**, ainsi que celle de 15 autres scripts `study/` et 2 lanceurs `scripts/` | **D-71** — `study/v4/t14_numerical_validation.py` (et 15 chemins frères) n'existent plus depuis la réorganisation `17d983d` ; corrigé, `RESULTS.md` |
+
+**Axes empruntés** : aucun de la fiche — ce module ne construit ni circuit
+ni décision, il valide le solveur MHD lui-même sur `orszag_tang`, grilles
+32/64/128 (et 64/128/256 à N=256), Re dans et hors grille d'entraînement
+({200, 3200} contre {400, 800, 1200, 1600}).
 
 ### Un axe qui manquait à la fiche : les anomalies avancées — D-51
 

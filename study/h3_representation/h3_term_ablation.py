@@ -21,7 +21,7 @@ zero changement, ce qui valide la chaine de mesure elle-meme.
 
 Sortie : results/t13_term_ablation_N{N}_dim{D}.npz
 Usage :
-  python study/v4/t13_term_ablation.py --N 64 --dim 2 --n-snaps 2
+  python study/h3_representation/h3_term_ablation.py --N 64 --dim 2 --n-snaps 2
 """
 import argparse, json, os, sys
 import numpy as np

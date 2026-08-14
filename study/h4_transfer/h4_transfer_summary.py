@@ -32,7 +32,7 @@ a ete calibre sur la condition CANONIQUE : sur la condition inedite le
 
 Sortie : results/t22c_transfer_summary.json
 Usage :
-  python study/v4/t22c_transfer_summary.py
+  python study/h4_transfer/h4_transfer_summary.py
 """
 import argparse, json, os, sys
 

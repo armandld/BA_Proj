@@ -49,7 +49,7 @@ REGLE DE DECISION (pre-specifiee, avant execution) :
 Sortie : results/h0_optimiser_equivalence_N{N}_dim{D}.npz (+ hash git, args CLI)
 
 Usage :
-  python study/v4/h0_optimiser_equivalence.py --N 256 --dim 2 --n-snaps 3
+  python study/h0_selection/h0_optimiser_equivalence.py --N 256 --dim 2 --n-snaps 3
 """
 import argparse
 import json, os, sys, time

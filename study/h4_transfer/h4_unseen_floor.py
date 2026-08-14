@@ -38,7 +38,7 @@ bissections de t15b, donc ni choisi ni ajuste ici.
 
 Sortie : results/t22d_unseen_floor_{fold}.json
 Usage :
-  python study/v4/t22d_unseen_floor.py --fold tearing
+  python study/h4_transfer/h4_unseen_floor.py --fold tearing
 """
 import argparse, contextlib, io, json, os, sys, time
 

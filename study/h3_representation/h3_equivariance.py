@@ -38,7 +38,7 @@ solveur : aucune n'est postulee.
 # artefacts (defaut D9, deja rencontre sur t13 et t19).
 Sortie : results/t12_equivariance_N{N}_dim{D}.npz
 Usage :
-  python study/v4/t12_equivariance.py --N 64 --dim 2 --n-snaps 2
+  python study/h3_representation/h3_equivariance.py --N 64 --dim 2 --n-snaps 2
 """
 import argparse, json, os, sys, time
 import numpy as np

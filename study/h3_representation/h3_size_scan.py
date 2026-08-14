@@ -48,7 +48,7 @@ n'utilise pas l'exhaustif non plus.
 
 Sortie : results/t26_size_scan_N{N}.npz
 Usage :
-  python study/v4/t26_size_scan.py --dims 2 4 8 --n-snaps 3
+  python study/h3_representation/h3_size_scan.py --dims 2 4 8 --n-snaps 3
 """
 import argparse, json, os, sys, time
 

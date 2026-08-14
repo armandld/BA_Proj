@@ -29,7 +29,7 @@ LECTURE PRE-SPECIFIEE.
 
 Sortie : results/t15b_budget_matched_{fold}.json
 Usage :
-  python study/v4/t15b_budget_matched.py --fold ot --max-iter 5
+  python study/closed_loop/closed_loop_budget_matched.py --fold ot --max-iter 5
 """
 import argparse, json, os, sys, time
 import numpy as np
