@@ -131,8 +131,20 @@ def run_dim(dim, N, re_values, scenarios, max_snaps, seed, B, suffix):
         pred_sten = (r_sten["p"] > r_sten["thr"]).astype(int)
 
         ci = delta_ci(Yva, pred_site, pred_sten, traj, B, seed)
-        flags = [n for n, p in (("site", pred_site), ("sten", pred_sten),
-                                ("cls", pred_cls)) if constant_predictor(p)]
+        # D-79 : `constant` decide qui VOTE, et la quantite votee est
+        # F1(sten) - F1(site). Le predicteur classique n'y entre pas : son
+        # effondrement ne dit rien des deux modeles compares. Il etait
+        # pourtant dans la meme liste, et ecartait des folds dont les deux
+        # bras compares etaient sains — mesure sur le rejeu qui a produit
+        # l'artefact publie : `kelvin_helmholtz` ecarte avec un IC95
+        # entierement negatif (-0,027 [-0,050, -0,001]), donc decisif.
+        # L'effondrement classique reste imprime : c'est une information,
+        # pas un motif d'exclusion.
+        compared = [n for n, p in (("site", pred_site), ("sten", pred_sten))
+                    if constant_predictor(p)]
+        flags = list(compared)
+        if constant_predictor(pred_cls):
+            flags.append("cls")
         state = ("constant: " + ",".join(flags)) if flags else "ok"
 
         print(f"  {held:<18} {len(Yva):>8d} {Yva.mean():>6.3f} "
@@ -148,7 +160,10 @@ def run_dim(dim, N, re_values, scenarios, max_snaps, seed, B, suffix):
             f1_sten=_f1(Yva, pred_sten),
             delta=float(ci["estimate"]), ci_low=float(ci["ci_low"]),
             ci_high=float(ci["ci_high"]),
-            constant=",".join(flags), n_traj=int(ci["n_traj"]),
+            constant=",".join(flags),
+            # ce qui decide le vote : seuls les deux bras compares
+            constant_compared=",".join(compared),
+            n_traj=int(ci["n_traj"]),
         ))
     return out
 
@@ -158,10 +173,15 @@ def verdict(rows):
 
     Regle : un fold soutient « les voisins aident » si son IC95 est
     entierement > 0, « ils nuisent » s'il est entierement < 0. Les folds ou
-    un bras s'est effondre sur une constante ne votent pas — leur F1 ne
-    mesure pas un modele.
+    l'un des DEUX BRAS COMPARES (site, stencil) s'est effondre sur une
+    constante ne votent pas — leur F1 ne mesure pas un modele.
+
+    D-79 : le predicteur classique etait compte dans cette regle alors qu'il
+    n'entre pas dans F1(sten) - F1(site). Un fold dont les deux modeles
+    compares etaient sains pouvait donc etre ecarte parce qu'un TROISIEME
+    predicteur, etranger a la comparaison, etait constant.
     """
-    voting = [r for r in rows if not r["constant"]]
+    voting = [r for r in rows if not r.get("constant_compared", r["constant"])]
     helps = [r for r in voting if r["ci_low"] > 0]
     hurts = [r for r in voting if r["ci_high"] < 0]
     print(f"\n  folds retenus : {len(voting)}/{len(rows)} "
@@ -228,6 +248,7 @@ def main():
         ci_low=np.array([r["ci_low"] for r in all_rows]),
         ci_high=np.array([r["ci_high"] for r in all_rows]),
         constant=np.array([r["constant"] for r in all_rows]),
+        constant_compared=np.array([r["constant_compared"] for r in all_rows]),
         verdict_by_dim=np.array([f"{d}:{v}" for d, v in verdicts.items()]),
         label_suffix=args.label_suffix,
         cli_args=" ".join(sys.argv[1:]),
