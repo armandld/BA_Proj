@@ -5263,3 +5263,83 @@ publié « le terme ZZZZ était numériquement mort ».*
 **Décision ouverte.** Passer à la normalisation `√sig` rend le canal point X
 dimensionnellement cohérent avec le canal courant. C'est un second changement
 de `src/`, non pris.
+
+---
+
+# Les quatre familles de coefficients, et la correction dimensionnelle
+
+**Commandes.**
+`pytest tests/mapping/test_coefficient_families_contract.py -q` (14 tests)
+`pytest tests/mapping/test_xpoint_at_training_resolution.py -q` (11 tests)
+
+## Règle du banc : tout passe par la vraie fonction
+
+Aucun test de ce banc ne reconstruit la chaîne. Chaque assertion interroge
+`compute_coefficients` elle-même, puis `get_adaptive_flux` pour la partie
+qui vérifie que **le circuit reçoit bien ce que le banc mesure**.
+
+C'est une leçon payée : mon premier banc de points X reconstruisait les
+étages pour les inspecter, et ses 20 tests passaient à l'identique **après**
+une modification du mappeur. Un test qui ne voit pas `src/` changer ne
+verrouille rien.
+
+## Ce que chaque famille promet, et ce qu'elle fait
+
+| famille | contrat | verdict |
+|---|---|---|
+| `H_edges` | nul au seuil, signe qui bascule, subordonné aux couplages | **sain** |
+| `C_edges` | ferromagnétique, éteint loin du seuil | **sain** |
+| `K_plaquettes` | négatif, nul sans structure, répond à la structure | **sain** |
+| `K_xpoint` | X oui, O non, courant non | **sain** après correction |
+
+Mesures sur rotation solide (N=64) : `H = 6,02e−03`, `C = 1,78`,
+`K_plaquettes = 94,8`. Sur champ uniforme : tout à zéro. La fenêtre
+d'incertitude éteint le couplage à 10 σ du seuil d'un facteur **> 10⁶**.
+
+## Deux erreurs de ma part, toutes deux du même genre
+
+Mon test de subordination du biais Z a échoué deux fois avant de mesurer la
+bonne chose. Le code calcule `C_scale = median(|C|, |K|)` sur les valeurs
+**> 1e−10** ; j'ai d'abord pris `> 0` sur `|C|` seul (médiane 5,9e−22),
+puis `> 0` sur `|C|` et `|K|` (1,7e−22). Dans les deux cas la queue de la
+fenêtre gaussienne écrasait la distribution et la borne devenait absurde.
+
+**Le code était juste ; c'est le test qui mesurait autre chose.**
+Reproduire un calcul sans reproduire son filtre donne un faux verdict —
+c'est la même famille de piège que l'opérateur non assorti.
+
+## La correction dimensionnelle de `K_xpoint`
+
+`sqrt(det)` a les mêmes unités que `|Jz|` : tous deux sont des gradients de
+B. Le canal point X emploie donc désormais la normalisation et le seuil du
+canal courant (`jz_crit`), déjà définis.
+
+L'ancienne forme comparait `sig / (B0/dx)²` à `(RM_CRIT·η/(dx·B0))²` :
+`sig` est un gradient **au carré** normalisé par une seule puissance de
+`dx²`, puis comparé à un seuil lui-même au carré. Le rapport variait en
+**dx⁴** — le critère devenait moins susceptible de se déclencher à mesure
+que la grille se raffine, à la puissance quatre.
+
+| rapport signal/seuil | N=64 | N=128 | N=256 | loi |
+|---|---|---|---|---|
+| ancienne forme | 0,171 | 0,0105 | 0,0007 | dx⁴ |
+| **forme actuelle** | **0,414** | **0,1025** | **0,0256** | **dx²** |
+| `\|Jz\|`, référence | 5,137 | 1,349 | 0,341 | dx² |
+
+Vérifié à travers la vraie fonction, sur des nappes d'épaisseur décroissante :
+
+| | 8 cellules | 4 | 2 | 1 |
+|---|---|---|---|---|
+| N=128 | 0 | **0,232** | 0,848 | 1,810 |
+| N=256 | 0 | 0 | **0,212** | 0,693 |
+
+Le terme tire maintenant dès **4 cellules** à N=128, contre ≤3 auparavant.
+Et dans tous les cas où il tire, **son maximum est exactement au nul** —
+la suppression de la porte est ainsi confirmée à travers le chemin déployé,
+pas seulement sur une reconstruction.
+
+**Ce qui reste vrai malgré la correction :** sur les champs réels
+(`island_coalescence`, `harris_tearing`) le terme reste nul aux trois
+résolutions. Les nappes de courant y sont plus épaisses que le seuil
+n'exige. Ce n'est pas un défaut du coefficient — c'est que ces scénarios,
+à Rm = 800, sont résolus.

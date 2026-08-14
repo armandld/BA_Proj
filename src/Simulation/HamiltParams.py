@@ -557,18 +557,30 @@ class PhysicalMapper:
             # X-point signal: only negative determinant (hyperbolic nulls)
             xpoint_signal = np.maximum(0.0, -det_J_B)
 
-            # Normalize by (B0/dx)² — natural scale of gradient product
-            B0_sq_over_dx_sq = max(B0, 1e-10)**2 / max(dx, 1e-10)**2
-            xpoint_norm = xpoint_signal / max(B0_sq_over_dx_sq, 1e-10)
-
-            # Critical value: when each gradient reaches Rm_crit scale
-            # grad_crit = RM_CRIT * eta / dx, so det_crit = (grad_crit/dx)²
-            # normalized by (B0/dx)²: (RM_CRIT * eta / (dx * B0))²
-            xpoint_crit = (self.RM_CRIT * self.eta_mhd
-                           / (max(dx, 1e-10) * max(B0, 1e-10)))**2
+            # `sqrt(det)` a les MEMES UNITES que |Jz| : tous deux sont des
+            # gradients de B. On emploie donc la normalisation et le seuil du
+            # canal courant, deja definis plus haut (`jz_crit`).
+            #
+            # L'ancienne forme comparait `sig / (B0/dx)^2` a
+            # `(RM_CRIT eta / (dx B0))^2`. `sig` est un gradient AU CARRE
+            # normalise par une seule puissance de dx^2, puis compare a un
+            # seuil lui-meme au carre : le rapport variait en **dx^4**. Le
+            # critere devenait donc moins susceptible de se declencher a
+            # mesure que la grille se raffine, a la puissance quatre.
+            #
+            # Mesure du rapport signal/seuil (il faut depasser 1 pour tirer) :
+            #
+            #                        N=64     N=128    N=256   loi
+            #   ancienne forme      0.171    0.0105   0.0007   dx^4
+            #   forme actuelle      0.414    0.1025   0.0256   dx^2
+            #   |Jz|, reference     5.137    1.349    0.341    dx^2
+            #
+            # La forme actuelle suit la meme loi que le canal courant, ce que
+            # la coherence dimensionnelle impose. Voir RESULTS.md.
+            xpoint_grad = np.sqrt(xpoint_signal) / max(B0, 1e-10)
 
             mic_xpoint = self._threshold_contrast(
-                xpoint_norm, xpoint_crit, self.beta_xpoint
+                xpoint_grad, jz_crit, self.beta_xpoint
             )
 
             # PAS de `f_Rm_cell` ici : cette porte vaut
