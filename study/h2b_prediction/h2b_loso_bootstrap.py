@@ -153,7 +153,15 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if len(set(c[0] for c in configs)) < 2:
-        print("Need >=2 scenarios for LOSO."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
+            f"d'entree, {len(set(c[0] for c in configs))} trouve(s) "
+            f"({sorted(set(c[0] for c in configs))}). Le script sortait ici avec "
+            "le code 0 et sans artefact (D-75).")
 
     t0 = time.time()
     per_sc = gather_by_scenario(configs, args.dim, args.max_snaps)

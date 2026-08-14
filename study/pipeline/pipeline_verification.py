@@ -248,8 +248,16 @@ def main():
               f"the Hamiltonian-energy averages below -- E was constant\n"
               f"        (no coefficient ever crossed a critical threshold): {names}")
     if not clean_rows:
-        print("\n  All rows are degenerate: no Hamiltonian-energy verdict can be computed.")
-        return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            f"balayage vide : les {len(rows)} ligne(s) sont toutes degenerees "
+            "(E constant, aucun coefficient n'a franchi de seuil critique — voir "
+            "D-41), donc aucun verdict energie-hamiltonien n'est calculable. Ce "
+            "script n'ecrit pas d'artefact : son code de sortie EST son verdict, "
+            "et il valait 0 ici (D-75).")
 
     mean_auc_E = np.nanmean([r['auc_E'] for r in clean_rows])
     mean_f1_E = np.nanmean([r['f1_E'] for r in clean_rows])

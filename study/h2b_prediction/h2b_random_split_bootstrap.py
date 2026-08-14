@@ -129,7 +129,14 @@ def main():
     Xs, Xst, Ys, Ss, tags = gather_per_snapshot(
         args.scenario, args.re, args.N, args.dim, args.max_snaps)
     if not Xs:
-        print("no inputs."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : aucune configuration (scenario, Re) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec le "
+            "code 0 et sans artefact (D-75).")
     print(f"  built dataset: {len(Xs)} snapshots across "
           f"{len(set(tags))} scenarios\n")
 
@@ -152,7 +159,14 @@ def main():
     Sv_list   = [Ss[i]  for i in va]
 
     if len(np.unique(Ytr)) < 2:
-        print("degenerate training set."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "jeu d'entrainement degenere : une seule classe presente "
+            f"({np.unique(Ytr).tolist()}), aucun classifieur ne peut etre ajuste. "
+            "Le script sortait ici avec le code 0 et sans artefact (D-75).")
 
     # classical threshold
     thr_cls, _ = best_threshold_f1(Str, Ytr)

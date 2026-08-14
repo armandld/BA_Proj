@@ -283,8 +283,14 @@ def main():
         if rows:
             by_sc[sc] = rows
     if len(by_sc) < 2:
-        print(f"need >=2 scenarios with data; have {list(by_sc.keys())}")
-        return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
+            f"d'entree, {len(by_sc)} trouve(s) ({sorted(by_sc)}). Le script "
+            "sortait ici avec le code 0 et sans artefact (D-75).")
 
     # gather per-snapshot (needed for snapshot-level bootstrap)
     t0 = time.time()

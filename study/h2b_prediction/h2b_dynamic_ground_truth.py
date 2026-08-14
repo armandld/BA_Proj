@@ -268,7 +268,14 @@ def main():
             print(f"    saved: {os.path.basename(out)}")
 
     if not all_d:
-        print("no output."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : aucune configuration n'a produit de verite terrain "
+            "dynamique — aucun artefact d'entree pour les arguments donnes. Le "
+            "script sortait ici avec le code 0 et sans artefact (D-75).")
 
     # ---- sanity check d'acceptation : Spearman(d_i, e_i) > 0 ----
     from metrics import spearman

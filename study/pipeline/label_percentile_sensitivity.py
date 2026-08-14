@@ -181,7 +181,14 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if len(configs) < 2:
-        print("Need at least 2 configs with data."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : la sensibilite au percentile exige au moins 2 "
+            f"configurations avec artefacts d'entree, {len(configs)} trouvee(s). "
+            "Le script sortait ici avec le code 0 et sans artefact (D-75).")
     print(f"  {len(configs)} configs available across "
           f"{len(set(sc for sc,*_ in configs))} scenario(s)")
 

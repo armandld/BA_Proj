@@ -277,8 +277,14 @@ def main():
 
     dns_files = sorted(glob.glob(os.path.join(RESULTS_DIR, "dns_*.npz")))
     if not dns_files:
-        print("No DNS files found. Run phase1_dns_sweep.py first.")
-        return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            f"balayage vide : aucun fichier dns_*.npz dans {RESULTS_DIR}. "
+            "Lancer study/pipeline/dns_sweep.py d'abord. Le script sortait ici "
+            "avec le code 0 et sans artefact (D-75).")
 
     # filter by requested scenario/Re
     for dns_path in dns_files:

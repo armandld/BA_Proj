@@ -123,7 +123,14 @@ def main():
     Xs, Ys, Ss, tags = gather_per_snapshot(
         args.scenario, args.re, args.N, args.dim, args.max_snaps)
     if not Xs:
-        print("no inputs."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : aucune configuration (scenario, Re) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec le "
+            "code 0 et sans artefact (D-75).")
     scs = sorted(set(tags))
     sc_idx = {sc: i for i, sc in enumerate(scs)}
     K = len(scs)
