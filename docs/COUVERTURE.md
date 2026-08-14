@@ -1040,6 +1040,74 @@ d'un facteur 3,5.
 
 ---
 
+## `study/closed_loop/` — lu en entier, terrain neuf
+
+Les 9 fichiers (~2 500 lignes), jamais mentionnés ici ni dans `DEFAUTS.md`
+avant cette passe. `h1_solver`/T14 venait de se fermer (D-72/D-73), sans
+entrée ouverte sur ce module : terrain neuf, comme le prescrit l'ordre du
+travail de la fiche.
+
+Le module diffère du reste de `study/` sur un point de fond : il n'appelle
+**aucun** des modules déjà audités (`h0_selection`, `h1_solver`,
+`h3_representation`, `hard_patch_labels`, `dns_extension`,
+`ising_terms_and_annealing`) — il pilote directement `src/pipeline.py` et
+`src/train_hyperparams.py` (le chemin **déployé**), plus
+`study/common/stats_confirmatory.py`, `study/common/provenance.py` et
+`study/h2b_prediction/h2b_feature_selection.git_commit_hash` (déjà sains,
+voir §1b). Les défauts historiques D-39/D-69/D-72/D-73 — un consommateur
+resté sur l'ancien opérateur ou l'ancienne définition d'un module amont
+corrigé sous lui — n'ont donc **pas de prise ici** : il n'y a pas de
+duplication de calcul entre `closed_loop/` et `study/pipeline/`
+ou `study/common/`, seulement des appels à la fonction vivante.
+
+| fichier | verdict |
+|---|---|
+| `closed_loop_status.py` | **sain** — lecture Optuna en mode `?mode=ro` explicite (ne peut ni bloquer ni corrompre un writer concurrent), erreur SQLite consignée plutôt qu'avalée |
+| `closed_loop_campaign.py` | **sain** — `fold_scenarios` dé-doublonne `SCENARIOS_ALL` par garde, mais la correction amont (D-33 lignée, `SCENARIOS_ISOLATED` restaurée à 4 scénarios distincts) fait qu'elle ne retire plus rien aujourd'hui ; vérifié en relisant `train_hyperparams.py:820-874` que les 6 clés sont bien distinctes. `FROZEN_DEFAULTS` (`gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0`) vérifié **identique à l'octet** à `config.TRAINED_GAMMA_HYDRO/MAG/KAPPA` et à `PHASE1_SEED_GRID` — même « valeur V1 de référence » partout, pas de fourche silencieuse. `summarise()` construit `q`/`c` non filtrés et `delta` filtré par `np.isfinite` sous la même clé `s[k]` : question 4 posée explicitement (un appelant qui indexerait `delta[i]` en pensant lire `q[i]-c[i]` lirait la mauvaise paire dès qu'un NaN a été filtré) — vérifié, `main()` recalcule `q[i]-c[i]` directement pour l'affichage par fold et ne lit `delta` que pour la statistique globale, qui n'a pas besoin de l'alignement par fold |
+| `closed_loop_budget_matched.py` | **D-74** — seul fichier des 9 sans `assert` ni `raise` ; ses deux gardes d'entrée rendaient la main code 0 sans artefact. Corrigé. Le reste est sain : la bissection suppose `patch_ratio` décroissant en `threshold_amr` — vérifié contre `refinement.py:369,401` (`local_prob >= effective_threshold` → raffiner, donc seuil haut ⇒ moins de raffinement) sur les deux chemins (`_run_level` VQA et `_run_level_classical`), même sens des deux côtés |
+| `closed_loop_divergence_audit.py` | **sain** — `parse_abort` cherche la marque `[ABORT]` que `pipeline.py:621` émet uniquement `if verbose`, et `audit_arm` appelle bien `run_arm(..., verbose=True)` : pas de garde muette côté source. `DIVERGENCE_PENALTY = 10.0` recopié localement plutôt qu'importé de `src/pipeline.py` (repli sans provenance en puissance) — **vérifié identique** aux deux endroits aujourd'hui, donc pas un défaut mesuré ; à réimporter si un jour ça diverge. La fusion `merged[...]` en fin de script relit l'audit existant avant d'écrire, en commentaire explicite contre le défaut D9 (perte silencieuse d'un sous-ensemble déjà audité) |
+| `closed_loop_endpoint_wellposedness.py` | **sain** — `crossover_lambda` vérifié analytiquement (`combined_q(λ)=combined_c(λ)` résolu en λ, formule assortie au code) ; `combined()` est affine en λ à `patch` et `phys` fixés, donc un seul point testé au-delà de `lambda*` suffit à trancher le signe pour tout λ plus grand — vérifié algébriquement, pas supposé |
+| `closed_loop_fold_synthesis.py` | **sain** — `primary_analysis` relit le `combined` **stocké** par `t15` ; vérifié contre un recalcul indépendant `(phys+0,4·patch)/1,4` sur les 4 artefacts réels du dépôt (`ot/kh/rotor/tearing`, bras `qhas` et `classical`) : **8/8 identiques** à 1e−6. `load_divergence_audit` traite l'absence d'audit comme « inconnu », jamais comme « valide » |
+| `closed_loop_headline_counts.py` | **sain** — recompte vérifié contre l'artefact réel `t23_headline_counts.json` committé : totaux 18 complétés / 18 moins fidèle / 16 plus coûteux / 16 dominé, conformes au docstring et recalculés à la main depuis `t20_qhas_run_variance_*.json` + `t15b_budget_matched_*.json` |
+| `closed_loop_leak_free_summary.py` | **sain, une réserve non corrigée** — `ratio_vs_frontier = qe/ref if ref else None` traite un `ref` (phys_score classique interpolé) exactement nul comme absent : la forme « zéro confondu avec valeur manquante » que `D-46`/`h2b` ont déjà rencontrée ailleurs. Vérifié sur les 8 lignes de l'artefact `t24_leak_free_summary.json` réellement commité : aucune ne vaut 0 (0,015 à 1,80), donc **non emprunté** aujourd'hui — signalé, pas corrigé, comme le veut la règle « mesurer avant d'affirmer » |
+| `closed_loop_run_variance.py` | **sain** — `guarded()` capture systématiquement le statut d'avortement (question 4 : un tirage QAOA divergent ne peut pas se détecter après coup en le rejouant vu la non-déterminisme, donc il faut le capturer *pendant*) ; la référence classique choisie est **toujours** le point budget-apparié quand il existe, avec la source imprimée (`ref_source`) qui nomme explicitement un repli sur le bras réglé quand `t15b` n'existe pas encore — écart avec le commentaire du fichier (« TOUJOURS le point budget-apparié ») qui n'est cependant jamais silencieux : la déviation s'auto-déclare dans la sortie |
+
+**Axes empruntés** (table de `VIGIL_BA_Proj.md`, plus l'axe « anomalies
+avancées » ajouté par D-51) : AMR **`depth > 0`** exclusivement — les 6
+scénarios d'entraînement portent tous `max_depth_override = MAX_DEPTH_TRAINING
+= 4` (`src/train_hyperparams.py:88`), c'est le **seul** module de `study/`
+dont l'exécution réelle traverse ce côté-là de l'axe plutôt que `depth = 0`
+(voir la note « aucun n'emprunte » de la fiche pour tous les modules relus
+avant celui-ci) ; bras **quantique et `classical_only`**, les deux à chaque
+fold ; backend **échantillonné** (`shots = 256`, `Estimator`/`Sampler` sans
+`seed_simulator` — c'est l'objet même de D11/T20) ; warm start
+**présent** — c'est le chaînage réel de `refinement.py` (`warm_start_cache`),
+pas le schedule constant de D-48, qui ne vit que dans `qaoa_inputs.py` ;
+optimiseur **COBYLA** (défaut du dépôt, jamais changé ici) ; hamiltonien
+**non nul** sur les runs qui aboutissent ; **anomalies avancées `True` sur
+6/6 scénarios** (`AdvAnomaliesEnable`) — le seul chemin de `study/` qui
+emprunte ce côté de l'axe que D-51 documente comme jamais traversé ailleurs.
+Non traversés par ce module : bord **borné** au sens Hamiltonien (le
+solveur MHD est toujours périodique ici), `dim` autre que celui de la
+production, `depth = 0`.
+
+**Un défaut trouvé, corrigé** : D-74 (ci-dessus), `RESULTS.md`.
+
+**Ce que la lecture n'a pas fait.** Aucune campagne n'a été relancée — les
+9 fichiers ont été lus en entier et croisés contre les artefacts déjà commités
+dans `results/` (`t15`, `t15b`, `t15c`, `t19`, `t20`, `t21`, `t23`, `t24`),
+pas rejoués de bout en bout (`closed_loop_campaign.py --n-trials 40` coûte
+des heures par fold, hors budget d'une passe Vigil). Les recalculs
+indépendants ci-dessus (combined à 1e−6, totaux T23 à l'unité) portent donc
+sur la cohérence du **code contre ses propres artefacts déjà écrits**, pas
+sur une reproduction de la campagne depuis zéro.
+
+`study/h4_transfer/` (consommé par `closed_loop_leak_free_summary.py` via
+les artefacts `t22_unseen_*`) reste **non lu** : hors périmètre de cette
+passe, qui portait sur `closed_loop/` seul.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
