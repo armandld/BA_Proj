@@ -340,3 +340,65 @@ def test_le_champ_calme_reste_calme_jusqu_au_circuit():
     assert np.abs(np.asarray(c["K_plaquettes"])).max() == pytest.approx(0.0, abs=1e-12)
     assert np.abs(np.asarray(mini["K_plaquettes"])).max() == pytest.approx(0.0, abs=1e-12), (
         "le reechantillonnage fabrique du ZZZZ a partir d'un champ uniforme")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Tenue en resolution — le meme champ physique, plusieurs grilles
+# ══════════════════════════════════════════════════════════════════════
+
+def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
+    """Sur un champ physique FIXE, seule la resolution changeant.
+
+    MESURE (rotation solide, hyperparametres deployes) :
+
+        N       H_edges      C_edges      K_plaquettes
+        32     2.10e-01     1.04e+01       1.00e+02
+        64     6.02e-03     1.78e+00       9.48e+01
+       128     2.89e-05     3.43e-01       1.86e+01
+       256     2.27e-05     8.32e-02       0.00e+00
+
+    Les trois familles s'effondrent, et `K_plaquettes` atteint **exactement
+    zero a N=256** — la resolution d'entrainement.
+
+    Ce n'est PAS un defaut d'implementation : les seuils sont des Reynolds
+    de maille (`omega_crit = RE_CRIT nu / (dx^2 v0)`), qui croissent en
+    1/dx^2. Une grille plus fine resout mieux, donc demande moins de
+    raffinement. La logique AMR est correcte.
+
+    Mais la CONSEQUENCE doit rester visible : a la configuration
+    d'entrainement (N=256, Re=Rm=800), l'hamiltonien perd sa structure ZZZZ
+    sur les champs canoniques. C'est le meme fait que le verdict deja
+    publie « le terme ZZZZ etait numeriquement mort », vu ici au niveau du
+    coefficient plutot que du circuit.
+
+    Ce test EPINGLE la mesure. Il tombera si un changement de
+    normalisation, de seuil ou d'hyperparametres deplace cet equilibre —
+    et il faudra alors remesurer, pas ajuster.
+    """
+    valeurs = {}
+    for n in (32, 64, 128, 256):
+        global N
+        ancien, N = N, n
+        try:
+            sim, grid = _sim_avec(_rotation_solide)
+            c, _ = _coeffs(sim, grid, 0.3)
+            valeurs[n] = (
+                max(np.abs(np.asarray(a)).max() for a in c["H_edges"]),
+                max(np.abs(np.asarray(a)).max() for a in c["C_edges"]),
+                np.abs(np.asarray(c["K_plaquettes"])).max(),
+            )
+        finally:
+            N = ancien
+
+    # decroissance monotone des trois familles
+    for i, nom in enumerate(("H_edges", "C_edges", "K_plaquettes")):
+        suite = [valeurs[n][i] for n in (32, 64, 128, 256)]
+        assert suite == sorted(suite, reverse=True), (
+            f"{nom} n'est plus monotone decroissant en resolution : {suite}")
+
+    assert valeurs[32][2] > 50.0, (
+        f"K_plaquettes vaut {valeurs[32][2]:.3e} a N=32, attendu ~1.0e+02 — "
+        f"sans structure a la grille grossiere, ce test ne separerait rien")
+    assert valeurs[256][2] == pytest.approx(0.0, abs=1e-12), (
+        f"K_plaquettes vaut {valeurs[256][2]:.3e} a N=256 : l'equilibre a "
+        f"change, remesurer la table de la docstring")
