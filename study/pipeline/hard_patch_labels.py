@@ -107,6 +107,23 @@ def patch_classical_scores(vx, vy, Bx, By, n_patches, dx):
     """
     Compute classical AMR score per patch using the 4-indicator RMS.
     Returns: (n_patches, n_patches) array of scores in [0, 1].
+
+    D-77 — deviation connue, mesuree, NON corrigee ici.
+    `AngleMapper.classical_score` prend `fixed_curl=True` depuis D-1
+    (`bb6a387`, 11 aout) : deux de ses quatre indicateurs, vorticite et
+    divergence, ont change de convention d'axes. Les artefacts `patches_*`
+    ecrits AVANT cette date n'ont jamais ete regeneres. Sur les 156 du depot,
+    **84 portent un `classical_scores` que cette fonction ne reproduit plus**
+    (ecart jusqu'a 3,8e-01 sur un score borne a [0, 1]) ; 50 d'entre eux sont
+    reproduits **bit a bit** par `fixed_curl=False`. Les `l2_errors` du meme
+    fichier, eux, se reproduisent (9,4e-12, plancher float32) : ils ne
+    dependent d'aucun rotationnel.
+
+    Rien n'est corrige ici : regenerer changerait des artefacts publies, ce
+    qui se signale et se laisse trancher. Ne PAS "reparer" en regenerant au
+    passage — `tests/study/test_patches_classical_score_provenance.py`
+    epingle l'etat mesure et fera echouer la suite si ces fichiers bougent
+    sans que D-77 soit mis a jour.
     """
     N = vx.shape[0]
     patch_size = N // n_patches
