@@ -176,12 +176,56 @@ def test_la_porte_sannule_exactement_au_nul_magnetique():
         f"montrerait pas qu'elle s'annule SPECIFIQUEMENT au nul")
 
 
+def test_le_vrai_mappeur_marque_le_point_X(monkeypatch):
+    """Le controle qui compte : il appelle `compute_coefficients` LUI-MEME.
+
+    Les tests ci-dessus reconstruisent la chaine etage par etage pour
+    l'inspecter — ils ne verraient donc pas un changement dans `src/`.
+    Celui-ci passe par la vraie fonction, et c'est lui qui verrouille le
+    retrait de la porte.
+    """
+    from Simulation.grid import PeriodicGrid
+    from Simulation.solver import MHDSolver
+    from Simulation.PhysToAngle import AngleMapper
+
+    N = 64
+    a = 2 * L / N
+    grid = PeriodicGrid(N)
+    sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
+    dx, Bx, By = _champ(N, a, "X")
+    # champ impose directement : on veut un point X franc, pas une evolution
+    sim.Bx, sim.By = Bx, By
+    sim.vx = np.zeros_like(Bx)
+    sim.vy = np.zeros_like(Bx)
+
+    mapper = PM(cs=1.0, nu=grid.L / 800, eta_mhd=ETA, dx=grid.dx,
+                gamma_hydro=2.13, gamma_mag=GAMMA_MAG, kappa=14.33,
+                sigma=0.05, beta_curl=0.82, beta_xpoint=BETA_XPOINT,
+                w_z_frac=0.10)
+    etat = sim.get_fluxes()
+    score = AngleMapper.classical_score(etat)
+    coeffs = mapper.compute_coefficients(
+        sim, score, etat, threshold_amr=0.0, advanced_anomalies_enabled=True)
+
+    assert "K_xpoint" in coeffs, "le drapeau est vrai, la cle doit exister"
+    K = np.asarray(coeffs["K_xpoint"])
+    i0 = N // 2
+
+    assert np.abs(K).max() > 0.0, (
+        "K_xpoint est nul partout — le seuil n'est pas atteint sur ce champ, "
+        "le test ne verifierait rien")
+    assert abs(K[i0, i0]) == pytest.approx(np.abs(K).max(), rel=1e-9), (
+        f"le coefficient vaut {abs(K[i0, i0]):.4e} AU point X pour un maximum "
+        f"de {np.abs(K).max():.4e} ailleurs : la porte |B| est-elle revenue ?")
+
+
 def test_le_coefficient_est_nul_au_point_X_mais_pas_autour():
     """La consequence : le detecteur marque l'anneau, jamais le centre.
 
-    EPINGLE le comportement actuel. Il echouera le jour ou la porte sera
-    retiree de `K_xpoint` — ce que le commentaire du code reclame deja.
-    Ce jour-la, remesurer et reecrire ce test, ne pas ajuster un seuil.
+    EPINGLE l'ETAT ANTERIEUR, reconstruit ici etage par etage : la porte
+    `f_Rm_cell` a ete RETIREE de `K_xpoint` dans `src/`. Ce test conserve
+    la mesure qui a justifie ce retrait ; c'est
+    `test_le_vrai_mappeur_marque_le_point_X` qui verifie le code actuel.
     """
     N = N_ENTRAINEMENT
     dx, Bx, By = _champ(N, 2 * L / N, "X")

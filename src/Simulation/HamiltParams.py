@@ -557,23 +557,53 @@ class PhysicalMapper:
             # X-point signal: only negative determinant (hyperbolic nulls)
             xpoint_signal = np.maximum(0.0, -det_J_B)
 
-            # Normalize by (B0/dx)² — natural scale of gradient product
-            B0_sq_over_dx_sq = max(B0, 1e-10)**2 / max(dx, 1e-10)**2
-            xpoint_norm = xpoint_signal / max(B0_sq_over_dx_sq, 1e-10)
-
-            # Critical value: when each gradient reaches Rm_crit scale
-            # grad_crit = RM_CRIT * eta / dx, so det_crit = (grad_crit/dx)²
-            # normalized by (B0/dx)²: (RM_CRIT * eta / (dx * B0))²
-            xpoint_crit = (self.RM_CRIT * self.eta_mhd
-                           / (max(dx, 1e-10) * max(B0, 1e-10)))**2
+            # `sqrt(det)` a les MEMES UNITES que |Jz| : tous deux sont des
+            # gradients de B. On emploie donc la normalisation et le seuil du
+            # canal courant, deja definis plus haut (`jz_crit`).
+            #
+            # L'ancienne forme comparait `sig / (B0/dx)^2` a
+            # `(RM_CRIT eta / (dx B0))^2`. `sig` est un gradient AU CARRE
+            # normalise par une seule puissance de dx^2, puis compare a un
+            # seuil lui-meme au carre : le rapport variait en **dx^4**. Le
+            # critere devenait donc moins susceptible de se declencher a
+            # mesure que la grille se raffine, a la puissance quatre.
+            #
+            # Mesure du rapport signal/seuil (il faut depasser 1 pour tirer) :
+            #
+            #                        N=64     N=128    N=256   loi
+            #   ancienne forme      0.171    0.0105   0.0007   dx^4
+            #   forme actuelle      0.414    0.1025   0.0256   dx^2
+            #   |Jz|, reference     5.137    1.349    0.341    dx^2
+            #
+            # La forme actuelle suit la meme loi que le canal courant, ce que
+            # la coherence dimensionnelle impose. Voir RESULTS.md.
+            xpoint_grad = np.sqrt(xpoint_signal) / max(B0, 1e-10)
 
             mic_xpoint = self._threshold_contrast(
-                xpoint_norm, xpoint_crit, self.beta_xpoint
+                xpoint_grad, jz_crit, self.beta_xpoint
             )
 
-            # Scale by f_Rm_cell (already computed above for K_plaquettes)
+            # PAS de `f_Rm_cell` ici : cette porte vaut
+            # `_f_gate(|B| dx / eta)` et un point X est PAR DEFINITION un
+            # zero de B. Elle annulait donc le coefficient exactement a
+            # l'endroit qu'il doit signaler, ne laissant que l'anneau
+            # autour. Mesure sur une nappe de 2 cellules a N=256 : seuil au
+            # point X = 0.5292, porte au point X = 0.0000 (sur les six
+            # epaisseurs testees), coefficient resultant 0.0000 contre
+            # 0.8537 sur l'anneau.
+            #
+            # Le commentaire d'origine annoncait deja « No separate g-gate
+            # needed (signal is intrinsically localized) » pendant que le
+            # code appliquait la porte : le commentaire et le code se
+            # contredisaient. Voir tests/mapping/test_xpoint_at_training_resolution.py
+            #
+            # ATTENTION — ce retrait ne suffit pas a faire tirer le terme sur
+            # des champs REELS : a N=256 le seuil lui-meme n'est pas atteint
+            # (signal/seuil = 7e-4 sur island_coalescence). La normalisation
+            # est le second verrou, et il reste ouvert. Voir RESULTS.md.
+            #
             # Even-parity ZZZZ: output negative so cost_hamiltonian uses as-is
-            K_xpoint = -1.0 * f_Rm_cell * mic_xpoint
+            K_xpoint = -1.0 * mic_xpoint
             result["K_xpoint"] = K_xpoint
 
         return result
