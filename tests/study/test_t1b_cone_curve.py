@@ -29,6 +29,7 @@ from h2b_neighbour_cone_curve import (
 
     blocked_split_indices,
     capped_model_factory,
+    khop_distinct_footprint,
     khop_features,
     khop_offsets,
 )
@@ -94,6 +95,71 @@ def test_khop_features_k1_equals_phase11_stencil_construction():
     f_w = np.roll(feats, +1, axis=1)
     ref = np.concatenate([feats, f_n, f_s, f_e, f_w], axis=-1).reshape(-1, 45)
     np.testing.assert_array_equal(khop_features(feats, 1), ref)
+
+
+# ----------------- empreinte reelle sur grille periodique (D-88) -----------
+#
+# Reserve initialement : "a dim=4, le voisinage k=2 couvre deja toute la
+# grille periodique, donc k=3 n'est pas un voisinage plus grand -- et
+# `n_feats` compte les colonnes dupliquees". Mesure, cf.
+# `khop_distinct_footprint` : a dim=4, footprint(2) = footprint(3) = 16 = 4*4
+# (toute la grille), alors que les comptes NOMINAUX de `khop_offsets`
+# (25 puis 49, deja pins par le test ci-dessus) suggeraient une croissance.
+# Avant ce module, rien dans le fichier ne distinguait les deux -- le
+# tableau imprime et l'artefact sauvegarde ne portaient que le compte
+# nominal, plausible (une grille de features 15x15... 21x21 existe bien en
+# theorie) mais faux sur CETTE grille periodique.
+
+def test_khop_distinct_footprint_k2_covers_whole_dim4_grid():
+    dim = 4
+    assert khop_distinct_footprint(2, dim) == dim * dim
+
+
+def test_khop_distinct_footprint_k3_is_not_larger_than_k2_at_dim4():
+    dim = 4
+    # sanity : le compte NOMINAL grandit bien (c'est lui qui trompe)
+    assert len(khop_offsets(3)) > len(khop_offsets(2))
+    # le compte REEL, lui, ne grandit pas : k=3 n'est pas un voisinage
+    # plus grand que k=2 sur une grille periodique 4x4
+    assert khop_distinct_footprint(3, dim) == khop_distinct_footprint(2, dim)
+
+
+def test_khop_distinct_footprint_matches_actual_unique_columns():
+    """Mesure a l'operateur assorti : comparaison directe aux colonnes
+    REELLEMENT produites par `khop_features` (pas une reimplementation
+    parallele des decalages)."""
+    dim = 4
+    feats = np.random.default_rng(7).normal(size=(dim, dim, 9))
+    for k in (0, 1, 2, 3):
+        X = khop_features(feats, k)
+        n_unique = np.unique(X, axis=1).shape[1]
+        assert n_unique == khop_distinct_footprint(k, dim) * 9
+
+
+def test_khop_distinct_footprint_duplicated_columns_at_dim4():
+    # n_feats "nominal" (celui qu'affichait le script avant D-88) contre le
+    # nombre reel de colonnes distinctes : l'ecart EST le defaut.
+    dim = 4
+    nf_nominal = {k: len(khop_offsets(k)) * 9 for k in (0, 1, 2, 3)}
+    nf_distinct = {k: khop_distinct_footprint(k, dim) * 9 for k in (0, 1, 2, 3)}
+    assert nf_nominal == {0: 9, 1: 45, 2: 225, 3: 441}
+    assert nf_distinct == {0: 9, 1: 45, 2: 144, 3: 144}
+    # k=0 et k=1 n'ont pas encore de doublons (2k+1 < dim=4)
+    assert nf_nominal[0] == nf_distinct[0]
+    assert nf_nominal[1] == nf_distinct[1]
+    # k=2 et k=3 en ont, et k=3 n'ajoute AUCUNE colonne distincte de plus
+    assert nf_nominal[2] > nf_distinct[2]
+    assert nf_nominal[3] > nf_distinct[3]
+    assert nf_distinct[2] == nf_distinct[3]
+
+
+def test_khop_distinct_footprint_does_not_saturate_on_a_larger_grid():
+    """Champ qui separe : sur une grille assez grande (dim=8), 2k+1 <= 7 < 8
+    pour tout k <= 3, donc AUCUNE saturation -- le defaut D-88 est propre a
+    dim=4, pas un artefact du calcul lui-meme."""
+    dim = 8
+    assert [khop_distinct_footprint(k, dim) for k in (0, 1, 2, 3)] == \
+        [len(khop_offsets(k)) for k in (0, 1, 2, 3)]
 
 
 # --------------------------- split bloque ----------------------------

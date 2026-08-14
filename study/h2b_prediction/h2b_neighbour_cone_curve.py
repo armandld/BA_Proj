@@ -12,6 +12,14 @@ periodiques (decalages np.roll) :
            LOSO doit reproduire le 0.215 publie)
   k=2 -> 225 features (carre de Moore 5x5)
   k=3 -> 441 features (carre de Moore 7x7)
+(comptes NOMINAUX : la boule de Chebyshev, sans egard a la periodicite de
+la grille. D-88 : sur une grille periodique de cote `dim`, deux decalages
+nominaux distincts peuvent s'enrouler sur le meme residu et produire deux
+colonnes identiques des que 2k+1 >= dim. A dim=4 c'est deja le cas a k=2 :
+le carre 5x5 couvre les 4 residus de chaque axe, donc la grille entiere ;
+k=3 n'ajoute alors AUCUNE colonne distincte de plus que k=2 -- 225 et 441
+se reduisent tous deux a 144 colonnes reelles. Voir `khop_distinct_footprint`
+et la colonne `n_distinct` des tables ci-dessous.)
 
 Deux evaluations par k :
   (a) split temporellement bloque (regle Task 4 : 60 % premiers snapshots
@@ -83,6 +91,30 @@ def khop_features(feats_2d, k):
              for dy, dx in khop_offsets(k)]
     cat = np.concatenate(parts, axis=-1)
     return cat.reshape(-1, cat.shape[-1])
+
+
+def khop_distinct_footprint(k, dim):
+    """Nombre de decalages REELLEMENT distincts du voisinage k-hop sur une
+    grille periodique de cote `dim` (D-88).
+
+    `khop_offsets(k)` enumere les decalages nominaux d'une boule de
+    Chebyshev sans savoir que `khop_features` les applique par `np.roll`
+    PERIODIQUE (mod `dim`). Des que la largeur du carre `2k+1` atteint ou
+    depasse `dim`, deux decalages nominaux distincts retombent sur le meme
+    residu `(dy % dim, dx % dim)` -> deux colonnes bit-a-bit identiques
+    dans `khop_features`. `len(khop_offsets(k))` n'est alors plus le
+    nombre de voisins reellement vus : c'est un compte de doublons.
+
+    Mesure a dim=4 (D-88, meme construction que `khop_offsets`/
+    `khop_features` - pas de reimplementation parallele) : k=2 (largeur 5)
+    couvre deja les 4 residus de chaque axe, donc les 16 cellules de la
+    grille entiere -> k=3 (largeur 7) n'ajoute AUCUN residu de plus. Les
+    225 et 441 features nominales de k=2 et k=3 se reduisent toutes deux a
+    144 = 16 * 9 colonnes distinctes ; verifie contre
+    `np.unique(khop_features(...), axis=1).shape[1]`, qui rend le meme
+    nombre (comparaison a l'operateur assorti, pas a une reconstruction).
+    """
+    return len({(dy % dim, dx % dim) for dy, dx in khop_offsets(k)})
 
 
 def blocked_split_indices(n_snaps, train_frac=0.6):
@@ -314,36 +346,52 @@ def main():
     print("\n  " + "=" * 84)
     print(f"  [blocked split]  (val prevalence={prev_b:.3f}; refine-all "
           f"floor F1={2 * prev_b / (1 + prev_b):.3f})")
-    print(f"  {'k':>3} {'n_feats':>8} {'n_tr/F':>8} {'F1':>8} "
-          f"{'delta/hop':>10} {'capped':>8}")
-    print(f"  {'cls':>3} {'-':>8} {'-':>8} {cls_blocked:>8.3f} "
+    print(f"  {'k':>3} {'n_feats':>8} {'n_distinct':>10} {'n_tr/F':>8} "
+          f"{'F1':>8} {'delta/hop':>10} {'capped':>8}")
+    print(f"  {'cls':>3} {'-':>8} {'-':>10} {'-':>8} {cls_blocked:>8.3f} "
           f"{'-':>10} {'-':>8}")
     prev_f1 = None
+    prev_footprint = None
     for k in K_VALUES:
         nf = len(khop_offsets(k)) * 9
+        footprint = khop_distinct_footprint(k, args.dim)
+        nf_distinct = footprint * 9
         f1 = results["blocked"][k]
         d = "-" if prev_f1 is None else f"{f1 - prev_f1:+.3f}"
         cap = capped["blocked"].get(k)
         cap_s = ("-" if k not in capped["blocked"]
                  else ("n/a" if cap is None else f"{cap:.3f}"))
         flag = "  [FLAG n_tr/F<20]" if ratios["blocked"][k] < 20 else ""
-        print(f"  {k:>3} {nf:>8} {ratios['blocked'][k]:>8.1f} {f1:>8.3f} "
+        # D-88 : `nf` (nominal) surcompte des lors que 2k+1 >= dim -- deux
+        # decalages distincts s'enroulent sur le meme residu et rendent la
+        # meme colonne. Ce drapeau dit quand k n'ajoute aucune information
+        # de plus que k-1 sur CETTE grille : le "delta/hop" ne compare alors
+        # plus deux voisinages de tailles differentes.
+        if prev_footprint is not None and footprint == prev_footprint:
+            flag += (f"  [FLAG k={k} n'agrandit pas le voisinage : meme "
+                     f"empreinte que k={k - 1} sur grille dim={args.dim}]")
+        print(f"  {k:>3} {nf:>8} {nf_distinct:>10} "
+              f"{ratios['blocked'][k]:>8.1f} {f1:>8.3f} "
               f"{d:>10} {cap_s:>8}{flag}")
         prev_f1 = f1
+        prev_footprint = footprint
 
     print("\n  [LOSO]  (per-fold prevalence=0.250; refine-all floor "
           "F1=0.400)")
     head = " ".join(f"{sc[:8]:>8}" for sc in scenarios)
-    print(f"  {'k':>3} {'n_feats':>8} {'n_tr/F':>8} {head}  {'mean':>7} "
-          f"{'delta/hop':>10} {'capped':>8}")
+    print(f"  {'k':>3} {'n_feats':>8} {'n_distinct':>10} {'n_tr/F':>8} "
+          f"{head}  {'mean':>7} {'delta/hop':>10} {'capped':>8}")
     cls_cells = " ".join(f"{cls_loso[sc]:>8.3f}" for sc in scenarios)
     cls_m = float(np.mean(list(cls_loso.values())))
-    print(f"  {'cls':>3} {'-':>8} {'-':>8} {cls_cells}  {cls_m:>7.3f} "
-          f"{'-':>10} {'-':>8}")
+    print(f"  {'cls':>3} {'-':>8} {'-':>10} {'-':>8} {cls_cells}  "
+          f"{cls_m:>7.3f} {'-':>10} {'-':>8}")
     prev_f1 = None
+    prev_footprint = None
     means = {}
     for k in K_VALUES:
         nf = len(khop_offsets(k)) * 9
+        footprint = khop_distinct_footprint(k, args.dim)
+        nf_distinct = footprint * 9
         pf = results["loso"][k]
         m = float(np.mean(list(pf.values())))
         means[k] = m
@@ -354,9 +402,14 @@ def main():
                  else ("n/a" if cap is None
                        else f"{np.mean(list(cap.values())):.3f}"))
         flag = "  [FLAG n_tr/F<20]" if ratios["loso"][k] < 20 else ""
-        print(f"  {k:>3} {nf:>8} {ratios['loso'][k]:>8.1f} {cells}  "
+        if prev_footprint is not None and footprint == prev_footprint:
+            flag += (f"  [FLAG k={k} n'agrandit pas le voisinage : meme "
+                     f"empreinte que k={k - 1} sur grille dim={args.dim}]")
+        print(f"  {k:>3} {nf:>8} {nf_distinct:>10} "
+              f"{ratios['loso'][k]:>8.1f} {cells}  "
               f"{m:>7.3f} {d:>10} {cap_s:>8}{flag}")
         prev_f1 = m
+        prev_footprint = footprint
 
     deltas = [means[K_VALUES[i + 1]] - means[K_VALUES[i]]
               for i in range(len(K_VALUES) - 1)]
@@ -366,6 +419,24 @@ def main():
           + ", ".join(f"{d:+.3f}" for d in deltas))
     print("  Section-2 decision rule (flat: every |delta| <= 0.01 -> cone "
           "retired; rising -> slope quoted): stated in study/v3/RESULTS.md.")
+
+    footprints = [khop_distinct_footprint(k, args.dim) for k in K_VALUES]
+    saturated_ks = [K_VALUES[i] for i in range(1, len(K_VALUES))
+                    if footprints[i] == footprints[i - 1]]
+    if saturated_ks:
+        # D-88 : mesure, dim=4, khop_distinct_footprint -- k=2 et k=3 rendent
+        # tous deux 16 residus distincts (144 colonnes) sur cette grille : k=3
+        # n'est PAS un voisinage plus grand que k=2 ici, seulement plus de
+        # colonnes dupliquees (441 nominales contre 144 reelles, meme compte
+        # qu'a k=2). Un delta/hop calcule sur deux k satures compare deux jeux
+        # de colonnes structurellement identiques, pas deux tailles de cone.
+        first_sat = K_VALUES[footprints.index(footprints[-1])]
+        print(f"  [D-88] k in {saturated_ks} n'agrandit pas le voisinage sur "
+              f"cette grille (dim={args.dim}) : empreinte saturee a "
+              f"{footprints[-1]} residus distincts des k={first_sat}. Ne pas "
+              "lire le delta/hop de ces k comme un point de la courbe de "
+              "cone -- ils comparent des colonnes structurellement "
+              "identiques, pas un voisinage plus grand.")
 
     # ---- sauvegarde ----
     out = os.path.join(RESULTS_DIR,
@@ -386,6 +457,14 @@ def main():
                                    in capped["loso"].items()}),
         f1_blocked_capped=json.dumps({str(k): v for k, v
                                       in capped["blocked"].items()}),
+        # D-88 : n_feats nominal (boule de Chebyshev) contre n_feats_distinct
+        # (colonnes reellement distinctes sur cette grille periodique) --
+        # les deux divergent des que 2k+1 >= dim, et l'ecart dit combien de
+        # colonnes de la matrice d'entrainement sont des doublons exacts.
+        n_feats_nominal=np.array([len(khop_offsets(k)) * 9
+                                  for k in K_VALUES]),
+        n_feats_distinct=np.array([f * 9 for f in footprints]),
+        k_saturated=np.array([k in saturated_ks for k in K_VALUES]),
         n_train_blocked=len(Ytr_b), n_val_blocked=len(Yva_b),
         seed=args.seed,
         git_hash=git_commit_hash(),

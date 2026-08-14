@@ -1238,11 +1238,38 @@ mesures dans `RESULTS.md`).
 | réduction du score | `block_avg` **et** `block_max` (D-84) | — |
 | discipline de seuil | train **et** validation, mesurées côte à côte (D-83) | — |
 
-**Reste à faire sur ce module** : 8 fichiers encore non lus —
-`h2b_analytical_solution`, `h2b_multiseed`, `h2b_neighbour_cone_curve`,
+**Reste à faire sur ce module** : 7 fichiers encore non lus —
+`h2b_analytical_solution`, `h2b_multiseed`,
 `h2b_prediction_horizon`, `h2b_scenario_specialisation`, `h2b_loso_bootstrap`,
 et les deux lus seulement en partie (`h2b_psi_feature_loso`,
 `h2b_learned_meanfield_h`). Aucun n'a d'artefact dans `results/`.
+
+---
+
+## `study/h2b_prediction/h2b_neighbour_cone_curve.py` (T1b) — D-88
+
+Lu en entier, fonction par fonction (~450 lignes). **Défaut trouvé** : D-88
+(détail et mesures dans `RESULTS.md`) — `n_feats` comptait les colonnes
+NOMINALES d'une boule de Chebyshev, pas les colonnes réellement distinctes
+qu'`np.roll` périodique produit ; à dim=4 la courbe de cône traite k=2 et
+k=3 comme deux voisinages de tailles différentes (225 puis 441 features)
+alors qu'ils rendent tous deux les 144 mêmes colonnes.
+
+**Configurations empruntées** — ce qui a réellement tourné :
+
+| axe | emprunté | non emprunté |
+|---|---|---|
+| `dim` (empreinte périodique de `khop_offsets`/`khop_features`) | 4 (sature à k=2), 8 (champ séparateur : aucune saturation à k≤3) | 2, 3, 16, 32, 64 |
+| `k` | 0, 1, 2, 3 (les quatre points de la courbe) | — |
+| chemin bout-en-bout (`main`, LOSO/split bloqué sur DNS réelles) | non emprunté — `results/` ne porte aucun `dns_*`/`patches_*` pour ce script, ni `t1b_cone_curve_*.npz` | tout `main()` |
+
+Les fonctions pures (`khop_offsets`, `khop_features`,
+`khop_distinct_footprint`, `blocked_split_indices`, `capped_model_factory`)
+sont vérifiées à l'opérateur assorti (mesure directe sur
+`np.unique(khop_features(...), axis=1)`, pas de réimplémentation
+parallèle). `main()` (chargement DNS, boucle LOSO/bloqué, sauvegarde) n'a
+jamais tourné sur ce dépôt — aucune donnée d'entrée disponible — et reste
+non audité par exécution.
 
 ---
 
