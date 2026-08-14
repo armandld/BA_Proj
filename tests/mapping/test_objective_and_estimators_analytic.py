@@ -190,15 +190,50 @@ def test_the_patch_ratio_is_the_average_cost_per_step(used, steps, expected):
     assert out["patch_ratio"] == pytest.approx(expected)
 
 
-def test_zero_steps_silently_scores_the_worst_possible_cost():
-    """Un run qui n'a fait AUCUN pas recoit patch_ratio = 1, pas une erreur.
+def test_zero_steps_now_raises_instead_of_scoring(_lambda_seuil=0.2361):
+    """Un run qui n'a fait AUCUN pas LEVE — il ne se note plus (D-67).
 
-    C'est defensif — mais cela signifie qu'une campagne qui n'a rien
-    calcule rend un score defini, donc exploitable par Optuna, au lieu
-    d'echouer. On epingle le comportement pour qu'il soit un choix visible.
+    Ce test epinglait l'ancien comportement : `patch_ratio = 1.0`, donc un
+    score defini pour un run qui n'avait rien calcule. Sa docstring notait
+    deja le risque — « exploitable par Optuna au lieu d'echouer » — et le
+    figeait comme « choix visible ». D-66 a montre que ce choix rendait un
+    defaut invisible : la CLI ne tournait pas du tout et annoncait
+    `combined = 0.333333` sans que rien ne signale l'anomalie.
+
+    Le risque etait reel et se chiffre. Avec les valeurs mesurees du run
+    de reference (phys = 0.140052, patch = 0.4067), un run vide bat un run
+    reel des que
+
+        lambda < phys / (1 - patch) = 0.2361
+
+    A `LAMBDA_COST_SOFT = 0.4` le run vide perd. Mais `recompute_lambda_scores`
+    rescore les essais a lambda = 0.0, 0.1, 0.2 — et sous ces trois valeurs
+    un essai degenere devient le MEILLEUR essai de la campagne.
+
+    Remesure, pas ajustee : l'ancienne valeur (1.0) et la nouvelle (une
+    exception) sont toutes deux consignees ici.
     """
-    out = score(_flux(16), _flux(17), 0.5, 0, 0, NSQ)
-    assert out["patch_ratio"] == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="total_steps"):
+        score(_flux(16), _flux(17), 0.5, 0, 0, NSQ)
+
+    # Le garde-fou du chiffre ci-dessus : sous le seuil, le vide gagnait.
+    phys, patch = 0.140052, 0.4067
+    for lam in (0.0, 0.1, 0.2):
+        vide = lam / (1 + lam)
+        reel = (phys + lam * patch) / (1 + lam)
+        assert vide < reel, (
+            f"a lambda={lam}, un run vide ({vide:.4f}) devrait battre un run "
+            f"reel ({reel:.4f}) — si ce n'est plus le cas, remesurer le seuil")
+    for lam in (0.4, 0.5):
+        assert lam / (1 + lam) > (phys + lam * patch) / (1 + lam), (
+            f"a lambda={lam}, le run vide devrait perdre")
+
+
+def test_zero_steps_guard_does_not_break_the_nominal_path():
+    """Garde-fou : refuser zero pas ne doit pas refuser un pas."""
+    out = score(_flux(16), _flux(17), 0.5, NSQ // 2, 1, NSQ)
+    assert out["patch_ratio"] == pytest.approx(0.5)
+    assert np.isfinite(out["combined"])
 
 
 def test_a_zero_reference_field_does_not_produce_nan():
