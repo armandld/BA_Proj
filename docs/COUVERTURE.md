@@ -540,6 +540,35 @@ le schedule constant de D-48) ; hamiltonien **non nul** ; bord
 `classical_only`, bord **borné**, hamiltonien **nul**, autres optimiseurs,
 `depth > 0`, et l'axe des **anomalies avancées** (`False` codé en dur, D-51).
 
+### `study/h1_solver/h1_curl_convention_gap.py` (T31) — lu en entier
+
+Le script qui chiffre ce que la correction de convention d'axes des
+mappeurs (D-1 à D-17) changerait pour la tâche de sélection de patches, et
+sur lequel la conclusion « corriger sans réoptimiser dégrade à dim=16 »
+s'appuie.
+
+| lu | verdict |
+|---|---|
+| `_top_k`, budget apparié | **sain** — sélectionne exactement k patches, prend les k scores les plus hauts, `kind="stable"` (déterministe sur des ex æquo) |
+| `_spearman` | **sain** — refuse un vecteur constant (`NaN` explicite plutôt qu'une corrélation indéfinie silencieuse) |
+| `bootstrap_delta_ci` | **sain** — le bloc est le **scénario**, pas l'instantané (les instantanés d'une même trajectoire ne sont pas indépendants) ; refuse un seul scénario (`NaN`) plutôt qu'un intervalle vide de sens |
+| `verdict` | **sain** — n'affirme un sens que si l'IC95 exclut zéro des deux côtés ; `indécidable` sinon |
+| `_hard_patches` | **D-70** — docstring « même définition que `hard_patch_labels.py` », corps : une autre formule (écart-type intra-patch de la norme, pas l'erreur L2 de reconstruction par grossissement en bloc). Corrigé, `RESULTS.md` |
+| **la table publiée elle-même**, rejouée par sa propre commande | **D-70** — ne se reproduit plus à HEAD ; le verdict « dégrade » à dim=16 devient « indécidable ». Cause identifiée : le solveur a changé sous les 4 scénarios canoniques après l'écriture de T31 (D-25, D-26/D-27). Rapport seul, `DEFAUTS.md` |
+| balayage vide | **crie** — `RuntimeError` explicite |
+
+**Axes empruntés** : bord **périodique** uniquement (le script n'instancie
+que `PeriodicGrid`) ; hamiltonien **non nul** sur les 4 scénarios ;
+mappeur **v1** (`use_v2=False` par défaut, `--mapper` accepte v2 mais aucun
+artefact publié ne l'utilise) ; `dim` **8 et 16** ; drapeau `fixed_curl`
+**les deux côtés**, dans le même appel. Non traversés : bord **borné**,
+mappeur **v2** publié, bras **classical_only** (le script ne construit que
+des scores, pas de décision QAOA), backend, warm start, optimiseur — aucun
+de ces axes n'entre dans ce que ce script mesure.
+
+`study/h1_solver/h1_solver_convergence.py` — **non encore lu**, laissé pour
+la prochaine passe sur ce module.
+
 ### Un axe qui manquait à la fiche : les anomalies avancées — D-51
 
 `VIGIL_BA_Proj.md` liste sept axes ; il en manque un huitième, et `study/`

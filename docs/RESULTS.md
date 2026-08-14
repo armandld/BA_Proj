@@ -17,15 +17,17 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 56 défauts corrigés
+## Les 58 défauts corrigés
 
-*(56 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 58 corrections en tout. Le titre annonçait **53** avant que la
-fusion de la base n'apporte D-10, D-66 et D-67 ; il annonçait **41** pour 42
-lignes numérotées avant l'ajout de D-52, D-54, D-55 et D-56. Le compte de
-tête est faux à chaque fusion — c'est exactement le défaut de registre que la
-section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
-défauts corrigés ». Compté, pas estimé — la commande est
+*(58 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 60 corrections en tout. Le titre annonçait **56** avant l'ajout
+de D-68 et D-70 (D-69 n'entre pas ici : rapport seul, il vit dans
+`DEFAUTS.md`) ; il annonçait **53** avant que la fusion de la base n'apporte
+D-10, D-66 et D-67 ; **41** pour 42 lignes numérotées avant l'ajout de D-52,
+D-54, D-55 et D-56. Le compte de tête est faux à chaque fusion — c'est
+exactement le défaut de registre que la section « Compte de tête inexact »
+plus bas rapporte déjà pour « Les 24 défauts corrigés ». Compté, pas estimé
+— la commande est
 `grep -o '^| D-[0-9]*' docs/RESULTS.md | sort -u -t- -k2 -n | wc -l`.)*
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
@@ -247,8 +249,7 @@ audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
 | D-62 | `plot_pareto_with_isocost` fixait sa fenêtre verticale à **(-0,05 ; 0,40) en dur**. C'est la figure qui porte le front de Pareto et les lignes d'iso-score du rescore : un point hors cadre ne se signale pas, il disparaît, et le front semble s'arrêter là où le cadre s'arrête | mesuré sur les deux bases gelées, erreur physique moyennée sur les scénarios : `q_has_v2_phase1` **0/178** hors cadre (phys ∈ [0,0348 ; 0,2997]) — figure **inchangée** — et `classical_v2_phase1` **9/125** hors cadre (phys ∈ [0,0114 ; **2,2749**]), dont **3 des 46 points du front de Pareto**. Après : la fenêtre reste (-0,05 ; 0,40) quand tout y entre et s'élargit aux données sinon. Aucun seuil inventé — les bornes viennent des points tracés | `pytest tests/pipeline/test_pareto_window_hides_nothing.py` |
 | D-64 | `import_Neon_data_to_local.py` — le **seul** code du dépôt qui supprime une étude Optuna — supprimait l'étude de **destination** avant d'avoir lu la **source**, puis rattrapait tout échec par un message ❌ et un code de sortie **0**. Un import qui n'a rien importé était indiscernable d'un import réussi, et la destination était déjà détruite | mesuré, deux SQLite (`--in-url` remplace Neon) : destination à **5 essais**, source ne portant pas l'étude → avant, `KeyError`, **code 0**, et **l'étude locale n'existe plus** ; après, **5 essais intacts**, code 0, ligne « destination laissée intacte ». Échec réel de copie (destination inouvrable) : **code 0 → code 1**. Import réel : inchangé, 2 → **7** essais copiés. **L'empreinte est dans le dépôt** : 8 des 10 bases de `results/hyperparams/optuna_studies/` portent le schéma Optuna complet et **zéro ligne**, et `classical_v2_phase2` / `classical_v2_phase3` pèsent **274 432** et **299 008** octets là où un schéma neuf en pèse **114 688** — des pages libérées, donc des lignes écrites puis supprimées. Ce n'est pas une preuve que ce script les a vidées ; c'est la fermeture du chemin qui le fait | `pytest tests/pipeline/test_import_never_destroys_destination.py` |
 | D-68 | `plot_amr_state` — la **seule** fonction de `src/visual.py` et `src/help_visual.py` qui s'exécute en production : `pipeline.py` l'appelle 4× par pas de verrouillage et sauve un PNG à chaque fois — étiquetait `Grid X` l'axe horizontal et `Grid Y` le vertical. `imshow` place l'axe 0 du tableau en **vertical** ; `Jz` étant indexé `[X, Y]` (`grid.py` : `AXIS_X = 0`, `AXIS_Y = 1`, et `get_fluxes` forme bien `dBy/dX − dBx/dY` avec `axis=0` pour X), l'axe horizontal porte **Y**. Les deux étiquettes nommaient donc l'axe de l'autre. La cause est écrite trois lignes plus haut : un commentaire annonçait « axis=1 est d/dx (colonnes), axis=0 est d/dy (lignes) », la convention `indexing='xy'` que `grid.py` désigne explicitement comme n'étant pas celle du dépôt. La figure **paraissait juste** — les cadres d'attention tombent bien sur les structures qu'ils désignent, vérifié — seule la lecture des positions était transposée | champ d'essai qui **sépare** (une cellule brillante hors diagonale, `Jz ≠ Jzᵀ`) : structure posée en **X=10, Y=40** au sens de `grid.py`, **relue sur la figure X=40, Y=10** avant, **X=10, Y=40** après. Seules les **étiquettes** changent : le tableau passé à `imshow` et les cadres sont bit-à-bit identiques, un test l'épingle. Aucun nombre publié ne bouge ; la géométrie des PNG déjà publiés non plus | `pytest tests/pipeline/test_amr_figure_axes.py` |
-| D-69 | *(en cours — passe Vigil du 14 août, T31 `h1_curl_convention_gap` : les nombres publiés ne sont plus reproductibles à HEAD. Numéro réservé avant rédaction)* | — | — |
-| D-70 | *(en cours — passe Vigil du 14 août, `_hard_patches` : la docstring annonce le label canonique, la fonction en calcule un autre. Numéro réservé avant rédaction)* | — | — |
+| D-70 | `_hard_patches` (`study/h1_solver/h1_curl_convention_gap.py`) — la « vérité terrain » de durété utilisée par les métriques de classement de T31 (Spearman, F1 à budget apparié) : sa docstring promettait « même définition que `study/pipeline/hard_patch_labels.py` » (l'erreur L2 de reconstruction par grossissement en bloc, sommée sur les 4 champs, normalisée par le RMS global). Le corps calculait autre chose — l'écart-type intra-patch de la **norme** du champ (`sqrt(vx²+vy²+Bx²+By²)`) — une formule qui coïncide avec la canonique sur un champ lisse mais **s'inverse** dès qu'un patch oscille à magnitude constante : l'écart-type y est nul (rien ne « varie » en norme) alors que l'information fine y est totalement détruite par le grossissement en bloc, donc l'erreur de reconstruction canonique y est maximale | champ d'essai qui **sépare** : un patch en damier `vx=±1` (les 3 autres champs nuls dans ce patch, magnitude rigoureusement constante `= 1`), sur fond de bruit lisse. Ancienne formule : `0,0000` — **minimum** du champ entier, patch jugé le plus facile. `patch_l2_errors` (canonique) : `1,0314` — **maximum** du champ, patch le plus difficile. Classement inversé, pas seulement décalé. Nouvelle formule : identique à `patch_l2_errors` à **1,1e−16** près sur un champ aléatoire quelconque (4 champs, 32×32, 4×4 patches), et retrouve le damier comme patch le plus dur. Aucun nombre publié ne bouge — les artefacts `.npz` de T31 sont déjà signalés non reproductibles pour une autre raison (D-69, `DEFAUTS.md`), donc rien de publié aujourd'hui ne dépendait de cette version | `pytest tests/study/test_hard_patches_matches_canonical.py` |
 
 **Douze de ces défauts viennent d'une seule question** — *deux chemins censés
 coïncider coïncident-ils encore ?* Aucun test de valeur ne pouvait les voir :

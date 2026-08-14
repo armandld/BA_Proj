@@ -136,19 +136,42 @@ def verdict(lo, hi):
 
 
 def _hard_patches(vx, vy, Bx, By, N, dim, quantile):
-    """Label « patch dur » : ecart-type intra-patch rapporte au RMS global.
+    """Label « patch dur » : erreur L2 de reconstruction par grossissement en bloc.
 
-    Meme definition que `study/pipeline/hard_patch_labels.py`, recopiee ici
-    sur les seuls champs dont ce script dispose. Le quantile est calcule par
+    Meme definition que `study/pipeline/hard_patch_labels.py::patch_l2_errors`
+    (moyenne par bloc puis relevement plus proche voisin, ecart quadratique
+    moyen sur les 4 champs, normalise par le RMS global), recopiee ici sur les
+    seuls champs dont ce script dispose. Le quantile est calcule par
     instantane : ce script compare deux variantes SUR LE MEME label, donc le
     choix du seuil n'entre pas dans l'ecart mesure.
+
+    D-70 : la version precedente calculait l'ecart-type intra-patch de la
+    NORME du champ (sqrt(vx^2+vy^2+Bx^2+By^2)) — une formule differente de
+    celle que la docstring annoncait, qui s'accorde avec `patch_l2_errors`
+    sur un champ lisse mais diverge totalement des qu'un champ oscille a
+    magnitude constante (ecart-type nul, alors que l'information est
+    perdue par le grossissement en bloc : erreur de reconstruction maximale).
+    Mesure sur un patch en damier +1/-1 (magnitude constante, information
+    fine detruite par la moyenne de bloc) : ancienne formule 0.0000 (patch
+    juge LE PLUS FACILE), `patch_l2_errors` 3.327 (patch le plus difficile
+    du champ, x60 le second) — classement invertie. Voir
+    tests/study/test_hard_patches_matches_canonical.py.
     """
     ps = N // dim
-    mag = np.sqrt(vx ** 2 + vy ** 2 + Bx ** 2 + By ** 2)
-    blocks = mag.reshape(dim, ps, dim, ps)
-    local = blocks.std(axis=(1, 3))
-    rms = float(np.sqrt(np.mean(mag ** 2)))
-    l2 = local / (rms + 1e-30)
+
+    def _coarsen_prolong(field):
+        coarse = field.reshape(dim, ps, dim, ps).mean(axis=(1, 3))
+        return np.repeat(np.repeat(coarse, ps, axis=0), ps, axis=1)
+
+    rms = float(np.sqrt(np.mean(vx ** 2 + vy ** 2 + Bx ** 2 + By ** 2)))
+    rms = rms if rms > 1e-15 else 1.0
+    diff_sq = (
+        (vx - _coarsen_prolong(vx)) ** 2
+        + (vy - _coarsen_prolong(vy)) ** 2
+        + (Bx - _coarsen_prolong(Bx)) ** 2
+        + (By - _coarsen_prolong(By)) ** 2
+    )
+    l2 = np.sqrt(diff_sq.reshape(dim, ps, dim, ps).mean(axis=(1, 3))) / rms
     thr = float(np.quantile(l2, quantile))
     return l2, thr, (l2 > thr)
 
