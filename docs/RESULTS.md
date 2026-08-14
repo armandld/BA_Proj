@@ -3092,6 +3092,18 @@ diffèrent que par lesquels.
 décisions 0.921 dans les deux cas. La convention change donc réellement les
 entrées — mais pas dans le bon sens.
 
+**Table non reproductible à HEAD (D-69, `DEFAUTS.md`).** Rejouée telle
+quelle sur la branche vive, cette table ne ressort plus : à dim=16 le
+verdict `Spearman vs dureté` passe de **dégrade** (IC95 excluant zéro) à
+**indécidable** (IC95 l'incluant). Cause identifiée, pas seulement
+constatée : le solveur a changé sous les quatre scénarios canoniques entre
+le hash `8ee5c8a` ci-dessus et aujourd'hui (D-25 : projection de B par
+défaut désactivée ; D-26/D-27 : `harris_tearing` réamorcé à 100 % de son
+amplitude prévue au lieu de 27,5 %). La lecture qui suit — « corriger sans
+réoptimiser dégrade à dim=16 » — s'appuie sur un intervalle qui n'est plus
+celui que le dépôt reproduit. Voir D-69 pour la mesure avant/après complète
+et la décision requise avant de la citer telle quelle.
+
 ## Ce qu'il faut en conclure
 
 **Corriger la convention d'axes n'améliore pas la tâche, et à dim=16 la
