@@ -387,6 +387,36 @@ def print_comparison(results):
 
 
 # -------------------------------------------------------------------
+# Analytical init (phase 10a)
+# -------------------------------------------------------------------
+
+def build_init_map(tags, thr_star, c_bias_star, degenerate):
+    """tag -> theta_init = (log10 c_bias*, thr*), lignes degenerees ecartees.
+
+    Returns (init_map, n_skipped).
+
+    D-86 : extrait de `main()` pour etre testable sans rejouer la campagne
+    (meme geste que D-46/D-50/D-52/D-85). La phase 10a marque desormais les
+    lignes dont la courbe F1(c_bias) est plate : leur `c_bias*` n'est pas un
+    optimum mais le bord GAUCHE de la grille, rendu par `argmax` faute de
+    mieux. Les prendre pour `theta_init` demarrait l'optimiseur a
+    `log10 c_bias = -1`, le bord du domaine, sur la foi d'une mesure qui
+    n'avait rien mesure — et cela arrivait sur 14 des 52 configurations
+    parcourues. Une ligne degeneree (ou NaN, pour un scenario dont tous les
+    Re le sont) est ecartee : le module retombe sur son x0 par defaut,
+    exactement comme si la phase 10a n'avait pas tourne.
+    """
+    init_map, n_skipped = {}, 0
+    for t, th, cb, dg in zip(tags, thr_star, c_bias_star, degenerate):
+        if bool(dg) or not (np.isfinite(cb) and np.isfinite(th)):
+            n_skipped += 1
+            continue
+        init_map[str(t)] = np.array(
+            [np.log10(max(float(cb), 0.1)), float(th)])
+    return init_map, n_skipped
+
+
+# -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
 
@@ -473,11 +503,21 @@ def main():
             ana = np.load(ana_path, allow_pickle=False)
             tags = ana["tags"]; thr_s = ana["thr_star"]
             c_s = ana["c_bias_star"]
-            for t, th, cb in zip(tags, thr_s, c_s):
-                init_map[str(t)] = np.array(
-                    [np.log10(max(float(cb), 0.1)), float(th)])
+            # D-86 : la phase 10a marque desormais les lignes dont la courbe
+            # F1(c_bias) est plate — leur `c_bias*` n'est pas un optimum mais
+            # le bord gauche de la grille, rendu par `argmax` faute de mieux.
+            # Les prendre pour theta_init demarrait l'optimiseur au bord du
+            # domaine sur la foi d'une mesure qui n'avait rien mesure. Une
+            # ligne degeneree (ou NaN, pour un scenario dont tous les Re le
+            # sont) est ecartee : le module retombe sur son x0 par defaut,
+            # exactement comme si la phase 10a n'avait pas tourne.
+            degen = ana["degenerate"] if "degenerate" in ana.files \
+                else np.zeros(len(tags), dtype=bool)
+            init_map, n_skip = build_init_map(tags, thr_s, c_s, degen)
             print(f"  analytical init loaded from "
-                  f"{os.path.basename(ana_path)}: {len(init_map)} entries\n")
+                  f"{os.path.basename(ana_path)}: {len(init_map)} entries"
+                  + (f", {n_skip} degenerees ecartees (D-86)"
+                     if n_skip else "") + "\n")
         else:
             print(f"  no analytical init at {ana_path} -> "
                   f"using default x0\n")

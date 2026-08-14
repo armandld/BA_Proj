@@ -55,6 +55,12 @@ from ising_terms_and_annealing import (
 )
 
 
+# D-86 : au-dessous de cet ecart max-min, la courbe F1(c_bias) est plate et
+# son `argmax` ne designe rien. Voir le commentaire dans `analyse_snapshots`
+# pour la separation mesuree (0,125 a 0,433 contre exactement 0).
+F1_SPAN_TOL = 1e-12
+
+
 # -------------------------------------------------------------------
 # 1D threshold sweep (classical indicator F1 vs L2-hard mask)
 # -------------------------------------------------------------------
@@ -211,6 +217,29 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
         )
     f1_grid /= len(snap_cache)
 
+    # D-86 : `argmax` sur une courbe PLATE rend l'indice 0 — le bord GAUCHE
+    # de la grille, c'est-a-dire le point le PLUS domine par les couplages,
+    # l'oppose de ce que le balayage cherche. Quand aucun c de la grille ne
+    # sort le champ moyen de l'etat uniforme « ne pas raffiner », F1(c) est
+    # identiquement nul : `c_bias_star = 0.1` s'ecrivait alors dans
+    # l'artefact, indiscernable d'un optimum mesure, et la phase 10 le lisait
+    # comme `theta_init = (log10 0.1, thr*)`. Meme forme que D-56, un cran
+    # plus bas : la campagne trouvait bien ses entrees, c'est le balayage
+    # lui-meme qui ne mesurait rien.
+    #
+    # Mesure (N=96, dim=4, 8 instantanes, graine 0) : `|h_unit| max` =
+    # 1,91e-02 contre `|C| max` = 7,80 sur harris_tearing Re=400 — a c = 100,
+    # borne haute de la grille, le biais plafonne a 1,91 et ne renverse aucun
+    # site. 14 balayages plats sur 52 configurations parcourues : 0/16 a
+    # dim=2, 5/16 a dim=4 (N=96), 8/16 a dim=8, 1/4 a dim=4 (N=256).
+    #
+    # Le critere est la PLATITUDE, pas la nullite : c'est elle qui rend
+    # l'argmax arbitraire. La separation mesuree ne laisse aucune zone grise
+    # — les 38 balayages informatifs ont un ecart max-min de 0,125 a 0,433,
+    # les 14 degeneres un ecart exactement nul.
+    f1_span = float(f1_grid.max() - f1_grid.min())
+    degenerate = bool(f1_span <= F1_SPAN_TOL)
+
     bi = int(np.argmax(f1_grid))
     c_star = float(c_grid[bi])
     f1_mf  = float(f1_grid[bi])
@@ -221,7 +250,31 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
         f1_mf=f1_mf, classical_f1=f1_class,
         f1_grid=f1_grid, c_grid=np.array(c_grid),
         snap_indices=np.array(snap_indices),
+        f1_span=f1_span, degenerate=degenerate,
     )
+
+
+# -------------------------------------------------------------------
+# Aggregation (D-86)
+# -------------------------------------------------------------------
+
+def mean_over_informative(rows, key):
+    """Moyenne de `key` sur les seules lignes NON degenerees ; NaN si aucune.
+
+    D-86 : extrait de `main()` pour etre testable sans rejouer la campagne
+    (meme geste que D-46/D-50/D-52/D-85). Une ligne degeneree n'a pas mesure
+    de `c_bias*` — l'agreger avec celles qui en ont un tire la moyenne vers
+    le bord gauche de la grille. Mesure sur mhd_rotor (N=96, dim=4), c* par
+    Re = [74,99 ; 100 ; 100 ; 0,10] dont la derniere est degeneree : la
+    moyenne passe de 68,77 a 91,66, soit +0,125 decade la ou la phase 10
+    lit ce nombre (elle en prend le log10).
+
+    NaN plutot qu'un repli : un scenario dont tous les Re sont degeneres
+    n'a pas de `c_bias*`, et 0,1000 est un nombre fini, plausible, qui ne
+    mesure rien — exactement ce que D-86 corrige.
+    """
+    vals = [r[key] for r in rows if not r["degenerate"]]
+    return float(np.mean(vals)) if vals else float("nan")
 
 
 # -------------------------------------------------------------------
@@ -272,7 +325,9 @@ def main():
             print(f"  [{sc} Re={re}] thr*={res['thr_star']:.3f} "
                   f"c_bias*={res['c_bias_star']:.2f}  "
                   f"F1_MF={res['f1_mf']:.3f}  "
-                  f"classical={res['classical_f1']:.3f}   [{dt:.1f}s]")
+                  f"classical={res['classical_f1']:.3f}   [{dt:.1f}s]"
+                  + ("   DEGENERE : F1(c) plat, c_bias* n'est que le bord "
+                     "gauche de la grille (D-86)" if res["degenerate"] else ""))
 
     if not per_cfg:
         # D-56 : ce garde imprimait « no input. » et rendait la main avec le
@@ -285,33 +340,66 @@ def main():
             "arguments donnes. Le script sortait ici avec le code 0 et sans "
             "artefact, donc sans se distinguer d'une campagne reussie.")
 
+    # D-86 : un balayage degenere n'a pas mesure de c_bias*. L'agreger avec
+    # ceux qui en ont un tire la moyenne vers le bord gauche de la grille —
+    # sur mhd_rotor (N=96, dim=4), c* par Re valait [74,99 ; 100 ; 100 ; 0,10]
+    # dont le dernier est degenere : moyenne 68,77 contre 91,66 sur les trois
+    # mesures reelles. Les degeneres sortent donc de l'agregation, et une
+    # ligne dont TOUTES les entrees sont degenerees ne rend pas un nombre
+    # invente : elle rend NaN et se declare telle.
+    n_degen = sum(r["degenerate"] for r in per_cfg)
+    if n_degen == len(per_cfg):
+        # Meme regle que D-56, un cran plus bas : la campagne a bien trouve
+        # ses entrees, mais aucun balayage n'a rien mesure. Sans ce garde
+        # l'artefact s'ecrivait quand meme, avec `c_bias*` = bord gauche
+        # partout, indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            f"balayage vide : les {len(per_cfg)} configurations ont toutes "
+            "une courbe F1(c_bias) plate — aucun c_bias* n'a ete mesure. "
+            "Le champ moyen reste dans l'etat uniforme sur toute la grille "
+            "c_bias ; elargir --n-cgrid ou sa borne haute, ou reduire --dim.")
+
     # ---- per-scenario aggregation ----
     by_scene = {}
     for r in per_cfg:
         by_scene.setdefault(r["scenario"], []).append(r)
 
     scenario_rows = []
-    print("\n  per-scenario (mean over Re):")
+    print("\n  per-scenario (mean over Re, degenerate rows excluded):")
     for sc, rows in by_scene.items():
-        thr = float(np.mean([r["thr_star"] for r in rows]))
-        c   = float(np.mean([r["c_bias_star"] for r in rows]))
-        f1m = float(np.mean([r["f1_mf"] for r in rows]))
-        f1c = float(np.mean([r["classical_f1"] for r in rows]))
-        scenario_rows.append(dict(
-            tag=f"scenario:{sc}", thr_star=thr, c_bias_star=c,
-            f1_mf=f1m, classical_f1=f1c))
-        print(f"    {sc:<18} thr*={thr:.3f}  c_bias*={c:.2f}  "
-              f"F1_MF={f1m:.3f}  classical={f1c:.3f}")
+        n_d = sum(r["degenerate"] for r in rows)
+        row = dict(
+            tag=f"scenario:{sc}",
+            thr_star=mean_over_informative(rows, "thr_star"),
+            c_bias_star=mean_over_informative(rows, "c_bias_star"),
+            f1_mf=mean_over_informative(rows, "f1_mf"),
+            classical_f1=mean_over_informative(rows, "classical_f1"),
+            degenerate=(n_d == len(rows)),
+        )
+        scenario_rows.append(row)
+        print(f"    {sc:<18} thr*={row['thr_star']:.3f}  "
+              f"c_bias*={row['c_bias_star']:.2f}  "
+              f"F1_MF={row['f1_mf']:.3f}  "
+              f"classical={row['classical_f1']:.3f}"
+              + (f"   ({n_d}/{len(rows)} degeneres exclus)" if n_d else "")
+              + ("   DEGENERE : aucun balayage informatif (D-86)"
+                 if row["degenerate"] else ""))
 
     # ---- joint (mean over everything) ----
-    thr_j = float(np.mean([r["thr_star"]    for r in per_cfg]))
-    c_j   = float(np.mean([r["c_bias_star"] for r in per_cfg]))
-    f1mj  = float(np.mean([r["f1_mf"]       for r in per_cfg]))
-    f1cj  = float(np.mean([r["classical_f1"] for r in per_cfg]))
-    joint_row = dict(tag="joint", thr_star=thr_j, c_bias_star=c_j,
-                     f1_mf=f1mj, classical_f1=f1cj)
-    print(f"\n  joint  thr*={thr_j:.3f}  c_bias*={c_j:.2f}  "
-          f"F1_MF={f1mj:.3f}  classical={f1cj:.3f}")
+    joint_row = dict(
+        tag="joint",
+        thr_star=mean_over_informative(per_cfg, "thr_star"),
+        c_bias_star=mean_over_informative(per_cfg, "c_bias_star"),
+        f1_mf=mean_over_informative(per_cfg, "f1_mf"),
+        classical_f1=mean_over_informative(per_cfg, "classical_f1"),
+        degenerate=False,          # garde ci-dessus : au moins un informatif
+    )
+    print(f"\n  joint  thr*={joint_row['thr_star']:.3f}  "
+          f"c_bias*={joint_row['c_bias_star']:.2f}  "
+          f"F1_MF={joint_row['f1_mf']:.3f}  "
+          f"classical={joint_row['classical_f1']:.3f}"
+          + (f"   ({n_degen}/{len(per_cfg)} degeneres exclus)"
+             if n_degen else ""))
 
     # ---- per-config (for reference) ----
     cfg_rows = []
@@ -320,6 +408,7 @@ def main():
             tag=f"cfg:{r['scenario']}_Re{r['Re']}",
             thr_star=r["thr_star"], c_bias_star=r["c_bias_star"],
             f1_mf=r["f1_mf"], classical_f1=r["classical_f1"],
+            degenerate=r["degenerate"], f1_span=r["f1_span"],
         ))
 
     # ---- save ----
@@ -333,6 +422,11 @@ def main():
         c_bias_star=np.array([r["c_bias_star"] for r in all_rows]),
         f1_mf=np.array([r["f1_mf"]       for r in all_rows]),
         classical_f1=np.array([r["classical_f1"] for r in all_rows]),
+        # D-86 : le drapeau voyage AVEC les nombres. Sans lui, un
+        # `c_bias_star` de bord de grille est indiscernable d'un optimum
+        # pour tout consommateur de l'artefact.
+        degenerate=np.array([bool(r["degenerate"]) for r in all_rows]),
+        f1_span=np.array([float(r.get("f1_span", np.nan)) for r in all_rows]),
         c_grid=c_grid,
     )
     print(f"\n  saved: {os.path.basename(out)}")
