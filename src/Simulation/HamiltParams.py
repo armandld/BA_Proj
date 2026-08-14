@@ -571,9 +571,27 @@ class PhysicalMapper:
                 xpoint_norm, xpoint_crit, self.beta_xpoint
             )
 
-            # Scale by f_Rm_cell (already computed above for K_plaquettes)
+            # PAS de `f_Rm_cell` ici : cette porte vaut
+            # `_f_gate(|B| dx / eta)` et un point X est PAR DEFINITION un
+            # zero de B. Elle annulait donc le coefficient exactement a
+            # l'endroit qu'il doit signaler, ne laissant que l'anneau
+            # autour. Mesure sur une nappe de 2 cellules a N=256 : seuil au
+            # point X = 0.5292, porte au point X = 0.0000 (sur les six
+            # epaisseurs testees), coefficient resultant 0.0000 contre
+            # 0.8537 sur l'anneau.
+            #
+            # Le commentaire d'origine annoncait deja « No separate g-gate
+            # needed (signal is intrinsically localized) » pendant que le
+            # code appliquait la porte : le commentaire et le code se
+            # contredisaient. Voir tests/mapping/test_xpoint_at_training_resolution.py
+            #
+            # ATTENTION — ce retrait ne suffit pas a faire tirer le terme sur
+            # des champs REELS : a N=256 le seuil lui-meme n'est pas atteint
+            # (signal/seuil = 7e-4 sur island_coalescence). La normalisation
+            # est le second verrou, et il reste ouvert. Voir RESULTS.md.
+            #
             # Even-parity ZZZZ: output negative so cost_hamiltonian uses as-is
-            K_xpoint = -1.0 * f_Rm_cell * mic_xpoint
+            K_xpoint = -1.0 * mic_xpoint
             result["K_xpoint"] = K_xpoint
 
         return result

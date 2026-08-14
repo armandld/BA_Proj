@@ -5187,3 +5187,79 @@ deux la colonne centrale et obtiennent **0,0208**, soit 93 % de mieux. Le
 « ground truth » du protocole n'est donc pas un optimum de raffinement, et le
 verdict « agreement 0/3 » qu'il imprime ne mesure pas ce qu'il annonce. À
 reprendre avant d'en tirer une revendication.
+
+---
+
+# La porte de `K_xpoint` retirée — et le second verrou qui reste
+
+**Commande.** `pytest tests/mapping/test_xpoint_at_training_resolution.py -q`
+(11 tests)
+
+Décision de USER, prise après le banc analytique. Modification de `src/` :
+`K_xpoint = -1.0 * f_Rm_cell * mic_xpoint` devient `K_xpoint = -1.0 * mic_xpoint`.
+
+## Pourquoi la porte devait sauter
+
+`f_Rm_cell = _f_gate(|B|·dx/η)` — et un point X est **par définition un zéro
+de B**. La porte annulait donc le coefficient exactement à l'endroit qu'il
+doit signaler. Mesuré sur une nappe de 2 cellules à N=256 :
+
+| | au point X |
+|---|---|
+| seuil (`mic`) | **0,5292** |
+| porte (`f_Rm`) | **0,0000** — sur les six épaisseurs testées |
+| `K_xpoint` résultant | **0,0000** |
+| `K_xpoint` sur l'anneau | 0,8537 |
+
+Le détecteur marquait l'anneau, jamais le centre. Le commentaire d'origine
+réclamait déjà ce retrait — *« No separate g-gate needed (signal is
+intrinsically localized) »* — pendant que le code appliquait la porte.
+
+Verrouillé par `test_le_vrai_mappeur_marque_le_point_X`, qui appelle
+`compute_coefficients` elle-même. **Vérifié par mutation** : il échoue quand
+on restaure la porte, il passe quand on la retire. Les autres tests du banc
+reconstruisent la chaîne étage par étage pour l'inspecter — ils ne
+verraient pas un changement dans `src/`, et c'est un piège que j'avais
+d'abord laissé dans mon propre banc.
+
+## Ce que ce retrait ne fait PAS — le second verrou
+
+**Sur des champs réels, à la résolution d'entraînement, le terme reste nul.**
+Le seuil n'est pas atteint, et de très loin :
+
+| scénario | N=64 | N=128 | N=256 |
+|---|---|---|---|
+| `island_coalescence`, signal/seuil | 0,171 | 0,0105 | **0,0007** |
+| `harris_tearing`, signal/seuil | 0,045 | 0,0029 | **0,0002** |
+
+Il faut dépasser 1 pour que le terme tire. On en est à **1 400 fois** en
+dessous à N=256 — et l'écart **empire quand la grille se raffine**.
+
+La cause est une incohérence dimensionnelle. `sig = max(0, −det(J_B))` est
+un gradient **au carré**, normalisé par `B0²/dx²` — une seule puissance de
+`dx²` — puis comparé à un seuil lui-même au carré. Le rapport varie donc en
+**dx⁴**. Mesuré : de N=64 à N=256, il chute d'un facteur **244**, contre 256
+attendu pour dx⁴.
+
+Le canal du courant, lui, est cohérent : `|Jz|/B0` comparé à
+`η/(dx²·B0)` varie en **dx²** (facteur 15 mesuré, 16 attendu).
+
+**Candidat, non appliqué :** `√sig` a les mêmes unités que `|Jz|`, donc la
+même normalisation et le même seuil. Mesuré, il varie bien en **dx²**
+(facteur 16) et gagne un facteur 37 à 68 sur le rapport — sans suffire à
+franchir le seuil à N=256 sur ces champs.
+
+| | N=64 | N=128 | N=256 | loi |
+|---|---|---|---|---|
+| forme actuelle | 0,171 | 0,0105 | 0,0007 | dx⁴ |
+| candidat `√sig` | 0,414 | 0,1025 | 0,0256 | **dx²** |
+| `Jz`, référence | 5,137 | 1,349 | 0,341 | dx² |
+
+*À noter : à N=256, `K_plaquettes` est nul lui aussi sur ces champs — le
+canal `Jz` tombe à 0,341, sous son propre seuil. Les deux familles ZZZZ se
+taisent à la résolution d'entraînement, ce qui rejoint le verdict déjà
+publié « le terme ZZZZ était numériquement mort ».*
+
+**Décision ouverte.** Passer à la normalisation `√sig` rend le canal point X
+dimensionnellement cohérent avec le canal courant. C'est un second changement
+de `src/`, non pris.
