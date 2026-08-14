@@ -1112,16 +1112,25 @@ passe, qui portait sur `closed_loop/` seul.
 ni dans `DEFAUTS.md`. `closed_loop/` s'était fermé la veille sans entrée
 ouverte, donc c'était le suivant dans l'ordre de la fiche.
 
-**Lu en entier, fonction par fonction — 6 fichiers, ~2 100 lignes :**
+**Lu en entier, fonction par fonction — 7 fichiers, ~2 460 lignes :**
 `h2b_ceiling_random_split.py` (461), `h2b_loso_transfer.py` (239),
 `h2b_loso_delta_ci.py` (240), `h2b_dynamic_ground_truth.py` (295),
-`h2b_feature_selection.py` (270), `h2b_train_linear_hamiltonian.py` (545).
+`h2b_feature_selection.py` (270), `h2b_train_linear_hamiltonian.py` (545),
+`h2b_variational_classifier.py` (362).
 
-**Les 13 autres n'ont PAS été lus fonction par fonction.** Ils n'ont été
-traversés que par deux balayages mécaniques : l'audit AST des gardes
-d'entrée (D-75) et la vérification que chaque script accepte encore les
-drapeaux que les lanceurs lui passent (D-76). Dire « module audité » ici
-serait faux — au sens de ce document, un fichier n'est audité que quand ses
+**Lu partiellement, et seulement autour du défaut trouvé** :
+`h2b_scenario_ablation.py` (la boucle LOSO et ses quatre bras — D-82),
+`h2b_psi_feature_loso.py` (les helpers purs `signed_combine`,
+`psi_signed_v1`, `psi_abs_v1`, `block_agg` : vérifiés cohérents entre eux et
+avec la formule que la docstring pré-enregistre ; la boucle principale non).
+
+**Les 10 restants n'ont PAS été lus.** Ils n'ont été traversés que par trois
+balayages mécaniques : l'audit AST des gardes d'entrée (D-75), la
+vérification que chaque script accepte encore les drapeaux des lanceurs
+(D-76), et la relecture des **30 appels de `best_threshold_f1` de tout
+`study/`** déclenchée par D-81 — c'est ce dernier qui a donné D-82, et il
+n'en a trouvé que deux fautifs sur trente. Dire « module audité » ici serait
+faux : au sens de ce document, un fichier n'est audité que quand ses
 contrats ont été lus et qu'un test emprunte ses configurations.
 
 **Vérifié et trouvé sain**, mesuré et non supposé :
@@ -1152,8 +1161,15 @@ ont un artefact dans `results/` — `upper_bound_*` (8 fichiers) et `t29_*`
 (4). Les tâches T1, T1b, T4, T5, T6, T7 n'ont laissé aucun `.npz` : leur code
 existe, leur sortie non. À savoir avant de citer un de leurs nombres.
 
-**Défauts trouvés** : D-75 (12 sites ici sur 15), D-77, D-78, D-79, D-80 —
-détail et mesures dans `RESULTS.md`.
+**Défauts trouvés** : D-75 (12 sites ici sur 15), D-77, D-78, D-79, D-80,
+D-81, D-82 — détail et mesures dans `RESULTS.md`.
+
+**Une discipline vérifiée sur tout `study/`, pas seulement ici** : les 30
+appels de `best_threshold_f1` ont été relus un par un. **28 prennent leur
+seuil sur le train** — c'est la règle du dépôt, celle de `fit_eval`. Les
+deux exceptions étaient `h2b_variational_classifier` (D-81) et
+`h2b_scenario_ablation` (D-82), toutes deux sur le bras dont le script
+cherche à mesurer l'avantage ou la chute.
 
 **Reste à faire sur ce module**, dans cet ordre : les 13 fichiers non lus,
 en commençant par ceux qui portent un artefact (`h2b_ceiling_random_split`
