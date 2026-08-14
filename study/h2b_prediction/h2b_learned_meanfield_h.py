@@ -63,7 +63,21 @@ from sklearn.metrics import f1_score
 
 def fit_learned_h(Xtr, Ytr, seed=0, C_reg=1.0):
     """Fit logistic regression -> effective (w, b) in standardised feature
-    space. Decision: h_i = w . phi_i - b > 0  <=>  refine."""
+    space.
+
+    Le champ rendu est ADDITIF dans les deux espaces :
+
+        h_i = z_i . w_std + b_std          (espace standardise, `predict_h`)
+            = x_i . w_raw + b_raw          (unites physiques)
+
+    Verifie numeriquement : les deux expressions coincident a 3,6e-15 sur
+    400 points a 9 features. La docstring annoncait `h_i = w . phi_i - b` ;
+    appliquee telle quelle au `b_raw` rendu, elle decale le champ de 2*b_raw
+    (mesure : ecart max 2,01 sur le meme echantillon). Aucun consommateur du
+    depot n'etait touche — `h2b_blocked_split` et `h2b_scenario_specialisation`
+    passent tous deux par `predict_h` — mais le contrat est aligne sur le
+    calcul plutot que l'inverse.
+    """
     scaler = StandardScaler().fit(Xtr)
     Zt = scaler.transform(Xtr)
     lr = LogisticRegression(
