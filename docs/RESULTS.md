@@ -17,12 +17,13 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Les 53 défauts corrigés
+## Les 56 défauts corrigés
 
-*(53 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
-numérotées — 55 corrections en tout. Le titre annonçait **41** pour 42 lignes
-numérotées avant l'ajout de D-52, D-54, D-55 et D-56 : le compte de tête
-était de nouveau faux d'une unité, exactement le défaut de registre que la
+*(56 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
+numérotées — 58 corrections en tout. Le titre annonçait **53** avant que la
+fusion de la base n'apporte D-10, D-66 et D-67 ; il annonçait **41** pour 42
+lignes numérotées avant l'ajout de D-52, D-54, D-55 et D-56. Le compte de
+tête est faux à chaque fusion — c'est exactement le défaut de registre que la
 section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
 défauts corrigés ». Compté, pas estimé — la commande est
 `grep -o '^| D-[0-9]*' docs/RESULTS.md | sort -u -t- -k2 -n | wc -l`.)*
@@ -104,6 +105,9 @@ fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
 
 | # | ce qui était faux | avant → après | vérifier |
 |---|---|---|---|
+| D-66 | `pipeline.main` précalculait le DNS avec `PHASE` puis passait à `pipeline()` les **défauts de la CLI** | boucle **jamais exécutée**, `combined = 0,333333` sur un run vide → configuration du scénario, garde `T_MAX > T_START` | `pytest tests/pipeline/test_full_launch_config.py -k d66` |
+| D-67 | `score()` notait un run à **zéro pas** au lieu de crier | `patch_ratio = 1.0` par repli → **lève** | `pytest tests/pipeline/test_full_launch_config.py -k d67` |
+| D-10 | `compare_rotor_budget` levait `TypeError` à l'étape 4/5, et ses défauts demandaient **69 Go** | n'a **jamais** tourné → tourne, garde posée avant le DNS | `pytest tests/pipeline/test_compare_rotor_budget.py` |
 | D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
 | D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
 
@@ -5231,3 +5235,136 @@ En vérifiant les quotas de la campagne gelée contre `PHASES` :
 Les treize fonctions de tracé. Comme pour `recompute_lambda_scores`, elles
 n'écrivent que des `.png` : le chemin de données et le chemin d'échec sont
 audités, la mise en page ne l'est pas.
+
+---
+
+# D-66 et D-67 — le lancement complet ne calculait rien
+
+**Commande.** `pytest tests/pipeline/test_full_launch_config.py -q`
+(8 tests, ~10 s)
+
+`python src/pipeline.py` est le **seul** moyen de lancer une simulation
+complète à la main. Rien dans le dépôt n'importe `main` — `train_hyperparams`,
+`closed_loop_campaign` et les tests importent tous la *fonction* `pipeline`.
+C'est précisément pourquoi personne ne voyait que la CLI ne calculait rien.
+
+## Mesure — avant
+
+Invocation par défaut, `orszag_tang`, **code de retour 0** :
+
+```
+FINAL COMPARISON: Q-HAS vs Classical AMR vs DNS
+combined............     0.333333     0.333333
+phys_score..........     0.000000     0.000000
+patch_ratio.........       1.0000       1.0000
+error_vx … error_Jz      0.000000     0.000000
+```
+
+Erreur **exactement nulle** sur les cinq champs, pour les deux bras. Ce n'est
+pas une performance parfaite : c'est un run qui n'a rien intégré.
+`combined = 0,333333` vaut simplement `(0 + 0,5×1) / 1,5`.
+
+## D-66 — sept clés de configuration sur neuf étaient ignorées
+
+`main()` précalculait le DNS avec `PHASE[scenario]`, puis passait à
+`pipeline()` les **défauts de la ligne de commande** :
+
+| | `PHASE["orszag_tang"]` | ce que `main()` passait |
+|---|---|---|
+| `T_MAX` | 2,8 | **1,0** |
+| `DT` | 1e−3 | **1e−4** |
+| `Re` / `Rm` | 800 | **1000** |
+| `K_opt` | 30 | 80 |
+| `shots` | 256 | 1024 |
+| `AdvAnomaliesEnable` | True | **False** |
+
+Le DNS était donc calculé sous une physique et la boucle hybride sous une
+autre. Et le hot start place `t_current` à `T_START = 2,3` : avec
+`T_MAX = 1,0`, la condition `while t_current < T_MAX` est fausse d'entrée —
+**le corps de la boucle ne s'exécutait jamais**. L'état final restait l'état
+DNS, d'où l'erreur nulle.
+
+Effet secondaire : le `AdvAnomaliesEnable: True` ajouté pour D-33 était
+**inerte sur ce chemin**, `argus` étant construit depuis `args`.
+
+**Correction.** `PHASE` fait foi ; la CLI ne surcharge que ce qu'on lui passe
+explicitement (défauts à `None`) ; une garde refuse `T_MAX ≤ T_START` en
+nommant la cause. `PHASE` est sorti au niveau module pour être testable, et
+les choix de `--scenario` en sont **dérivés** : la liste écrite à la main en
+annonçait dix pour sept entrées — `magnetic_twist`, `noisy_uniform` et
+`double_tearing` étaient acceptés puis levaient `KeyError`.
+
+## Mesure — après
+
+```
+Q-HAS      combined 0.228928  phys 0.140052  patch 0.4067
+Classique  combined 0.212591  phys 0.117626  patch 0.4025
+error_Jz      0.332329     0.256746
+```
+
+Physiquement cohérent : ~12–14 % d'erreur relative pour 40 % du coût, et `Jz`
+— une dérivée du champ — porte l'erreur la plus forte. Le classique bat Q-HAS
+sur 4 champs sur 5 et sur le score combiné, à coût égal, avec les
+hyperparamètres non réoptimisés.
+
+## D-67 — un run vide se notait
+
+`score()` repliait `total_steps == 0` sur `avg_pixel_used = N_square`, donc
+`patch_ratio = 1,0`, donc `combined = λ/(1+λ)`. C'est ce repli qui a rendu
+D-66 invisible pendant tout ce temps : un run qui n'a rien calculé rendait un
+nombre plausible. Il lève désormais.
+
+## Ce que la vérification quantitative a confirmé
+
+Le pavage AMR, sur deux cartes successives du run réel : **aire cumulée
+65 536 = 256², zéro cellule non couverte, zéro recouvrement.** La correction
+D-16 tient à pleine échelle.
+
+La comptabilité de coût est reproductible depuis la seule liste de patchs —
+`Σ (H·W)/local_factor²` rend 15 616 → **0,2383** et 24 064 → **0,3672**, les
+valeurs imprimées au chiffre près. Et la moyenne des 200 pas
+(`0,2383 … 0,5078`) vaut **0,4067**, exactement le `patch_ratio` annoncé.
+
+*Le `patch_ratio = 1,0` mesuré en configuration réduite (N=32, profondeur 1)
+lors de l'audit du bras `classical_only` était donc bien un effet de taille,
+comme il avait été noté sans pouvoir être tranché. À N=256 profondeur 4,
+l'AMR économise 60 %.*
+
+---
+
+# D-10 — `compare_rotor_budget` n'avait jamais tourné
+
+**Commande.** `pytest tests/pipeline/test_compare_rotor_budget.py -q`
+(12 tests, ~4 s)
+
+Seul fichier non audité de `src/` qui **écrit** un résultat numérique : c'est
+un producteur, pas un analyseur. Il porte la démonstration d'avantage
+quantique sous budget contraint.
+
+**Trois défauts empilés, tous mesurés :**
+
+1. `PhysicalMapper(..., beta=0.5, ...)` — `beta` a quitté le constructeur du
+   mapper pour devenir un argument de `run_adaptive_vqa`. `TypeError` à
+   l'**étape 4 sur 5**, après avoir payé le DNS.
+2. `--n-blocks 4` demande `2×4² = 32` qubits, soit **69 Go** de statevector.
+   Mesuré : `Insufficient memory ... Required memory: 65536M`. Le défaut
+   annoncé n'était exécutable sur aucune machine.
+3. Une fois `n_blocks` ramené à 3, la résolution 128 n'est plus divisible
+   par 3.
+
+**Corrections.** Le mapper reçoit les hyperparamètres **réellement déployés**
+au lieu des constantes `gamma_hydro=0,5 / gamma_mag=0,5 / kappa=5,0`, qui
+n'étaient celles d'aucune campagne — et les quatre clés que la signature
+attend (`sigma`, `beta_curl`, `beta_xpoint`, `w_z_frac`) étaient absentes de
+l'appel, donc silencieusement remplacées par les défauts du mapper. Une garde
+refuse une taille de circuit hors mémoire **avant** le DNS. Les défauts
+deviennent (96, 3, 3) : 9 blocs, budget 3, une contrainte qui contraint.
+
+Il produit désormais son `.npz`. **Ce qu'il mesure est à lire avec
+précaution** : à (96, 3, 3), la sélection dite « ground truth » — les blocs
+de plus forte erreur DNS/grossier — rend une erreur L2 de **0,3079**, *pire*
+que l'absence d'AMR (0,3074), tandis que classique et Q-HAS choisissent tous
+deux la colonne centrale et obtiennent **0,0208**, soit 93 % de mieux. Le
+« ground truth » du protocole n'est donc pas un optimum de raffinement, et le
+verdict « agreement 0/3 » qu'il imprime ne mesure pas ce qu'il annonce. À
+reprendre avant d'en tirer une revendication.

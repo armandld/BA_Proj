@@ -28,7 +28,10 @@ Protocol
 Usage
 -----
     cd src/
-    python compare_rotor_budget.py [--resolution 128] [--n-blocks 4] [--budget 4]
+    python compare_rotor_budget.py [--resolution 96] [--n-blocks 3] [--budget 3]
+
+Le circuit porte 2*n_blocks^2 qubits : n_blocks=4 en demanderait 32,
+soit 69 Go de statevector. Voir `verifier_taille_circuit`.
 """
 
 import argparse
@@ -43,6 +46,7 @@ from Simulation.PhysToAngle import AngleMapper
 from Simulation.HamiltParams import PhysicalMapper
 from VQA.runtime import VQARuntime
 from call_vqa_shell import call_vqa_shell
+from hyperparams_loader import load_hyperparams
 
 
 def compute_block_errors(dns_fluxes, coarse_fluxes, N, n_blocks):
@@ -105,10 +109,29 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
     nu = sim.grid.L / argus.Re
     eta_mhd = sim.grid.L / argus.Rm
 
+    # D-10 : `PhysicalMapper(..., beta=0.5, ...)` levait `TypeError`.
+    # `beta` a quitte le constructeur du mapper pour devenir un argument de
+    # `run_adaptive_vqa` ; ce script n'en a jamais eu besoin ici, il passe
+    # deja son propre beta a `map_to_angles` plus bas. Le script mourait a
+    # l'etape 4 sur 5 et n'a donc JAMAIS produit son .npz.
+    #
+    # Les trois constantes 0.5 / 0.5 / 5.0 sont remplacees par les
+    # hyperparametres REELLEMENT deployes : une demonstration d'avantage
+    # quantique sur des parametres que personne n'utilise ne demontre rien
+    # sur le critere de ce depot. Les quatre cles que la signature actuelle
+    # attend (sigma, beta_curl, beta_xpoint, w_z_frac) etaient absentes de
+    # l'appel, donc silencieusement remplacees par les defauts du mapper.
+    hp = load_hyperparams()
     HamiltMapper = PhysicalMapper(
         cs=argus.c_s, nu=nu, eta_mhd=eta_mhd,
-        beta=0.5, dx=sim.grid.dx,
-        gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0,
+        dx=sim.grid.dx,
+        gamma_hydro=hp["gamma_hydro"],
+        gamma_mag=hp["gamma_mag"],
+        kappa=hp["kappa"],
+        sigma=hp.get("sigma", 0.05),
+        beta_curl=hp["beta_curl"],
+        beta_xpoint=hp["beta_xpoint"],
+        w_z_frac=hp["w_z_frac"],
     )
 
     vqa_runtime = VQARuntime(
@@ -193,6 +216,40 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
     return prob_map
 
 
+#: Au-dela, le statevector ne tient plus en memoire sur une machine
+#: ordinaire. 18 qubits coutent 4 Mo, 32 en coutent 69 Go.
+QUBITS_MAX_STATEVECTOR = 20
+
+
+def qubits_requis(n_blocks):
+    """Nombre de qubits du circuit de selection : un par arete du pavage.
+
+    `call_vqa_shell` rend `2 * n_blocks**2` probabilites (horizontales et
+    verticales), donc le circuit porte autant de qubits.
+    """
+    return 2 * n_blocks ** 2
+
+
+def verifier_taille_circuit(n_blocks, backend, qubits_max=QUBITS_MAX_STATEVECTOR):
+    """Refuse AVANT le DNS une taille de circuit qui ne tiendra pas.
+
+    Le defaut d'origine (`--n-blocks 4`) demande 32 qubits, soit 69 Go de
+    statevector. Il echouait avec un `QiskitError` de qiskit-aer -- mais
+    seulement a l'etape 4 sur 5, apres avoir paye la simulation DNS et la
+    reference grossiere. Une configuration impossible doit etre refusee au
+    premier instant, avec le chiffre qui explique pourquoi.
+    """
+    q = qubits_requis(n_blocks)
+    if backend == "state_vector" and q > qubits_max:
+        octets = (2 ** q) * 16
+        raise ValueError(
+            f"n_blocks={n_blocks} demande {q} qubits "
+            f"(2*{n_blocks}^2), soit {octets / 1e9:.1f} Go de statevector. "
+            f"Maximum retenu : {qubits_max} qubits. "
+            f"Utiliser n_blocks <= {int((qubits_max / 2) ** 0.5)} avec "
+            f"`state_vector`, ou --backend aer.")
+
+
 def select_top_k(scores, budget):
     """Select indices of top-K blocks by score. Returns list of (i, j)."""
     flat_indices = np.argsort(scores.ravel())[::-1][:budget]
@@ -246,10 +303,22 @@ def main():
     parser = argparse.ArgumentParser(
         description="Budget-constrained AMR comparison: Q-HAS vs Classical on MHD Rotor"
     )
-    parser.add_argument("--resolution", type=int, default=128,
-                        help="DNS grid resolution (NxN)")
-    parser.add_argument("--n-blocks", type=int, default=4,
-                        help="Partition into n_blocks × n_blocks macro-blocks")
+    # 96 = 3 x 32 : divisible par le defaut `--n-blocks 3`. Le couple
+    # d'origine (128, 4) violait DEUX contraintes a la fois -- 128 n'est pas
+    # divisible par 3 une fois n_blocks corrige, et 4 blocs demandent
+    # 32 qubits. Les defauts d'un script doivent former une configuration
+    # qui tourne.
+    parser.add_argument("--resolution", type=int, default=96,
+                        help="DNS grid resolution (NxN), divisible par --n-blocks")
+    # Defaut ramene de 4 a 3 : le circuit porte 2*n_blocks^2 qubits, et le
+    # simulateur `state_vector` alloue 2^q nombres complexes.
+    #
+    #   n_blocks=2 ->  8 qubits ->   4 ko
+    #   n_blocks=3 -> 18 qubits ->   4 Mo
+    #   n_blocks=4 -> 32 qubits ->  69 Go   <- le defaut d'origine
+    parser.add_argument("--n-blocks", type=int, default=3,
+                        help="Partition into n_blocks × n_blocks macro-blocks "
+                             "(cout: 2*n^2 qubits ; 4 est hors de portee memoire)")
     parser.add_argument("--budget", type=int, default=3,
                         help="Number of blocks allowed to refine (budget K)")
     parser.add_argument("--t-eval", type=float, default=0.5,
@@ -273,8 +342,11 @@ def main():
     budget = args.budget
     T_eval = args.t_eval
 
-    assert N % n_blocks == 0, f"Resolution {N} must be divisible by n_blocks {n_blocks}"
+    assert N % n_blocks == 0, (
+        f"Resolution {N} must be divisible by n_blocks {n_blocks} — "
+        f"essayer --resolution {n_blocks * round(N / n_blocks)}")
     assert budget <= n_blocks ** 2, f"Budget {budget} exceeds total blocks {n_blocks**2}"
+    verifier_taille_circuit(n_blocks, args.backend)
 
     print("=" * 70)
     print("  BUDGET-CONSTRAINED AMR: Q-HAS vs CLASSICAL on MHD ROTOR")
