@@ -496,10 +496,20 @@ def main():
         print(f"  [{tag}] wall-time: {time.time()-t0:.0f}s\n")
         fname = f"train_{tag.replace(':', '-').replace(' ', '_')}_" \
                 f"N{args.N}_dim{args.dim}.npz"
+        # D-80 : ce filtre `not isinstance(v, str)` ecartait les deux seules
+        # chaines de `res` — `tag`, reajoutee juste apres sous `tag_str`, et
+        # `optimiser`, qui ne l'etait pas. Or `optimiser` est la SEULE trace
+        # du repli : si `cma` n'est pas installe, le script previent sur une
+        # ligne parmi des centaines puis tourne en Nelder-Mead, et l'artefact
+        # etait alors indiscernable d'un vrai run CMA-ES. Mesure : sur un
+        # conteneur sans `cma`, l'artefact ne portait aucune cle `optimiser`.
         np.savez_compressed(
             os.path.join(RESULTS_DIR, fname),
             **{k: v for k, v in res.items() if not isinstance(v, str)},
-            tag_str=tag)
+            tag_str=tag,
+            optimiser=res["optimiser"],
+            optimiser_requested=args.optimiser,
+            cma_available=HAS_CMA)
         print(f"  saved: {fname}")
         return res
 
@@ -536,6 +546,12 @@ def main():
         classical_f1=np.array([r["classical_f1"] for r in all_results]),
         delta=np.array([r["delta"] for r in all_results]),
         hits_bound=np.array([r["hits_bound"] for r in all_results]),
+        # D-80 : la table de comparaison croise les modes ; sans cette
+        # colonne, deux lignes optimisees par deux optimiseurs differents
+        # y sont indiscernables.
+        optimiser=np.array([r["optimiser"] for r in all_results]),
+        optimiser_requested=args.optimiser,
+        cma_available=HAS_CMA,
     )
     print(f"\n  saved compare: {os.path.basename(compare_path)}")
     print("\nPhase 10 complete.")
