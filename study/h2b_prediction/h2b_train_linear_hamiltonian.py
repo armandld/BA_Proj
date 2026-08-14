@@ -234,8 +234,13 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
           else np.clip(np.asarray(theta_init, dtype=float),
                        THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]))
     c0_, thr0_ = decode_theta(x0)
+    # D-87 : `hits_bound` n'etait evalue que sur le theta FINAL. Un x0 pose sur
+    # une borne — ce que l'init analytique produisait pour 3 lignes sur 4 —
+    # n'apparaissait nulle part, ni a l'ecran ni dans l'artefact.
+    x0_bnd = hits_bound(x0)
     print(f"  [{tag}] x0: c_bias={c0_:.3f}  thr={thr0_:.3f}  "
-          f"(source: {'analytical' if theta_init is not None else 'default'})")
+          f"(source: {'analytical' if theta_init is not None else 'default'})"
+          f"{'  [x0 SUR UNE BORNE, D-87]' if x0_bnd else ''}")
     lb, ub = THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]
     use_cma = (optimiser_name == "cma") and HAS_CMA
     if optimiser_name == "cma" and not HAS_CMA:
@@ -324,6 +329,11 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
         classical_f1=best_cf,
         delta=best_f1v - best_cf,
         hits_bound=bnd,
+        # D-87 : sans ces trois cles, un run parti d'un coin de la boite et un
+        # run parti de l'interieur sont le meme artefact.
+        x0_theta=np.asarray(x0, dtype=float),
+        x0_hits_bound=x0_bnd,
+        x0_from_analytical=bool(theta_init is not None),
         train_pairs=np.array(train_pairs, dtype=int),
         val_pairs=np.array(val_pairs, dtype=int),
         val_fixed=np.array(val_fixed, dtype=int),
@@ -411,8 +421,23 @@ def build_init_map(tags, thr_star, c_bias_star, degenerate):
         if bool(dg) or not (np.isfinite(cb) and np.isfinite(th)):
             n_skipped += 1
             continue
-        init_map[str(t)] = np.array(
-            [np.log10(max(float(cb), 0.1)), float(th)])
+        theta_raw = np.array([np.log10(max(float(cb), 0.1)), float(th)])
+        theta_x0 = np.clip(theta_raw, THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1])
+        # D-87 : `np.clip` ne dit rien. `thr*` est cherche par la phase 10a sur
+        # une grille qui deborde la boite — mesure, `--dim 4 --N 256
+        # --max-snaps 8 --seed 0`, Re=400 : 0,6777 (harris_tearing) et 0,6908
+        # (kelvin_helmholtz) contre une borne haute de 0,60, rabotes sur la
+        # borne. Un x0 pose SUR une borne est par ailleurs exactement ce que
+        # `hits_bound` sert a signaler — il n'etait evalue que sur le theta
+        # FINAL. Mesure, meme configuration : vrai sur 3 lignes sur 4.
+        if not np.allclose(theta_raw, theta_x0):
+            print(f"  [{t}] init analytique RABOTE sur la boite (D-87) : "
+                  f"(log10 c, thr) {theta_raw} -> {theta_x0}")
+        if hits_bound(theta_x0):
+            print(f"  [{t}] x0 analytique est SUR une borne de la boite "
+                  f"(D-87) : l'optimiseur y demarre au coin, et le vrai "
+                  f"optimum peut etre au-dela.")
+        init_map[str(t)] = theta_x0
     return init_map, n_skipped
 
 

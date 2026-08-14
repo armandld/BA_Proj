@@ -53,12 +53,27 @@ from exact_diagonalisation import build_patch_hamiltonian
 from ising_terms_and_annealing import (
     build_ising_terms, spins_to_decisions, _metrics, _build_incidence,
 )
+# D-87 : la boite de recherche a UNE source, celle de la phase 10 qui la fait
+# respecter. Deux copies se separent silencieusement.
+from h2b_train_linear_hamiltonian import THETA_BOUNDS
 
 
 # D-86 : au-dessous de cet ecart max-min, la courbe F1(c_bias) est plate et
 # son `argmax` ne designe rien. Voir le commentaire dans `analyse_snapshots`
 # pour la separation mesuree (0,125 a 0,433 contre exactement 0).
 F1_SPAN_TOL = 1e-12
+
+
+def _thr_outside_box(thr):
+    """Vrai si `thr` sortira de la boite de la phase 10, donc sera rabote.
+
+    D-87 : la boite est LUE chez la phase 10, jamais recopiee ici. La phase
+    10a produit un `x0` pour la phase 10 ; deux copies de la meme boite se
+    separent en silence, et c'est par la que `thr*` sortait de la boite sans
+    que personne ne le voie — `np.clip` ne dit rien.
+    """
+    return bool(thr < float(THETA_BOUNDS[1, 0])
+                or thr > float(THETA_BOUNDS[1, 1]))
 
 
 # -------------------------------------------------------------------
@@ -244,6 +259,27 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
     c_star = float(c_grid[bi])
     f1_mf  = float(f1_grid[bi])
 
+    # D-87 : D-86 traite la courbe PLATE. Restent les courbes informatives
+    # dont l'argmax tombe sur un BORD de la grille : la grille s'arrete la,
+    # donc l'optimum reel peut etre au-dela, et rien ne le disait. Mesure
+    # (`--dim 4 --N 256 --max-snaps 8 --seed 0`, Re=400) : `kelvin_helmholtz`
+    # et `mhd_rotor` rendent c* = 100,0 — le bord DROIT — avec des ecarts
+    # max-min de 0,224 et 0,433, donc informatifs et laisses passer par D-86.
+    # Mesure de ce qu'il y a au-dela : le plus petit c qui fait basculer un
+    # seul spin vaut 1,6e4 et 5,0e4, deux ordres au-dela du bord. La phase 10
+    # porte `hits_bound()` pour exactement cette pathologie ; la phase 10a
+    # n'avait pas d'equivalent.
+    at_left_edge = bool(bi == 0)
+    at_right_edge = bool(bi == f1_grid.size - 1)
+
+    # D-87 : thr* est cherche sur une grille qui melange
+    # `linspace(0.02, 0.60, 59)` — exactement la boite de la phase 10 — et les
+    # quantiles du score, qui en sortent. Mesure, meme configuration :
+    # thr* = 0,6777 (harris_tearing) et 0,6908 (kelvin_helmholtz) contre une
+    # borne haute de 0,60. La phase 10 les rabotait sur la borne, et `np.clip`
+    # ne dit rien. La valeur n'est pas touchee ici : le fait est rendu.
+    thr_outside_box = _thr_outside_box(thr_star)
+
     return dict(
         scenario=scenario, Re=Re, dim=dim, N=N,
         thr_star=thr_star, c_bias_star=c_star,
@@ -251,6 +287,8 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
         f1_grid=f1_grid, c_grid=np.array(c_grid),
         snap_indices=np.array(snap_indices),
         f1_span=f1_span, degenerate=degenerate,
+        at_left_edge=at_left_edge, at_right_edge=at_right_edge,
+        thr_outside_box=thr_outside_box,
     )
 
 
@@ -275,6 +313,43 @@ def mean_over_informative(rows, key):
     """
     vals = [r[key] for r in rows if not r["degenerate"]]
     return float(np.mean(vals)) if vals else float("nan")
+
+
+# -------------------------------------------------------------------
+# Drapeaux de bord (D-87)
+# -------------------------------------------------------------------
+
+def _edge_flags(row):
+    """Les drapeaux D-87 d'une ligne, en clair sur la ligne imprimee."""
+    agg = "f1_span" not in row       # une ligne agregee n'a pas de courbe
+    suffix = "-COMPOSANTE" if agg else ""
+    f = []
+    if row.get("at_left_edge"):
+        f.append(f"BORD-GAUCHE{suffix}")
+    if row.get("at_right_edge"):
+        f.append(f"BORD-DROIT{suffix}")
+    # Seul drapeau calcule sur la valeur PROPRE de la ligne, agregat compris :
+    # c'est cette valeur-la que la phase 10 rabotera sur sa borne.
+    if row.get("thr_outside_box"):
+        f.append(f"THR-HORS-BOITE({row['thr_star']:.4f} hors "
+                 f"[{THETA_BOUNDS[1, 0]:g}, {THETA_BOUNDS[1, 1]:g}])")
+    return ("   << " + " | ".join(f)) if f else ""
+
+
+def _edge_flags_agg(rows):
+    """Drapeaux D-87 d'une ligne agregee, depuis ses lignes informatives.
+
+    Les degeneres sont exclus comme ils le sont de la moyenne (D-86) : leur
+    argmax est au bord gauche par construction, le compter ici allumerait
+    `at_left_edge` sur tous les agregats et le drapeau ne dirait plus rien.
+    """
+    live = [r for r in rows if not r["degenerate"]]
+    return dict(
+        at_left_edge=bool(any(r["at_left_edge"] for r in live)),
+        at_right_edge=bool(any(r["at_right_edge"] for r in live)),
+        thr_outside_box=_thr_outside_box(
+            mean_over_informative(rows, "thr_star")),
+    )
 
 
 # -------------------------------------------------------------------
@@ -327,7 +402,8 @@ def main():
                   f"F1_MF={res['f1_mf']:.3f}  "
                   f"classical={res['classical_f1']:.3f}   [{dt:.1f}s]"
                   + ("   DEGENERE : F1(c) plat, c_bias* n'est que le bord "
-                     "gauche de la grille (D-86)" if res["degenerate"] else ""))
+                     "gauche de la grille (D-86)" if res["degenerate"] else "")
+                  + _edge_flags(res))
 
     if not per_cfg:
         # D-56 : ce garde imprimait « no input. » et rendait la main avec le
@@ -375,6 +451,11 @@ def main():
             f1_mf=mean_over_informative(rows, "f1_mf"),
             classical_f1=mean_over_informative(rows, "classical_f1"),
             degenerate=(n_d == len(rows)),
+            # D-87 : un drapeau de bord remonte des qu'UNE des lignes
+            # informatives moyennees etait au bord ; `thr_outside_box` se
+            # calcule au contraire sur la valeur PROPRE de l'agregat, parce
+            # que c'est celle-la que la phase 10 rabotera.
+            **_edge_flags_agg(rows),
         )
         scenario_rows.append(row)
         print(f"    {sc:<18} thr*={row['thr_star']:.3f}  "
@@ -383,7 +464,8 @@ def main():
               f"classical={row['classical_f1']:.3f}"
               + (f"   ({n_d}/{len(rows)} degeneres exclus)" if n_d else "")
               + ("   DEGENERE : aucun balayage informatif (D-86)"
-                 if row["degenerate"] else ""))
+                 if row["degenerate"] else "")
+              + _edge_flags(row))
 
     # ---- joint (mean over everything) ----
     joint_row = dict(
@@ -393,13 +475,15 @@ def main():
         f1_mf=mean_over_informative(per_cfg, "f1_mf"),
         classical_f1=mean_over_informative(per_cfg, "classical_f1"),
         degenerate=False,          # garde ci-dessus : au moins un informatif
+        **_edge_flags_agg(per_cfg),
     )
     print(f"\n  joint  thr*={joint_row['thr_star']:.3f}  "
           f"c_bias*={joint_row['c_bias_star']:.2f}  "
           f"F1_MF={joint_row['f1_mf']:.3f}  "
           f"classical={joint_row['classical_f1']:.3f}"
           + (f"   ({n_degen}/{len(per_cfg)} degeneres exclus)"
-             if n_degen else ""))
+             if n_degen else "")
+          + _edge_flags(joint_row))
 
     # ---- per-config (for reference) ----
     cfg_rows = []
@@ -409,6 +493,9 @@ def main():
             thr_star=r["thr_star"], c_bias_star=r["c_bias_star"],
             f1_mf=r["f1_mf"], classical_f1=r["classical_f1"],
             degenerate=r["degenerate"], f1_span=r["f1_span"],
+            at_left_edge=r["at_left_edge"],
+            at_right_edge=r["at_right_edge"],
+            thr_outside_box=r["thr_outside_box"],
         ))
 
     # ---- save ----
@@ -427,6 +514,17 @@ def main():
         # pour tout consommateur de l'artefact.
         degenerate=np.array([bool(r["degenerate"]) for r in all_rows]),
         f1_span=np.array([float(r.get("f1_span", np.nan)) for r in all_rows]),
+        # D-87 : meme regle que la colonne `degenerate` ci-dessus. Un
+        # `c_bias_star` pose sur le bord de la grille, et un `thr_star` que la
+        # phase 10 rabotera sur sa borne, sont indiscernables d'un optimum
+        # interieur pour tout consommateur de l'artefact. La boite est jointe :
+        # un artefact relu plus tard doit pouvoir dire contre quoi le test a
+        # ete fait.
+        at_left_edge=np.array([bool(r["at_left_edge"]) for r in all_rows]),
+        at_right_edge=np.array([bool(r["at_right_edge"]) for r in all_rows]),
+        thr_outside_box=np.array(
+            [bool(r["thr_outside_box"]) for r in all_rows]),
+        theta_bounds=np.asarray(THETA_BOUNDS, dtype=float),
         c_grid=c_grid,
     )
     print(f"\n  saved: {os.path.basename(out)}")
