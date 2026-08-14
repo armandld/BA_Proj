@@ -1166,12 +1166,28 @@ existe, leur sortie non. À savoir avant de citer un de leurs nombres.
 **Défauts trouvés** : D-75 (12 sites ici sur 15), D-77, D-78, D-79, D-80,
 D-81, D-82 — détail et mesures dans `RESULTS.md`.
 
-**Une discipline vérifiée sur tout `study/`, pas seulement ici** : les 30
-appels de `best_threshold_f1` ont été relus un par un. **28 prennent leur
-seuil sur le train** — c'est la règle du dépôt, celle de `fit_eval`. Les
-deux exceptions étaient `h2b_variational_classifier` (D-81) et
-`h2b_scenario_ablation` (D-82), toutes deux sur le bras dont le script
-cherche à mesurer l'avantage ou la chute.
+**Une discipline vérifiée sur tout `study/` — et mon premier balayage était
+faux, il est corrigé ici.** J'avais écrit « 30 appels de `best_threshold_f1`,
+deux exceptions ». Les deux chiffres étaient faux, et une session concurrente
+l'a montré en réservant **D-83** sur un site que j'avais manqué.
+
+La cause est exactement le piège que `VIGIL.md` décrit : j'avais balayé au
+**`grep`**, qui coupe les appels écrits sur plusieurs lignes. Refait à
+l'**AST**, en dépliant chaque appel et en lisant ses deux premiers arguments :
+
+| | |
+|---|---|
+| appels de `best_threshold_f1` dans `study/` | **37**, pas 30 |
+| seuil pris sur le **train** (la règle du dépôt, celle de `fit_eval`) | **32** |
+| seuil pris sur la **validation**, avant cette passe | **3** — `h2b_variational_classifier` ×2 (D-81), `h2b_scenario_ablation` (D-82), `h2b_random_split_bootstrap` (**D-83**, session concurrente) |
+| faux positifs de mon balayage `grep` | `h2b_learned_meanfield_h:245,247` — `Yt` y désigne les folds d'**entraînement** du LOSO, pas un jeu de test ; sains |
+| appels sur validation **délibérés**, ajoutés par D-81/D-82 | 4, sous le nom `f1_*_thr_on_val` : ce sont les anciens nombres, gardés pour que le biais reste mesurable |
+
+Les trois sites fautifs sont tous sur le bras dont le script cherche à
+mesurer l'avantage ou la chute. **Un balayage au `grep` ne suffit pas pour
+ce genre d'audit** — c'est la troisième fois que ce dépôt le paie (D-56 :
+« trois des onze sites ont été trouvés par l'AST, pas par la recherche de
+chaîne »).
 
 **Reste à faire sur ce module**, dans cet ordre : les 13 fichiers non lus,
 en commençant par ceux qui portent un artefact (`h2b_ceiling_random_split`
