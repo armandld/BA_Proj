@@ -1165,11 +1165,18 @@ existe, leur sortie non. À savoir avant de citer un de leurs nombres.
 D-81, D-82 — détail et mesures dans `RESULTS.md`.
 
 **Une discipline vérifiée sur tout `study/`, pas seulement ici** : les 30
-appels de `best_threshold_f1` ont été relus un par un. **28 prennent leur
+appels de `best_threshold_f1` ont été relus un par un. **27 prennent leur
 seuil sur le train** — c'est la règle du dépôt, celle de `fit_eval`. Les
-deux exceptions étaient `h2b_variational_classifier` (D-81) et
-`h2b_scenario_ablation` (D-82), toutes deux sur le bras dont le script
-cherche à mesurer l'avantage ou la chute.
+**trois** exceptions étaient `h2b_variational_classifier` (D-81),
+`h2b_scenario_ablation` (D-82) et `h2b_random_split_bootstrap` (D-83),
+toutes trois sur le bras dont le script cherche à mesurer l'avantage ou la
+chute.
+
+Ce document annonçait « 28 sur 30, deux exceptions » pendant une passe :
+D-83 était dans le balayage et lui a échappé, son appel étant enfermé dans
+une fermeture aux noms génériques (`best_thr(P_list, Y_list)`) sous un
+commentaire qui affirmait le contraire du code. Même motif que D-75 et
+D-76 — un balayage ne voit que la forme qu'on lui a apprise.
 
 **Reste à faire sur ce module**, dans cet ordre : les 13 fichiers non lus,
 en commençant par ceux qui portent un artefact (`h2b_ceiling_random_split`
