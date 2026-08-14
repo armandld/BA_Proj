@@ -12,7 +12,12 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     """
     # 1. Calcul du Courant Jz pour l'esthétique "Fluide" (Curl of B)
     # Jz = dBy/dx - dBx/dy
-    # np.gradient(arr, axis=1) est d/dx (colonnes), axis=0 est d/dy (lignes)
+    #
+    # D-68 : le commentaire disait ici « axis=1 est d/dx (colonnes), axis=0
+    # est d/dy (lignes) ». C'est la convention indexing='xy', qui n'est PAS
+    # celle du depot. `grid.py` fait foi : AXIS_X = 0, AXIS_Y = 1, et
+    # `MHDSolver.get_fluxes` forme bien Jz = dBy/dX - dBx/dY avec axis=0
+    # pour X. Le tableau Jz est donc indexe [X, Y].
     _, _, _, _, Jz = sim.get_fluxes().values()
 
     # Création de la figure
@@ -76,8 +81,21 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     # Titres et Labels
     total_patches = len(active_patches)
     ax.set_title(f"VQA-Driven AMR Simulation\nTime: {t_val:.3f} | Active Zones: {total_patches}")
-    ax.set_xlabel("Grid X")
-    ax.set_ylabel("Grid Y")
+    # D-68 : `imshow` place l'axe 0 du tableau en VERTICAL et l'axe 1 en
+    # HORIZONTAL. Jz etant indexe [X, Y] (cf. plus haut), l'axe horizontal
+    # de cette figure porte Y et le vertical porte X — l'inverse de ce que
+    # les deux etiquettes annoncaient. Mesure : une structure placee en
+    # X=10, Y=40 au sens de grid.py se lisait « X=40, Y=10 » sur la figure.
+    #
+    # Seules les ETIQUETTES sont corrigees. Le champ et les cadres ne
+    # bougent pas d'un pixel : ils sont deja coherents entre eux — le cadre
+    # (xs, ys) tombe bien sur la structure, verifie sur un champ asymetrique
+    # sous transposition. Transposer l'image pour mettre X en horizontal,
+    # comme le font `plot_recursive_state` et `simple_hierarchical_plot`,
+    # changerait la geometrie de PNG deja publies : c'est une decision qui
+    # revient a USER, pas une correction. Voir docs/DEFAUTS.md D-68.
+    ax.set_xlabel("Grid Y  (axe 1 du tableau)")
+    ax.set_ylabel("Grid X  (axe 0 du tableau)")
     
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)

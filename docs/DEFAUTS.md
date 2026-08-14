@@ -1118,6 +1118,58 @@ s'arrête en le disant. Un test refuse toute URL portant un mot de passe dans
 pytest tests/pipeline/test_no_credential_in_source.py
 ```
 
+## D-68 — l'image de la figure AMR est transposée par rapport au reste du dépôt : décision
+
+**Où ça bloque.** Nulle part sur un nombre. Ce qui reste ouvert est un
+**choix de présentation** que Vigil ne tranche pas seul, parce qu'il change
+la géométrie d'images déjà publiées.
+
+**Comment on est tombé dessus.** En lisant `src/visual.py` et
+`src/help_visual.py` en entier — les deux seuls modules que
+`tests/pipeline/test_src_coverage_inventory.py` excluait de l'inventaire,
+avec pour raison « tracé matplotlib, aucune valeur numérique produite ». La
+raison est vraie au sens strict (aucune valeur ne ressort de ces fonctions)
+et c'est précisément ce qui les avait mises hors de portée : la figure, elle,
+porte une convention d'axes, et elle était fausse (D-68, corrigé).
+
+**Ce qui est établi.** Des trois fonctions du dépôt qui affichent `Jz` :
+
+| fonction | ce qu'elle passe à l'afficheur | axe horizontal | appelée par |
+|---|---|---|---|
+| `plot_amr_state` | `Jz` **tel quel** | Y (axe 1) | `pipeline.py`, 4×/pas de verrouillage |
+| `plot_recursive_state` | `Jz.T` | X (axe 0) | **personne** |
+| `simple_hierarchical_plot` | `Jz.T` | X (axe 0) | **personne** |
+
+La seule qui s'exécute est donc la seule à mettre X en vertical. Les deux
+autres — mortes — suivent la convention du reste du dépôt. Mesuré : une
+structure posée en `X=10, Y=40` au sens de `grid.py` apparaît en
+horizontal = 40, vertical = 10.
+
+Les étiquettes ont été corrigées pour nommer l'axe qu'elles portent (D-68
+dans `RESULTS.md`) : la figure ne ment plus. Le **champ et les cadres n'ont
+pas bougé d'un pixel**, et ils sont cohérents entre eux — le cadre
+d'attention tombe bien sur la structure qu'il désigne, vérifié sur un champ
+asymétrique sous transposition.
+
+**Où on en est.** La question ouverte, pour USER :
+
+- **laisser tel quel** — les PNG déjà produits restent lisibles à
+  l'identique, au prix d'une figure dont l'orientation diffère de celle du
+  reste du dépôt ;
+- **transposer** `Jz` et les cadres pour mettre X en horizontal, comme
+  partout ailleurs — au prix de PNG dont la géométrie ne correspond plus à
+  ceux déjà publiés.
+
+Vigil ne recommande rien ici : les deux côtés se défendent, et le coût est
+un coût de reproductibilité, pas de justesse.
+`tests/pipeline/test_amr_figure_axes.py::test_la_geometrie_du_champ_n_a_pas_ete_transposee`
+tombe le jour où la seconde branche est prise — pour qu'elle ne se prenne
+pas en silence.
+
+```bash
+pytest tests/pipeline/test_amr_figure_axes.py
+```
+
 ## Ajouter une entrée
 
 Un défaut n'entre ici que s'il **bloque**. Une fois corrigé, il sort d'ici et

@@ -81,7 +81,9 @@ effectivement relu fonction par fonction.
 | fichier | lignes | pourquoi ça compte |
 |---|---|---|
 | `compare_rotor_budget.py` | 481 | comparaison de budget — **ne s'exécute pas**, voir plus bas |
-| `visual.py`, `help_visual.py` | 327 | figures |
+
+`visual.py` et `help_visual.py` figuraient ici (327 lignes, « figures ») :
+lus en entier le 14 août, voir §1a quater — D-68.
 
 `analyze_hyperparams.py`, `recompute_lambda_scores.py` et
 `import_Neon_data_to_local.py` figuraient ici. Ils ont été audités **deux
@@ -288,6 +290,83 @@ et deux figures de plus, tous produits par les mêmes fonctions déjà couvertes
 d'écriture réel. Tous traversés avec **deux SQLite** — `--in-url` accepte
 n'importe quelle URL de stockage, donc le chemin « Neon » se teste hors
 ligne. Non traversé : un vrai PostgreSQL.
+
+## 1a quater. `src/visual.py` et `src/help_visual.py` — lus en entier
+
+327 lignes, les deux derniers modules de `src/` que l'inventaire excluait,
+avec pour raison « tracé matplotlib, aucune valeur numérique produite ».
+
+**La raison d'exclusion était vraie et insuffisante.** Aucune de ces
+fonctions ne rend de valeur — c'est exact, vérifié : toutes rendent `None`.
+Mais une figure porte une **convention d'axes**, et celle de la seule
+fonction qui s'exécute était fausse : **D-68**. « Ne produit aucun nombre »
+n'implique pas « ne peut rien dire de faux ».
+
+**Ce qui s'exécute, et ce qui ne s'exécute pas.** Mesuré, pas supposé — un
+`grep` des appelants sur tout le dépôt, `docs/archive/` exclu :
+
+| fonction | lignes | appelée par |
+|---|---|---|
+| `plot_amr_state` | 88 | `src/pipeline.py`, 4× par pas de verrouillage |
+| `plot_recursive_state` | 48 | **personne** |
+| `simple_hierarchical_plot` | 22 | **personne** |
+| `plot_grid_topology` | 28 | **personne** |
+| `plot_flux_on_edges` | 76 | **personne** |
+| `visualize_vqa_step` | 51 | **personne** — mais *importée* par `refinement.py` |
+
+**88 lignes sur 327 s'exécutent.** Les 239 autres sont mortes.
+
+`visualize_vqa_step` mérite sa ligne : `src/Simulation/refinement.py:7` fait
+`from help_visual import visualize_vqa_step` et ne l'appelle jamais. L'import
+seul suffit à rendre `matplotlib` obligatoire pour importer le chemin AMR.
+Ce n'est pas un défaut de calcul — rien n'en dépend numériquement — mais
+c'est une dépendance que rien ne justifie, et elle est notée ici plutôt que
+retirée : `src/` est l'objet d'étude, et retirer un import est un
+changement de comportement à l'import qu'aucune mesure ne réclame
+aujourd'hui.
+
+**Vérifié et trouvé sain**, mesuré et non supposé :
+
+- `_, _, _, _, Jz = sim.get_fluxes().values()` — le dépaquetage **positionnel**
+  d'un dictionnaire. Fragile par construction, mais **correct** :
+  `MHDSolver.get_fluxes` rend `{'vx', 'vy', 'Bx', 'By', 'Jz'}` dans cet
+  ordre, et `Jz` y est bien le cinquième. Un `dict` Python conserve l'ordre
+  d'insertion depuis 3.7 ; le contrat tient tant que l'ordre des clés de
+  `get_fluxes` ne change pas. Aucun test ne le garde — noté, non corrigé ;
+- `Jz` lui-même : `get_fluxes` forme `dBy/dX − dBx/dY` avec `axis=0` pour X,
+  conforme à `AXIS_X = 0` / `AXIS_Y = 1`. Ce n'est **pas** un rotationnel
+  privé au sens de `test_no_private_curl_survives.py` — il est du bon côté
+  de la convention ;
+- **les cadres d'attention tombent sur les structures qu'ils désignent** :
+  `bounds = (a0_s, a0_e, a1_s, a1_e)` indexe l'axe 0 puis l'axe 1 — l'ordre
+  que `get_periodic_patch` consomme — et `Rectangle((xs, ys), …)` place bien
+  le cadre sur l'image non transposée. Vérifié sur un champ **asymétrique
+  sous transposition**, seul champ qui sépare les deux hypothèses. C'est la
+  moitié saine de `plot_amr_state`, et un test l'épingle pour qu'une
+  « correction » de D-68 ne la casse pas ;
+- le garde `if not verbose and save_dir is None: return` : la fonction ne
+  fait rien quand la boucle fermée tourne sans figure. Il est placé **avant**
+  la docstring, qui n'est donc pas une docstring mais une expression morte —
+  `plot_amr_state.__doc__` vaut `None`. Sans effet, noté.
+
+**Axes empruntés** (fiche `VIGIL_BA_Proj.md`) : `depth = 0` **et** `depth > 0`
+— le cadre à `depth > 0` porte une annotation de zoom que `depth = 0` n'a
+pas, les deux branches sont traversées ; patch **périodique** et **borné**
+sans distinction, `plot_amr_state` ne lit pas la topologie ; bras
+**quantique** et **classique** — `pipeline.py` appelle la même fonction pour
+les quatre suffixes (`dns`, `quantum_amr`, `quantum_amr_wo_vqa`,
+`classic_amr`), aucun chemin ne diffère. Les axes backend, warm start,
+Hamiltonien nul et optimiseur **ne traversent pas ce module** : il ne voit
+que `sim.get_fluxes()` et une liste de `bounds`.
+
+**Ce que cette lecture ne couvre pas.** Les 239 lignes mortes ont été lues,
+pas mesurées : `plot_recursive_state` contient une boucle dont le corps est
+un `pass` et un commentaire annonçant une correction jamais faite, et
+`simple_hierarchical_plot` construit un `depth_counts` qu'il n'utilise pas.
+Rien n'en dépend. Elles ne sont pas auditées au sens de la fiche, et ne le
+seront que si un appelant apparaît.
+
+---
 
 ## `src/compare_rotor_budget.py` — revérifié, toujours mort
 
