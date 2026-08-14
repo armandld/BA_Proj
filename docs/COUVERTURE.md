@@ -1196,6 +1196,56 @@ est fait, restent les consommateurs de `upper_bound_*`) ; puis la variante
 
 ---
 
+## `study/h2b_prediction/` — seconde passe du 14 août, 4 fichiers de plus
+
+Passe concurrente de la précédente sur le même module ; les deux se sont
+croisées sur D-82 (voir le fil de la PR). Lus **en entier, fonction par
+fonction** : `h2b_scenario_ablation.py` (264), `h2b_random_split_bootstrap.py`
+(252), `h2b_v1_hamiltonian_loso.py` (412), `h2b_blocked_split.py` (405) —
+environ 1 330 lignes. **Défauts trouvés** : D-83, D-84, D-85 (détail et
+mesures dans `RESULTS.md`).
+
+**Vérifié et trouvé sain**, mesuré et non supposé :
+
+| ce qui a été vérifié | comment |
+|---|---|
+| appariement du bootstrap de la phase 11H | `bootstrap_ci` et `paired_delta_ci` tirent **un seul** jeu d'indices par réplique et l'appliquent aux deux bras : l'appariement est réel, pas nominal |
+| `split_indices_random` (T4) contre la phase 11A | même convention à la ligne près (`tr = perm[:n_tr]`, `h2b_ceiling_random_split.py:308-310`) |
+| garde de cohérence d'agrégation de T4 | traversée par **exécution** (`--dim 4 --N 256`) : `raise RuntimeError("score aggregation mismatch")` ne se déclenche pas — le canal `score` de `extract_features_2d` est bien `block_max(full_score)` |
+| ordre des blocs de `ranking_metrics_per_snapshot` | `np.split(scores_va, len(va_idx))` suit l'ordre de `va_idx`, celui de `e_snaps` : chaque classement est comparé à l'erreur de **son** instantané |
+| `AngleMapper.classical_score` et la clé `dx` absente | la fonction ne lit pas `dx` ; le `physics_state` de `v1_state`, qui ne la porte pas, ne déclenche aucun repli silencieux |
+
+**Noté, non corrigé** — ni l'un ni l'autre ne change une valeur :
+
+* 11G et 11H prennent la convention de split **complémentaire** de 11A
+  (`va = perm[:n_va]` contre `tr = perm[:n_tr]`) : à graine et permutation
+  identiques, leurs ensembles de validation sont **disjoints** de celui de
+  11A. Aucune des trois ne prétend rejouer le split d'une autre, donc ce
+  n'est pas un défaut — mais la docstring de 11H annonce un IC sur « le
+  nombre de tête du split aléatoire », qui est un nombre d'archive (0,989,
+  `docs/archive/`, obsolète par la règle du dépôt).
+* `gap_hi = st_hi - s_lo` (11H) est calculé et jamais utilisé ; la ligne
+  imprimée juste après lit `dst_hi`. Code mort, pas une valeur fausse.
+
+**Configurations empruntées** — ce qui a réellement tourné :
+
+| axe | emprunté | non emprunté |
+|---|---|---|
+| `dim` | 4 ; 16 et 32 au balayage de biais de D-83 | 2, 3, 8, 64 |
+| `N` | 256 ; 64 pour la vérification de bout en bout de T4 | 512 |
+| graine | 0, 1, 2 (D-83) | — |
+| `Re` | 400 — le seul qui ait des artefacts à N=256 | 800, 1200, 1600 |
+| réduction du score | `block_avg` **et** `block_max` (D-84) | — |
+| discipline de seuil | train **et** validation, mesurées côte à côte (D-83) | — |
+
+**Reste à faire sur ce module** : 8 fichiers encore non lus —
+`h2b_analytical_solution`, `h2b_multiseed`, `h2b_neighbour_cone_curve`,
+`h2b_prediction_horizon`, `h2b_scenario_specialisation`, `h2b_loso_bootstrap`,
+et les deux lus seulement en partie (`h2b_psi_feature_loso`,
+`h2b_learned_meanfield_h`). Aucun n'a d'artefact dans `results/`.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
