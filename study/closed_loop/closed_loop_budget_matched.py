@@ -119,15 +119,24 @@ def main():
     fold_path = os.path.join(RESULTS_DIR,
                              f"{args.prefix}_fold_{args.fold}.json")
     if not os.path.exists(fold_path):
-        print(f"missing {fold_path}; run t15 for this fold first.")
-        return
+        # D-74 : rendait la main avec le code 0, sans artefact — un
+        # balayage vide (ici : un fold manquant) indiscernable d'une
+        # execution reussie. Meme famille que D-56 (CLAUDE.md : « un
+        # balayage vide doit crier »), deja corrigee sur les 11 sites
+        # soeurs de study/ mais jamais appliquee a ce fichier.
+        raise SystemExit(
+            f"missing {fold_path}; run t15 for this fold first. "
+            "(balayage vide : aucun fold correspondant, voir D-74)")
     rec = json.load(open(fold_path))
     target = float(rec["qhas"]["patch_ratio"])
 
     T = _load_v1_training_module()
     scen = dict(fold_scenarios(T, warn=False))
     if args.fold not in scen:
-        print(f"unknown fold {args.fold}"); return
+        # D-74, meme garde : un fold inconnu ne doit pas non plus rendre
+        # la main en silence.
+        raise SystemExit(
+            f"unknown fold {args.fold} (balayage vide, voir D-74)")
     cfg = scen[args.fold]
 
     print("=" * 88)
