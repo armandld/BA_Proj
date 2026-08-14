@@ -20,6 +20,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import numpy as np
+import pytest
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.HamiltParams import PhysicalMapper
@@ -112,20 +113,38 @@ def test_xpoint_selectivity():
     print(f"{'|K_xpoint| mean':<45} {np.mean(np.abs(K_xpoint_kh)):>10.4f}")
 
     print()
-    return active_xpoint, conc
+
+    # ── Assertions ────────────────────────────────────────────────
+    #
+    # Ce test n'en portait AUCUNE. Son verdict — les deux branches
+    # `good_selectivity` / `good_concentration` — vivait dans le bloc
+    # `if __name__ == "__main__"`, que pytest n'execute JAMAIS. Le test
+    # imprimait un rapport, rendait un tuple, et passait quoi qu'il arrive.
+    # Seul cas du depot (balayage AST sur ~1970 tests, helpers resolus).
+    #
+    # Seuils MESURES, pas choisis :
+    #   island_coalescence : 27.5 % de cellules actives, concentration 8.4
+    #   kelvin_helmholtz   :  0.0 % de cellules actives, moyenne 0.0000
+    #
+    # C'est Kelvin-Helmholtz qui fait de ce test une mesure : sans ce
+    # controle, « 27.5 % de cellules actives » ne separerait rien.
+
+    assert active_kh == pytest.approx(0.0, abs=1e-12), (
+        f"Kelvin-Helmholtz ne porte pas de point X, or {active_kh:.1%} des "
+        f"cellules sont actives — le detecteur repond a autre chose")
+    assert active_xpoint > 0.05, (
+        f"island_coalescence porte des points X, or seules "
+        f"{active_xpoint:.1%} des cellules sont actives (mesure : 27.5 %)")
+    assert active_xpoint < 0.5, (
+        f"{active_xpoint:.1%} des cellules actives : detection non selective "
+        f"(mesure : 27.5 %)")
+    assert conc > 2.0, (
+        f"concentration max/moyenne = {conc:.1f}, detection diffuse "
+        f"(mesure : 8.4)")
+
+    print(f"  Selectivite verifiee : {active_xpoint:.1%} sur "
+          f"island_coalescence contre {active_kh:.1%} sur Kelvin-Helmholtz.")
 
 
 if __name__ == "__main__":
-    active_xpoint, conc = test_xpoint_selectivity()
-
-    # Summary verdict
-    print("=" * 70)
-    print("VERDICT")
-    print("=" * 70)
-    good_selectivity = active_xpoint < 0.5  # Less than half the cells active
-    good_concentration = conc > 2.0          # At least 2x more concentrated than mean
-
-    if good_selectivity or good_concentration:
-        print("  X-point detection is spatially selective.")
-    else:
-        print("  X-point detection is not sufficiently selective.")
+    test_xpoint_selectivity()
