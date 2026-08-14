@@ -195,22 +195,33 @@ def main():
         if len(np.unique(Ytr)) < 2 or len(np.unique(Yv)) < 2:
             rows.append(dict(held=held, f1_class=float("nan"),
                              f1_9=float("nan"), f1_9id=float("nan"),
-                             f1_9fz=float("nan"))); continue
+                             f1_9fz=float("nan"),
+                             f1_9fz_thr_on_val=float("nan"))); continue
 
         thr_c, _ = best_threshold_f1(Str, Ytr)
         f1_class = f1_score(Yv, (Sv > thr_c).astype(int), zero_division=0)
         r9   = fit_eval(make_model("gbt", args.seed), Xtr_9, Ytr, Xv_9, Yv)
         rid  = fit_eval(make_model("gbt", args.seed), Xtr_a, Ytr, Xv_a, Yv)
         # fuzz uses augmented model (trained with correct id); val rows get wrong id
-        rfz_pred = rid["p"]  # ignored; we re-eval with augmented model on Xv_fuzz
         m_a = make_model("gbt", args.seed).fit(Xtr_a, Ytr)
         p_fuzz = m_a.predict_proba(Xv_fuzz)[:, 1]
-        thr_fz, _ = best_threshold_f1(p_fuzz, Yv,
-            grid=np.linspace(0.05, 0.95, 91))
+        # D-82 : le seuil etait choisi sur `(p_fuzz, Yv)` — les labels de
+        # VALIDATION — alors que les trois autres colonnes de cette meme
+        # table (classique, 9 features, 9+id) passent par `fit_eval`, donc
+        # par un seuil pris sur le train. La colonne « fuzz » etait la seule
+        # a beneficier de ses propres labels de test, et c'est precisement
+        # elle qui mesure la CHUTE quand l'identite de scenario est fausse :
+        # un F1 gonfle sous-estime la chute. `rid` est le meme modele
+        # (meme graine, memes donnees), son seuil vient de son train.
+        thr_fz = rid["thr"]
         f1_fz = f1_score(Yv, (p_fuzz > thr_fz).astype(int), zero_division=0)
+        # l'ancien nombre, garde pour que le biais reste mesurable
+        _, f1_fz_thr_on_val = best_threshold_f1(
+            p_fuzz, Yv, grid=np.linspace(0.05, 0.95, 91))
 
         rows.append(dict(held=held, f1_class=f1_class,
-                         f1_9=r9["f1"], f1_9id=rid["f1"], f1_9fz=f1_fz))
+                         f1_9=r9["f1"], f1_9id=rid["f1"], f1_9fz=f1_fz,
+                         f1_9fz_thr_on_val=f1_fz_thr_on_val))
         print(f"  {held:<18} {f1_class:>9.3f} {r9['f1']:>9.3f} "
               f"{rid['f1']:>9.3f} {f1_fz:>10.3f} "
               f"{(rid['f1']-r9['f1']):>+16.3f}")
@@ -219,10 +230,13 @@ def main():
     f9   = np.array([r["f1_9"]    for r in rows])
     fid  = np.array([r["f1_9id"]  for r in rows])
     ffz  = np.array([r["f1_9fz"]  for r in rows])
+    ffz_v = np.array([r["f1_9fz_thr_on_val"] for r in rows])
     fcl  = np.array([r["f1_class"] for r in rows])
     print(f"  LOSO mean: classical {np.nanmean(fcl):.3f}, "
           f"9-feat {np.nanmean(f9):.3f}, 9+id {np.nanmean(fid):.3f}, "
-          f"9+fuzz {np.nanmean(ffz):.3f}")
+          f"9+fuzz {np.nanmean(ffz):.3f}"
+          f"   [fuzz au seuil de validation, biaise, D-82 : "
+          f"{np.nanmean(ffz_v):.3f}]")
 
     print()
     print("  INTERPRETATION:")
@@ -255,6 +269,10 @@ def main():
         rs_class=f1_class_rs, rs_site9=r_b["f1"], rs_site9id=r_a["f1"],
         loso_held=np.array([r["held"] for r in rows]),
         loso_class=fcl, loso_site9=f9, loso_site9id=fid, loso_site9fuzz=ffz,
+        # D-82 : l'ancien nombre, seuil pris sur les labels de validation.
+        # Garde pour que le biais reste mesurable ; jamais compare aux
+        # trois autres colonnes.
+        loso_site9fuzz_thr_on_val=ffz_v,
     )
     print(f"\n  saved: {os.path.basename(out)}")
     print("\nPhase 11G complete.")
