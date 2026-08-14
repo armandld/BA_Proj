@@ -581,6 +581,25 @@ d'entraînement, et localisation temporelle de l'ordre 1 (D-25).
 | **la commande de reproduction elle-même**, ainsi que celle de 15 autres scripts `study/` et 2 lanceurs `scripts/` | **D-71** — `study/v4/t14_numerical_validation.py` (et 15 chemins frères) n'existent plus depuis la réorganisation `17d983d` ; corrigé, `RESULTS.md` |
 | l'**opérateur** qui mesure `max\|div B\|/rms\|B\|` dans `evolve_to` | **D-72** — `dns_validation.div_B` est spectrale ; depuis D-25 le solveur ne projette plus B et le garantit **en FD4**. La ligne avait été lue, l'opérateur non : mesuré 3,9029e−02 contre 2,0266e−14 sur la configuration publiée, `all_checks_pass` True → False. Corrigé, `RESULTS.md` |
 
+**Vérifié et trouvé sain : le reste de T14 se reproduit à HEAD.** L'artefact
+`t14_numerical_validation.npz` date de `1f03713` (2026-08-11), donc **d'avant
+D-25** — même situation que la table T31 que D-69 a trouvée non
+reproductible. La question a donc été posée à T14 aussi, et la réponse est
+l'inverse : seule la divergence avait bougé. Rejoué à HEAD sur la
+configuration publiée, sans réécrire l'artefact :
+
+| section | rejoué à HEAD | publié | tol |
+|---|---|---|---|
+| (A) `‖u_N − u_2N‖_rel` | 7,4132e−02 · 3,7087e−02 | 7,41e−02 · 3,71e−02 | — |
+| (A) ordre d'auto-convergence | **0,9992** | 1,00 | 0,05 |
+| (D) ordre temporel **avec** projection | **1,1194** | 1,12 | 0,05 |
+| (D) ordre temporel **sans** projection | **3,9978** | 4,00 | 0,05 |
+
+Les trois ordres publiés tiennent. C'est ce qui rend D-72 imputable : tout le
+reste de T14 se reproduit, seul le diagnostic de divergence ne le faisait
+plus. Et le master table, régénéré, reste à **180 / OK=164 / DIFF=16 /
+MISSING=0**, ses 180 lignes de données identiques à l'octet.
+
 **La même question posée à tous les consommateurs de l'opérateur — D-73.**
 D-72 trouvé, la question qui l'a produit a été passée à chaque site qui
 mesure une divergence : *depuis D-25, qui mesure B avec un opérateur que le
