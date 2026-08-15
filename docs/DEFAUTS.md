@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **16** |
+| **ouverts** — décision ou campagne requise | **17** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1392,6 +1392,48 @@ un test vérifie qu'elle y reste.
 
 ```bash
 pytest tests/study/test_fig9_negative_control.py
+```
+
+## D-100 — le panneau « Uncertainty w(s) » de la figure 11 n'affiche pas le poids que le hamiltonien applique
+
+**Où ça bloque.** La figure s'intitule *« Hamiltonian Design:
+Uncertainty-Weighted ZZ Coupling »* et son 4e panneau annonce `Uncertainty
+w(s)`, avec une annotation chiffrée (« X % of cells w > 0.1 »). Tant que la
+présentation n'est pas tranchée, ce panneau et son pourcentage ne décrivent
+pas le hamiltonien qu'ils illustrent.
+
+**Comment on est tombé dessus.** Question 4 de `VIGIL.md` — deux chemins
+censés coïncider. `fig11_hamiltonian_design.py:102` recalcule le poids
+localement à partir du score **par cellule** ; `HamiltParams.py:469-473`, le
+seul endroit où ce poids est réellement appliqué, le calcule sur le score
+**moyenné par arête** (`0.5 * (s + roll(s, -1, axis))`) et en produit **deux**
+champs distincts, horizontal et vertical.
+
+**Ce qui est établi.** Part des cellules à `w > 0,1`, mesurée à N=64 avec les
+paramètres déployés (`sigma = 0,0500`, `threshold_amr = 0,3044`) :
+
+| scénario | panneau D (par cellule) | ce qu'applique le mappeur (arêtes h / v) | écart |
+|---|---|---|---|
+| Kelvin-Helmholtz | 9,89 % | 10,40 % / 9,91 % | +3 % |
+| **Harris Tearing** | **1,27 %** | **5,52 %** / 1,27 % | **+167 %** |
+
+Sur la nappe de tearing, les arêtes **horizontales** sont **4,3×** plus
+actives que ce que le panneau affiche. Et l'anisotropie que le hamiltonien
+voit — `h` ≠ `v`, d'un facteur 4,3 ici — n'apparaît pas du tout sur un
+panneau unique. Le champ qui sépare est celui dont le score varie le long
+d'**un seul** axe ; sur un score constant, les trois versions coïncident.
+
+**Ce qui n'est PAS touché.** L'annotation « ZZ reduced by X % » du panneau C
+vient bien du mappeur réel (`compute_zz_maps` appelle
+`compute_coefficients`) : elle n'est pas concernée.
+
+**Où on en est.** Rapport seul. Afficher `w_h`, `w_v`, leur moyenne ou leur
+max est un **choix de présentation** — et montrer deux cartes au lieu d'une
+change la mise en page de la figure. À trancher. La déviation est écrite à
+côté du calcul concerné, et un test vérifie qu'elle y reste.
+
+```bash
+pytest tests/study/test_fig11_uncertainty_weight.py
 ```
 
 ## Ajouter une entrée
