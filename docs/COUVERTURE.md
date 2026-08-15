@@ -1381,6 +1381,48 @@ dossier couverts.
 
 ---
 
+## `figures/pareto_frontier.py` et `figures/pareto_panel.py` — terrain neuf, lus en entier
+
+596 lignes (191 + 405). **`figures/` n'apparaissait nulle part dans ce
+document avant cette passe** — ni dans « jamais audité », ni ailleurs :
+`src/` et `study/` étant tous deux lus en entier (sections précédentes), le
+dossier entier était le terrain neuf suivant au sens de l'ordre du travail
+de la fiche. Ce sont les deux scripts qui produisent les figures V4
+« Q-HAS contre la frontière classique » — `figures/result_figs.py` et
+`figures/v1_legacy/` (17 fichiers) restent non lus, prochain terrain neuf.
+
+| fonction | verdict |
+|---|---|
+| `pareto_frontier.main()` | **D-92** — exécuté seul, reproduisait les rapports Q-HAS déjà retractés (voir `RESULTS.md`) : tirage `t15b` unique au lieu de la moyenne T20, aucun retrait des points de trace avortés (audit T19) |
+| `pareto_frontier.load_points`, le triplet `tuned` | **réserve, non corrigée** — mélange `patch`/`phys` de `tuned_classical` et `thr` de `matched_classical`, deux runs différents, deux seuils différents. Sans conséquence mesurée : `tuned` n'est lu ni par `build_figure` ni par aucun appelant de `main()` dans les deux fichiers — un piège armé, non déclenché (question 1 de `VIGIL.md`), signalé plutôt que corrigé pour rester sur un seul défaut par commit (D-92 le touche déjà) |
+| `pareto_frontier.interp_frontier` | **sain** — extrapolation plate hors domaine (comportement documenté de `np.interp`), jamais empruntée : sur les 4 folds réels le budget Q-HAS retombe toujours dans l'intervalle balayé par la trace |
+| `pareto_frontier.build_figure` | **sain** — fenêtre verticale dynamique (`max(...) * 1.12`, pas de borne codée en dur comme D-62 dans `recompute_lambda_scores.py`) ; étiquette du point apparié indexée par `argmin` sur l'écart de budget, pas par position dans la trace |
+| `pareto_panel.draw_panel`, `build_panel` | **lus, aucun défaut de valeur** — mise en page en pouces (marges, largeur de texte enveloppé) non revérifiée au pixel près : ce n'est pas une grandeur physique au sens de la mission de `VIGIL.md` |
+| `pareto_panel.available_folds` | **sain** — filtre trivial sur l'existence du fichier, ordre demandé préservé |
+
+**Ce que la lecture a montré sans que ce soit un défaut** : `pareto_panel.py`
+tenait sa propre copie de `verified_qhas_point`/`load_trace_audit`/
+`drop_aborted`, identique à celle qu'on aurait dû trouver dans
+`pareto_frontier.py` — exactement la forme que ce dépôt a déjà rencontrée
+deux fois (D-60/D-61, `_add_trend`). Déplacées dans `pareto_frontier.py`
+avec D-92, `pareto_panel.py` les importe désormais au lieu d'en tenir sa
+propre définition ; `tests/study/test_pareto_frontier_retracted_ratio.py`
+verrouille l'identité des trois pour qu'elles ne puissent plus diverger une
+seconde fois.
+
+**Axes empruntés** : fold **ot**, **kh**, **tearing** (T20 disponible, 5
+tirages, aucun point de trace avorté) et **rotor** (T20 disponible, 3
+tirages sur 5 dont 2 avortés, 2 points de trace avortés retirés par
+l'audit T19) — les quatre artefacts gelés du dépôt. Point Q-HAS **moyenné**
+(T20 présent) et **tirage unique en repli** (synthétique, T20 absent, tests
+D-92). Trace **avec** points avortés à retirer et **sans**. Non emprunté :
+un vrai désaccord entre `t19_budget_trace_audit.json` et les seuils de la
+trace (aucun test ne construit un seuil avorté qui ne serait PAS dans la
+trace) ; l'option `--folds` de `pareto_panel.py` au-delà des 4 valeurs par
+défaut.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

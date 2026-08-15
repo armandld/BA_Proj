@@ -1433,6 +1433,32 @@ frontier is lower there:
 Both are in `pareto_panel.csv` (`ratio` and `ratio_vs_matched`) so no reader
 has to guess which one a number came from.
 
+### D-92 — `pareto_frontier.py`, run alone, still produced the retracted ratio
+
+**Where this was found.** 🦉 Vigil, terrain neuf : `figures/` had no entry
+anywhere in `COUVERTURE.md` before this pass — the whole directory had
+never been read. `pareto_panel.py`'s own docstring says each panel "reprend
+exactement la grammaire de `pareto_frontier`", and it imports
+`interp_frontier`/`load_points` from that file — so reading `pareto_panel.py`
+without also reading `pareto_frontier.py::main()` would have been reading
+half of a pair (`VIGIL.md` question 4).
+
+**What was wrong.** The two corrections described just above — average the
+Q-HAS point over T20's repeated draws instead of trusting T15b's single
+non-deterministic draw, and drop T19-audited aborted points from the
+frontier — were applied only inside `pareto_panel.py`'s `main()`. The
+`pareto_frontier.py` module still defined its **own** `main()`
+(`figures/pareto_frontier.py`, run standalone as
+`python figures/pareto_frontier.py --fold X`, e.g. to produce a single-fold
+supplementary figure), and that one never called `verified_qhas_point` or
+`drop_aborted` — it plotted `d["qhas"]` untouched. Same shape as D-60/D-61
+already logged in this file (`_add_trend`, two copies, one fixed one not):
+a correction landed at one site sharing the code, not at the other.
+
+| # | ce qui était faux | avant → après | vérifier |
+|---|---|---|---|
+| D-92 | `pareto_frontier.py::main()`, exécuté seul, ne consultait ni `t20_qhas_run_variance_*.json` ni l'audit `t19_budget_trace_audit.json` : il traçait le tirage unique de `t15b["qhas"]` et gardait tout point de la trace, y compris ceux issus d'une bissection avortée | rejoué sur les 4 artefacts gelés (`results/t15b_budget_matched_{ot,kh,rotor,tearing}.json` + `t20_qhas_run_variance_*` + `t19_budget_trace_audit.json`) : ratio annoté **2,57× → 1,79×** (`ot`), **4,41× → 2,10×** (`kh`), **3,62× → 2,49×** (`rotor`, dont 2 points de trace avortés désormais retirés), **4,38× → 1,98×** (`tearing`) — les quatre valeurs « après » coïncident, au centième près, avec celles que `pareto_panel.py` produit déjà pour la planche V4. Le CSV mono-fold gagne une ligne `matched_classical` et le denominateur mesuré : **1,30×, 1,90×, 2,74×, 1,81×** — même colonne `ratio_vs_matched` que `pareto_panel.csv`. `verified_qhas_point`, `load_trace_audit`, `drop_aborted` déplacées dans `pareto_frontier.py` (une seule définition désormais ; `pareto_panel.py` les importe d'ici) pour que les deux fichiers ne puissent plus diverger une seconde fois de la même façon. Aucune figure `results/figures/pareto_frontier_*.{pdf,png,csv}` n'était committée avant cette passe — le nombre retracté n'était donc pas déjà publié dans ce dépôt, mais l'aurait été au prochain `python figures/pareto_frontier.py --fold X` | `pytest tests/study/test_pareto_frontier_retracted_ratio.py` |
+
 ---
 
 ## T20 — Q-HAS run-to-run variance on fold `kh` (D11 quantified)

@@ -63,7 +63,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from pareto_frontier import (
     C_FRONTIER, C_QHAS, INK_MUTED, INK_PRIMARY, INK_SECONDARY, SURFACE,
-    interp_frontier, load_points,
+    drop_aborted, interp_frontier, load_points, load_trace_audit,
+    verified_qhas_point,
 )
 
 # Intitules lisibles : le code de fold n'est pas un nom de physique.
@@ -75,34 +76,6 @@ FOLD_TITLES = {
 }
 
 
-def verified_qhas_point(results_dir, fold):
-    """Point Q-HAS a partir des tirages REPETES de T20, ou None.
-
-    `t15b["qhas"]` est UN tirage unique d'un bras non deterministe (D11).
-    La figure l'annotait comme s'il etait la mesure : elle portait 2.6x,
-    4.4x, 3.6x, 4.4x, c'est-a-dire les rapports RETRACTES, gonfles de 1.1
-    a 2.2 fois par rapport aux moyennes sur 5 tirages. Un lecteur qui
-    compare la figure au tableau corrige y verrait deux etudes.
-
-    On prend donc la moyenne des tirages ACHEVES (les avortes ne sont pas
-    des points de mesure) et on rend aussi leur dispersion, pour que la
-    figure montre ce qu'un tirage unique cachait.
-    """
-    p = os.path.join(results_dir, f"t20_qhas_run_variance_{fold}.json")
-    if not os.path.exists(p):
-        return None
-    d = json.load(open(p))
-    ok = [r for r in d.get("qhas_runs", []) if r.get("completed")]
-    if len(ok) < 2:
-        return None
-    ph = np.array([r["phys_score"] for r in ok], dtype=float)
-    pa = np.array([r["patch_ratio"] for r in ok], dtype=float)
-    return {"patch": float(pa.mean()), "phys": float(ph.mean()),
-            "patch_sd": float(pa.std(ddof=1)),
-            "phys_sd": float(ph.std(ddof=1)),
-            "n": len(ok), "n_aborted": len(d.get("qhas_runs", [])) - len(ok)}
-
-
 def available_folds(results_dir, folds):
     """Ne garde que les folds dont la comparaison budget-appariee existe."""
     keep = []
@@ -111,36 +84,6 @@ def available_folds(results_dir, folds):
         if os.path.exists(p):
             keep.append(f)
     return keep
-
-
-def load_trace_audit(results_dir):
-    """Points de bissection dont la trajectoire a AVORTE, par fold.
-
-    La courbe est presentee comme la frontiere ATTEIGNABLE : un point issu
-    d'une execution avortee n'est pas un point de fonctionnement et n'a
-    rien a y faire. Le critere est l'audit T19 (la trace d'execution de V1
-    elle-meme), PAS une heuristique sur la valeur : sur `tearing`, le point
-    a phys = 4.13 a bel et bien termine — c'est un regime de raffinement
-    quasi nul, mauvais mais atteignable. Une regle du type « phys > 1 donc
-    divergence » l'aurait supprime a tort.
-    """
-    p = os.path.join(results_dir, "t19_budget_trace_audit.json")
-    if not os.path.exists(p):
-        return None
-    d = json.load(open(p))
-    return {t["fold"]: [pt["threshold"] for pt in t["points"]
-                        if not pt["completed"]]
-            for t in d.get("traces", [])}
-
-
-def drop_aborted(front, aborted_thresholds, tol=1e-9):
-    """Retire de la frontiere les points marques avorts par l'audit."""
-    if not aborted_thresholds:
-        return front, 0
-    keep = [r for r in front
-            if not any(abs(r.get("thr", float("nan")) - t) < tol
-                       for t in aborted_thresholds)]
-    return keep, len(front) - len(keep)
 
 
 def _style_axes(ax):
