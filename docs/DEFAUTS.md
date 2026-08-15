@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **14** |
+| **ouverts** — décision ou campagne requise | **15** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1270,6 +1270,71 @@ python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 8  --n-snaps 6 --
 python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 16 --n-snaps 6 --seed 0
 # comparer results/h1_curl_convention_gap_N128_dim{8,16}_v2.npz['verdicts']
 # a la table publiee dans RESULTS.md (git hash 8ee5c8a)
+```
+
+## D-91 — la « vérité terrain » de `compare_rotor_budget.py` est une erreur RELATIVE : le bruit de fond y bat la vraie structure
+
+**Où ça bloque.** Sur une lecture déjà écrite dans `RESULTS.md` (note D-10) :
+*« la sélection dite "ground truth" … rend une erreur L2 de 0,3079, pire
+que l'absence d'AMR (0,3074), tandis que classique et Q-HAS … obtiennent
+0,0208 … Le "ground truth" du protocole n'est donc pas un optimum de
+raffinement … À reprendre avant d'en tirer une revendication. »* Cette
+entrée constatait l'anomalie sans en donner la cause. En voici la cause,
+mesurée.
+
+**Comment on est tombé dessus.** `compare_rotor_budget.py` (D-10, `src/`)
+était le seul fichier de `src/` qu'aucune passe n'avait encore relu
+fonction par fonction — `COUVERTURE.md` le disait « mort » sur la foi d'une
+note antérieure à sa propre correction (D-10, D-66, D-67, `403240b`) ; il
+tourne en réalité. Question 2 de `VIGIL.md` sur `compute_block_errors` :
+que promet-elle ? « ground truth : which blocks truly need refinement ».
+Rejoué sur les artefacts réels du rotor MHD (`--resolution 96 --n-blocks 3`,
+Re=Rm=800, T_eval=0,5) : la sélection qu'elle produit ne contient PAS le
+bloc central, celui qui porte la vraie structure du rotor.
+
+**Ce qui est établi.** `compute_block_errors` calcule, par bloc et par
+champ, `diff / ref` avec `ref = sqrt(mean(dns_block**2)) + 1e-10` — le
+plancher `1e-10` protège uniquement le **dénominateur**. Sur les 9 blocs
+réels (grille 96×96, 3×3 blocs), détail du champ `Jz` :
+
+| bloc | diff | ref | ratio |
+|---|---|---|---|
+| (0,0) — coin, fond quasi vide | 3,47e−02 | 2,26e−02 | **1,53** |
+| (2,0) — coin, fond quasi vide | 3,10e−02 | 2,00e−02 | **1,55** |
+| (1,1) — centre, vraie structure | 6,667 | 14,09 | **0,47** |
+
+Le score moyen (5 champs) place **(1,0)=0,622** et **(0,0)=0,449** devant
+**(1,1)=0,335**, le bloc central — septième sur neuf. À budget 3, la
+sélection rendue est `[(1,0), (1,2), (0,0)]` : deux blocs de bord et un
+coin, jamais le centre. Deux blocs qui partagent le **même** écart absolu
+DNS/grossier reçoivent un score qui dépend presque uniquement de
+l'amplitude du signal DNS dans chacun, pas de l'écart lui-même — vérifié
+sur un champ synthétique qui isole la variable : écart absolu identique
+(1e−6) sur un bloc de bruit (signal ≈ 1e−6) et un bloc de structure
+(signal = 10) donnent un ratio **1e7** entre les deux scores.
+
+**Ce que ce n'est pas.** Ni un défaut de `select_top_k` (vérifié ailleurs,
+sain, testé), ni de `build_patches_from_selection` (même convention `bi,bj`
+que les trois fonctions de score) : le calcul du score lui-même mesure la
+sensibilité de la normalisation au signal, pas au besoin de raffinement.
+
+**Où on en est — non corrigé, rapport seul.** `compare_rotor_budget.py`
+est dans `src/`, l'objet d'étude gelé (`CLAUDE.md`) ; changer la métrique
+« vérité terrain » changerait les deux nombres déjà écrits dans
+`RESULTS.md` (D-10 : 0,3079 / 0,0208 / agreement 0/3) — décision, pas
+correction mécanique. Deux directions, à trancher :
+
+1. **Pondérer par un plancher absolu commun** (ex. RMS du champ sur tout
+   le domaine plutôt que par bloc), pour qu'un écart minuscule sur un
+   signal minuscule ne l'emporte plus sur un écart plus grand sur un
+   signal plus grand.
+2. **Documenter la limite** : le script démontre l'avantage Q-HAS/classique
+   sur la sélection *classique/QAOA*, dont le score n'est pas de cette
+   forme ; sa colonne « ground truth » ne mesure alors qu'un plancher de
+   comparaison connu pour être faux, pas un optimum.
+
+```bash
+pytest tests/pipeline/test_compare_rotor_budget.py -k d91
 ```
 
 ## Ajouter une entrée

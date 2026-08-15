@@ -78,9 +78,9 @@ effectivement relu fonction par fonction.
 
 **Jamais audité** — aucune des cinq questions n'y a été posée :
 
-| fichier | lignes | pourquoi ça compte |
-|---|---|---|
-| `compare_rotor_budget.py` | 481 | comparaison de budget — **ne s'exécute pas**, voir plus bas |
+Vide. `compare_rotor_budget.py` (481 lignes) figurait ici — « ne s'exécute
+pas » était déjà faux au moment où c'était écrit (corrigé par D-10 le
+13 août, avant cette note) : lu en entier cette passe, voir plus bas — D-91.
 
 `visual.py` et `help_visual.py` figuraient ici (327 lignes, « figures ») :
 lus en entier le 14 août, voir §1a quater — D-68.
@@ -368,22 +368,39 @@ seront que si un appelant apparaît.
 
 ---
 
-## `src/compare_rotor_budget.py` — revérifié, toujours mort
+## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut ouvert (D-91)
 
-Non audité fonction par fonction : il ne s'exécute pas. Le `TypeError` que
-la note « Defect D10 » de `RESULTS.md` décrit est **toujours là, au même
-endroit** — `PhysicalMapper(beta=0.5, …)` à la ligne 108, alors que la
-signature actuelle n'a pas de `beta` (elle porte `beta_curl`,
-`beta_xpoint`, `beta_grad`). Vérifié le 13 août 2026 en le lançant :
-`--resolution 32 --n-blocks 2 --budget 1` s'arrête là.
+Note obsolète : le `TypeError` décrit ci-dessous a été corrigé le
+13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne soit
+écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit son
+`.npz`, et est désormais lu en entier, fonction par fonction (question 2 de
+`VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
 
-**Ce que la lecture de son en-tête ajoute** : même réparé, ce script
-comparerait un bras Q-HAS dont les hyperparamètres sont écrits en dur
-(`beta=0.5`, `gamma_hydro=0.5`, `gamma_mag=0.5`, `kappa=5.0`,
-`threshold_amr=0.0`) et non chargés depuis `best_hyperparams.json`. Aucun
-nombre publié n'en vient — il n'a jamais tourné — mais quiconque le
-réparerait obtiendrait une comparaison qui n'oppose pas la configuration
-déployée. À dire avant, pas après.
+**D-91, ouvert** (`DEFAUTS.md`) : `compute_block_errors` divise par
+`ref = sqrt(mean(dns_block**2)) + 1e-10`, plancher côté dénominateur
+seul — deux blocs au même écart absolu reçoivent un score qui dépend de
+l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
+« ground truth » qui en sort exclut le bloc central (celui qui porte la
+vraie structure), au profit de coins de fond quasi vide. C'est la cause de
+l'anomalie déjà notée dans `RESULTS.md` (D-10 : sélection ground truth
+0,3079, à peine mieux que l'absence d'AMR à 0,3074, contre 0,0208 pour
+classique/Q-HAS). Non corrigé : changer la métrique changerait ces deux
+nombres déjà publiés.
+
+Sain par ailleurs : `select_top_k` (testé, `argsort` décroissant correct),
+`build_patches_from_selection` (même convention `bi,bj` que les trois
+fonctions de score), `classical_block_scores`/`qhas_block_scores` (le
+mapper reçoit désormais les hyperparamètres réellement déployés, D-10),
+`compute_solution_error` (nulle sur un champ identique, croissante avec
+l'écart, testé). Historique désormais dans le fichier lui-même : même
+réparé, il comparerait un bras Q-HAS aux hyperparamètres écrits en dur
+avant D-10 — ce n'est plus le cas, `qhas_block_scores` appelle
+`load_hyperparams()`.
+
+**Axes empruntés** : bras qhas/classique/ground-truth tous exercés, bord
+périodique uniquement, `state_vector` uniquement (le seul backend rejoué
+ici), warm start absent (`Phi_prev` fourni mais pas de cache warm start
+inter-appel comme `refinement.py`), Hamiltonien non nul.
 
 ---
 
