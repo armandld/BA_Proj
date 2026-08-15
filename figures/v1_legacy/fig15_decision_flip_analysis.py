@@ -163,7 +163,18 @@ def instrumented_bfs(sim, N, Phi_prev, threshold_amr, target_dim, max_depth,
             pad = 1 if depth > 0 else 0
             local_score_raw = get_periodic_patch(full_score, y_s, y_e, x_s, x_e, pad=pad)
             is_periodic = (depth == 0)
-            score_map_padded = _process_score(local_score_raw, is_periodic, target_dim + 2 * pad if pad > 0 else target_dim)
+            # `target_dim`, PAS `target_dim + 2*pad` : a depth > 0, `_process_score`
+            # emprunte `_resize_padded_maxpool`, dont le contrat est « entree
+            # (N+2, M+2) -> sortie (t_dim+2, t_dim+2) » — le halo est deja ajoute
+            # par la fonction. Regression de D-37 (voir refinement.py) : demander
+            # target_dim+2 fait rendre un coeur 4x4 pour target_dim=2, et la boucle
+            # `for i in range(target_dim)` ne lit alors QUE son quart haut-gauche —
+            # classical_score decrit une sous-region differente de qaoa_prob.
+            # Mesure sur Harris tearing (N=256, 30 pas, patch depth=1) : ecart
+            # jusqu'a 0.525 sur des scores dont l'echelle max vaut 0.656 (80%),
+            # et 2 des 4 decisions binaires (score >= threshold_amr=0.3228)
+            # basculaient. Voir D-96.
+            score_map_padded = _process_score(local_score_raw, is_periodic, target_dim)
             if depth > 0:
                 score_map = score_map_padded[1:-1, 1:-1]
             else:

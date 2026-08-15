@@ -127,9 +127,12 @@ def instrumented_bfs_hamilt(sim, N, Phi_prev, threshold_amr, target_dim,
             local_score_raw = get_periodic_patch(full_score, y_s, y_e,
                                                  x_s, x_e, pad=pad)
             is_periodic = (depth == 0)
+            # `target_dim`, PAS `target_dim + 2*pad` : voir D-96 dans fig15/16 et
+            # D-37 dans refinement.py — `_process_score` ajoute deja le halo pour
+            # `t_dim`, le redemander decale classical_score sur la mauvaise
+            # sous-region a depth > 0.
             score_map_padded = _process_score(
-                local_score_raw, is_periodic,
-                target_dim + 2 * pad if pad > 0 else target_dim)
+                local_score_raw, is_periodic, target_dim)
             score_map = (score_map_padded[1:-1, 1:-1]
                          if depth > 0 else score_map_padded)
 
