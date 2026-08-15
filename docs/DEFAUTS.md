@@ -1337,7 +1337,7 @@ correction mécanique. Deux directions, à trancher :
 pytest tests/pipeline/test_compare_rotor_budget.py -k d91
 ```
 
-## D-97 — le « contrôle négatif » de la figure 9 ne peut pas rendre de faux positif
+## D-98 — le « contrôle négatif » de la figure 9 ne peut pas rendre de faux positif
 
 **Où ça bloque.** `figures/v1_legacy/fig9_synthetic_unit_tests.py` construit
 quatre motifs synthétiques, dont le quatrième est annoncé par sa propre

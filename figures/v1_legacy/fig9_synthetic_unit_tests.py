@@ -56,7 +56,7 @@ def patches_to_fine_mask(patches, N):
 def pixel_prf(patches, gt, N):
     """Pixel-level precision, recall, F1 against GT > mean.
 
-    D-97 — DEVIATION CONNUE, MESUREE, NON CORRIGEE (decision en attente,
+    D-98 — DEVIATION CONNUE, MESUREE, NON CORRIGEE (decision en attente,
     voir docs/DEFAUTS.md). La reference `needs` est RELATIVE au champ
     lui-meme : `gt > gt.mean()`. Elle ne porte donc aucune information
     absolue — multiplier `gt` par 1000 laisse `needs` bit-a-bit identique.

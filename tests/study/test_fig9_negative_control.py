@@ -1,4 +1,4 @@
-"""D-97 — le « controle negatif » de fig9 ne peut pas echouer.
+"""D-98 — le « controle negatif » de fig9 ne peut pas echouer.
 
 `fig9_synthetic_unit_tests.py` annonce sa 4e ligne comme
 « Uniform noise : negative control -> false positive rate ». Mais
@@ -47,7 +47,7 @@ def test_la_reference_ne_porte_aucune_information_absolue():
     gt = np.abs(rng.standard_normal((32, 32)))
     a = _pixel_prf_reference(gt)
     b = _pixel_prf_reference(gt * 1000.0)
-    assert np.array_equal(a, b), "la reference reagit a l'echelle : D-97 serait ferme"
+    assert np.array_equal(a, b), "la reference reagit a l'echelle : D-98 serait ferme"
     c = _pixel_prf_reference(gt + 5.0)
     assert np.array_equal(a, c), "la reference reagit a un decalage constant"
 
@@ -77,7 +77,7 @@ def test_le_controle_negatif_declare_la_moitie_du_domaine():
         "fraction declaree = %.4f, consignee 0,4709 — remesurer, ne pas "
         "retoucher le seuil" % frac)
     assert frac > 0.25, (
-        "le controle negatif ne declare plus la moitie du domaine : D-97 a "
+        "le controle negatif ne declare plus la moitie du domaine : D-98 a "
         "peut-etre ete tranche, mettre a jour DEFAUTS.md")
 
 
@@ -100,4 +100,4 @@ def test_la_deviation_reste_ecrite_dans_le_fichier_concerne():
         if isinstance(n, ast.FunctionDef) and n.name == "pixel_prf":
             doc = ast.get_docstring(n)
     assert doc is not None, "pixel_prf a disparu de fig9"
-    assert "D-97" in doc, "la mention de la deviation D-97 a quitte pixel_prf"
+    assert "D-98" in doc, "la mention de la deviation D-98 a quitte pixel_prf"
