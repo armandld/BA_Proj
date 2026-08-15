@@ -1332,6 +1332,38 @@ aucune configuration, donc la branche « cible `d_i`
 
 ---
 
+## `study/h4_transfer/` — lu en entier, terrain neuf, 2 défauts (D-89, D-90)
+
+4 fichiers (~1 550 lignes), jamais mentionnés ici ni dans `DEFAUTS.md` avant
+cette passe — `study/h2b_prediction/` venait de se clore sans entrée
+ouverte, `study/h4_transfer/` était le terrain neuf suivant dans l'ordre de
+la fiche (déjà signalé non lu par la passe du 14 août sur `closed_loop/`).
+
+| fichier | verdict |
+|---|---|
+| `h4_unseen_conditions.py` (T22) | **sain** — construit et documente lui-même le cas `total_abort` (« un résultat, pas une panne ») qui a fait trébucher ses deux consommateurs ci-dessous ; `degradation_ratio = mu/mc` cohérent avec `phys_score` = erreur (plus bas est meilleur, `src/pipeline.py:859`) |
+| `h4_unseen_floor.py` (T22d) | **D-89**, corrigé — plantait (`KeyError: 'canonical'`) sur un bras `total_abort` de T22, jamais exercé sur ce dépôt (les 4 artefacts réels ont les deux bras `completed`) |
+| `h4_transfer_summary.py` (T22c) | **D-90**, corrigé — lisait `total_abort_arm` (singulier), clé absente de l'artefact réel (T22 écrit `total_abort_arms`, pluriel) : affichait « the None arm aborted » au lieu du nom du bras. Le reste du fichier (`ratio_sd`, `analyse`, dominance tirage par tirage) est **sain** — la note interne à `analyse()` (« shift/deg algébriquement identiques ») a été vérifiée à la main, elle tient |
+| `h4_physics_robustness.py` (T25) | **sain** — bissection sur `patch_ratio` vérifiée dans le bon sens (seuil haut ⇒ patch bas, cohérent avec D-74) ; `frontier_verdict` refuse explicitement une interpolation sur une frontière non monotone ou mal encadrée plutôt que de rendre un ratio d'apparence normale (documenté dans le fichier lui-même comme le motif qu'il évite) ; `rng_override` ignore l'argument que l'appelant passe à `np.random.default_rng` et le remplace par la graine substituée — c'est voulu, `init_mhd_rotor` appelle `default_rng(42)` en dur |
+
+**Ce que la lecture n'a pas fait** : aucune campagne `main()` rejouée de
+bout en bout (chaque fold coûte des heures de DNS/QAOA) ; les 2 défauts
+trouvés l'ont été par lecture de contrat (question 3, deux fichiers
+consommant la même forme d'artefact que documente un troisième) et
+reproduits par appel direct des fonctions extraites, pas par exécution de
+`main()` sur données réelles.
+
+**Axes empruntés** (au sens de la fiche) : aucun — ce module ne construit
+ni circuit ni Hamiltonien, il pilote `src/pipeline.py`/`src/train_hyperparams.py`
+(le chemin déployé) sur des conditions initiales alternatives, comme
+`closed_loop/`. Bord périodique uniquement, bras `qhas` et `classical`
+(`only=True`) tous deux exercés par construction.
+
+`study/h4_transfer/` **est maintenant lu en entier**, les 4 fichiers du
+dossier couverts.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
