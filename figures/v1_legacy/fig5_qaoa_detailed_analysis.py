@@ -365,16 +365,27 @@ def _gt_error_share(gt, target_dim):
     return shares / total
 
 
-def _gt_quadrant_above_threshold(gt, target_dim, threshold):
-    """Binary: does each quadrant's mean error exceed the threshold?
+def _gt_quadrant_above_threshold(gt, target_dim):
+    """Binary: does each quadrant's mean error exceed the domain's own mean?
 
     Used for TP/FP/FN/TN classification of QAOA vs classical decisions.
+
+    Ne prend plus `threshold_amr` en argument : ce seuil est calibre pour
+    `AngleMapper.classical_score` (normalise au max du domaine, dans [0,1]),
+    pas pour `ground_truth_errors` (magnitude brute de gradient+laplacien,
+    non normalisee). Mesure sur init_harris_tearing (N=256, 150 pas) :
+    gt.max() = 0.183 sur tout le domaine, contre threshold_amr = 0.304 --
+    `gt_above` valait FAUX partout, systematiquement, quelle que soit la
+    structure reelle du champ. Le seuil de comparaison est desormais
+    `gt.mean()`, comme `_gt_error_share` (ci-dessus, meme fichier) et
+    `pixel_precision`/`pixel_recall` de fig4_comprehensive_comparison.py.
     """
     bk = gt.shape[0] // target_dim
+    gt_thr = gt.mean()
     above = np.zeros((target_dim, target_dim), dtype=bool)
     for i in range(target_dim):
         for j in range(target_dim):
-            above[i, j] = gt[i*bk:(i+1)*bk, j*bk:(j+1)*bk].mean() > threshold
+            above[i, j] = gt[i*bk:(i+1)*bk, j*bk:(j+1)*bk].mean() > gt_thr
     return above
 
 
@@ -508,9 +519,10 @@ for label, data in all_results.items():
           f"  {'(QAOA matches GT)' if qa_top == gt_top else '(QAOA misses)'}"
           f"  {'(CL matches GT)' if cl_top == gt_top else '(CL misses)'}")
 
-    # TP/FP/FN analysis at threshold
-    thr = TRAINED_PARAMS['threshold_amr']
-    gt_above = _gt_quadrant_above_threshold(gt, TARGET_DIM, thr)
+    # TP/FP/FN analysis at threshold. `gt` is compared to its OWN mean, not
+    # threshold_amr (D-101): threshold_amr is calibrated for the normalized
+    # classical_score, not for this unnormalized error magnitude.
+    gt_above = _gt_quadrant_above_threshold(gt, TARGET_DIM)
     qa_refine = ana_d0['qaoa_prob'] > 0.5
     cl_refine = ana_d0['classical_prob'] > 0.5
     n_cells = TARGET_DIM * TARGET_DIM
