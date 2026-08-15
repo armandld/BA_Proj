@@ -1440,6 +1440,70 @@ défaut.
 
 ---
 
+## `figures/v1_legacy/fig_utils.py` et `fig0_pareto_lambda.py` — terrain neuf, lus en entier
+
+1 396 lignes (962 + 434). `figures/v1_legacy/` était, après la passe
+précédente, la seule partie non lue du dépôt. Trois défauts en sont sortis —
+D-93, D-94, D-95, détaillés dans `RESULTS.md`.
+
+**Ce qui les relie** : la réorganisation `17d983d` a réécrit le prélude
+`sys.path` de chaque fichier (`_REPO_ROOT`, deux niveaux) sans toucher aux
+ancres de racine **déjà présentes** dans le corps. Balayage fait sur les 19
+fichiers du dossier : **deux** portaient encore une ancre à un seul niveau,
+`fig_utils.py:109` (D-93) et `fig0_pareto_lambda.py:39` (D-94) — les 17 autres
+n'ont que l'ancre générée. La liste est close, pas échantillonnée.
+
+**Configurations traversées.** `FIGURE_PHASE` **absent et présent** — l'axe
+propre à ce module, les deux côtés (`test_fig_utils_output_dir.py`). Les deux
+motifs de `load_all_trials`, **quantique et classique**, sur les CSV gelés
+(`test_fig0_pareto_paths.py`). Les **quatre** scénarios de `SCENARIOS_ALL`
+pour D-95, dont `harris_tearing` qui **ne sépare pas** — aucun essai classique
+sous la fenêtre quantique : un test écrit sur ce seul scénario serait passé
+sans rien vérifier.
+
+**Ce qui n'a PAS été traversé, et doit être dit** : la moitié « simulation »
+de `fig_utils.py` — `qaoa_block_scores`, `run_hierarchical_comparison`,
+`run_single_method`, `find_optimal_threshold`, `patches_to_metrics` — a été
+**lue**, pas **exécutée**. Aucun test ne l'emprunte, et les axes de la fiche
+(profondeur AMR, bord du patch, bras, backend, warm start, Hamiltonien,
+optimiseur) passent tous par là. Au sens de la fiche, cette moitié n'est donc
+**pas auditée** : elle est lue.
+
+**Vérifié et trouvé sain, mesuré :**
+
+| ce qui a été vérifié | verdict |
+|---|---|
+| `_hamilt_mapper_kwargs` code `nu = eta = grid.L / 800` alors que `make_sim` accepte `Re`/`Rm` | **sain** — soupçon de repli silencieux tué par la mesure : **aucun** des 17 scripts ne passe un `Re` ou `Rm` autre que 800 (balayage complet du dossier). La constante duplique le réglage, elle ne le contredit pas |
+| `ground_truth_errors` lit `axis=1` pour `grad_x` et `axis=0` pour `grad_y`, à l'envers de la convention `grid.py` (`AXIS_X = 0`) | **sain** — les deux contributions sont **sommées au carré** : l'échange est exactement symétrique, la sortie est bit-à-bit la même. Ce n'est pas la forme de D-1 |
+| `_patches_overlap_with_gt` prend le **max** des poids sur les patchs qui se recouvrent | **sain** — pas de double comptage : la somme des poids par pixel ne peut pas dépasser 1 |
+| `interp`/`argmin`/`argmax` de `fig0` | **sain** — `extract_pareto_front` est une dominance stricte correcte ; `np.argmin(scores)` porte sur le tableau complet depuis D-95 |
+| les 12 valeurs codées en dur | **sans objet** — `fig0` ne code aucune valeur : tout vient des CSV |
+
+**Réserve mesurée, non corrigée — un piège armé, non déclenché.** Neuf
+fonctions publiques de `fig_utils.py` n'ont **aucun appelant**, ni dans les 17
+scripts, ni ailleurs dans le dépôt : `phase_allows_scenario`,
+`make_sim_with_history`, `smoothed_classical_scores`, `compute_mean_jz_squared`,
+`selection_to_mask`, `count_connected_components`, `compute_fragmentation`,
+`compute_perimeter_area_ratio`, `selection_jaccard` (plus la constante
+`LABELS`). Trois d'entre elles — les métriques de cohérence spatiale — **sont
+fausses sur la grille de ce dépôt**, qui est périodique (`PeriodicGrid`), et
+rendraient des valeurs plausibles :
+
+| entrée | ce que la fonction rend | vérité périodique |
+|---|---|---|
+| `{(0,0), (3,0)}` sur 4×4, collés **à travers** le bord | 2 composantes, fragmentation **1,000** (« maximalement fragmenté ») | 1 composante, **0,500** |
+| bande complète `mask[:,0]` — un cylindre fermé | périmètre/aire **2,500** | **2,000** (**+25 %**) |
+| `{(1,1), (1,2)}`, au centre, ne touche aucun bord | 1 composante, 0,500, périmètre/aire 3,000 | **identique** |
+
+La troisième ligne est le champ qui **ne sépare pas** : toute validation écrite
+sur une sélection centrale passe sans rien vérifier. Non corrigé — aucun
+consommateur, donc aucun avant/après à mesurer sur une sortie ; c'est à
+trancher (supprimer, ou rendre périodique) le jour où une figure de cohérence
+spatiale revient. Écrit ici pour que le trou ne soit pas re-trouvé une
+troisième fois.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
