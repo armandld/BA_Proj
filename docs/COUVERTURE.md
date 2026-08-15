@@ -1557,6 +1557,35 @@ mais la barre d'erreur des deux bras ne mesure pas la même chose.
 
 ---
 
+## `figures/v1_legacy/fig1_noise_robustness.py` — lu en entier
+
+173 lignes. Aucun défaut de valeur. Trois observations, dont deux à retenir :
+
+**Contrat faux, sans conséquence ici.** `inject_field_noise` annonce
+*« Returns a copy of the sim with noisy fields »* — elle ne copie rien :
+`setattr(sim, field_name, field + noise)` **modifie l'objet reçu**. Le script
+ne s'en aperçoit pas parce que son appelant construit un `sim_noisy` neuf à
+chaque essai et ignore la valeur de retour ; il repose donc sur la mutation,
+c'est-à-dire sur l'inverse de ce que la docstring promet. Piège armé pour le
+premier appelant qui croira la docstring : il verra son entrée corrompue.
+
+**Une étape annoncée qui n'a pas lieu.** La bannière imprime *« Finding
+optimal threshold for each method first... »* et le commentaire de l'étape 1
+parle de *« GT and threshold optimization »*. Aucune optimisation de seuil
+n'est faite : `best_qa_thr` / `best_cl_thr` sont lus tels quels dans
+`TRAINED_PARAMS` / `CLASSICAL_PARAMS`, et `find_optimal_threshold` n'est
+jamais appelée. Le journal fait donc croire à une recherche qui n'existe pas.
+
+**Vérifié et trouvé sain** : les graines
+`42 + trial + int(sigma * 1000)` ne collisionnent pas — les décalages de
+`NOISE_LEVELS` (0, 50, 100, 200, 300, 500) sont tous séparés d'au moins 50
+pour `trial` ≤ 4 (soupçon levé par le calcul, pas par l'inspection) ; le bruit
+est bien mis à l'échelle du RMS de **chaque** champ, comme annoncé ; la vérité
+terrain est prise sur le champ PROPRE et le raffinement sur le champ bruité,
+ce qui est la bonne façon de mesurer une robustesse.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
