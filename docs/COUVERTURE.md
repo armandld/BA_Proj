@@ -1504,6 +1504,59 @@ troisième fois.
 
 ---
 
+## `figures/v1_legacy/` — l'axe `FIGURE_PHASE` n'a qu'une valeur vivante
+
+Mesuré en traversant l'axe des **quatre** côtés (absent, 1, 2, 3), sur
+l'import de n'importe quel script du dossier :
+
+| `FIGURE_PHASE` | ce qui se passe |
+|---|---|
+| absent | import OK — `FIG_DIR = results/figures` |
+| `1` | import OK — `FIG_DIR = results/figures/phase1` |
+| `2` | **meurt à l'import** : `KeyError: "Phase 'phase2' not in quantum training. Available: ['phase1']"`, `hyperparams_loader.py:139`, appelé par `fig_utils.py:327` |
+| `3` | **meurt à l'import**, même erreur |
+
+Les hyperparamètres déployés ne portent que `phase1`. Toute la machinerie de
+phase de `fig_utils.py` — `SCENARIOS_PHASE2`, `SCENARIOS_PHASE3`,
+`filter_scenarios`, `filter_scenarios_dict`, `phase_allows_scenario` — n'est
+donc atteignable que dans sa branche `phase1`, où elle ne filtre rien (les 4
+scénarios y sont tous). S'y ajoute que **plus rien ne pose `FIGURE_PHASE`** :
+`generate_figures.sh`, que les commentaires du dossier citent comme le
+poseur (`fig_utils.py:84`, `fig0:352`), a été supprimé par la
+réorganisation. C'est une décision en attente — retirer la machinerie, ou
+lui rendre un lanceur — pas un défaut à corriger au passage.
+
+## `figures/v1_legacy/fig4_comprehensive_comparison.py` — lu en entier
+
+189 lignes. Aucun défaut **vivant**. Deux réserves mesurées :
+
+**Un piège armé, non déclenché — les étiquettes du graphe sont codées en
+dur.** `short_names = ['KH', 'Tearing', 'Rotor', 'OT']` est tronqué par
+`[:n_scen]`, tandis que `scen_names`, construit depuis la liste réellement
+parcourue, existe dans le même fichier et sert au tableau texte. Les deux
+chemins coïncident tant que `filter_scenarios` ne retire rien — c'est le cas
+`FIGURE_PHASE` absent et `phase1`, les deux seuls exécutables. Ils
+divergeraient sous `phase2`, dont l'ensemble est `{orszag_tang, mhd_rotor}` :
+la figure étiquetterait « KH » et « Tearing » deux barres qui sont Rotor et
+Orszag-Tang, pendant que le tableau texte de la même exécution imprimerait
+les bons noms. Non corrigé : la configuration qui l'arme meurt d'abord à
+l'import (voir ci-dessus), donc il n'y a aucun avant/après à mesurer sur une
+sortie.
+
+**Dérive de docstring, sans conséquence sur les valeurs.** L'en-tête annonce
+quatre métriques dont « Efficiency = captured / compute » ; la figure trace
+`['Captured Fraction', 'Precision', 'Recall', 'Compute Ratio']` — `Recall`
+au lieu d'`Efficiency`. Les valeurs tracées sont justes et correctement
+titrées sur les axes ; c'est l'en-tête qui est périmé.
+
+**Vérifié et trouvé sain** : `pixel_precision` / `pixel_recall` gardent leurs
+cas dégénérés (`n_refined == 0` → 0,0 ; `n_needs == 0` → 1,0) dans le bon
+sens ; les barres `yerr` portent bien l'écart-type sur `N_TRIALS`, et le bras
+classique étant déterministe, son `yerr` vaut 0 — ce n'est pas un défaut,
+mais la barre d'erreur des deux bras ne mesure pas la même chose.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
