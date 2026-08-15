@@ -1586,6 +1586,45 @@ ce qui est la bonne façon de mesurer une robustesse.
 
 ---
 
+## `figures/v1_legacy/fig2_early_detection.py` — lu en entier
+
+307 lignes. **Aucun défaut.** C'est le fichier le plus soigneux du dossier :
+la détection précoce est mesurée aux temps courts **contre la vérité terrain
+tardive**, ce que sa docstring annonce et ce qui est la bonne façon de poser
+la question ; l'IoU consécutif est indexé juste (`si - 1` n'est écrit que
+lorsque `prev` existe, `n-1` cases remplies, `mid_steps` de même longueur) ;
+la référence relative `gt.mean()` y sert à comparer **deux bras sur le même
+champ**, son rôle défendable.
+
+Une seule réserve, non déclenchée : `qa_iou_all` / `cl_iou_all` sont
+initialisés à zéro et ne seraient jamais écrits si `N_POINTS` retombait à un
+seul pas après `np.unique` — les zéros entreraient alors dans la moyenne
+comme des mesures. Avec les réglages du fichier, `n_steps_actual` vaut
+toujours plus de 1.
+
+## Reste après D-95 : la fenêtre verticale de `fig0`, mesurée et bornée
+
+La correction D-95 retire la troncature des **données**. Il reste une
+asymétrie de **cadre** : `y_max = max(percentile(q_phys, 95) * 1,3 ; 0,4)` est
+fixé par le seul bras quantique et appliqué aux deux panneaux. Mesuré sur les
+CSV gelés — part des essais classiques hors cadre, et visibilité du meilleur
+d'entre eux :
+
+| scénario | `y_max` | classiques hors cadre | `phys` du meilleur classique |
+|---|---|---|---|
+| `kelvin_helmholtz` | 0,400 | 0 / 172 (0 %) | 0,077 — **visible** |
+| `harris_tearing` | 0,400 | 5 / 169 (3 %) | 0,004 — **visible** |
+| `orszag_tang` | 0,400 | 35 / 292 (12 %) | 0,089 — **visible** |
+| `mhd_rotor` | 0,932 | 9 / 292 (3 %) | 0,027 — **visible** |
+
+Les points coupés sont tous du **mauvais** côté (erreur physique élevée), et
+dans les quatre cas l'optimum classique reste dans le cadre : l'étoile que
+D-95 rétablit est bien visible. Cosmétique, donc — écrit ici pour ne pas
+être re-trouvé comme un défaut, et pour que la mesure existe si USER veut
+malgré tout un cadre commun.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
