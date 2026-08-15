@@ -226,16 +226,32 @@ def plot_pareto_scenario(quantum_data, classical_data,
     q_phys, q_patch, q_scores = _collect_points(quantum_data, phys_col, patch_col, center_lambda)
     c_phys, c_patch, c_scores = _collect_points(classical_data, phys_col, patch_col, center_lambda)
 
-    v_min, v_max = None, None
-    if len(q_scores) > 0:
-        v_min = np.min(q_scores)
-        v_max = np.max(q_scores)
-
-    if v_min is not None and len(c_scores) > 0:
-        mask = (c_scores >= v_min) & (c_scores <= v_max)
-        c_phys = c_phys[mask]
-        c_patch = c_patch[mask]
-        c_scores = c_scores[mask]
+    # D-95. Ici, `v_min`/`v_max` etaient pris sur le SEUL bras quantique, puis
+    # servaient a deux choses : l'echelle de couleur commune (leur role, elles
+    # partent en vmin/vmax de scatter) et — c'est le defaut — un FILTRE sur les
+    # donnees classiques. Or v_min = min(q_scores) : tout essai classique
+    # meilleur que TOUT le quantique tombait hors fenetre et etait jete, par
+    # construction. Le front de Pareto classique et l'etoile « Best Classical »
+    # etaient ensuite calcules sur ce reste tronque.
+    # Mesure sur les CSV geles (results/hyperparams/optuna_studies/, lambda 0.40) :
+    #   kelvin_helmholtz  56 essais classiques sur 172 jetes SOUS la fenetre ;
+    #                     « Best Classical » annonce S=0,306590 quand le vrai
+    #                     minimum classique est S=0,129020 (2,4x meilleur) ;
+    #                     front classique 169 points -> 45.
+    #   orszag_tang       47 jetes ; S=0,348250 annonce contre 0,326180.
+    #   mhd_rotor          6 jetes ; S=0,192481 annonce contre 0,183508.
+    #   harris_tearing     0 jete — le scenario qui NE SEPARE PAS : un test
+    #                     ecrit sur lui seul serait passe sans rien verifier.
+    # Le biais est a sens unique et va toujours contre le bras classique, du
+    # cote precisement ou la comparaison se joue. Correction : on ne filtre
+    # plus rien, et l'echelle de couleur commune se prend sur la REUNION des
+    # deux bras — sinon les points classiques restitues saturent tous.
+    scores_reunis = [s for s in (q_scores, c_scores) if len(s) > 0]
+    if scores_reunis:
+        v_min = float(min(np.min(s) for s in scores_reunis))
+        v_max = float(max(np.max(s) for s in scores_reunis))
+    else:
+        v_min, v_max = None, None
 
     has_q = len(q_phys) > 0
     has_c = len(c_phys) > 0
@@ -312,16 +328,14 @@ def plot_grouped_pareto(quantum_data, classical_data,
     q_phys, q_patch, q_scores = _collect_grouped_points(quantum_data, scenario_dict, lam_cost)
     c_phys, c_patch, c_scores = _collect_grouped_points(classical_data, scenario_dict, lam_cost)
 
-    v_min, v_max = None, None
-    if len(q_scores) > 0:
-        v_min = np.min(q_scores)
-        v_max = np.max(q_scores)
-
-    if v_min is not None and len(c_scores) > 0:
-        mask = (c_scores >= v_min) & (c_scores <= v_max)
-        c_phys = c_phys[mask]
-        c_patch = c_patch[mask]
-        c_scores = c_scores[mask]
+    # D-95, second site : meme troncature du bras classique a la fenetre du
+    # bras quantique, sur la planche agregee. Voir plot_pareto_scenario.
+    scores_reunis = [s for s in (q_scores, c_scores) if len(s) > 0]
+    if scores_reunis:
+        v_min = float(min(np.min(s) for s in scores_reunis))
+        v_max = float(max(np.max(s) for s in scores_reunis))
+    else:
+        v_min, v_max = None, None
 
     has_q = len(q_phys) > 0
     has_c = len(c_phys) > 0
