@@ -5470,3 +5470,60 @@ n'est plus nécessaire puisque l'architecture est abandonnée.
 La configuration de pooling de `train_hyperparams._get_storage` est
 conservée : elle vaut pour n'importe quel Postgres distant, pas seulement
 pour Neon. Son commentaire est généralisé en conséquence.
+
+---
+
+# Équilibre entre les familles : trois faits sains, un déséquilibre ouvert
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(21 tests)
+
+Matrice de spécificité — chaque champ isole **une** instabilité, mesurée à
+travers la vraie `compute_coefficients` :
+
+| champ | `H_edges` | `C_edges` | `K_plaq` | `K_xpoint` |
+|---|---|---|---|---|
+| rotation solide (Q>0) | 6,02e−03 | 1,78e+00 | **9,48e+01** | 0 |
+| cisaillement v pur (Q<0) | 2,13e−08 | 2,72e−04 | 5,71e−03 | 0 |
+| nappe de courant (Jz) | 1,57e−07 | 7,18e−05 | **1,82e−05** | 0 |
+| point X magnétique | 9,95e−07 | 3,33e−01 | 5,09e−06 | **9,59e−02** |
+| uniforme (contrôle) | 0 | 0 | 0 | 0 |
+
+## Ce qui est sain
+
+**Le contrôle rend zéro partout**, sur les quatre familles.
+
+**La rotation allume `K_plaquettes` (94,8) et laisse `K_xpoint` à zéro** — le
+canal fluide fait son travail et ne déborde pas.
+
+**Les deux canaux ZZZZ sont orthogonaux.** Le point X allume `K_xpoint`
+(9,6e−02) et laisse `K_plaquettes` à 5,1e−06 — **19 000 fois moins**. C'est
+leur raison d'être, et elle est vérifiée.
+
+**`H_edges` reste subordonné** partout, de trois à cinq ordres sous les
+couplages. Le biais Z ne décide pas seul.
+
+## Le déséquilibre, ouvert
+
+**Le canal magnétique est écrasé par le canal fluide.** La rotation solide
+donne `K_plaquettes` = 9,5e+01 ; la nappe de courant, son équivalent
+magnétique exact, donne **1,8e−05**. Cinq à six ordres de grandeur pour deux
+instabilités de même nature — l'une hydrodynamique, l'autre magnétique.
+
+**Reproduits étage par étage et isolément, les deux canaux sont pourtant
+comparables** : fluide 9,5e+01 sur la rotation, magnétique **1,06e+01** sur la
+nappe. La perte se produit donc dans la fonction, pas dans les étages tels
+que je les reproduis.
+
+**Je ne l'ai pas localisée, et je m'abstiens d'en nommer la cause.** Deux
+fois déjà dans cette campagne, une reproduction incomplète d'un calcul m'a
+fait accuser du code juste — le filtre `> 1e-10` de `C_scale`, et le champ
+d'essai dont |B| s'annulait là où |Jz| culmine. Je ne recommencerai pas sur
+un troisième.
+
+**Ce qui EST établi** : la localisation spatiale est correcte. Le maximum de
+`K_plaquettes` tombe là où `|Jz|` vaut 2,145 pour un maximum de 2,329. **Le
+canal désigne le bon endroit, avec la mauvaise amplitude.**
+
+C'est la prochaine chose à instruire, et elle porte directement sur
+`gamma_mag` — l'un des neuf paramètres à réoptimiser.
