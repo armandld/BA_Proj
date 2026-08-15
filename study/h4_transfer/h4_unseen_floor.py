@@ -66,6 +66,51 @@ from h4_unseen_conditions import build_traces, unseen_config
 FLOOR_THRESHOLD = 0.05
 
 
+def floor_ratios(t22_arms, floor_can, floor_uns):
+    """Ecart au plancher par bras, sans supposer que t22 a complete.
+
+    D-89 : `h4_unseen_conditions.py` documente et gere explicitement le cas
+    ou un bras avorte sur la TOTALITE d'une condition -- c'est "un resultat,
+    pas une panne", et son dict d'artefact ne porte alors AUCUNE sous-cle
+    `"canonical"`/`"unseen"` (seulement les `*_runs` bruts et
+    `degradation_ratio = NaN`, `status = "total_abort"`). Avant cette
+    correction, cette fonction etait en ligne dans `main()` et lisait
+    `t22_arms[arm]["canonical"]["phys_score"]` sans jamais verifier -- sur un
+    total_abort elle levait `KeyError: 'canonical'`, sans artefact ecrit --
+    exactement le motif que `h4_unseen_conditions.py` prend soin d'eviter
+    pour lui-meme (voir son propre bloc `dead = [...]`). Extraite pour etre
+    testable sans rejouer les 4h de DNS d'un fold.
+
+    Teste la PRESENCE de `"canonical"`/`"unseen"`, pas le champ `"status"` :
+    les 4 artefacts `t22_unseen_unseen-ic_*.json` deja publies dans
+    `results/` datent d'avant que `status` existe dans le schema (mesure
+    directe : aucune des deux cles `status` n'y figure, ni au niveau racine
+    ni au niveau d'un bras) et portent pourtant `"canonical"`/`"unseen"`
+    valides sur les deux bras des quatre folds -- un test sur `status`
+    aurait classe ces quatre artefacts REELS comme `total_abort` et rendu
+    NaN a la place des 8 ratios deja publies dans
+    `results/t22d_unseen_floor_*.json`. Verifie en rejouant les 4 artefacts
+    contre `results/t22d_unseen_floor_*.json` deja committes : identiques au
+    bit pres.
+    """
+    out = {}
+    dead = []
+    for arm in ("qhas", "classical"):
+        a = t22_arms[arm]
+        if "canonical" not in a or "unseen" not in a:
+            dead.append(arm)
+            out[arm] = dict(status=a.get("status", "unknown"),
+                            canonical_over_floor=float("nan"),
+                            unseen_over_floor=float("nan"))
+            continue
+        dc = a["canonical"]["phys_score"] / floor_can["phys_score"]
+        du = a["unseen"]["phys_score"] / floor_uns["phys_score"]
+        out[arm] = dict(status=a.get("status", "completed"),
+                        canonical_over_floor=float(dc),
+                        unseen_over_floor=float(du))
+    return out, dead
+
+
 def measure(T, fold, cfg, dns, hp, tag):
     """Une execution classique, avec capture de l'avortement."""
     buf = io.StringIO()
@@ -131,32 +176,47 @@ def main():
 
     print("\n  distance to the attainable floor (phys / phys_floor)")
     print(f"  {'arm':<11}{'canonical':>22}{'unseen':>22}")
+    ratios, dead = floor_ratios(t22["arms"], floor_can, floor_uns)
+    out["arms"] = ratios
     for arm in ("qhas", "classical"):
-        a = t22["arms"][arm]
-        dc = a["canonical"]["phys_score"] / floor_can["phys_score"]
-        du = a["unseen"]["phys_score"] / floor_uns["phys_score"]
-        out["arms"][arm] = {"canonical_over_floor": float(dc),
-                            "unseen_over_floor": float(du)}
-        print(f"  {arm:<11}{dc:>21.2f}x{du:>21.2f}x")
+        r = ratios[arm]
+        if arm in dead:
+            print(f"  {arm:<11}{'--- ' + r['status'] + ', no ratio ---':>44}")
+        else:
+            print(f"  {arm:<11}{r['canonical_over_floor']:>21.2f}x"
+                  f"{r['unseen_over_floor']:>21.2f}x")
 
-    dq = out["arms"]["qhas"]["unseen_over_floor"]
-    dc_ = out["arms"]["classical"]["unseen_over_floor"]
-    # un bras SOUS 1.0 signale que la reference n'est pas une borne
-    below = min(dq, dc_) < 1.0
-    at_floor = dq < 1.5 and dc_ < 1.5
-    out["both_arms_at_floor_on_unseen"] = bool(at_floor)
     print("\n  " + "-" * 74)
-    if below:
-        print("  NOTE: an arm scores BELOW 1.00x, so near-full refinement is")
-        print("  not optimal here and this reference is not a lower bound.")
-    if at_floor:
-        print("  => BOTH arms sit within 1.5x of the attainable floor on the")
-        print("     unseen condition. The narrowing of their ratio is floor")
-        print("     convergence, NOT evidence of better transfer.")
+    if dead:
+        # D-89 : un bras total_abort n'a pas de ratio -- meme regle que
+        # `h4_unseen_conditions.py` applique deja a lui-meme (son propre
+        # bloc `dead = [...]`) : le constat s'ecrit, on ne le fait pas
+        # passer pour un ratio mesure.
+        out["status"] = "total_abort"
+        out["total_abort_arms"] = dead
+        out["both_arms_at_floor_on_unseen"] = False
+        print(f"  NOTE: no floor ratio for {', '.join(dead)} -- aborted on "
+              f"every draw of a condition in t22_unseen_{{mode}}_{args.fold}"
+              f".json. The floor comparison is not measured for this fold.")
     else:
-        print("  => at least one arm remains well above the floor, so the")
-        print("     arms still have room to differ: their ratio reflects the")
-        print("     decision rules, not a shared ceiling on achievable error.")
+        dq = ratios["qhas"]["unseen_over_floor"]
+        dc_ = ratios["classical"]["unseen_over_floor"]
+        # un bras SOUS 1.0 signale que la reference n'est pas une borne
+        below = min(dq, dc_) < 1.0
+        at_floor = dq < 1.5 and dc_ < 1.5
+        out["status"] = "completed"
+        out["both_arms_at_floor_on_unseen"] = bool(at_floor)
+        if below:
+            print("  NOTE: an arm scores BELOW 1.00x, so near-full refinement is")
+            print("  not optimal here and this reference is not a lower bound.")
+        if at_floor:
+            print("  => BOTH arms sit within 1.5x of the attainable floor on the")
+            print("     unseen condition. The narrowing of their ratio is floor")
+            print("     convergence, NOT evidence of better transfer.")
+        else:
+            print("  => at least one arm remains well above the floor, so the")
+            print("     arms still have room to differ: their ratio reflects the")
+            print("     decision rules, not a shared ceiling on achievable error.")
 
     op = os.path.join(RESULTS_DIR, f"t22d_unseen_floor_{args.fold}.json")
     out["git_hash"] = git_commit_hash()
