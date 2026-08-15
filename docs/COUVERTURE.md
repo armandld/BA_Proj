@@ -1671,6 +1671,32 @@ D-9.
 
 ---
 
+## `figures/v1_legacy/fig10_grid_scaling.py` — lu en entier, **abandonné par décision**
+
+218 lignes, dont 204 mortes **par déclaration** : le fichier s'arrête à un
+`sys.exit(0)` ligne 14, et son en-tête dit pourquoi (« ABANDONED … N < 256
+raffine tout à cause de `min_patch_size` ; N > 256 hors budget ; le panneau
+de temps de décision n'a pas de sens sur un simulateur »). C'est un **choix de
+conception documenté**, pas un défaut — la distinction que `VIGIL.md` demande
+de faire avant d'accuser.
+
+À signaler quand même, parce que c'est un piège si le fichier revit : lignes
+99-100, le temps du bras classique n'est pas mesuré, il est **fabriqué** —
+`all_cl_time[N].append(t_total * 0.3)`, avec pour seule justification le
+commentaire *« classical is ~30% of total »*, tandis que `all_qa_time` reçoit
+le total des **deux** bras. Le rapport de vitesse qui en sortirait vaudrait
+3,33× par construction, quelle que soit la mesure — une valeur sans
+provenance, au sens de la 8e forme de `VIGIL.md`.
+
+**Ce qui sauve la figure** : ces deux dictionnaires sont écrits et **jamais
+relus** (vérifié sur tout le dossier). Le panneau C trace `qa_times_separate`
+et `cl_times_separate`, qui sont, eux, honnêtement chronométrés par deux
+appels séparés à `run_single_method`. Le 0,3 est donc doublement mort — dans
+un fichier désactivé, et dans une variable sans lecteur. Non corrigé pour
+cette raison ; écrit ici pour que sa réanimation ne passe pas inaperçue.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
