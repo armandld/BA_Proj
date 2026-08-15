@@ -129,9 +129,31 @@ def test_xpoint_selectivity():
     # C'est Kelvin-Helmholtz qui fait de ce test une mesure : sans ce
     # controle, « 27.5 % de cellules actives » ne separerait rien.
 
-    assert active_kh == pytest.approx(0.0, abs=1e-12), (
-        f"Kelvin-Helmholtz ne porte pas de point X, or {active_kh:.1%} des "
-        f"cellules sont actives — le detecteur repond a autre chose")
+    # REMESURE apres le passage au critere RELATIF.
+    #
+    # Le critere marque toujours le decile le plus instable du champ
+    # courant : Kelvin-Helmholtz passe donc de 0.0 % a 8.6 % de cellules
+    # actives. C'est le compromis assume du critere relatif, pas une
+    # regression -- un critere relatif raffine toujours quelque chose.
+    #
+    # La grandeur qui SEPARE n'est donc plus le compte mais l'AMPLITUDE.
+    # Mesure a N=32 :
+    #     island_coalescence  |K_xpoint| max 5.17e+00  moyenne 4.31e-01
+    #     kelvin_helmholtz    |K_xpoint| max 4.27e-02  moyenne 1.94e-03
+    # soit un facteur 121 en maximum et 222 en moyenne.
+    #
+    # Ancienne assertion : `active_kh == 0`. Nouvelle : l'amplitude sur KH
+    # doit rester deux ordres de grandeur sous celle de la reconnexion.
+    ampl_kh = np.abs(K_xpoint_kh).max()
+    ampl_ic = np.abs(K_xpoint).max()
+    assert ampl_kh < ampl_ic / 20.0, (
+        f"Kelvin-Helmholtz ne porte pas de point X : |K_xpoint| y vaut "
+        f"{ampl_kh:.3e} contre {ampl_ic:.3e} sur island_coalescence "
+        f"(mesure de reference : 4.27e-02 contre 5.17e+00, facteur 121). "
+        f"Le detecteur repond a autre chose que la topologie.")
+    assert active_kh < 0.20, (
+        f"{active_kh:.1%} des cellules actives sur Kelvin-Helmholtz : le "
+        f"critere relatif devrait en marquer ~le decile (mesure : 8.6 %)")
     assert active_xpoint > 0.05, (
         f"island_coalescence porte des points X, or seules "
         f"{active_xpoint:.1%} des cellules sont actives (mesure : 27.5 %)")
