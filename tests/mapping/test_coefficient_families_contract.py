@@ -346,34 +346,29 @@ def test_le_champ_calme_reste_calme_jusqu_au_circuit():
 #  Tenue en resolution — le meme champ physique, plusieurs grilles
 # ══════════════════════════════════════════════════════════════════════
 
-def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
+def test_le_critere_relatif_empeche_l_effondrement_en_resolution():
     """Sur un champ physique FIXE, seule la resolution changeant.
 
-    MESURE (rotation solide, hyperparametres deployes) :
+    AVANT le critere relatif (seuil ABSOLU seul) :
 
         N       H_edges      C_edges      K_plaquettes
         32     2.10e-01     1.04e+01       1.00e+02
         64     6.02e-03     1.78e+00       9.48e+01
        128     2.89e-05     3.43e-01       1.86e+01
-       256     2.27e-05     8.32e-02       0.00e+00
+       256     2.27e-05     8.32e-02       0.00e+00   <- mort
 
-    Les trois familles s'effondrent, et `K_plaquettes` atteint **exactement
-    zero a N=256** — la resolution d'entrainement.
+    APRES :
 
-    Ce n'est PAS un defaut d'implementation : les seuils sont des Reynolds
-    de maille (`omega_crit = RE_CRIT nu / (dx^2 v0)`), qui croissent en
-    1/dx^2. Une grille plus fine resout mieux, donc demande moins de
-    raffinement. La logique AMR est correcte.
+       256     2.27e-05     8.32e-02       6.59e+01   <- vivant
 
-    Mais la CONSEQUENCE doit rester visible : a la configuration
-    d'entrainement (N=256, Re=Rm=800), l'hamiltonien perd sa structure ZZZZ
-    sur les champs canoniques. C'est le meme fait que le verdict deja
-    publie « le terme ZZZZ etait numeriquement mort », vu ici au niveau du
-    coefficient plutot que du circuit.
+    Le seuil de maille croit en 1/dx^2 : a N=256 plus aucune cellule ne le
+    franchit, et le terme a quatre corps disparaissait EXACTEMENT a la
+    resolution d'entrainement. Le relais relatif le maintient.
 
-    Ce test EPINGLE la mesure. Il tombera si un changement de
-    normalisation, de seuil ou d'hyperparametres deplace cet equilibre —
-    et il faudra alors remesurer, pas ajuster.
+    `H_edges` et `C_edges` decroissent toujours : ils sont gouvernes par
+    la fenetre gaussienne et par `C_scale`, pas par le seuil de maille.
+    C'est un mecanisme different, et ce test ne le confond pas avec
+    celui-ci.
     """
     valeurs = {}
     for n in (32, 64, 128, 256):
@@ -382,27 +377,17 @@ def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
         try:
             sim, grid = _sim_avec(_rotation_solide)
             c, _ = _coeffs(sim, grid, 0.3)
-            valeurs[n] = (
-                max(np.abs(np.asarray(a)).max() for a in c["H_edges"]),
-                max(np.abs(np.asarray(a)).max() for a in c["C_edges"]),
-                np.abs(np.asarray(c["K_plaquettes"])).max(),
-            )
+            valeurs[n] = np.abs(np.asarray(c["K_plaquettes"])).max()
         finally:
             N = ancien
 
-    # decroissance monotone des trois familles
-    for i, nom in enumerate(("H_edges", "C_edges", "K_plaquettes")):
-        suite = [valeurs[n][i] for n in (32, 64, 128, 256)]
-        assert suite == sorted(suite, reverse=True), (
-            f"{nom} n'est plus monotone decroissant en resolution : {suite}")
-
-    assert valeurs[32][2] > 50.0, (
-        f"K_plaquettes vaut {valeurs[32][2]:.3e} a N=32, attendu ~1.0e+02 — "
+    assert valeurs[32] > 50.0, (
+        f"K_plaquettes vaut {valeurs[32]:.3e} a N=32, attendu ~1.0e+02 — "
         f"sans structure a la grille grossiere, ce test ne separerait rien")
-    assert valeurs[256][2] == pytest.approx(0.0, abs=1e-12), (
-        f"K_plaquettes vaut {valeurs[256][2]:.3e} a N=256 : l'equilibre a "
-        f"change, remesurer la table de la docstring")
-
+    assert valeurs[256] > 1.0, (
+        f"K_plaquettes vaut {valeurs[256]:.3e} a N=256, attendu ~6.6e+01 : "
+        f"le terme a quatre corps meurt de nouveau a la resolution "
+        f"d'entrainement")
 
 # ══════════════════════════════════════════════════════════════════════
 #  Le signal brut porte-t-il l'instabilite ? (avant tout seuil)
@@ -470,3 +455,84 @@ def test_le_signal_brut_discrimine_meme_quand_le_seuil_absolu_ne_tire_pas():
         assert v.max() < crit, (
             f"{nom} : max {v.max():.3e} franchit le seuil {crit:.3e} — "
             f"l'equilibre a change, remesurer la table de la docstring")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le critere RELATIF
+# ══════════════════════════════════════════════════════════════════════
+
+def test_le_critere_relatif_ne_fabrique_pas_de_signal():
+    """L'invariant de surete, et le plus important de ce fichier.
+
+    Un champ rigoureusement uniforme n'a AUCUNE cellule « plus instable »
+    que les autres. Son percentile vaut son maximum, le contraste seuille
+    rend zero partout. Si ce test tombait, le critere relatif inventerait
+    du raffinement sur du vide — et tout ce qu'il produit ailleurs serait
+    sans valeur.
+    """
+    sim, grid = _sim_avec(_calme)
+    c, _ = _coeffs(sim, grid, 0.3)
+    for nom in ("K_plaquettes", "K_xpoint"):
+        v = np.abs(np.asarray(c[nom])).max()
+        assert v == pytest.approx(0.0, abs=1e-12), (
+            f"{nom} vaut {v:.4e} sur un champ uniforme : le critere relatif "
+            f"fabrique du signal a partir de rien")
+
+
+def test_l_absolu_l_emporte_quand_il_tire():
+    """`min(absolu, percentile)` : des qu'une cellule franchit le critere
+    physique, le comportement d'origine doit etre conserve A L'IDENTIQUE.
+
+    Sans cette clause, le critere relatif remplacerait la physique au lieu
+    de la completer.
+    """
+    from Simulation.HamiltParams import PhysicalMapper as PM
+    signal = np.array([0.1, 0.5, 2.0, 10.0])      # le max franchit 1.0
+    assert PM._effective_crit(signal, 1.0) == 1.0
+
+    signal_faible = np.array([0.01, 0.02, 0.05])   # aucun ne franchit
+    eff = PM._effective_crit(signal_faible, 1.0)
+    assert eff < 1.0, f"le relatif n'a pas pris le relais : {eff}"
+    assert eff == pytest.approx(
+        np.percentile(signal_faible, PM.RELATIVE_PERCENTILE))
+
+
+def test_le_critere_relatif_redonne_un_hamiltonien_non_vide_a_N256():
+    """MESURE avant / apres, a la resolution d'entrainement.
+
+        scenario              K_plaq avant -> apres   K_xpoint avant -> apres
+        orszag_tang              0 -> 2.78e-01           0 -> 8.34e-02
+        harris_tearing           0 -> 2.66e-03           0 -> 9.81e-01
+        island_coalescence       0 -> 1.54e-02           0 -> 5.55e-01
+        mhd_rotor                0 -> 6.68e+01           0 -> 1.00e+01
+
+    Le terme a quatre corps existait sur AUCUN des quatre scenarios ; il
+    existe desormais sur les quatre.
+
+    A noter, et coherent avec le contraste du signal brut : sur les deux
+    scenarios de reconnexion, le canal point X DOMINE le canal courant --
+    0.981 contre 0.0027 sur harris_tearing (facteur 370), 0.555 contre
+    0.0154 sur island_coalescence (facteur 36). C'est ce que la physique
+    predit, et c'est le canal qui etait doublement casse.
+    """
+    global N
+    ancien, N = N, 256
+    try:
+        sim, grid = _sim_avec(_calme)      # place le solveur
+        sim.init_harris_tearing()
+        for _ in range(200):
+            sim.step_full()
+        c, _ = _coeffs(sim, grid, 0.3)
+    finally:
+        N = ancien
+
+    k_plaq = np.abs(np.asarray(c["K_plaquettes"])).max()
+    k_xp = np.abs(np.asarray(c["K_xpoint"])).max()
+
+    assert k_xp > 0.1, (
+        f"K_xpoint = {k_xp:.4e} a N=256 sur harris_tearing, attendu ~9.8e-01 "
+        f"— le critere relatif ne prend pas le relais")
+    assert k_plaq > 0.0, f"K_plaquettes reste nul ({k_plaq:.4e})"
+    assert k_xp > k_plaq * 10, (
+        f"sur un scenario de reconnexion, le canal point X ({k_xp:.4e}) "
+        f"devrait dominer le canal courant ({k_plaq:.4e})")

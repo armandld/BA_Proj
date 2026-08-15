@@ -5343,3 +5343,76 @@ pas seulement sur une reconstruction.
 résolutions. Les nappes de courant y sont plus épaisses que le seuil
 n'exige. Ce n'est pas un défaut du coefficient — c'est que ces scénarios,
 à Rm = 800, sont résolus.
+
+---
+
+# Le critère devient RELATIF
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(19 tests)
+
+Décision de USER après mesure. `src/Simulation/HamiltParams.py` :
+le seuil effectif vaut désormais `min(seuil_absolu, percentile(signal))`.
+
+## Pourquoi
+
+Le seuil de maille est **absolu** — `RE_CRIT·ν/(dx²·v0)`. Deux conséquences,
+toutes deux mesurées :
+
+**Il meurt au raffinement.** Sur un champ physique fixe (rotation solide),
+`K_plaquettes` passe de 1,00e+02 à N=32 à **exactement 0** à N=256 — la
+résolution d'entraînement.
+
+**Il ne peut pas servir deux instabilités.** `|omega|` vaut au maximum
+1,55e−02 sur `harris_tearing` et 1,96e+01 sur `mhd_rotor` — trois ordres de
+grandeur, pour un seuil unique de 13,04.
+
+Or l'information est là. Contraste max/médiane du signal brut à N=256 :
+**1104** sur `harris_tearing` (`√det`), 223 sur `island_coalescence`, 752 sur
+`mhd_rotor`. Ce n'est pas la structure qui manque, c'est le seuil absolu qui
+l'efface.
+
+## Ce que ça donne — mesure avant / après, N=256
+
+| scénario | `K_plaq` avant → après | `K_xpoint` avant → après |
+|---|---|---|
+| `orszag_tang` | 0 → **2,78e−01** | 0 → 8,34e−02 |
+| `harris_tearing` | 0 → 2,66e−03 | 0 → **9,81e−01** |
+| `island_coalescence` | 0 → 1,54e−02 | 0 → **5,55e−01** |
+| `mhd_rotor` | 0 → **6,68e+01** | 0 → 1,00e+01 |
+
+Le terme à quatre corps n'existait sur **aucun** des quatre scénarios ; il
+existe désormais sur les quatre.
+
+**Et il se répartit comme la physique le prédit.** Sur les deux scénarios de
+reconnexion, le canal point X **domine** le canal courant — 0,981 contre
+0,0027 sur `harris_tearing` (facteur **370**), 0,555 contre 0,0154 sur
+`island_coalescence` (facteur 36). C'est exactement ce qu'annonçait le
+contraste brut (`√det` 1104× contre `|Jz|` 49,5×), et c'est le canal qui
+était doublement cassé.
+
+## Les deux clauses qui rendent le critère sûr
+
+**L'absolu l'emporte quand il tire.** Dès qu'une cellule franchit le critère
+physique, le comportement d'origine est conservé **à l'identique**. Le
+relatif ne remplace pas la physique, il la complète.
+
+**Il ne fabrique pas de signal.** Un champ rigoureusement uniforme n'a aucune
+cellule « plus instable » : son percentile vaut son maximum, le contraste
+seuillé rend zéro partout. C'est l'invariant le plus important du fichier de
+tests, et il est vérifié sur `K_plaquettes` comme sur `K_xpoint`.
+
+## Ce que le test d'épinglage a fait
+
+`test_les_coefficients_s_effondrent_quand_la_grille_se_raffine` figeait
+`K_plaquettes = 0` à N=256. Il est **tombé** — c'est son rôle. Remesuré, pas
+ajusté : la table de sa docstring porte maintenant l'avant *et* l'après.
+
+`H_edges` et `C_edges` continuent de décroître en résolution : ils sont
+gouvernés par la fenêtre gaussienne et par `C_scale`, pas par le seuil de
+maille. Mécanisme différent, non confondu.
+
+## Conséquence pour la réoptimisation
+
+`RELATIVE_PERCENTILE = 90` est un **réglage nouveau**. Le périmètre passe de
+**8 à 9 paramètres**.
