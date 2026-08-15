@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **15** |
+| **ouverts** — décision ou campagne requise | **16** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1335,6 +1335,63 @@ correction mécanique. Deux directions, à trancher :
 
 ```bash
 pytest tests/pipeline/test_compare_rotor_budget.py -k d91
+```
+
+## D-97 — le « contrôle négatif » de la figure 9 ne peut pas rendre de faux positif
+
+**Où ça bloque.** `figures/v1_legacy/fig9_synthetic_unit_tests.py` construit
+quatre motifs synthétiques, dont le quatrième est annoncé par sa propre
+docstring comme *« Uniform noise : negative control → false positive rate »*.
+Il ne borne aucun taux de faux positifs. Tant que la référence n'est pas
+tranchée, la 4e ligne de la figure ne s'interprète pas — et ses barres se
+lisent à côté de celles des trois lignes à signal, qui, elles, sont valides.
+
+**Comment on est tombé dessus.** Question 2 de `VIGIL.md` — lire la docstring
+comme un contrat : `pixel_prf` promet une précision/rappel « against GT >
+mean ». La promesse du motif 4 (« taux de faux positifs ») et celle de la
+métrique (« référence = la moyenne du champ lui-même ») ne peuvent pas être
+vraies en même temps.
+
+**Ce qui est établi.**
+
+`needs = gt > gt.mean()` est une référence **relative au champ mesuré**. Elle
+ne porte aucune information absolue : `gt` multiplié par 1000, ou décalé d'une
+constante, laisse `needs` **bit-à-bit identique** (vérifié sans solveur ni
+tirage).
+
+Sur le champ sans anomalie du contrôle négatif — bruit gaussien d'écart-type
+0,01 sur un `Bx` uniforme, 50 pas :
+
+| champ | fraction des pixels déclarée « à raffiner » | `gt` max |
+|---|---|---|
+| **Uniform Noise** — contrôle NÉGATIF, aucune anomalie | **46,6 %** (N=256) / 47,1 % (N=64) | 8,93e−03 |
+| Vortex Core — signal | 58,1 % | 3,47e−02 |
+
+Le contrôle négatif déclare donc la moitié du domaine « à raffiner », par
+construction : il n'existe pas de faux positif à compter quand la vérité
+terrain est définie sur le champ qu'on teste. L'information qui séparerait
+les deux lignes existe pourtant — les `gt` max diffèrent d'un facteur ~4 —
+mais `pixel_prf` la normalise entièrement.
+
+**Ce qui n'est PAS touché.** Les lignes 1 à 3. Une référence relative y sert à
+comparer **deux bras sur le même champ**, où elle est défendable : les deux
+voient le même `needs`. Même remarque pour `fig2_early_detection.py:102` et
+`fig4_comprehensive_comparison.py:74,84`, qui partagent la référence relative
+dans ce rôle-là — aucun d'eux ne s'annonce comme contrôle négatif.
+
+**Où on en est.** Rapport seul, non corrigé : trancher demande de choisir, et
+tout choix change les quatre lignes de la figure. Deux directions :
+
+1. **Seuil absolu commun** pour `needs` (par ex. un plancher sur `gt` calibré
+   hors du champ testé), ce qui rend le contrôle négatif capable d'échouer ;
+2. **Retirer la 4e ligne** et cesser d'annoncer un taux de faux positifs que
+   la métrique ne peut pas produire.
+
+La déviation est écrite dans la docstring de `pixel_prf`, là où elle vit, et
+un test vérifie qu'elle y reste.
+
+```bash
+pytest tests/study/test_fig9_negative_control.py
 ```
 
 ## Ajouter une entrée

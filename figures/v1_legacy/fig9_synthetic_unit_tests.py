@@ -54,7 +54,29 @@ def patches_to_fine_mask(patches, N):
 
 
 def pixel_prf(patches, gt, N):
-    """Pixel-level precision, recall, F1 against GT > mean."""
+    """Pixel-level precision, recall, F1 against GT > mean.
+
+    D-97 — DEVIATION CONNUE, MESUREE, NON CORRIGEE (decision en attente,
+    voir docs/DEFAUTS.md). La reference `needs` est RELATIVE au champ
+    lui-meme : `gt > gt.mean()`. Elle ne porte donc aucune information
+    absolue — multiplier `gt` par 1000 laisse `needs` bit-a-bit identique.
+
+    Consequence sur la 4e ligne de la figure, `make_uniform_noise`, qui
+    s'annonce « negative control -> false positive rate » : sur un champ
+    SANS anomalie, `gt.mean()` coupe le bruit en deux et **46,6 % des
+    pixels** sont declares « a raffiner » (mesure N=256, 50 pas ; 47,1 %
+    a N=64). Il n'existe donc pas de faux positif a compter : la ligne ne
+    borne aucun taux de faux positifs, et ses barres P/R/F1 se lisent
+    pourtant a cote de celles des trois lignes a signal.
+
+    Les trois autres lignes ne sont PAS touchees : la reference relative y
+    sert a comparer deux bras sur le MEME champ, ou elle est defendable
+    (les deux bras voient le meme `needs`). C'est le controle negatif seul
+    qui demande une reference ABSOLUE — ou son retrait.
+
+    Ne pas « corriger » sans trancher : choisir un seuil absolu change les
+    quatre lignes de la figure.
+    """
     refined = patches_to_fine_mask(patches, N)
     needs = gt > gt.mean()
     tp = np.sum(refined & needs)
