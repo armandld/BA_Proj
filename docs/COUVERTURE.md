@@ -1273,6 +1273,65 @@ non audité par exécution.
 
 ---
 
+## `study/h2b_prediction/` — passe du 15 août, dernier lot : le module est lu en entier
+
+Les 7 items que la section précédente listait sous « reste à faire » : le
+module n'avait pas d'entrée ouverte dans `DEFAUTS.md` (D-75 à D-85 et D-88
+tous corrigés), donc terrain neuf au sens de l'ordre du travail de la fiche.
+Ligne de base avant lecture, `tests/study -q -m "not slow"` :
+**952 passed, 62 skipped, 1 xfailed** — verte, aucun échec préexistant.
+Suite complète non relancée (hors budget d'une passe, comme pour
+`closed_loop/` le 14 août) ; la ligne ci-dessus couvre les 65 fichiers de
+`tests/study/`.
+
+**Lus en entier, fonction par fonction — 4 fichiers** :
+`h2b_multiseed.py` (232), `h2b_loso_bootstrap.py` (309),
+`h2b_scenario_specialisation.py` (298), `h2b_learned_meanfield_h.py` (291,
+déjà partiellement audité pour `fit_learned_h` — relu en entier ici, `main()`
+compris). **Relu en entier après une première lecture partielle** :
+`h2b_psi_feature_loso.py` (`_gather`/`main`, les helpers purs l'étaient
+déjà) et `h2b_prediction_horizon.py` (611, lu en entier — c'est le plus
+long fichier du module). **Revérifié, pas relu** : `h2b_analytical_solution.py`
+— ses deux défauts (D-86, D-87) étaient déjà corrigés et testés
+(`test_phase10a_argmax_is_not_a_grid_edge.py`,
+`test_phase10a_flat_sweep_is_not_an_optimum.py`) ; la question 4 posée en
+plus ici (ci-dessous) n'en rouvre aucun.
+
+**Aucun défaut trouvé.** Vérifié et non supposé :
+
+| ce qui a été vérifié | comment |
+|---|---|
+| `h2b_analytical_solution.mf_f1_curve`, « build avec c_bias=1, mise à l'échelle après coup » | **l'hypothèse tient** — remonté jusqu'à `HamiltParams_v2.compute_coefficients` (`HamiltParams_v2.py:203`) : `z_bias = c_bias * median_scale * (score - thr)` est bien la SEULE grandeur linéaire en `c_bias` ; `C_edges`/`K_plaquettes` (lignes 167-186) ne le lisent pas du tout. Construire une fois à `c_bias=1` puis mettre `h_unit` à l'échelle est donc exact, pas une approximation |
+| discipline de seuil (train seul, jamais la validation) | **tenue dans les 4 fichiers lus en entier** — `h2b_multiseed.random_split_seed`/`loso_seed`, `h2b_loso_bootstrap.main`, `h2b_scenario_specialisation.main` (split interne ET matrice de transfert), `h2b_learned_meanfield_h.main` (split ET LOSO) : chaque appel de `best_threshold_f1`/`fit_eval` reçoit `(scores_train, Y_train)`, jamais la validation. Aucun des trois sites fautifs de D-81/D-82/D-83 (le balayage AST déjà fait sur tout `study/`) n'est dans ce lot |
+| `h2b_prediction_horizon.horizon_pairs`/`blocked_pair_split` | **saines** — `horizon_pairs(n, h)` borne `t < n-h`, donc `t+h <= n-1` reste un indice valide ; `blocked_pair_split` classe une paire par le PIRE de ses deux bords (`th < t0` pour train, `t >= t0` pour val), donc une paire à cheval sur la frontière n'est ni l'une ni l'autre — anti-fuite conforme au docstring, vérifié sur les bornes plutôt que supposé |
+| `h2b_prediction_horizon._assemble` | **saine** — la cible `Y`/`e` est lue à `t+h` (le futur), les features à `t` (le présent) ; le score brut des baselines classiques (`RAW_BASELINES`) est lui aussi lu à `t`, pas à `t+h` — la tâche est bien « prédire », pas « décrire » |
+| convention de signe de `psi` entre `h2b_psi_feature_loso._gather` et `h2b_prediction_horizon._gather` | **identiques et correctes** — les deux calculent `dphi = phi[t] - phi[t-1]` à la main pour `psi_signed_v1`, et passent `(phi_prev, phi)` dans cet ordre à `compute_psi_v2`, dont le corps fait `delta = phi - phi_prev` (`HamiltParams_v2.py:274`) : même signe des deux côtés, question 4 posée entre les deux fichiers et entre chaque fichier et la fonction qu'il appelle |
+| `h2b_prediction_horizon`, cône causal `k=2` à `dim=4` | **hérite de la saturation déjà mesurée en D-88** (`khop_distinct_footprint(2,4)` = 16 distinct sur 25 nominaux), pas un défaut nouveau — les colonnes dupliquées sont redondantes pour le GBT, pas fausses, et D-88 a déjà tranché de ne pas changer `khop_features`. Noté ici pour qu'un futur lecteur du tableau `k x h` sache pourquoi `k=2` ne gagne pas grand-chose sur `k=1` à cette taille |
+| `h2b_scenario_specialisation`, diagonale de la matrice de transfert | **cohérente avec le calcul direct** — `T[i,i]` (recalculée via la boucle `[2]`) mesure la même paire (modèle entraîné sur `s`, évalué sur la validation de `s`) que `f1_spec` de la boucle `[1]`, sur les mêmes `Xva`/`Yva` |
+
+**Configurations empruntées** (au sens de la fiche, plus l'axe « discipline
+de seuil » et l'axe temporel propres à ce lot) :
+
+| axe | emprunté | non emprunté |
+|---|---|---|
+| hamiltonien | non nul (`c_bias=1` et grille log, `h2b_analytical_solution`) | nul |
+| bord | périodique (seul type construit par `build_patch_hamiltonian` dans ce lot) | borné |
+| split | aléatoire par instantané, bloqué temporel (Task 4), LOSO — les trois, dans des fichiers différents | — |
+| horizon temporel (`h2b_prediction_horizon`) | 1, 2, 4, 8 pas de la sous-séquence sous-échantillonnée | horizon = pas DNS bruts (le sous-échantillonnage `max_snaps` change l'unité) |
+| modèle | régression logistique (`h2b_learned_meanfield_h`, `h2b_scenario_specialisation --model lr`) et GBT (les cinq autres) | — |
+
+`study/h2b_prediction/` **est maintenant lu en entier, module par module,
+19 fichiers sur 19** — dernier fichier restant avant cette passe :
+aucun, la liste « reste à faire » de la section précédente est vide.
+Non fait, comme déjà noté pour le lot du 14 août : aucune campagne
+`main()` n'a été rejouée de bout en bout sur ces 4-7 fichiers (les
+artefacts d'entrée `dns_*`/`patches_*` du dépôt le permettent pour
+certains, pas pour tous — `d_patches_*` en particulier n'existe pour
+aucune configuration, donc la branche « cible `d_i`
+(Task 6) » de `h2b_prediction_horizon.main` n'a jamais tourné ici).
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
