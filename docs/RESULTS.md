@@ -5478,52 +5478,58 @@ pour Neon. Son commentaire est généralisé en conséquence.
 **Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
 (21 tests)
 
-Matrice de spécificité — chaque champ isole **une** instabilité, mesurée à
-travers la vraie `compute_coefficients` :
+## Une correction de ma part, d'abord
+
+La première version de cette matrice utilisait une **rotation solide**
+`v = (−(y−L/2), x−L/2)` comme champ fluide. Ce champ est **discontinu au
+raccord périodique** : son `K_plaquettes` valait 9,48e+01 avec un maximum
+dans le coin (63, 63). Un artefact de bord, pas une mesure.
+
+Le réseau de vortex `v = (−sin y, sin x)`, périodique, donne **5,01e−01**
+dans l'intérieur. **J'avais donc surestimé le canal fluide d'un facteur
+190**, et annoncé un déséquilibre de 10⁶ là où il est de 2,75·10⁴.
+
+C'est la même famille de piège que le champ d'essai qui ne sépare pas :
+un champ analytique qui viole une hypothèse du solveur mesure le solveur,
+pas la physique.
+
+## La matrice, champs périodiques uniquement
 
 | champ | `H_edges` | `C_edges` | `K_plaq` | `K_xpoint` |
 |---|---|---|---|---|
-| rotation solide (Q>0) | 6,02e−03 | 1,78e+00 | **9,48e+01** | 0 |
-| cisaillement v pur (Q<0) | 2,13e−08 | 2,72e−04 | 5,71e−03 | 0 |
-| nappe de courant (Jz) | 1,57e−07 | 7,18e−05 | **1,82e−05** | 0 |
+| réseau de vortex (fluide) | 1,16e−05 | 1,83e−01 | **5,01e−01** | 0 |
+| nappe de courant (magnét.) | 1,57e−07 | 7,18e−05 | **1,82e−05** | 0 |
+| cisaillement v (Q<0) | 2,13e−08 | 2,72e−04 | 5,71e−03 | 0 |
 | point X magnétique | 9,95e−07 | 3,33e−01 | 5,09e−06 | **9,59e−02** |
 | uniforme (contrôle) | 0 | 0 | 0 | 0 |
 
 ## Ce qui est sain
 
-**Le contrôle rend zéro partout**, sur les quatre familles.
+**Le contrôle rend zéro** sur les quatre familles.
 
-**La rotation allume `K_plaquettes` (94,8) et laisse `K_xpoint` à zéro** — le
-canal fluide fait son travail et ne déborde pas.
+**Le réseau de vortex allume `K_plaquettes` et laisse `K_xpoint` à zéro** —
+le canal fluide ne déborde pas.
 
 **Les deux canaux ZZZZ sont orthogonaux.** Le point X allume `K_xpoint`
-(9,6e−02) et laisse `K_plaquettes` à 5,1e−06 — **19 000 fois moins**. C'est
-leur raison d'être, et elle est vérifiée.
+(9,59e−02) et laisse `K_plaquettes` à 5,09e−06 — **19 000 fois moins**.
+C'est leur raison d'être, et elle est vérifiée.
 
-**`H_edges` reste subordonné** partout, de trois à cinq ordres sous les
-couplages. Le biais Z ne décide pas seul.
+**`H_edges` reste subordonné** partout.
 
 ## Le déséquilibre, ouvert
 
-**Le canal magnétique est écrasé par le canal fluide.** La rotation solide
-donne `K_plaquettes` = 9,5e+01 ; la nappe de courant, son équivalent
-magnétique exact, donne **1,8e−05**. Cinq à six ordres de grandeur pour deux
-instabilités de même nature — l'une hydrodynamique, l'autre magnétique.
+**Vortex 5,01e−01 contre nappe de courant 1,82e−05 : facteur 27 500**, pour
+deux instabilités de même nature — l'une hydrodynamique, l'autre magnétique.
 
-**Reproduits étage par étage et isolément, les deux canaux sont pourtant
-comparables** : fluide 9,5e+01 sur la rotation, magnétique **1,06e+01** sur la
-nappe. La perte se produit donc dans la fonction, pas dans les étages tels
-que je les reproduis.
+**La cause n'est pas localisée, et je m'abstiens de la nommer.** Trois fois
+dans cette campagne, une reproduction incomplète d'un calcul m'a fait
+accuser du code juste : le filtre `> 1e-10` de `C_scale`, un champ d'essai
+dont `|B|` s'annulait là où `|Jz|` culmine, et maintenant un champ non
+périodique.
 
-**Je ne l'ai pas localisée, et je m'abstiens d'en nommer la cause.** Deux
-fois déjà dans cette campagne, une reproduction incomplète d'un calcul m'a
-fait accuser du code juste — le filtre `> 1e-10` de `C_scale`, et le champ
-d'essai dont |B| s'annulait là où |Jz| culmine. Je ne recommencerai pas sur
-un troisième.
-
-**Ce qui EST établi** : la localisation spatiale est correcte. Le maximum de
-`K_plaquettes` tombe là où `|Jz|` vaut 2,145 pour un maximum de 2,329. **Le
-canal désigne le bon endroit, avec la mauvaise amplitude.**
+**Ce qui est établi** : la localisation spatiale du canal magnétique est
+correcte — le maximum tombe là où `|Jz|` culmine. Le canal désigne le bon
+endroit, avec la mauvaise amplitude.
 
 C'est la prochaine chose à instruire, et elle porte directement sur
-`gamma_mag` — l'un des neuf paramètres à réoptimiser.
+`gamma_mag`, l'un des neuf paramètres à réoptimiser.

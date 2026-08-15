@@ -634,42 +634,42 @@ def test_les_coefficients_pointent_ou_le_raffinement_est_necessaire():
 def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
     """Chaque champ isole UNE instabilite ; quelle famille repond ?
 
+    TOUS LES CHAMPS SONT PERIODIQUES. La premiere version de ce test
+    utilisait une rotation solide `v = (-(y-L/2), x-L/2)`, qui est
+    DISCONTINUE au raccord periodique. Son `K_plaquettes` valait 9.48e+01
+    avec un maximum dans le coin (63, 63) : un artefact de bord, pas une
+    mesure. Le reseau de vortex `v = (-sin y, sin x)` donne 5.01e-01, dans
+    l'interieur. J'avais donc surestime le canal fluide d'un facteur 190.
+
     MESURE (N=64, hyperparametres deployes, via la vraie fonction) :
 
-      champ                       H_edges    C_edges     K_plaq   K_xpoint
-      rotation solide (Q>0)     6.019e-03  1.779e+00  9.477e+01  0.000e+00
-      cisaillement v pur (Q<0)  2.127e-08  2.724e-04  5.709e-03  0.000e+00
-      nappe de courant (Jz)     1.567e-07  7.183e-05  1.816e-05  0.000e+00
-      point X magnetique        9.948e-07  3.328e-01  5.092e-06  9.585e-02
-      uniforme (controle)       0.000e+00  0.000e+00  0.000e+00  0.000e+00
+      champ                         H_edges    C_edges     K_plaq   K_xpoint
+      reseau de vortex (fluide)   1.160e-05  1.826e-01  5.009e-01  0.000e+00
+      nappe de courant (magnet.)  1.567e-07  7.183e-05  1.816e-05  0.000e+00
+      cisaillement v (Q<0)        2.127e-08  2.724e-04  5.709e-03  0.000e+00
+      point X magnetique          9.948e-07  3.328e-01  5.092e-06  9.585e-02
+      uniforme (controle)         0.000e+00  0.000e+00  0.000e+00  0.000e+00
 
     CE QUI EST SAIN :
 
-      - le controle uniforme rend zero PARTOUT, sur les quatre familles ;
-      - la rotation solide allume `K_plaquettes` (94.8) et rien d'autre de
-        comparable — le canal fluide fait son travail ;
-      - le point X allume `K_xpoint` (9.6e-02) et laisse `K_plaquettes` a
-        5.1e-06, soit 19 000 fois moins : les deux canaux ZZZZ sont bien
-        orthogonaux, ce qui est leur raison d'etre ;
-      - `H_edges` reste subordonne partout, de trois a cinq ordres sous les
-        couplages.
+      - le controle uniforme rend zero sur les QUATRE familles ;
+      - le reseau de vortex allume `K_plaquettes` (5.01e-01) et laisse
+        `K_xpoint` a zero : le canal fluide ne deborde pas ;
+      - le point X allume `K_xpoint` (9.59e-02) et laisse `K_plaquettes` a
+        5.09e-06, soit 19 000 fois moins. Les deux canaux ZZZZ sont
+        ORTHOGONAUX, ce qui est leur raison d'etre ;
+      - `H_edges` reste subordonne partout.
 
-    CE QUI NE L'EST PAS — et qui reste ouvert :
+    CE QUI RESTE OUVERT — le desequilibre fluide / magnetique :
 
-      Le canal MAGNETIQUE est ecrase par le canal FLUIDE. La rotation
-      solide donne `K_plaquettes` = 9.5e+01 ; la nappe de courant, qui est
-      son equivalent magnetique exact, donne 1.8e-05. Cinq a six ordres de
-      grandeur pour deux instabilites de meme nature.
+      vortex 5.01e-01 contre nappe de courant 1.82e-05, soit un facteur
+      **27 500** pour deux instabilites de meme nature. C'est beaucoup
+      moins que les 10^6 que j'avais annonces sur le champ non periodique,
+      mais c'est toujours un desequilibre reel.
 
-      Reproduits etage par etage et ISOLEMENT, les deux canaux sont
-      pourtant comparables : fluide 9.5e+01 sur la rotation, magnetique
-      1.06e+01 sur la nappe. La perte se produit donc DANS la fonction, et
-      pas dans les etages tels que je les reproduis -- je ne l'ai pas
-      encore localisee, et je m'abstiens d'en nommer la cause.
-
-      Ce qui EST etabli : la localisation spatiale est correcte. Le maximum
-      de `K_plaquettes` tombe la ou |Jz| vaut 2.145 pour un maximum de
-      2.329. Le canal designe le bon endroit, avec la mauvaise amplitude.
+      La cause n'est PAS localisee et je m'abstiens de la nommer : trois
+      fois deja dans cette campagne, une reproduction incomplete d'un
+      calcul m'a fait accuser du code juste.
 
     Ce test fige la matrice. Il tombera si l'equilibre change -- y compris
     si quelqu'un corrige le canal magnetique, et c'est voulu.
@@ -684,35 +684,34 @@ def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
 
     z = lambda X: np.zeros_like(X)
     o = lambda X: np.ones_like(X)
-    rot = _mesure(_rotation_solide)
+    # PERIODIQUES : un reseau de vortex, pas une rotation solide.
+    vortex = _mesure(lambda X, Y, g: (-np.sin(Y), np.sin(X), o(X), z(X)))
     nappe = _mesure(lambda X, Y, g: (z(X), z(X), 1 + 0.8 * np.tanh(3 * np.sin(Y)), z(X)))
     xpt = _mesure(lambda X, Y, g: (z(X), z(X),
                                    np.sin(Y - g.L / 2), np.sin(X - g.L / 2)))
     calme = _mesure(_calme)
 
-    # 1. le controle ne repond a rien
     for k, v in calme.items():
         assert v == pytest.approx(0.0, abs=1e-12), (
             f"champ uniforme : {k} vaut {v:.3e}")
 
-    # 2. la rotation allume le ZZZZ de vorticite
-    assert rot["Kp"] > 50.0, f"rotation : K_plaq = {rot['Kp']:.3e}, attendu ~9.5e+01"
-    assert rot["Kx"] == pytest.approx(0.0, abs=1e-12), (
-        f"rotation : K_xpoint = {rot['Kx']:.3e}, il n'y a pas de nul magnetique")
+    assert vortex["Kp"] > 0.1, (
+        f"reseau de vortex : K_plaq = {vortex['Kp']:.3e}, attendu ~5.0e-01")
+    assert vortex["Kx"] == pytest.approx(0.0, abs=1e-12), (
+        f"vortex : K_xpoint = {vortex['Kx']:.3e}, il n'y a pas de nul magnetique")
 
-    # 3. le point X allume SON canal, et pas celui de la vorticite
     assert xpt["Kx"] > 1e-2, f"point X : K_xpoint = {xpt['Kx']:.3e}"
     assert xpt["Kx"] > xpt["Kp"] * 1000, (
         f"point X : K_xpoint {xpt['Kx']:.3e} contre K_plaq {xpt['Kp']:.3e} — "
         f"les deux canaux ZZZZ ne sont plus orthogonaux")
 
-    # 4. H reste subordonne
-    for nom, m in (("rotation", rot), ("point X", xpt)):
+    for nom, m in (("vortex", vortex), ("point X", xpt)):
         assert m["H"] < m["C"], (
             f"{nom} : H_edges {m['H']:.3e} depasse C_edges {m['C']:.3e}")
 
-    # 5. LE DESEQUILIBRE OUVERT — epingle, pas corrige
-    assert nappe["Kp"] < rot["Kp"] / 1e4, (
+    # LE DESEQUILIBRE OUVERT — epingle, pas corrige
+    assert nappe["Kp"] < vortex["Kp"] / 1e3, (
         f"le canal magnetique n'est plus ecrase : nappe {nappe['Kp']:.3e} "
-        f"contre rotation {rot['Kp']:.3e}. Si c'est une correction "
-        f"deliberee, REMESURER cette matrice au lieu d'ajuster ce seuil.")
+        f"contre vortex {vortex['Kp']:.3e} (facteur de reference 27 500). "
+        f"Si c'est une correction deliberee, REMESURER cette matrice au "
+        f"lieu d'ajuster ce seuil.")
