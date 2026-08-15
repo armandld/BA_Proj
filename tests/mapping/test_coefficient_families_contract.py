@@ -402,3 +402,71 @@ def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
     assert valeurs[256][2] == pytest.approx(0.0, abs=1e-12), (
         f"K_plaquettes vaut {valeurs[256][2]:.3e} a N=256 : l'equilibre a "
         f"change, remesurer la table de la docstring")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le signal brut porte-t-il l'instabilite ? (avant tout seuil)
+# ══════════════════════════════════════════════════════════════════════
+
+def test_le_signal_brut_discrimine_meme_quand_le_seuil_absolu_ne_tire_pas():
+    """A N=256, les seuils absolus ne sont pas franchis — mais le signal
+    BRUT porte un contraste enorme.
+
+    MESURE (N=256, Re=Rm=800, seuil de maille = 1.304e+01) :
+
+      scenario            grandeur     max/mediane   max/seuil
+      orszag_tang         |omega|             2.8      0.1612
+      orszag_tang         sqrt(det)          36.3      0.1088
+      harris_tearing      |Jz|               49.5      0.2714
+      harris_tearing      sqrt(det)        1104.3      0.0135
+      island_coalescence  |Jz|               68.0      0.3393
+      island_coalescence  sqrt(det)         222.8      0.0256
+      mhd_rotor           |omega|           752.3      1.5038
+
+    Deux lectures, toutes deux dans les chiffres :
+
+    1. L'INFORMATION EXISTE. Un facteur 1104 entre le maximum et la mediane
+       sur harris_tearing signifie que les cellules a raffiner se
+       distinguent tres nettement. C'est le seuil ABSOLU qui l'efface, pas
+       l'absence de structure.
+
+    2. UN SEUIL UNIQUE NE PEUT PAS SERVIR TOUS LES SCENARIOS. |omega| vaut
+       1.55e-02 au maximum sur harris_tearing et 1.96e+01 sur mhd_rotor —
+       trois ordres de grandeur d'ecart. Le meme seuil de 13.04 pour les
+       deux ne peut pas etre le bon pour les deux.
+
+    3. `sqrt(det)` est le canal le PLUS discriminant sur trois scenarios
+       sur quatre (36x, 1104x, 223x contre 2.6x, 49.5x, 68x pour |Jz|).
+       C'est le terme de point X qui porte le plus d'information — et
+       c'etait celui qui etait doublement casse.
+
+    Ce test epingle la mesure. Il ne prescrit rien : passer a un critere
+    RELATIF est une decision de conception, pas une correction.
+    """
+    from Simulation.HamiltParams import PhysicalMapper as PM
+
+    n = 256
+    g = PeriodicGrid(n)
+    sim = MHDSolver(g, dt=1e-3, Re=RE, Rm=RM)
+    sim.init_harris_tearing()
+    for _ in range(200):
+        sim.step_full()
+
+    st = sim.get_fluxes()
+    dx, eta = g.dx, g.L / RM
+    crit = 1.0 * eta / dx ** 2
+
+    jz = np.abs(st["Jz"])
+    xp = np.sqrt(np.maximum(
+        0.0, -PM._compute_det_jacobian_B(st["Bx"], st["By"], dx)))
+
+    for nom, v, contraste_min in (("|Jz|", jz, 20.0), ("sqrt(det)", xp, 100.0)):
+        med = np.median(v)
+        assert med > 0, f"{nom} : mediane nulle, le contraste serait indefini"
+        contraste = v.max() / med
+        assert contraste > contraste_min, (
+            f"{nom} : contraste max/mediane = {contraste:.1f}, attendu "
+            f"> {contraste_min} — le signal ne discrimine plus")
+        assert v.max() < crit, (
+            f"{nom} : max {v.max():.3e} franchit le seuil {crit:.3e} — "
+            f"l'equilibre a change, remesurer la table de la docstring")
