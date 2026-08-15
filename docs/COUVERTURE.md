@@ -1625,6 +1625,52 @@ malgré tout un cadre commun.
 
 ---
 
+## `figures/v1_legacy/fig13_sigma_ablation.py` — lu en entier, deux pistes mesurées, aucune retenue
+
+247 lignes. Deux soupçons plausibles, tous deux tués par la mesure — noté ici
+pour qu'ils ne soient pas re-suspectés sans être re-mesurés.
+
+**`active_frac` (panneau B) utilise le score BRUT, pas le score moyenné par
+arête que `HamiltParams.compute_coefficients` applique réellement** (`score_avg_h
+= 0,5·(score + roll(score,-1,axis=1))`, séparément pour h et v). Plausible à la
+lecture — deux formes différentes de la même grandeur, exactement la question 4
+de `VIGIL.md`. **Mesuré, sur données réelles** (`init_harris_tearing`,
+`init_kelvin_helmholtz`, `init_orszag_tang`, `init_mhd_rotor`, N=256,
+100-150 pas), aux 7 valeurs de σ du balayage : écart absolu maximal **0,0010**,
+écart relatif maximal **2,7 %**, sur les 28 combinaisons scénario×σ testées.
+Le moyennage par arête d'un champ physique lisse ne déplace quasiment aucune
+cellule de part et d'autre du seuil `> 0.1` sur le poids gaussien — l'effet
+existe mais ne sépare rien à l'échelle où la figure trace ses points.
+**Non corrigé : mesuré et trouvé sans conséquence**, comme le splitting de
+Strang de `VIGIL.md` (« une hypothèse plausible s'est révélée fausse à la
+mesure »).
+
+**`sigma_trained = TRAINED_PARAMS.get('sigma', 0.023)` n'est jamais réellement
+« trained ».** Vérifié : `'sigma'` n'existe dans aucune entrée de
+`results/hyperparams/best_hyperparams.json` (`grep -c '"sigma"'` → 0), donc
+`sigma_trained` vaut **inconditionnellement** le repli codé en dur 0,023 —
+jamais un chiffre échantillonné par la campagne Optuna gelée. La valeur
+elle-même n'est pas fausse (elle sert de constante d'ablation cohérente dans
+tout le fichier), mais la légende (`σ*=0,023`) et le log (`f"trained σ =
+{sigma_trained}"`) la présentent comme si elle l'était. Repli silencieux
+(forme connue de `VIGIL.md`), mais **choix de conception plutôt que défaut** :
+`sigma` n'a jamais été un axe de la campagne d'entraînement gelée (voir
+`results/hyperparams/PROVENANCE.md`), il n'y a donc rien à corriger côté
+provenance — seulement une étiquette à ne pas prendre pour un résultat mesuré.
+Non corrigé, signalé pour que la prochaine lecture ne le retrouve pas comme un
+défaut de calcul.
+
+**Vérifié et trouvé sain** : `zz_mean`/`z_mean` lisent `C_edges`/`H_edges`
+directement (pas de reconstruction locale) ; `SIGMA_BASELINE = 100.0` désactive
+bien le gating (`uncertainty → 1` partout à cette échelle) ; usage de
+`AngleMapper.classical_score` (pas `physical_score`) correct, pas de confusion
+D-9.
+
+**Axes empruntés** : les 4 scénarios de `SCENARIOS`, les 7 valeurs de
+`SIGMA_VALUES` plus la référence `SIGMA_BASELINE`.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
