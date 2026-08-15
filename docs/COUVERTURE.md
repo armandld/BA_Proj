@@ -1388,8 +1388,25 @@ document avant cette passe** — ni dans « jamais audité », ni ailleurs :
 `src/` et `study/` étant tous deux lus en entier (sections précédentes), le
 dossier entier était le terrain neuf suivant au sens de l'ordre du travail
 de la fiche. Ce sont les deux scripts qui produisent les figures V4
-« Q-HAS contre la frontière classique » — `figures/result_figs.py` et
-`figures/v1_legacy/` (17 fichiers) restent non lus, prochain terrain neuf.
+« Q-HAS contre la frontière classique » — `figures/v1_legacy/` (17 fichiers)
+reste non lu, prochain terrain neuf.
+
+**`figures/result_figs.py` — lu en entier, sain.** 133 lignes, génère les
+deux figures de la falsification v1 (`fig1_ceiling_bar`,
+`fig2_loso_scatter`) à partir de nombres **recopiés à la main** depuis les
+logs de campagne (`results/logs_v2/Result_phase*.txt`) plutôt que calculés
+— le risque propre à ce genre de fichier est une transcription silencieuse,
+pas un calcul faux. Les 12 valeurs (6 barres + 4×3 points du nuage LOSO)
+revérifiées une à une contre leur source : `bar_values`/`bar_errors`
+coïncident avec `Result_phase7.txt:603-604` (0,409/0,336, classique/SA) et
+`Result_phase13.txt:30-31` (0,989/0,991, plafonds split aléatoire) et
+`Result_phase_end.txt:39` (0,191±0,152/0,215±0,142, plafonds LOSO) ;
+`f1_class_loso`/`f1_site_loso`/`f1_sten_loso`/`f1_learn_loso` coïncident
+avec les deux tableaux de `Result_phase_end.txt:34-37` et `:83-86`, dans
+l'ordre des scénarios. Aucun écart. Réserve non corrigée, sans conséquence
+sur les nombres : le commentaire d'en-tête attribue les plafonds « split
+aléatoire » à `Result_phase11.txt`, qui n'en porte que le détail
+par-scénario — l'agrégat qu'affiche la figure vient de `Result_phase13.txt`.
 
 | fonction | verdict |
 |---|---|
