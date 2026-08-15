@@ -102,7 +102,15 @@ def make_vortex_core(N):
     """Smooth vortex flow — curl anomaly at center."""
     grid = PeriodicGrid(resolution_N=N)
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
-    y, x = np.mgrid[0:N, 0:N] / N * 2 * np.pi
+    # `x, y`, PAS `y, x` : `np.mgrid[0:N, 0:N]` varie le long de l'axe 0 en
+    # premier, et la convention du depot (grid.py) est AXIS_X=0, AXIS_Y=1.
+    # L'ancien depaquetage nommait "y" le tableau qui variait en realite le
+    # long de X (et reciproquement) : Bx=cos(y)*0.5 variait donc le long de
+    # SON PROPRE axe X au lieu de Y, et div B n'etait pas nul.
+    # Mesure (N=256) : max|div B| = 0.0245 pour une echelle de champ 0.5
+    # (5 %) avant ; 0.0 (bit a bit) apres, avec le meme operateur que le
+    # depot (Simulation.grid.divergence, fixed_curl=True). Voir D-97.
+    x, y = np.mgrid[0:N, 0:N] / N * 2 * np.pi
     sim.vx = -np.sin(y)
     sim.vy = np.sin(x)
     sim.Bx = np.cos(y) * 0.5
@@ -123,9 +131,16 @@ def make_current_sheet(N):
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
     x = np.arange(N) / N
     # Strong sheared flow + magnetic field with sharp gradient
-    sim.vy = 0.5 * np.tanh((x - 0.5) * 40)[np.newaxis, :] * np.ones((N, 1))
+    # `[:, np.newaxis]`, PAS `[np.newaxis, :]` : le docstring promet un
+    # gradient "at x=N/2" — X est l'axe 0 (grid.py). L'ancien broadcast
+    # diffusait `x` le long de l'axe 1 (Y), donnant By=By(Y) et Bx=cte : la
+    # nappe de courant etait en realite orientee selon Y, et div B n'etait
+    # pas nul. Mesure (N=256) : max|div B| = 2.0 pour une echelle de champ
+    # 1.0 (200 %, persiste a 0.96 apres 20 pas) avant ; 0.0 (bit a bit)
+    # apres. Voir D-97.
+    sim.vy = 0.5 * np.tanh((x - 0.5) * 40)[:, np.newaxis] * np.ones((1, N))
     sim.vx[:] = 0
-    sim.By[:] = np.tanh((x - 0.5) * 40)[np.newaxis, :]
+    sim.By[:] = np.tanh((x - 0.5) * 40)[:, np.newaxis]
     sim.Bx[:] = 0.3
     for _ in range(20):
         sim.adapt_dt(cfl_target=0.4)
@@ -137,7 +152,11 @@ def make_xpoint(N):
     """Reconnection X-point — complex topology with strong gradients."""
     grid = PeriodicGrid(resolution_N=N)
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
-    y_arr, x_arr = np.mgrid[0:N, 0:N] / N
+    # `x_arr, y_arr`, PAS `y_arr, x_arr` : meme echange que make_vortex_core.
+    # Mesure (N=256) : max|div B| = 3.175 pour une echelle de champ 1.5
+    # (212 %, persiste a 1.90 apres 20 pas) avant ; 0.0 (bit a bit) apres.
+    # Voir D-97.
+    x_arr, y_arr = np.mgrid[0:N, 0:N] / N
     # Stronger fields for clearer signal
     sim.By = 1.5 * (np.tanh((x_arr - 0.25) * 30) - np.tanh((x_arr - 0.75) * 30) - 1.0)
     sim.Bx = 1.5 * np.tanh((y_arr - 0.5) * 30)
