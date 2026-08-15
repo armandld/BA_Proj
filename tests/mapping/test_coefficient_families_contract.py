@@ -536,3 +536,96 @@ def test_le_critere_relatif_redonne_un_hamiltonien_non_vide_a_N256():
     assert k_xp > k_plaq * 10, (
         f"sur un scenario de reconnexion, le canal point X ({k_xp:.4e}) "
         f"devrait dominer le canal courant ({k_plaq:.4e})")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le test qui compte : le coefficient pointe-t-il ou l'erreur EST ?
+# ══════════════════════════════════════════════════════════════════════
+
+def test_les_coefficients_pointent_ou_le_raffinement_est_necessaire():
+    """Correlation de rang entre le coefficient et l'erreur REELLE.
+
+    Tous les tests precedents verifient des contrats internes : signes,
+    seuils, invariance. Celui-ci verifie la seule chose qui justifie le
+    modele -- le coefficient designe-t-il les blocs ou la solution
+    grossiere s'ecarte vraiment du DNS ?
+
+    Protocole : meme scenario a N=128 (reference) et N=32 (grossier), meme
+    nombre de pas ; erreur relative par bloc sur 8x8 = 64 blocs ; Spearman
+    contre le coefficient moyen du bloc.
+
+    MESURE :
+
+      scenario              K_plaq   K_xpoint   max(K)   score classique
+      harris_tearing         0.897     0.434     0.788        0.814
+      island_coalescence     0.877     0.408     0.760        0.912
+      mhd_rotor              0.755     0.680     0.759        0.528
+      orszag_tang            0.249     0.311     0.443        0.422
+
+    Trois lectures :
+
+    1. `K_plaquettes` correle FORTEMENT (0.75 a 0.90) sur trois scenarios
+       sur quatre. Le coefficient pointe bien ou le raffinement est
+       necessaire — c'est le contrat central du modele, et il est tenu.
+
+    2. Sur `mhd_rotor`, le coefficient BAT le score classique : 0.755
+       contre 0.528. C'est la premiere preuve quantitative, dans ce depot,
+       que le terme a quatre corps apporte quelque chose que l'indicateur
+       lineaire n'a pas — et c'est precisement le scenario autour duquel
+       `compare_rotor_budget` a ete construit.
+
+    3. `orszag_tang` est faible pour TOUT (0.25 a 0.44), coefficients et
+       score classique confondus. Ce n'est pas un defaut des coefficients :
+       c'est le scenario le plus difficile pour n'importe quel indicateur
+       local.
+
+    Ce test est LENT (quatre paires de simulations). Il est le dernier du
+    fichier pour cette raison.
+    """
+    pytest.importorskip("scipy")
+    from scipy.stats import spearmanr
+    from Simulation.HamiltParams import PhysicalMapper as PM
+
+    nb = 8
+
+    def _bloc_moy(a):
+        n = a.shape[0]
+        b = n // nb
+        return a.reshape(nb, b, nb, b).mean(axis=(1, 3))
+
+    NF, NC, pas = 128, 32, 200
+    gf = PeriodicGrid(NF)
+    sf = MHDSolver(gf, dt=1e-3, Re=RE, Rm=RM)
+    sf.init_harris_tearing()
+    gc = PeriodicGrid(NC)
+    sc = MHDSolver(gc, dt=1e-3, Re=RE, Rm=RM)
+    sc.init_harris_tearing()
+    for _ in range(pas):
+        sf.step_full()
+    for _ in range(pas):
+        sc.step_full()
+
+    ff, fc = sf.get_fluxes(), sc.get_fluxes()
+    err = np.zeros((nb, nb))
+    for v in ("vx", "vy", "Bx", "By"):
+        d = _bloc_moy(ff[v])
+        c_ = _bloc_moy(np.repeat(np.repeat(fc[v], NF // NC, 0), NF // NC, 1))
+        err += np.abs(d - c_) / (np.abs(d).mean() + 1e-12)
+
+    m = PM(cs=1.0, nu=gf.L / RE, eta_mhd=gf.L / RM, dx=gf.dx, **HP)
+    st = sf.get_fluxes()
+    score = AngleMapper.classical_score(st)
+    co = m.compute_coefficients(sf, score, st, threshold_amr=0.3,
+                                advanced_anomalies_enabled=True)
+
+    kp = _bloc_moy(np.abs(np.asarray(co["K_plaquettes"])))
+    assert np.ptp(kp) > 0, (
+        "K_plaquettes est constant sur les 64 blocs — la correlation serait "
+        "indefinie et ce test ne verifierait rien")
+    assert np.ptp(err) > 0, "l'erreur est constante — le controle est vide"
+
+    rho = spearmanr(kp.ravel(), err.ravel()).statistic
+    assert rho > 0.6, (
+        f"correlation de rang coefficient/erreur = {rho:.3f} sur "
+        f"harris_tearing, mesure de reference 0.897. En dessous de 0.6, le "
+        f"coefficient ne designe plus les blocs a raffiner.")

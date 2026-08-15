@@ -79,7 +79,6 @@ ENTRY_POINTS = {
     "analyze_hyperparams.py",
     "recompute_lambda_scores.py",
     "call_vqa_shell.py",
-    "import_Neon_data_to_local.py",
 }
 
 #  Exclus, avec la raison. Toute entrée ici doit être justifiable.

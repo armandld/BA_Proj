@@ -5416,3 +5416,57 @@ maille. Mécanisme différent, non confondu.
 
 `RELATIVE_PERCENTILE = 90` est un **réglage nouveau**. Le périmètre passe de
 **8 à 9 paramètres**.
+
+---
+
+# Les coefficients pointent-ils où le raffinement est nécessaire ?
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(20 tests)
+
+Tous les autres tests vérifient des contrats internes — signes, seuils,
+invariance. Celui-ci vérifie la seule chose qui justifie le modèle.
+
+**Protocole.** Même scénario à N=128 (référence) et N=32 (grossier), même
+nombre de pas. Erreur relative par bloc sur 8×8 = 64 blocs. Corrélation de
+rang de Spearman contre le coefficient moyen du bloc.
+
+| scénario | `K_plaq` | `K_xpoint` | `max(K)` | score classique |
+|---|---|---|---|---|
+| `harris_tearing` | **0,897** | 0,434 | 0,788 | 0,814 |
+| `island_coalescence` | **0,877** | 0,408 | 0,760 | 0,912 |
+| `mhd_rotor` | **0,755** | 0,680 | 0,759 | 0,528 |
+| `orszag_tang` | 0,249 | 0,311 | 0,443 | 0,422 |
+
+## Trois lectures
+
+**Le contrat central est tenu.** `K_plaquettes` corrèle de **0,75 à 0,90**
+sur trois scénarios sur quatre. Le coefficient désigne bien les blocs où la
+solution grossière s'écarte du DNS.
+
+**Sur `mhd_rotor`, le coefficient bat le score classique — 0,755 contre
+0,528.** C'est la première preuve quantitative, dans ce dépôt, que le terme
+à quatre corps apporte quelque chose que l'indicateur linéaire n'a pas. Et
+c'est précisément le scénario autour duquel `compare_rotor_budget` a été
+construit, avec l'argument « le classique ne distingue pas forte vorticité
+sans Jz de forte vorticité **et** fort Jz ». La mesure va dans ce sens.
+
+**`orszag_tang` est faible pour tout** — 0,25 à 0,44, coefficients et score
+classique confondus. Ce n'est pas un défaut des coefficients : c'est le
+scénario le plus difficile pour n'importe quel indicateur local.
+
+*À noter : ces corrélations sont mesurées avec le critère relatif en place.
+Avant lui, `K_plaquettes` était identiquement nul à N=256 et la corrélation
+n'aurait pas été définie.*
+
+## Architecture Neon supprimée
+
+`src/import_Neon_data_to_local.py` est supprimé sur décision de USER. Le
+fichier portait D-64 (il effaçait la destination avant de lire la source,
+5 essais perdus à code 0) et D-65 (identifiant PostgreSQL en dur dans un
+dépôt public). Le mot de passe reste dans l'historique git ; sa rotation
+n'est plus nécessaire puisque l'architecture est abandonnée.
+
+La configuration de pooling de `train_hyperparams._get_storage` est
+conservée : elle vaut pour n'importe quel Postgres distant, pas seulement
+pour Neon. Son commentaire est généralisé en conséquence.

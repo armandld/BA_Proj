@@ -371,7 +371,8 @@ def create_argus(scenario_config):
 def _get_storage(phase_config):
     """Return the Optuna storage backend for this phase."""
     if DISTRIBUTED:
-        # Neon's pooler drops idle SSL connections after a few minutes.
+        # Un pooler Postgres distant ferme les connexions SSL inactives
+        # au bout de quelques minutes.
         # Each trial can take 10-20 min of computation, so the DB connection
         # goes stale.  pool_pre_ping=True makes SQLAlchemy test the connection
         # before each use and reconnect if needed.  pool_recycle=300 proactively
