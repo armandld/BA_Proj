@@ -80,8 +80,15 @@ def load(results_dir, fold, mode="unseen-ic"):
         return {"fold": fold, "underpowered": True, "partial": True,
                 "raw": d}
     if d.get("status") == "total_abort":
+        # D-90 : `h4_unseen_conditions.py:512` ecrit `total_abort_arms`
+        # (PLURIEL, une liste -- un fold peut voir les deux bras avorter).
+        # Ce fichier lisait `total_abort_arm` (singulier) : la cle
+        # n'existe jamais dans l'artefact, `.get()` rend systematiquement
+        # `None`, et le message affiche « the None arm aborted... » au
+        # lieu du nom reel -- un repli silencieux qui affiche une valeur
+        # plausible et fausse plutot que de lever.
         return {"fold": fold, "underpowered": True, "total_abort": True,
-                "total_abort_arm": d.get("total_abort_arm"), "raw": d}
+                "total_abort_arms": d.get("total_abort_arms", []), "raw": d}
     if d["arms"]["qhas"].get("n_runs", 1) < 2:
         return {"fold": fold, "underpowered": True, "raw": d}
     return {"fold": fold, "underpowered": False, "raw": d}
@@ -185,7 +192,7 @@ def main():
         if r is None:
             missing.append(f)
         elif r.get("total_abort"):
-            dead.append((f, r["total_abort_arm"]))
+            dead.append((f, r["total_abort_arms"]))
         elif r["underpowered"]:
             weak.append(f)
         else:
@@ -200,9 +207,10 @@ def main():
         print(f"  single-run only (cannot separate from D11 noise): "
               f"{', '.join(weak)}")
     if dead:
-        for f, arm in dead:
-            print(f"  {f}: NO OPERATING POINT — the {arm} arm aborted on "
-                  f"every draw of one condition; no ratio is defined, and "
+        for f, arms in dead:
+            arm_txt = ", ".join(arms) if arms else "unknown"
+            print(f"  {f}: NO OPERATING POINT — the {arm_txt} arm(s) aborted "
+                  f"on every draw of one condition; no ratio is defined, and "
                   f"this fold cannot be scored for or against transfer")
     if not recs:
         raise SystemExit("no fold with repeated draws; run t22 --repeats 5")
