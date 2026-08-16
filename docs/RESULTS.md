@@ -103,8 +103,19 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 |---|---|---|---|
 | D-48 | `mode="hardware"` s'exécutait sur un **simulateur** sans le signaler | `Session(AerSimulator)` **acceptée** → **lève** à la construction | `pytest tests/pipeline/test_v1_partial_pockets.py -k mode` |
 
-*(D-39 à D-47 sont sur la branche `vigil/…` de l'agent, en attente de
-fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
+*(La branche `vigil/…` de l'agent numérote en continu et va **au-delà de
+D-115**. Cette note disait « la numérotation reprend à D-48 » : c'était
+vrai à l'écriture et faux ensuite — D-68 et D-69 ont été attribués des
+deux côtés à des défauts différents, collision rattrapée en renumérotant
+les miens en **D-116 / D-117**. Avant d'attribuer un numéro, lire le
+maximum réel des **deux** branches :*
+
+```bash
+git fetch origin 'refs/heads/vigil/*:refs/remotes/origin/vigil/*'
+git show origin/vigil/<branche>:docs/RESULTS.md | grep -o 'D-[0-9]\+' \
+  | sort -t- -k2 -n -u | tail -1
+```
+*)*
 
 **Les fichiers jamais audités de V1** — le dernier chantier avant la réoptimisation
 
@@ -115,6 +126,8 @@ fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
 | D-10 | `compare_rotor_budget` levait `TypeError` à l'étape 4/5, et ses défauts demandaient **69 Go** | n'a **jamais** tourné → tourne, garde posée avant le DNS | `pytest tests/pipeline/test_compare_rotor_budget.py` |
 | D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
 | D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
+| D-116 | deux lanceurs de `scripts/` pointaient **entièrement** dans le vide ; `generate_figures_v1.sh` sautait ses 17 scripts et rendait **`Succeeded: 0  Failed: 0`, code 0** | campagne verte sans **aucune** figure → échec si `SUCCEEDED == 0`, chemins repointés, `ROOT_DIR` corrigé | `pytest tests/lint/test_scripts_point_somewhere.py` |
+| D-117 | `RELATIVE_PERCENTILE` était une constante **en dur** sur le chemin de décision, alors que c'est elle qui ranime les termes à quatre corps à N=256 | non entraînable → 9ᵉ paramètre de `SEARCH_SPACE`, câblé de bout en bout | `pytest tests/pipeline/test_relative_percentile_is_trainable.py` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -5884,7 +5897,7 @@ porte `|B|` de `K_xpoint`, sa normalisation en dx⁴, et le seuil absolu en
 | point X magnétique | 5,092e−06 | 5,437e−01 |
 | uniforme (contrôle) | 0 | 0 |
 
-**Le rapport magnétique / fluide passe de 27 500 à 0,44.** Les deux canaux
+**Le rapport fluide / magnétique passe de 27 500 à 0,44** — soit un rapport magnétique/fluide de **2,29**. *(Les deux sens ont circulé dans mes messages ; c'est bien 0,501 pour le fluide et 1,148 pour le magnétique.)* Les deux canaux
 sont désormais du même ordre — la seule chose qu'on puisse exiger de deux
 instabilités de même nature.
 
@@ -6085,3 +6098,296 @@ La relance écrivait sur `h0_optimiser_equivalence_N96_dim3.npz`, l'artefact
 qui porte D-53. Il est **restauré** ; la nouvelle mesure vit sous
 `..._hamiltonien_corrige.npz`. Les deux doivent coexister : ils mesurent
 deux hamiltoniens différents, et c'est leur comparaison qui a de la valeur.
+
+---
+
+# Le défaut principal n'est PAS l'optimiseur — c'est l'hamiltonien
+
+**Artefact.** `results/h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`
+
+La colonne que je n'avais pas exploitée : le **F1 contre la vérité terrain**
+du raffinement. Elle renverse la lecture.
+
+| solveur | trouve l'optimum | écart d'énergie | **F1 vs vérité** |
+|---|---|---|---|
+| `exhaustive` (certifié) | 1,000 | 0,0000 | **0,386** |
+| `sa_warm` | 0,833 | 0,0044 | **0,378** |
+| `sa` | 0,500 | 0,0101 | 0,393 |
+| `greedy` | 0,833 | 0,0131 | 0,424 |
+| `classical_init` | 0,500 | 0,6345 | 0,460 |
+| `qaoa_p1` | 0,083 | 1,0416 | **0,481** |
+
+**Corrélation de rang entre l'écart à l'optimum et le F1 : ρ = +0,970,
+p = 0,0001, sur 8 solveurs.**
+
+## Ce que ça veut dire
+
+Un ρ **positif** signifie : **plus on s'écarte de l'optimum de H, meilleure
+est la décision de raffinement.**
+
+- Le solveur qui résout H **parfaitement** (`exhaustive`, écart 0) obtient
+  un F1 de **0,386** — parmi les pires.
+- Le solveur qui le résout **le plus mal** (`qaoa_p1`, écart 1,04) obtient
+  le **meilleur** F1, 0,481.
+- Le recuit simulé warm-start, presque parfait sur H (écart 0,0044), est le
+  **pire** de tous : F1 = 0,378.
+
+**L'état fondamental de cet hamiltonien n'est pas la bonne décision AMR.**
+Le résoudre exactement rend la décision *moins* bonne que ne pas le résoudre
+du tout.
+
+## Conséquence sur la lecture de H0
+
+Le QAOA est mauvais optimiseur — c'est établi, 0,083 contre 0,500 pour sa
+propre initialisation. Mais **ce n'est pas le défaut dominant**, et le
+corriger irait dans la mauvaise direction :
+
+**un meilleur algorithme quantique trouverait mieux l'optimum, donc
+produirait une plus mauvaise décision.** `sa_warm` le démontre — il optimise
+presque parfaitement et décide le plus mal de tous.
+
+Le QAOA obtient son F1 supérieur **par accident** : il dévie tellement de
+l'optimum qu'il reste près de son initialisation classique, qui est
+meilleure que l'optimum.
+
+## Ce qui reste à conclure, et ce qui ne l'est pas
+
+**Établi ici** : à `dim = 3`, sur un hamiltonien complet et dimensionnellement
+cohérent, mieux résoudre H dégrade la décision (ρ = +0,970, p = 1e−4).
+
+**Non établi** : que ce soit vrai à toute taille, ou pour toute famille de
+coefficients. C'est **12 instantanés, une résolution, un jeu
+d'hyperparamètres non réoptimisés**. Le F1 absolu reste bas partout
+(0,378–0,481), ce qui limite ce qu'on peut lire dans les écarts.
+
+**Ce que ça change pour la réoptimisation** : elle devient *le* test
+décisif. Si des hyperparamètres existent pour lesquels l'optimum de H
+coïncide avec la bonne décision, ρ doit changer de signe. Sinon, c'est la
+forme de l'hamiltonien qu'il faut revoir, pas ses réglages.
+
+---
+
+# Contrôle avant vol des coefficients
+
+**Commande.** `python study/common/preflight_coefficients.py`
+(code de sortie non nul si un contrôle échoue)
+
+Une campagne coûte ~224 h CPU. Ce module vérifie en quelques minutes que
+les coefficients font leur travail **avant** qu'on les règle — parce qu'un
+coefficient qui ne détecte pas ne se corrige pas par un réglage.
+
+| contrôle | mesure | référence |
+|---|---|---|
+| **spécificité** | vortex → `K_plaq` 0,501, `K_xpoint` 0 ; uniforme → tout à 0 | — |
+| **équilibre** | magnétique / fluide = **2,29** | dans [0,1 ; 10] |
+| **vivant** | à N=256 : `K_plaq` 0,243, `K_xpoint` 0,981 | non nuls |
+| **pertinence** | ρ(coefficient, erreur réelle) = **0,798** | > 0,6 |
+| **coïncidence** | `study/` vs circuit : **5,33e−15** | < 1e−9 |
+
+**Verdict : les cinq passent.** Les coefficients font leur travail.
+
+## Deux références corrigées en montant ce contrôle
+
+**Le rapport d'équilibre.** J'ai écrit « 0,44 » ; c'est le rapport
+**fluide/magnétique**. Le contrôle calcule magnétique/fluide, soit **2,29**.
+Même mesure — 0,501 pour le fluide, 1,148 pour le magnétique — libellé
+inversé d'un message à l'autre. Corrigé ici et dans l'entrée précédente.
+
+**La corrélation avec l'erreur réelle.** Elle vaut **0,798**, pas 0,897.
+Le 0,897 datait d'**avant** l'harmonisation des portes `g` : réveiller le
+canal magnétique a légèrement abaissé la corrélation de `K_plaquettes`
+seul. Remesuré, non ajusté — les deux valeurs sont consignées.
+
+---
+
+# ρ(E_gap, F1) : le critère de décision de la campagne — option A
+
+**Commande.** `python study/common/rho_gap_f1.py results/h0_*.npz`
+
+Post-traitement : **ne tourne pas dans la boucle d'entraînement**. La
+campagne n'en porte donc aucun risque.
+
+| artefact | ρ | p | verdict |
+|---|---|---|---|
+| `..._dim3_hamiltonien_corrige` | **+0,870** | 0,0023 | l'optimum de H n'est pas la bonne décision |
+| `..._N256_dim2` | **−1,000** | 0,0000 | l'optimum de H est la bonne décision |
+
+## Deux corrections à ce que j'ai annoncé
+
+**ρ vaut +0,870, pas +0,970.** Mon calcul manuel excluait `qaoa_shots_p3` ;
+le module prend les 9 solveurs. Le signe et la conclusion sont inchangés,
+la valeur non.
+
+**Le signe s'inverse à `dim = 2`.** Je présentais « mieux résoudre H dégrade
+la décision » comme un fait général — il ne l'est pas.
+
+Mais `dim = 2` est **dégénéré**, et c'est D-45/D-47 : `classical_init` y a un
+écart de **0,0000** à l'optimum, c'est-à-dire que la règle classique *est*
+déjà l'optimum. Tous les solveurs qui l'atteignent ont le même masque, et
+les F1 tiennent dans 0,367–0,389. Un ρ = −1 sur un problème où il n'y a rien
+à départager ne prouve rien.
+
+**La lecture honnête** : ρ = +0,870 vaut à `dim = 3`, la seule taille à la
+fois certifiée et non dégénérée. À `dim = 2`, la question n'a pas de sens.
+
+## Le critère pré-enregistré
+
+- **ρ passe négatif à `dim = 3`** → il existe des hyperparamètres pour
+  lesquels l'optimum de H est la bonne décision. Le réglage suffisait.
+- **ρ reste positif** → c'est la **forme** de l'hamiltonien qu'il faut
+  revoir. Aucune campagne Optuna ne trouvera cela.
+
+À enregistrer avant de lancer, pas après.
+
+
+# D-117 — le percentile du critère relatif devient entraînable
+
+`min(absolu, percentile)` est ce qui rend `K_plaquettes` et `K_xpoint`
+non nuls à la résolution d'entraînement. Le seuil de maille est **absolu**
+et croît en `1/dx²` : à N=256 aucune cellule ne l'atteignait, et le terme
+à quatre corps valait zéro sur les **quatre** scénarios. Le percentile qui
+prend le relais valait `90.0`, écrit en dur — la dernière constante du
+chemin de décision que rien ne justifiait de fixer à la main.
+
+## Ce que le paramètre pilote, mesuré
+
+Réseau de tourbillons périodique, N=64, Re=Rm=800, hyperparamètres
+déployés, à travers la **vraie** `compute_coefficients` :
+
+| `relative_percentile` | `K_plaquettes` non nuls | `\|K\|` max |
+|---|---|---|
+| 50 | 2040 / 4096 | 5,879e+00 |
+| 90 | 404 / 4096 | 4,254e-01 |
+| 99 | 32 / 4096 | 1,726e-02 |
+
+Deux ordres de grandeur d'amplitude entre les bornes de l'espace de
+recherche : ce n'est pas un réglage cosmétique, c'est le nombre de patchs
+que l'AMR ouvrira.
+
+**Bornes.** 50 = la médiane, la moitié des cellules passent le seuil, ce
+qui sature l'AMR. 99 = une cellule sur cent, sous le grain d'un patch
+(`min_patch_size = 6`, soit 36 cellules) : au-delà, le critère relatif ne
+désignerait plus assez de cellules pour former un patch et redeviendrait
+le seuil absolu par un autre chemin.
+
+**L'invariant qui rend le paramètre sûr** : dès qu'une cellule franchit le
+critère physique, le comportement d'origine est conservé à l'identique,
+quelle que soit la valeur entraînée. Le percentile ne *remplace* jamais la
+physique, il ne prend le relais que là où elle est muette.
+
+## Ce qu'il coûte — et pourquoi le balayage à quatre points ne prouve rien
+
+Avant de louer des cœurs il fallait savoir si la borne basse est chère :
+un percentile bas désigne plus de cellules, donc plus de patchs, donc
+plus de circuits. Mesuré à la configuration **réelle** (N=256, Harris
+tearing, par les fonctions du module d'entraînement lui-même) :
+
+| `relative_percentile` | mur | perte |
+|---|---|---|
+| 50 | 517,8 s | 0,236030 |
+| 75 | 545,8 s | 0,245103 |
+| 90 | 553,2 s | 0,245455 |
+| 99 | 605,5 s | 0,273969 |
+
+**La direction supposée était fausse** : c'est le percentile *haut* qui
+coûte le plus. Mécanisme plausible — un percentile haut éparpille
+quelques cellules isolées, qui pavent en beaucoup de petits patchs, là où
+un percentile bas désigne des régions contiguës qui fusionnent en peu de
+grands patchs.
+
+Mais ce tableau se lit avec son **plancher de bruit**, sans quoi il ne
+vaut rien. Quatre répétitions au **même** percentile (90) :
+
+    pertes  0,253605  0,256327  0,247726  0,276318
+    moyenne 0,258494   écart-type 0,010750   étendue 0,028592
+    mur     moyenne 580,0 s      étendue 47,7 s
+
+Le bras QAOA est non déterministe, et cela suffit à effacer l'essentiel
+du balayage :
+
+- **la tendance sur la perte n'est pas établie.** p50 contre p90 vaut
+  0,0095 d'écart, soit ~0,6 σ d'une différence entre deux tirages
+  uniques : dans le bruit. Seul p50 contre p99 (0,038) atteint ~2,5 σ —
+  suggestif, pas concluant à n=1 ;
+- **la tendance sur le coût non plus.** L'étendue mur *à percentile
+  fixe* vaut 47,7 s contre 87,7 s *entre* percentiles ;
+- le p90 tiré une fois dans le balayage donne 0,2455, quand quatre
+  répétitions de la **même** configuration donnent 0,2585 : 1,2 σ entre
+  une configuration et elle-même.
+
+**Ce qui survit**, et c'est la seule chose dont la campagne avait besoin :
+l'effet du neuvième paramètre sur le coût vaut **au plus ~17 %**, et
+probablement moins. Il ne déplace pas l'estimation de la réoptimisation.
+
+**Ce qui ne survit pas** : l'idée que l'optimum se trouverait à la borne
+basse, donc que la borne choisirait à la place des données. Rien ne le
+montre. Une comparaison à un tirage n'est pas lisible sur ce bras — c'est
+précisément ce qu'une campagne Optuna de 180+ essais moyenne, et ce
+qu'un balayage à quatre points ne peut pas faire.
+
+## Le câblage, qui est l'essentiel
+
+L'ajouter à `SEARCH_SPACE` sans le câbler aurait été **D-31 à l'identique**
+— un paramètre optimisé que rien ne lit, payé au prix plein de la campagne.
+C'est d'ailleurs ce qui a failli arriver : la première insertion a atterri
+dans le bloc **mort** de `pipeline.py` (un littéral triple-quote qui
+contient un `hp.get` par paramètre). Le nom n'était alors défini nulle
+part, et `PhysicalMapper(relative_percentile=…)` aurait levé `NameError`
+au premier essai.
+
+Deux gardes ferment ce trou :
+
+1. un balayage AST qui exige un `hp.get` **vivant** pour *chaque* nom de
+   `SEARCH_SPACE` — l'AST ne descend pas dans les littéraux de chaîne,
+   donc le bloc mort ne peut pas satisfaire le test ;
+2. une mutation mesurée à travers `compute_coefficients`, qui échoue si
+   `__init__` rangeait la valeur dans un attribut que personne ne lit.
+
+`_effective_crit` passe de `@classmethod` à méthode d'instance ; `None`
+retient la constante de classe, donc le comportement d'avant. La graine de
+phase 1 vaut `90.0`, pour que le premier essai reproduise exactement
+l'état actuel et que tout écart mesuré ensuite vienne de l'exploration.
+
+Le périmètre passe de **8 à 9**. `PERIMETRE_8` devient `PERIMETRE_9` ; les
+neuf tests tombés sur cette ligne sont le comportement voulu — c'est la
+raison d'être de cette constante.
+
+# D-116 — deux lanceurs qui ne lançaient rien
+
+Trouvé en exécutant la recette de `CLAUDE.md`.
+
+`scripts/run_study_v3.sh` : les **quinze** chemins qu'il nommait pointaient
+dans le vide (`study/v3/`, `study/results/`, `tests/v3/`,
+`study/phase11_upper_bound.py`) — le script datait de deux réorganisations
+en arrière. En prime `ROOT_DIR` remontait de deux crans (`../..`) alors que
+le script est descendu dans `scripts/`, un seul cran sous la racine : il
+désignait le **parent du dépôt**. Sa seule étape qui « passait » était un
+`pytest` sur `tests/v3/`, vide : *no tests ran*, code de retour **0**.
+
+`scripts/generate_figures_v1.sh` portait la version la plus dangereuse.
+`FIGURES_CODE_DIR` pointait sur un `figures_code/` disparu — les 17
+scripts vivent dans `figures/v1_legacy/` — et la boucle dit :
+
+```bash
+if [[ ! -f "$script_path" ]]; then log "  SKIP: $script"; continue; fi
+```
+
+Les 17 scripts tombaient donc dans la branche `SKIP`, le lanceur annonçait
+**`Succeeded: 0  Failed: 0`** et rendait **0**. Une campagne de figures
+verte qui ne produit aucune figure. Un compteur `SKIPPED` et une clause
+d'échec sur `SUCCEEDED == 0` ferment le trou.
+
+Sa sortie n'écrase plus `best_hyperparams.json` — **entrée gelée** de
+l'étude, le seul dossier qu'aucune commande ne reproduit — mais écrit
+`best_hyperparams.regenerated.json` à côté. Un lanceur de figures qui
+réécrit les hyperparamètres changerait la science en produisant une image.
+
+`CLAUDE.md` portait trois erreurs de fait, corrigées : le module à
+réutiliser (`phase11_upper_bound.py` n'existe pas ; les cinq fonctions
+sont dans `h2b_ceiling_random_split.py`), l'ordinal du test de
+non-régression (**quatrième**, pas troisième) et son état attendu
+(**164 OK / 16 DIFF / 0 MISSING**, pas `0 DIFF`).
+
+C'est le piège n° 3 de `COUVERTURE`, « balayage vide », appliqué aux
+**lanceurs** plutôt qu'aux tests : un lanceur qui ne lance rien ressemble
+exactement à un lanceur qui a tout lancé.

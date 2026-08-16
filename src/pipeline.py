@@ -400,6 +400,12 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     gamma_mag   = hp.get('gamma_mag', _defaults['gamma_mag'])
     kappa       = hp.get('kappa', _defaults['kappa'])
     w_z_frac    = hp.get('w_z_frac', _defaults['w_z_frac'])
+
+    # Percentile du critere relatif : quand aucune cellule n'atteint le
+    # seuil absolu de Reynolds-maille, le seuil effectif devient ce
+    # percentile du signal. `None` => PhysicalMapper.RELATIVE_PERCENTILE.
+    relative_percentile = hp.get('relative_percentile',
+                                 _defaults.get('relative_percentile', None))
     
 
     # ── Physical constants derived from simulation ──
@@ -454,6 +460,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 beta_curl=beta_curl,
                 beta_xpoint=beta_xpoint,
                 w_z_frac=w_z_frac,
+                relative_percentile=relative_percentile,
             )
 
         # Create VQA runtime ONCE — reused across all hybrid steps and VQA calls.

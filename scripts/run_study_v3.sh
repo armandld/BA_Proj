@@ -2,39 +2,36 @@
 # ============================================================
 # V3 Task 10 - Orchestration (protocole v3, section 5.4)
 #
-# NE FONCTIONNE PLUS (D-49, docs/DEFAUTS.md). Ce script invoque neuf
-# generateurs (t1_feature_selection.py, t1b_cone_curve.py,
-# t4_blocked_split.py, t5_v1_psi_loso.py, t6_dynamic_gt.py,
-# t7_horizon.py, t9_prop2_check.py, phase11_upper_bound.py,
-# phase11b_loso.py) qui n'existent plus dans ce depot, sous un chemin
-# `study/v3/` qui n'existe plus non plus (voir CLAUDE.md pour
-# l'arborescence actuelle : les generateurs restants vivent dans
-# `study/<hypothese>/`, la table dans `study/common/aggregate_v3.py`).
-# Le garde-fou ci-dessous echoue avant meme d'atteindre ce probleme,
-# `study/results/` n'existant pas non plus (les donnees sont a la
-# racine, `results/`).
-#
-# Conserve pour l'historique de la commande documentee au protocole ;
-# ne pas debugger les chemins en pensant le remettre en etat sans lire
-# D-49 d'abord — la question qu'il pose (reconstruire les 9 generateurs,
-# ou archiver ce script et aggregate_v3.py) n'est pas tranchee.
-#
-# `bash study/v3/run_study_v3.sh --all` regenere chaque chiffre
+# `bash scripts/run_study_v3.sh --all` regenere chaque chiffre
 # titre depuis le commit tague, puis produit la table maitresse
-# (statut OK/DIFF/MISSING par ligne contre le baseline V3 ARCHIVE,
-# pas contre docs/RESULTS.md — voir D-49).
+# auto-verifiante (study/common/aggregate_v3.py, statut
+# OK/DIFF/MISSING par ligne contre les references publiees).
 #
-# Usage (documentaire seulement) :
-#   bash study/v3/run_study_v3.sh --all          # tout (~30-40 min)
-#   bash study/v3/run_study_v3.sh --skip-t6      # sans le pilote t6
-#   bash study/v3/run_study_v3.sh --only t4 t9   # sous-ensemble
+# ETAT : ce lanceur datait de deux reorganisations en arriere. Les
+# quinze chemins qu'il nommait pointaient TOUS dans le vide
+# (study/v3/, study/results/, tests/v3/), et sa seule etape qui
+# "passait" etait un pytest sur un dossier vide -- un balayage vide
+# qui rendait 0. Chemins repointes, ROOT_DIR corrige.
+# tests/lint/test_scripts_point_somewhere.py (D-116) interdit la recidive.
+#
+# Pre-requis : results/ contient les donnees phases 1-2
+# (dns_*.npz + patches_*.npz). La regeneration des DONNEES n'est
+# pas incluse (heures de DNS) : utiliser study/pipeline/dns_extension.py.
+#
+# Usage :
+#   bash scripts/run_study_v3.sh --all          # tout (~30-40 min)
+#   bash scripts/run_study_v3.sh --skip-t6      # sans le pilote t6
+#   bash scripts/run_study_v3.sh --only t4 t9   # sous-ensemble
 # ============================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RESULTS_DIR="$ROOT_DIR/study/results"
-LOG_DIR="$ROOT_DIR/logs/v3"
+# `..` et non `../..` : le script vivait dans study/v3/, il vit dans
+# scripts/. Laisse a `../..`, ROOT_DIR designait le PARENT du depot et
+# chaque chemin construit dessous etait faux.
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RESULTS_DIR="$ROOT_DIR/results"
+LOG_DIR="$ROOT_DIR/results/logs_v3"
 STAMP="$(date +'%Y-%m-%d_%H-%M-%S')"
 mkdir -p "$LOG_DIR"
 
@@ -73,33 +70,33 @@ run_step() {
 
 # ---- garde : donnees phases 1-2 presentes ----
 if [[ ! -f "$RESULTS_DIR/dns_orszag_tang_Re400_N${N}.npz" ]]; then
-    echo "ERROR: study/results/ has no phase-1 DNS data at N=$N."
-    echo "Generate it first (hours): python study/v3/dns_extension.py"
+    echo "ERROR: results/ has no phase-1 DNS data at N=$N."
+    echo "Generate it first (hours): python study/pipeline/dns_extension.py"
     exit 1
 fi
 
 echo "V3 regeneration run — N=$N dim=$DIM  (commit $(git -C "$ROOT_DIR" rev-parse --short HEAD))"
 
 # ---- gate : suite de tests ----
-want tests && run_step tests python -m pytest "$ROOT_DIR/tests/v3" -q
+want tests && run_step tests python -m pytest "$ROOT_DIR/tests/study" -q
 
 # ---- task 0 : regression V2 (scripts V2 intouches) ----
-want task0 && run_step task0a python "$ROOT_DIR/study/phase11_upper_bound.py" --N "$N" --dim "$DIM"
-want task0 && run_step task0b python "$ROOT_DIR/study/phase11b_loso.py" --N "$N" --dim "$DIM"
+want task0 && run_step task0a python "$ROOT_DIR/study/h2b_prediction/h2b_ceiling_random_split.py" --N "$N" --dim "$DIM"
+want task0 && run_step task0b python "$ROOT_DIR/study/h2b_prediction/h2b_loso_transfer.py" --N "$N" --dim "$DIM"
 
 # ---- taches v3 (t2/t3 sont des bibliotheques : validees par pytest) ----
-want t1  && run_step t1  python "$ROOT_DIR/study/v3/t1_feature_selection.py" --N "$N" --dim "$DIM"
-want t1b && run_step t1b python "$ROOT_DIR/study/v3/t1b_cone_curve.py" --N "$N" --dim "$DIM"
-want t4  && run_step t4  python "$ROOT_DIR/study/v3/t4_blocked_split.py" --N "$N" --dim "$DIM"
-want t5  && run_step t5  python "$ROOT_DIR/study/v3/t5_v1_psi_loso.py" --N "$N" --dim "$DIM"
+want t1  && run_step t1  python "$ROOT_DIR/study/h2b_prediction/h2b_feature_selection.py" --N "$N" --dim "$DIM"
+want t1b && run_step t1b python "$ROOT_DIR/study/h2b_prediction/h2b_neighbour_cone_curve.py" --N "$N" --dim "$DIM"
+want t4  && run_step t4  python "$ROOT_DIR/study/h2b_prediction/h2b_blocked_split.py" --N "$N" --dim "$DIM"
+want t5  && run_step t5  python "$ROOT_DIR/study/h2b_prediction/h2b_psi_feature_loso.py" --N "$N" --dim "$DIM"
 if ! $SKIP_T6 && want t6; then
-    run_step t6 python "$ROOT_DIR/study/v3/t6_dynamic_gt.py"   # pilote
+    run_step t6 python "$ROOT_DIR/study/h2b_prediction/h2b_dynamic_ground_truth.py"   # pilote
 fi
-want t7 && run_step t7 python "$ROOT_DIR/study/v3/t7_horizon.py" --N "$N" --dim "$DIM"
-want t9 && run_step t9 python "$ROOT_DIR/study/v3/t9_prop2_check.py" --N "$N" --dim 2 4
+want t7 && run_step t7 python "$ROOT_DIR/study/h2b_prediction/h2b_prediction_horizon.py" --N "$N" --dim "$DIM"
+want t9 && run_step t9 python "$ROOT_DIR/study/h3_representation/h3_locality_proposition.py" --N "$N" --dim 2 4
 
 # ---- table maitresse auto-verifiante ----
-want t10 && run_step t10 python "$ROOT_DIR/study/v3/aggregate_v3.py" --N "$N" --dim "$DIM" --strict
+want t10 && run_step t10 python "$ROOT_DIR/study/common/aggregate_v3.py" --N "$N" --dim "$DIM" --strict
 
 echo ""
-echo "V3 regeneration complete. Master table: study/results/v3_master_table.md"
+echo "V3 regeneration complete. Master table: results/v3_master_table.md"

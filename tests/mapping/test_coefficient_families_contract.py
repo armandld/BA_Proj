@@ -485,13 +485,20 @@ def test_l_absolu_l_emporte_quand_il_tire():
 
     Sans cette clause, le critere relatif remplacerait la physique au lieu
     de la completer.
+
+    `_effective_crit` etait une `@classmethod` ; elle est devenue une
+    methode d'instance quand `relative_percentile` est entre dans
+    `SEARCH_SPACE` — le percentile est desormais un reglage par mappeur,
+    pas une constante de classe. L'invariant teste ici n'a pas change :
+    il doit tenir pour TOUTE valeur entrainee, d'ou le balayage.
     """
     from Simulation.HamiltParams import PhysicalMapper as PM
     signal = np.array([0.1, 0.5, 2.0, 10.0])      # le max franchit 1.0
-    assert PM._effective_crit(signal, 1.0) == 1.0
+    for p in (50.0, PM.RELATIVE_PERCENTILE, 99.0):
+        assert PM(relative_percentile=p)._effective_crit(signal, 1.0) == 1.0
 
     signal_faible = np.array([0.01, 0.02, 0.05])   # aucun ne franchit
-    eff = PM._effective_crit(signal_faible, 1.0)
+    eff = PM()._effective_crit(signal_faible, 1.0)
     assert eff < 1.0, f"le relatif n'a pas pris le relais : {eff}"
     assert eff == pytest.approx(
         np.percentile(signal_faible, PM.RELATIVE_PERCENTILE))

@@ -78,7 +78,7 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
   les arguments CLI complets dans ses `.npz`.
 - Réutiliser avant de réécrire : importer `build_dataset`,
   `extract_features_2d`, `make_model`, `fit_eval`, `best_threshold_f1` depuis
-  `study/h2b_prediction/phase11_upper_bound.py` ; importer le solveur, ne
+  `study/h2b_prediction/h2b_ceiling_random_split.py` ; importer le solveur, ne
   jamais réimplémenter la numérique.
 - Commentaires en français acceptés ; identifiants de code en anglais.
 
@@ -88,10 +88,14 @@ results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 python -m pytest tests/ -q -m "not slow"        # tout, hors mesures longues
 python -m pytest tests/solver -q                # un sous-système
 python -m pytest tests/ -q -m slow              # ordre de convergence, ~10 min
-python study/common/aggregate_master_table.py                          # 180 lignes,
-                                                                 # 0 DIFF, 0 MISSING
+python study/common/aggregate_master_table.py   # 180 lignes,
+                                                # 164 OK / 16 DIFF / 0 MISSING
 ```
 
-Le troisième est le test de non-régression du dépôt : il recalcule chaque
-nombre publié à partir de son artefact. S'il reste à 180 / 0 / 0 après un
-déplacement de fichiers, le déplacement n'a rien cassé.
+Le **quatrième** est le test de non-régression du dépôt : il recalcule
+chaque nombre publié à partir de son artefact. Son état attendu n'est pas
+`0 DIFF` : les **16 DIFF** sont les nombres déplacés par les corrections
+de `src/`, à republier après la réoptimisation (voir `docs/RESULTS.md`).
+Ce qui compte est que les trois compteurs ne bougent pas : s'il reste à
+**180 / 164 / 16 / 0** après un déplacement de fichiers, le déplacement
+n'a rien cassé. Un `MISSING` non nul, lui, est toujours une régression.
