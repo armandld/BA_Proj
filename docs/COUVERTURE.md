@@ -2168,6 +2168,24 @@ un site en révèle souvent un autre. Vérifier un candidat « surestimé » n'e
 pas du temps perdu — c'est la question « et qui couvre le comportement,
 alors ? », et c'est elle qui a rendu D-120.
 
+**Passe du 16 août (nuit) — un 5ᵉ site vérifié, et c'est un défaut.**
+`test_hyperparams_provenance_break.py:171-172`
+(`test_the_pipeline_falls_back_to_a_hard_coded_sigma`, qui fait
+`assert "_defaults.get('sigma', 0.05)" in src`) — l'un des 27 du tri
+automatisé. Vérifié par mutation A (`pipeline.py:394`, `0.05` → `0.07`,
+reste du fichier intact) : suite des deux fichiers concernés rejouée,
+**1 failed, 21 passed, 1 xfailed** — le seul test qui rougit est celui qui
+lit le source. Contrairement à D-120, **rien d'autre ne couvre ce
+comportement** :
+`test_the_pipeline_shouts_when_sigma_is_missing` (`test_train_hyperparams_smoke.py`)
+vérifie `sigma_source == "default"` et l'avertissement, jamais la valeur
+numérique de `result["sigma"]`. **Verdict : confirmé, pas surestimé** —
+D-121, voir `RESULTS.md`. Corrigé en ajoutant un test comportemental qui
+appelle `pipeline()` et lit `result["sigma"]` directement ; le test
+source-text reste en place (il n'est pas faux, seulement fragile face à
+une réécriture équivalente — un 4ᵉ cas de cette forme dans ce dépôt,
+non vérifié celui-ci faute de mutation B).
+
 **Calibrage à retenir avant la prochaine passe** : sur cet échantillon de 3,
 le tri automatisé s'est trompé ou a exagéré 2 fois sur 3. Ce n'est pas le
 taux du dépôt (`CODE_REVIEW.md` : la majorité du code est juste, un défaut
@@ -2177,9 +2195,10 @@ défaut. Chaque site restant doit repasser par la vérification par mutation
 avant d'entrer dans `DEFAUTS.md`, pas seulement par la lecture qui l'a
 signalé.
 
-**24 sites restent non vérifiés** (sur les 27 signalés par le tri, candidats
-seulement — ne pas les citer comme défauts sans les rejouer) :
-`test_hyperparams_provenance_break.py:171,211` ·
+**23 sites restent non vérifiés** (sur les 27 signalés par le tri, candidats
+seulement — ne pas les citer comme défauts sans les rejouer ; `:171` de la
+première entrée est sorti de cette liste, vérifié et devenu D-121) :
+`test_hyperparams_provenance_break.py:211` ·
 `test_objective_and_estimators_analytic.py:574` ·
 `test_h0_panel_resume.py:97,108,199` ·
 `test_provenance.py:108` ·
@@ -2196,6 +2215,17 @@ seulement — ne pas les citer comme défauts sans les rejouer) :
 total sur 64), 58 sites restent sans verdict fiable — 24 avec un tri qui
 demande confirmation, 34 jamais relus. Terrain neuf de la prochaine passe,
 dans cet ordre : d'abord confirmer ou infirmer les 24, puis lire les 34.
+
+**Ce décompte n'a pas été retenu à jour aux deux passes suivantes** (16 août
+soir — D-120 — et 16 août nuit — D-121) : chacune ajoute un site vérifié,
+sans qu'on ait recompté ici plutôt que de risquer un chiffre approximatif —
+le « compte de tête inexact » que ce document reproche déjà à `RESULTS.md`
+ailleurs. Ce qui est sûr, compté à cette passe : la liste des 24 candidats
+issus du tri n'en porte plus que **23** (`:171` de
+`test_hyperparams_provenance_break.py` en est sorti, devenu D-121) ; les deux
+autres sites vérifiés depuis (D-120, et les 3 + 3 d'avant) ne viennent pas de
+cette liste. Un recompte complet de `grep -rn "\.read()" tests/` avant la
+prochaine passe dirait le total exact plutôt que de le supposer inchangé.
 
 ---
 

@@ -202,3 +202,41 @@ def test_the_pipeline_shouts_when_sigma_is_missing(tiny_campaign):
 
     assert result["sigma_source"] == "default"
     assert [w for w in caught if "sigma absent" in str(w.message)]
+
+
+def test_the_defaulted_sigma_value_is_exactly_0_05(tiny_campaign):
+    """D-121 — la valeur du repli n'etait verifiee nulle part par un test
+    COMPORTEMENTAL : `test_the_pipeline_falls_back_to_a_hard_coded_sigma`
+    (`test_hyperparams_provenance_break.py`) ne lit que le SOURCE
+    (`assert "_defaults.get('sigma', 0.05)" in src`), et le test au-dessus
+    ne verifie que `sigma_source == "default"`, jamais la valeur.
+
+    Mutation verifiee : `pipeline.py:394`, `0.05` change en `0.07` (le
+    reste du fichier intact). Suite rejouee sur les deux fichiers de repli
+    de sigma : SEUL le test qui lit le source rougit (`1 failed, 21 passed,
+    1 xfailed`) — ce test-ci, absent avant D-121, n'existait pas pour le
+    voir passer au travers. Une reecriture EQUIVALENTE de la ligne 394 (la
+    meme valeur 0.05 rendue par une variable nommee plutot que le litteral)
+    aurait, elle, fait rougir a tort le test source sans qu'aucun defaut
+    n'existe — troisieme defaut de coherence de cette forme dans ce depot.
+    Ce test verifie desormais la valeur REELLEMENT utilisee, pas le texte
+    qui pretend la produire.
+    """
+    from pipeline import pipeline
+    scenarios, traces = tiny_campaign
+    key, config = scenarios[0]
+    hyperparams = {n: (lo + hi) / 2 for n, (lo, hi, _) in TH.SEARCH_SPACE.items()
+                   if n != "sigma"}
+    dns_trace, hot_start = traces[key]
+
+    result = pipeline(
+        N=config["N"], VQA_N=TH.VQA_N_TRAINING, T_MAX=config["T_MAX"],
+        DT=config["DT"], HYBRID=int(config["HYBRID_DT"] / config["DT"]),
+        verbose=False, argus=TH.create_argus(config),
+        hyperparams=hyperparams, lambda_cost=TH.LAMBDA_COST_SOFT,
+        trial=None, dns_trace=dns_trace, hot_start_state=hot_start,
+        max_depth_override=config["max_depth_override"],
+        scenario=config["scenario"], return_details=True)
+
+    assert result["sigma_source"] == "default"
+    assert result["sigma"] == pytest.approx(0.05)
