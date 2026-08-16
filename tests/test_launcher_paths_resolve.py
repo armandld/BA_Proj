@@ -125,6 +125,16 @@ _INVOKE = re.compile(
     r"\"?([\w./${}-]+\.(?:py|sh))"
 )
 
+# Les lanceurs passent aussi par une fonction d'enrobage — `run_phase 2
+# study/pipeline/hard_patch_labels.py`, `run_step t1 python …` — ou le
+# `python` est DANS la fonction, pas sur la ligne. Sans ce second motif, les
+# 5 etages de `run_study_v2_phases.sh` ne sont vus par personne : le balayage
+# passe au vert sans les avoir regardes.
+_WRAPPED = re.compile(
+    r"run_(?:phase|step|stage)\s+\S+\s+(?:python3?\s+(?:-m\s+pytest\s+)?)?"
+    r"\"?([\w./${}-]+\.(?:py|sh))"
+)
+
 
 def _launchers():
     out = []
@@ -144,7 +154,10 @@ def _invocations(path):
                                        errors="replace"), start=1):
         if line.lstrip().startswith("#"):
             continue
-        for cwd, target in _INVOKE.findall(line):
+        trouves = [(cwd, tgt) for cwd, tgt in _INVOKE.findall(line)]
+        trouves += [("", tgt) for tgt in _WRAPPED.findall(line)
+                    if not any(tgt == t for _, t in trouves)]
+        for cwd, target in trouves:
             cwd = _expand(cwd, variables)
             target = _expand(target, variables)
             if "$" in target or "$" in cwd or target.startswith("-"):
@@ -166,7 +179,7 @@ _ALL = [(lch, tgt, ln)
 def test_the_sweep_is_not_empty():
     """Un balayage vide sort en vert et ne prouve rien."""
     assert len(_launchers()) >= 6, f"{len(_launchers())} lanceurs trouves"
-    assert len(_ALL) >= 30, f"{len(_ALL)} invocations trouvees"
+    assert len(_ALL) >= 45, f"{len(_ALL)} invocations trouvees"
 
 
 @pytest.mark.parametrize(
