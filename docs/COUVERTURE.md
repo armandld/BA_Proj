@@ -2140,6 +2140,34 @@ comportement réel, garder le texte source intact, relancer le test) :
 | `test_solver_guards_and_objective.py:138` (avertissement sigma D-22) | suspect | **surestimé** — le comportement réel (`sigma_source == "default"`) est déjà vérifié fonctionnellement par `test_train_hyperparams_smoke.py:203` ; seule la spécificité « lève bien un `RuntimeWarning` » (par opposition à seulement l'enregistrer) reste non exécutée — un écart réel mais mineur, pas la régression silencieuse annoncée |
 | `test_t28_t29_labels_and_ci.py:118` (seuil dégénéré) | suspect | **confirmé** — `relabel()` n'était jamais appelé ; un garde désactivé (`if False:`) laissait le texte du message en code mort et le test restait vert. Corrigé, mesuré, verrouillé → **D-115** ci-dessus |
 
+**Passe du 16 août (soir) — un 4ᵉ site vérifié, et ce qu'il a fait tomber
+à côté.** `test_vqa_chain_contracts.py:349`
+(`test_beta_is_bounded_and_the_bound_is_the_documented_one`, qui fait
+`assert "beta_max = np.pi / (4 * reps)" in src`) — il ne figurait pas dans
+les 27 du tri, il vient d'une lecture directe. Vérifié par mutation, dans
+les deux sens :
+
+| mutation | ce que fait le test qui lit le source |
+|---|---|
+| **A** — borne réelle cassée (`bounds_beta` et contraintes à ±10), texte source intact | reste **VERT** — il ne voit pas ce qu'il prétend garder |
+| **B** — réécriture **équivalente** `np.pi / 4 / reps`, valeur bit à bit identique | passe **VERT → ROUGE** — faux rouge sur un changement voulu, le 3ᵉ de cette forme ici |
+
+**Verdict : « surestimé », pas défaut** — le comportement est couvert
+ailleurs, par `test_the_three_supported_optimizers_keep_the_bound`
+(`test_runtime_contracts.py`), qui est bien comportemental.
+
+**Mais la mutation A a montré autre chose, et c'est D-120** : ce garde
+comportemental ne rougissait que pour **Powell et L-BFGS-B**. Sur **COBYLA**
+— 317 des 320 appels de la suite, et l'optimiseur de la campagne
+d'entraînement — il passait **avec les contraintes entièrement retirées**.
+Son champ d'essai part à froid, où `rhobeg = 0.05` borne `beta` tout seul ;
+l'entrée qui SÉPARE est un warm start hors borne. Voir `RESULTS.md`.
+
+**La leçon, qui vaut pour les 58 sites restants** : la mutation qui infirme
+un site en révèle souvent un autre. Vérifier un candidat « surestimé » n'est
+pas du temps perdu — c'est la question « et qui couvre le comportement,
+alors ? », et c'est elle qui a rendu D-120.
+
 **Calibrage à retenir avant la prochaine passe** : sur cet échantillon de 3,
 le tri automatisé s'est trompé ou a exagéré 2 fois sur 3. Ce n'est pas le
 taux du dépôt (`CODE_REVIEW.md` : la majorité du code est juste, un défaut
