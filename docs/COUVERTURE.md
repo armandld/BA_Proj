@@ -1697,6 +1697,75 @@ cette raison ; écrit ici pour que sa réanimation ne passe pas inaperçue.
 
 ---
 
+## `figures/v1_legacy/fig9_synthetic_unit_tests.py`, `fig11_hamiltonian_design.py`, `fig3_spatial_coherence.py` — lus en entier
+
+Aucun défaut neuf. `fig9` (D-97 corrigé, D-98 rapporté — déviation écrite
+dans la docstring de `pixel_prf`, comme `VIGIL.md` l'exige), `fig11` (D-100
+rapporté, écrit à côté du calcul concerné) et `fig3` (D-99 corrigé, les
+deux métriques rendues périodiques) ne portent rien d'autre après lecture
+complète des quatre questions — boucles principales, générateurs de champ,
+annotations de figure compris. **Axes empruntés** : les 4 scénarios
+canoniques (KH, Tearing, Rotor, OT pour fig11/fig3 ; les 4 motifs
+synthétiques propres à fig9), bras Q-HAS et classique, N=256.
+
+---
+
+## `figures/v1_legacy/fig15_decision_flip_analysis.py` — lu en entier, D-102
+
+Le bloc CONCLUSION citait en dur `σ=0.023 (trained)` — le `TRAINED_SIGMA`
+de `study/pipeline/config.py`, un module que ce fichier n'importe pas.
+Le repli réellement utilisé par son propre `HamiltMapper`
+(`_hamilt_mapper_kwargs`, `fig_utils.py`) vaut 0,05, jamais 0,023 (`'sigma'`
+absent de `results/hyperparams/best_hyperparams.json`, D-22). Détail
+chiffré et correction dans `RESULTS.md` (D-102). Le reste du fichier — BFS
+instrumenté (D-96, déjà corrigé), les quatre panneaux, le résumé texte —
+ne porte rien d'autre. **Axes empruntés** : les 4 scénarios canoniques,
+branche `flip_rate < 0.05 et mean_ratio < 0.5` du texte de conclusion
+(celle qui portait le défaut) vérifiée par lecture directe du code, pas
+par exécution (campagne VQA complète, hors budget d'une relecture).
+
+---
+
+## `figures/v1_legacy/fig16_decision_landscape.py` — lu en entier, sain
+
+Sa propre copie de `instrumented_bfs` (D-96, déjà corrigée) est plus
+pauvre que celle de `fig15`/`fig17` (pas de `gt_error_max`, `sub_area`, ni
+décomposition ZZ) mais cohérente avec ce que `fig16` lui demande réellement
+— aucun champ manquant n'est lu plus loin. La docstring du module
+(« Reuses the instrumented_bfs() engine from fig15 ») est fausse au sens
+strict (copie locale, pas un import) mais ne porte sur aucune valeur
+calculée — hors périmètre de `VIGIL.md`, non corrigée. **Vérifié et trouvé
+sain** : seuil, diagonale, comptages de quadrants et accord
+`decision_qaoa`/`decision_classical` avec `should_refine` (moyenne du
+`gt_error_mean` du journal) cohérents entre eux.
+
+---
+
+## `figures/v1_legacy/fig17_topological_attribution.py` — lu en entier, un point NON mesuré
+
+Décomposition Hamiltonienne (ZZ/ZZZZ/X-point/Z) par cellule cohérente avec
+`fig15` (même halo D-96 déjà corrigé, mêmes conventions de depad). Rien
+trouvé de faux dans les quatre panneaux ni l'agrégation par quartile.
+
+**Soupçon écrit mais NON mesuré, à vérifier au prochain passage** :
+`CACHE_PATH = FIG_DIR/.fig17_cache.json`, et
+`use_cache = os.path.exists(CACHE_PATH) and '--recompute' not in sys.argv`
+— le cache ne porte aucune empreinte de configuration (pas de hash de
+`TRAINED_PARAMS`/`threshold_amr`/`N`). Si le fichier a déjà tourné une fois
+puis que les hyperparamètres déployés changent (campagne D-22), une
+relecture réutiliserait un `decision_log` dont `decision_classical`/
+`decision_qaoa` ont été calculés avec l'ANCIEN `threshold_amr`, alors que
+l'en-tête du log imprime le seuil COURANT (`f"N={N}, threshold=
+{threshold:.4f}"`) — deux grandeurs qui devraient coïncider (question 4)
+et ne le feraient plus. **Non mesuré** : aucun `.fig17_cache.json` n'existe
+dans ce dépôt (le script n'a jamais tourné jusqu'au bout ici), donc rien à
+comparer avant/après pour l'instant. Ne pas le déclarer défaut avant
+mesure — juste écrit pour que la prochaine passe qui fait tourner `fig17`
+la première fois sache où regarder si elle le refait tourner une seconde
+fois après un changement d'hyperparamètres.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
