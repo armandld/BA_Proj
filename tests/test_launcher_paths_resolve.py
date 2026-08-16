@@ -47,34 +47,23 @@ _ROOT = _repo_root()
 # Chemins connus pour ne plus exister, avec leur raison. Une exemption sans
 # raison se fait oublier ; une exemption perimee doit crier (test plus bas).
 #
-# Les chemins sont donnes TELS QUE LE LANCEUR LES CALCULE — pour
-# `scripts/run_study_v3.sh` cela inclut son `../`, qui est lui-meme mesure et
-# volontairement NON corrige : son en-tete dit « ne pas debugger les chemins
-# en pensant le remettre en etat sans lire D-49 d'abord ». Un gel documente ne
-# se corrige pas au passage.
-_EXEMPTIONS = {
-    # D-49, entree ouverte : les 9 generateurs v3 n'existent plus sous aucun
-    # chemin. Leur sort (archiver le module, ou les reconstruire) est une
-    # decision de USER, pas une correction a faire ici.
-    "../study/v3/t1_feature_selection.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t1b_cone_curve.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t4_blocked_split.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t5_v1_psi_loso.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t6_dynamic_gt.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t7_horizon.py": "D-49 — generateur v3 supprime",
-    "../study/v3/t9_prop2_check.py": "D-49 — generateur v3 supprime",
-    # Celui-ci n'est pas invoque mais IMPRIME par un `echo` de conseil
-    # (run_study_v3.sh:80) : meme cause, meme decision en attente.
-    "study/v3/dns_extension.py":
-        "D-49 — cite dans un message d'aide, generateur v3 supprime",
-    "../study/v3/aggregate_v3.py":
-        "D-49 — le chemin reel est `study/common/aggregate_v3.py` ; le "
-        "lanceur porte deja l'avertissement",
-    "../study/phase11_upper_bound.py":
-        "D-49 — generateur v3 supprime (chemin reel : "
-        "`study/h2b_prediction/phase11_upper_bound.py`, autre module)",
-    "../study/phase11b_loso.py": "D-49 — generateur v3 supprime",
-}
+# SEUIL PERIME, REMESURE (D-111, section « remesure ») — la liste est VIDE
+# depuis la fusion `766d289` de la branche vive.
+# Elle portait 11 entrees, toutes des cibles de `scripts/run_study_v3.sh`
+# tenues pour mortes par D-49 (« les 9 generateurs v3 n'existent plus sous
+# aucun chemin »). D-116, sur la branche vive, a repointe ce lanceur : les
+# generateurs existent, RENOMMES, dans `study/h2b_prediction/`
+# (t1_feature_selection -> h2b_feature_selection, t4_blocked_split ->
+# h2b_blocked_split, …) — la meme table de renommage que D-76 avait deja
+# etablie pour `run_study_v2*.sh`. Mesure, sur ce fichier, meme commande
+# (`pytest tests/test_launcher_paths_resolve.py -q`) :
+#
+#   avant (bff6bd3) : 45 invocations balayees, 11 exemptions, 11/11 invoquees
+#   apres (766d289) : 79 invocations balayees,  0 exemption,  0 cible morte
+#
+# La liste reste en place, vide : elle est le point d'accroche du jour ou un
+# lanceur redesignera une cible morte pour une raison decidee.
+_EXEMPTIONS = {}
 
 # Variables de chemin, LUES dans le lanceur au lieu d'etre recopiees ici.
 # Une table ecrite a la main resterait juste le jour ou le lanceur change de
@@ -213,32 +202,57 @@ def test_run_tests_reaches_every_one_of_its_seventeen_stages():
         "run_tests.sh ne peut pas atteindre ces etages : " + str(manquants))
 
 
-def test_the_undecided_remainder_of_D111_stays_written_where_it_lives():
-    """Une deviation connue mais non consignee *la ou elle vit* se fait
-    recorriger par erreur.
+def test_the_figure_launcher_never_writes_over_the_frozen_hyperparams():
+    """Ce qui RESTE de D-111 apres que D-117 a tranche le reste.
 
-    D-111 corrige le `ROOT_DIR` de `scripts/generate_figures_v1.sh`, et
-    s'arrete la : trois cibles (`figures_code/`, `Train_results/`, le
-    `best_hyperparams.json` racine) n'existent plus sous aucune racine, et les
-    rebrancher est une DECISION — la derniere ecraserait une entree gelee.
-    Ce test verifie que la note le disant reste dans le fichier.
+    D-111 laissait trois cibles en suspens (`figures_code/`, `Train_results/`,
+    `best_hyperparams.json`) parce que les rebrancher etait une DECISION.
+    D-117 l'a prise, et bien : les deux premieres pointent desormais vers
+    `figures/v1_legacy/` et `results/hyperparams/optuna_studies/`, et la
+    troisieme — la seule qui portait un risque — ecrit dans un fichier
+    `.regenerated.json` distinct.
+
+    Ce qui n'a pas change, c'est la RAISON : `results/hyperparams/` est la
+    seule entree du depot que `CLAUDE.md` declare gelee et non reproductible
+    par une commande (son `PROVENANCE.md`, et D-22). La deviation vit donc
+    toujours, et se garde ici — sur le COMPORTEMENT du lanceur, pas sur le
+    texte de sa note (D-114).
+
+    Sur quelle entree ce test echoue
+    --------------------------------
+    Sur un `--output` du lanceur repointe vers le fichier gele, quelle que
+    soit la mise en forme de la ligne. Verifie en editant `--output` de
+    `scripts/generate_figures_v1.sh` : VERT -> ROUGE.
     """
-    txt = open(os.path.join(_ROOT, "scripts", "generate_figures_v1.sh"),
-               encoding="utf-8").read()
-    assert "D-111" in txt, "la note de D-111 a disparu du lanceur"
-    for cible in ("figures_code/", "Train_results/", "best_hyperparams.json"):
-        assert cible in txt, f"la note ne mentionne plus {cible}"
-    # Et la mesure qui la motive tient toujours : ces cibles n'existent pas.
-    for cible in ("figures_code", "Train_results", "best_hyperparams.json"):
-        assert not os.path.exists(os.path.join(_ROOT, cible)), (
-            f"{cible} existe de nouveau a la racine : la note de D-111 est "
-            "perimee, la retirer et rebrancher le lanceur")
+    path = os.path.join(_ROOT, "scripts", "generate_figures_v1.sh")
+    txt = open(path, encoding="utf-8").read()
+    variables = _launcher_vars(path)
+
+    sorties = [_expand(m.group(1), variables)
+               for m in re.finditer(r'--output\s+"([^"]+)"', txt)]
+    assert sorties, ("aucun `--output` lu dans le lanceur : balayage vide, "
+                     "le test ne prouve rien")
+
+    gele = os.path.normpath(
+        os.path.join(_ROOT, "results", "hyperparams", "best_hyperparams.json"))
+    for cible in sorties:
+        assert os.path.normpath(cible) != gele, (
+            "le lanceur ecrirait par-dessus l'entree GELEE "
+            "results/hyperparams/best_hyperparams.json (PROVENANCE.md, D-22, "
+            "D-111) : ecrire a cote, comme le fait `.regenerated.json`")
 
 
 def test_each_exemption_still_names_a_real_dead_path():
     """Une exemption perimee est un mensonge qui dort. Le jour ou l'un de ces
-    chemins revient, l'exemption doit tomber avec lui."""
-    assert _EXEMPTIONS, "liste d'exemptions vide : retirer le test"
+    chemins revient, l'exemption doit tomber avec lui.
+
+    La liste est vide depuis la remesure en tete de fichier ;
+    le balayage, lui, ne doit jamais l'etre — une table vide et un balayage
+    vide se ressemblent, et l'un des deux est un defaut.
+    """
+    assert len(_ALL) >= 79, (
+        f"{len(_ALL)} invocations balayees, 79 mesurees a `766d289` : "
+        "le balayage a retreci, il ne prouve plus ce qu'il prouvait")
     for target, raison in _EXEMPTIONS.items():
         assert raison.strip(), f"{target} exempte sans raison"
         assert not os.path.exists(os.path.join(_ROOT, target)), (
