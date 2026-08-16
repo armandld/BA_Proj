@@ -2026,7 +2026,7 @@ Les sept axes de la fiche, et ce que la suite emprunte vraiment :
 | **warm start** | absent **315** | présent **5** | **les deux** |
 | **profondeur AMR** | `depth = 0` | `depth > 0` | **les deux** — le bras borné n'est atteint que par `depth > 0` |
 | **backend** | `state_vector` **320** | échantillonné **0** → **traversé depuis D-118** | `aer` **sain**, `estimator` **mort** — voir plus bas |
-| **optimiseur** | COBYLA **317** | Powell **1**, L-BFGS-B **1**, Nelder-Mead **1** | **déséquilibré** — un appel chacun |
+| **optimiseur** | COBYLA **317** | Powell **1**, L-BFGS-B **1**, Nelder-Mead **1** → **traversé depuis D-119** | budget **non comparable**, et l'entraînement n'emploie pas le défaut du CLI — voir plus bas |
 
 Et l'axe qui n'est pas dans la fiche mais que le code emprunte, `dim` :
 **2 → 367**, **3 → 133**, **4 → 3**, **8 → 0**. `VQA_DIMS = [2, 4, 8]` : la
@@ -2055,8 +2055,26 @@ paramètres de **0,989**. Comparer deux backends à paramètres libres, c'est
 mesurer cette dispersion, pas l'axe. Le seul geste qui sépare est de figer
 les paramètres.
 
-Reste **les optimiseurs autres que COBYLA** : c'est la file de la prochaine
-passe.
+**L'axe optimiseur est traversé depuis D-119** —
+`tests/quantum/test_optimiser_axis.py`, 6 cas. Deux faits, et une
+non-conclusion :
+
+| ce qui est mesuré | verdict |
+|---|---|
+| budget acheté par `K_opt` | **non comparable** — `options={'maxiter': K_opt}` vaut des **évaluations** pour COBYLA (20/20 à `K_opt = 20`, 6 fois sur 6) et des **itérations** pour les deux autres (L-BFGS-B 50–115, Powell 176–377). Intervalles disjoints, jusqu'à **×18,9** |
+| optimiseur de l'entraînement contre celui du déploiement | **ils diffèrent** — `create_argus` code `COBYLA` en dur, `--method` de `pipeline.py` a pour défaut `L-BFGS-B`, et **0 lanceur sur 8** ne le surcharge. Depuis `cf93ba3` |
+| ce que cela déplace sur la **décision** | **non décidable à cette dispersion** — écart des moyennes **0,0867** contre un bruit intra-méthode de **0,200** / **0,240**. Dit, et non conclu |
+
+**Ce que la traversée a appris sur la méthode.** Un axe « traversé » par un
+appel ne l'est pas : le seul appel Powell et le seul appel L-BFGS-B de la
+suite passaient tous deux, et aucun des deux ne comparait le budget consommé
+à celui de COBYLA. Compter les appels dit qu'un chemin est **exécuté** ;
+il faut encore demander ce que le chemin **promet** pour voir qu'il promet
+autre chose que son voisin.
+
+**Ce qui reste, mesuré et non traversé** : `dim = 8`, déclaré dans
+`VQA_DIMS = [2, 4, 8]` et emprunté par **0** test de la suite rapide
+(2 → 367, 3 → 133, 4 → 3, 8 → 0). C'est la file de la prochaine passe.
 
 **Ce que cette traversée ne pouvait pas voir, et pourquoi.** L'axe « bord
 borné » était traversé, et D-113 y est resté invisible : en déploiement
