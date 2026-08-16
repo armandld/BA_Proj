@@ -1938,6 +1938,51 @@ vrai, pas une relecture.
 
 ---
 
+## `scripts/` — module lu en entier (passe du 16 août)
+
+Terrain neuf : `scripts/` n'avait jamais été déclaré lu. 7 fichiers,
+1 443 lignes. **Quatre défauts**, tous poussés — D-108, D-109 (extraction
+des hyperparamètres), D-110, D-111 (racines et chemins des lanceurs).
+
+| ce qui a été vérifié | verdict |
+|---|---|
+| `extract_best_hyperparams.py::_detect_param_cols` — trois générations de noms (`beta_michelson` → `beta_grad` → `sigma`) | **D-108** — la branche détectait `param_beta_grad` puis renvoyait un jeu qui ne le contient pas ; 579 valeurs échantillonnées jetées. Corrigé, verrouillé |
+| `extract_best_hyperparams.py::_pick_best_for_scenario` / `_pick_best_for_group`, et ce que `main()` leur donne | **D-109** — l'optimum « par scénario » était choisi parmi les 3 meilleurs du score agrégé, sur 178 essais ; 6 entrées sur 8 changent. Corrigé, verrouillé |
+| `run_tests.sh`, ses 32 appels `run_stage` | **D-110** — 17 commandes d'étage sur 17 mortes depuis la réorganisation `17d983d` ; 0 test atteignable → 168. Corrigé, verrouillé |
+| `generate_figures_v1.sh`, `run_study_v3.sh` — racine du dépôt calculée | **D-111** — décalées d'un niveau, dans les deux sens. La première corrigée ; la seconde **volontairement non corrigée** (son en-tête gèle ses chemins jusqu'à ce que D-49 soit tranché), déviation écrite dans le fichier et vérifiée par un test |
+| `run_fold.sh`, `run_leak_free_campaign.sh` — mêmes racines | **sains** — déjà corrigés par D-71, et leur commentaire porte la mesure |
+| `run_study_v2_phases.sh`, `run_study_v2b.sh` — chemins et drapeaux | **sains** — déjà vérifiés fichier par fichier par D-76 ; les 32 invocations enrobées (`run_phase`) résolvent toutes, mesuré |
+| `extract_best_hyperparams.py` — sélection `default` / `best_per_phase` | **sains** — minimum du score agrégé, identique que la sélection porte sur le top-K ou sur tous les essais (mesuré avant/après D-109) |
+
+**Trois observations mesurées, non corrigées** (elles ne rendent aucune
+valeur fausse ; à trancher) :
+
+1. **L'ordre des clés du JSON d'hyperparamètres n'est pas reproductible** —
+   `all_scenarios = list(set(...))` : trois exécutions à `PYTHONHASHSEED`
+   différents, mêmes entrées, **trois sha256 différents**. Les valeurs sont
+   identiques ; seul un diff d'artefacts en souffre.
+2. **Un scénario ou un combo sans résultat s'écrit `null` sans un mot** —
+   sur la campagne vive, `scenario_combos.simple` est `null` aux deux bras
+   et 2 entrées de `per_scenario` sur 6 le sont aussi, sans que le script le
+   dise. Atténuation : `load_hyperparams(combo=…)` **lève** sur une entrée
+   nulle.
+3. **`run_study_v2b.sh` accepte une phase `9` qu'il ne sait pas exécuter** —
+   le parseur admet `[1-9]`, la carte des phases va de 1 à 8 puis 10, et le
+   `case` d'exécution n'a pas de branche `*)`. `bash scripts/run_study_v2b.sh 9`
+   affiche sa bannière, ne lance rien et sort **0**. Un étage vide doit crier.
+
+**Ce que ça ne couvre pas.** Les lanceurs ne sont pas *exécutés* par la
+suite — le nouveau `tests/test_launcher_paths_resolve.py` vérifie que chaque
+fichier invoqué existe (79 invocations, 7 lanceurs), pas que la campagne
+tourne. Les axes de la fiche (profondeur AMR, bord, bras, backend, warm
+start, hamiltonien nul, optimiseur) ne s'appliquent pas à `scripts/` : aucun
+de ces fichiers ne calcule de physique. `extract_best_hyperparams.py`, lui,
+a été traversé sur ses **trois** générations de campagne (`beta_michelson`,
+`beta_grad`, `sigma`) et sur les **deux** bras (quantique, classique) — c'est
+l'axe réel de ce module.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
