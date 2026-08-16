@@ -318,3 +318,74 @@ def test_the_three_supported_optimizers_keep_the_bound(method, recwarn):
                if "cannot handle" in str(w.message)
                or "Unknown solver options" in str(w.message)]
     assert not ignores, f"{method} : scipy ignore des reglages — {ignores}"
+
+
+@pytest.mark.parametrize("method", ["COBYLA", "Powell", "L-BFGS-B"])
+def test_the_bound_holds_even_when_the_warm_start_starts_outside_it(method):
+    """D-120 — le champ d'essai qui SEPARE, celui que le test au-dessus n'a pas.
+
+    `test_the_three_supported_optimizers_keep_the_bound` part a FROID. Or
+    a froid, `beta` est initialise a zero et `rhobeg = 0.05` maintient le
+    simplexe de COBYLA minuscule : il n'a aucune raison d'aller chercher la
+    borne, et n'y va pas. Mesure, contraintes de COBYLA ENTIEREMENT
+    retirees (`common['constraints']` supprime), depart a froid :
+
+        max|beta| rendu : 0,018 a 0,317   borne 0,3927   depassements 0/5
+        (K_opt = 40 comme K_opt = 200, 5 tirages chacun)
+
+    — et le test au-dessus passait **VERT**. Sur le bras qui porte 317 des
+    320 appels de la suite, il ne pouvait donc pas echouer. `VIGIL.md` :
+    « ecrire un test dont il ne sait pas dire sur quelle entree il
+    echouerait » est interdit ; le champ d'essai doit SEPARER les deux
+    hypotheses.
+
+    L'entree qui separe est un WARM START hors borne — et ce n'est pas un
+    cas de laboratoire : `warm_start_params` est file d'un pas au suivant
+    par la campagne, et `execute` ne le valide contre aucune borne.
+    Mesure, meme circuit, `warm_start_params` a `beta = 1,0` :
+
+        avec contraintes    : 0,3927  0,3927  0,3927    0/3 hors borne
+        sans contraintes    : 1,0817  0,9470  1,0369    3/3 hors borne
+
+    Le rappel a la borne est donc bien l'oeuvre des contraintes, et ce test
+    le mesure. `beta = 1,0` est exactement la valeur que le commentaire de
+    `execute` decrit comme catastrophique : elle tourne les qubits d'environ
+    60 degres et rabat P(|1>) vers 0,25, supprimant tout raffinement.
+
+    Sur quelle entree ce test echoue
+    --------------------------------
+    Sur la disparition des contraintes de COBYLA, ou des `bounds` de Powell
+    et L-BFGS-B. Verifie pour COBYLA : VERT -> ROUGE.
+    """
+    import warnings as _w
+
+    import numpy as np
+    from qiskit.quantum_info import SparsePauliOp
+    from VQA.execute import execute
+
+    reps = 2
+    beta_max = np.pi / (4 * reps)
+    qc, _, n = _tiny_circuit(reps=reps)
+    H_reel = SparsePauliOp.from_list(
+        [("Z" + "I" * (n - 1), -5.0), ("ZZ" + "I" * (n - 2), -5.0)])
+
+    #  beta bien au-dela de la borne, gamma quelconque dans son domaine.
+    warm = np.array([1.0] * reps + [0.5] * reps)
+    assert np.max(np.abs(warm[:reps])) > beta_max, (
+        "le warm start ne part pas hors borne : le test ne separe rien")
+
+    with _w.catch_warnings(record=True) as caught:
+        _w.simplefilter("always")
+        _, params = execute(qc, H_reel, "simulator", "state_vector", 64,
+                            reps, 40, 1e-3, 1.0, False, vqa_runtime=None,
+                            method=method, warm_start_params=warm.copy())
+
+    rendu = float(np.max(np.abs(params[:reps])))
+    assert rendu <= beta_max + 1e-6, (
+        f"{method} part d'un warm start a beta = 1,0 et rend "
+        f"max|beta| = {rendu:.4f}, hors de +/-{beta_max:.4f} : la borne du "
+        "mixeur n'est plus imposee sur le chemin du warm start")
+    ignores = [str(w.message) for w in caught
+               if "cannot handle" in str(w.message)
+               or "Unknown solver options" in str(w.message)]
+    assert not ignores, f"{method} : scipy ignore des reglages — {ignores}"
