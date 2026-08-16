@@ -111,8 +111,38 @@ def _extract_patch_gt(gt, y_s, y_e, x_s, x_e, N):
 def _agreement_by_depth(qa_patches, cl_patches, N):
     """Compute agreement rate between Q-HAS and classical by depth.
 
-    For each depth level, compare refined regions pixel-by-pixel.
-    Returns dict: depth → agreement_rate (0-1).
+    For each depth level, compare refined regions pixel-by-pixel **over the
+    pixels where a decision at that depth is actually taken** — the union of
+    the two arms' non-`coarse_leaf` patches at that depth. Where the union is
+    empty, no decision exists at that depth and the rate is `nan`, not 1.0.
+
+    Returns dict: depth → agreement_rate (0-1) ou `nan` si indéfini.
+
+    D-106. Le dénominateur était `N * N`, le domaine ENTIER. À une
+    profondeur donnée, presque aucun pixel ne porte de patch : tous ceux que
+    ni l'un ni l'autre bras ne touche comptaient comme un accord
+    (`False == False`). Mesuré (`init_harris_tearing`, N=256, 300 pas,
+    `target_dim=2`, `min_size=6`, `solve_max_depth=5`) :
+
+    | profondeur | patchs QA | patchs CL | union couverte | taux d'avant | taux d'après |
+    |---|---|---|---|---|---|
+    | 0 | 0 | 0 | 0,00 % | 100,00 % | indéfini |
+    | 1 | 0 | 0 | 0,00 % | 100,00 % | indéfini |
+    | 2 | 44 | 32 | 0,00 % | 100,00 % | indéfini |
+    | 3 | 38 | 64 | 0,00 % | 100,00 % | indéfini |
+    | 4 | **62** | **0** | 0,00 % | **100,00 %** | indéfini |
+    | 5 | 106 | 256 | 25,00 % | **85,35 %** | **41,41 %** |
+
+    Cinq profondeurs sur six annonçaient un accord PARFAIT en ne mesurant
+    rien — à la profondeur 4, le bras Q-HAS porte 62 patchs et le bras
+    classique zéro, le désaccord structurel maximal. À la seule profondeur
+    où quelque chose est mesuré, le taux passe de 85,35 % à 41,41 % : un
+    facteur 2, qui fait passer la barre de l'ambre (`> 85`) au rouge.
+
+    Second scénario, `init_orszag_tang`, N=256, 500 pas : profondeurs 0 à 4
+    toutes à 100,00 % avant (union vide, indéfinies après) ; profondeur 5,
+    union 6,25 % du domaine, **95,02 % → 20,31 %**. La barre y était
+    **verte** (`> 95`) pour un accord réel d'un cinquième.
     """
     max_depth_qa = max((p['depth'] for p in qa_patches), default=1)
     max_depth_cl = max((p['depth'] for p in cl_patches), default=1)
@@ -137,12 +167,45 @@ def _agreement_by_depth(qa_patches, cl_patches, N):
                 cols = np.arange(x_s, x_e) % N
                 cl_mask[np.ix_(rows, cols)] = True
 
-        # Agreement = fraction of pixels where both agree
-        total = N * N
-        agree = np.sum(qa_mask == cl_mask)
-        agreement[d] = agree / total if total > 0 else 1.0
+        # Agreement = fraction of DECIDED pixels where both agree.
+        # Le dénominateur est l'union des deux bras : hors d'elle, aucune
+        # décision n'est prise à cette profondeur, donc rien à accorder.
+        decided = qa_mask | cl_mask
+        n_decided = int(np.sum(decided))
+        if n_decided == 0:
+            agreement[d] = float('nan')
+        else:
+            agreement[d] = float(np.sum((qa_mask == cl_mask) & decided)) / n_decided
 
     return agreement
+
+
+def agreement_bars(all_agreement, depths):
+    """Moyenne/écart-type du taux d'accord par profondeur, et où il est indéfini.
+
+    Extrait de `main()` pour être testable sans rejouer la campagne — même
+    geste que `interpretation_message` (D-46) et `reading_message` (D-50).
+
+    D-106 : une profondeur sans aucune décision (union vide, ou aucun essai)
+    rendait **100 %**, par deux chemins — `np.sum(qa == cl) / (N*N)` sur deux
+    masques vides, et le repli `if all_agreement[d] else 100` du tracé. Elle
+    rend maintenant `nan`, et la barre correspondante n'est pas tracée.
+
+    Retourne (means, stds, undefined) : `means[i]` vaut `nan` là où
+    `undefined[i]` est vrai.
+    """
+    means, stds, undefined = [], [], []
+    for d in depths:
+        vals = [v for v in all_agreement.get(d, []) if v == v]   # écarte les nan
+        if not vals:
+            means.append(float('nan'))
+            stds.append(0.0)
+            undefined.append(True)
+        else:
+            means.append(float(np.mean(vals)) * 100)
+            stds.append(float(np.std(vals)) * 100)
+            undefined.append(False)
+    return means, stds, undefined
 
 
 def main():
@@ -235,18 +298,25 @@ def main():
         ax.set_xlabel('BFS Depth', fontsize=8)
 
         # ── Panel C: Agreement rate ──
-        # NOTE: High agreement (>90%) is expected — most BFS decisions are
-        # far from the threshold, so QAOA corrections don't flip them.
-        # Disagreements at the deepest level show where corrections matter.
+        # NOTE (D-106) : le taux porte sur les pixels où une décision est
+        # PRISE à cette profondeur (union des deux bras), pas sur le domaine
+        # entier. Une profondeur sans décision est laissée vide, pas à 100 %.
+        # L'ancienne note attribuait à la physique (« most BFS decisions are
+        # far from the threshold ») un accord qui venait du comptage des
+        # pixels que personne ne touche.
         ax = axes[row, 2]
-        agree_mean = [np.mean(all_agreement[d]) * 100 if all_agreement[d] else 100
-                      for d in depths]
-        agree_std = [np.std(all_agreement[d]) * 100 if all_agreement[d] else 0
-                     for d in depths]
-        bar_colors = ['#59A14F' if a > 95 else '#ECA63D' if a > 85 else '#D65F5F'
-                      for a in agree_mean]
-        bars = ax.bar(x, agree_mean, 0.6, yerr=agree_std,
+        agree_mean, agree_std, agree_undef = agreement_bars(all_agreement, depths)
+        drawn = [i for i, u in enumerate(agree_undef) if not u]
+        bar_colors = ['#59A14F' if agree_mean[i] > 95 else
+                      '#ECA63D' if agree_mean[i] > 85 else '#D65F5F'
+                      for i in drawn]
+        bars = ax.bar([x[i] for i in drawn], [agree_mean[i] for i in drawn], 0.6,
+                      yerr=[agree_std[i] for i in drawn],
                       color=bar_colors, alpha=0.8, capsize=2)
+        for i, u in enumerate(agree_undef):
+            if u:
+                ax.text(x[i], 2, 'n/d', ha='center', va='bottom', fontsize=6,
+                        color='gray', rotation=90)
         ax.axhline(y=100, color='gray', linestyle='--', alpha=0.3, lw=0.8)
         ax.set_ylabel('Agreement (%)', fontsize=8)
         ax.set_title(f'{sn}: Decision Agreement', fontsize=9)
@@ -255,13 +325,14 @@ def main():
         ax.set_ylim(0, 105)
         ax.tick_params(labelsize=7)
         ax.set_xlabel('BFS Depth', fontsize=8)
-        # Annotate lowest-agreement depth
-        min_agree = min(agree_mean)
-        min_idx = agree_mean.index(min_agree)
-        if min_agree < 100:
-            ax.text(x[min_idx], min_agree - 2, f'{min_agree:.0f}%',
-                    ha='center', va='top', fontsize=7, fontweight='bold',
-                    color='#D65F5F')
+        # Annotate lowest-agreement depth (parmi celles qui sont définies)
+        if drawn:
+            min_idx = min(drawn, key=lambda i: agree_mean[i])
+            min_agree = agree_mean[min_idx]
+            if min_agree < 100:
+                ax.text(x[min_idx], min_agree - 2, f'{min_agree:.0f}%',
+                        ha='center', va='top', fontsize=7, fontweight='bold',
+                        color='#D65F5F')
 
         # ── Panel D: Compute budget ──
         ax = axes[row, 3]
@@ -292,11 +363,13 @@ def main():
             cl_c = np.mean(all_cl_by_depth[d]['count'])
             qa_cap_v = np.mean(all_qa_by_depth[d]['captured']) * 100
             cl_cap_v = np.mean(all_cl_by_depth[d]['captured']) * 100
-            agr = np.mean(all_agreement[d]) * 100 if all_agreement[d] else 100
+            agr_i = depths.index(d)
+            agr = ("non défini (aucune décision à cette profondeur)"
+                   if agree_undef[agr_i] else f"{agree_mean[agr_i]:.1f}%")
             log_lines.append(
                 f"  Depth {d}: QA={qa_c:.1f} patches ({qa_cap_v:.1f}% GT), "
                 f"CL={cl_c:.1f} patches ({cl_cap_v:.1f}% GT), "
-                f"Agreement={agr:.1f}%"
+                f"Agreement={agr}"
             )
 
     fig.suptitle('Depth-Resolved AMR Analysis',
