@@ -128,6 +128,7 @@ git show origin/vigil/<branche>:docs/RESULTS.md | grep -o 'D-[0-9]\+' \
 | D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
 | D-116 | deux lanceurs de `scripts/` pointaient **entièrement** dans le vide ; `generate_figures_v1.sh` sautait ses 17 scripts et rendait **`Succeeded: 0  Failed: 0`, code 0** | campagne verte sans **aucune** figure → échec si `SUCCEEDED == 0`, chemins repointés, `ROOT_DIR` corrigé | `pytest tests/lint/test_scripts_point_somewhere.py` |
 | D-117 | `RELATIVE_PERCENTILE` était une constante **en dur** sur le chemin de décision, alors que c'est elle qui ranime les termes à quatre corps à N=256 | non entraînable → 9ᵉ paramètre de `SEARCH_SPACE`, câblé de bout en bout | `pytest tests/pipeline/test_relative_percentile_is_trainable.py` |
+| D-118 | **`--backend estimator`, offert par le CLI du pipeline, ne peut produire aucune décision : la distribution finale échoue à 100 %, à toute taille** — rapport seul, la correction est une décision | `Succeeded`… non : `ValueError: could not broadcast (0,20) into (1024,20)`, à 2 comme à 8 qubits logiques | `pytest tests/quantum/test_estimator_backend_axis.py` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
