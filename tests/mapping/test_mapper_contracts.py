@@ -18,6 +18,7 @@ section. Ils ne contredisent rien que V1 revendique : V1 est un modele. Ils
 contredisent ce que le code DIT de lui-meme dans ses propres docstrings.
 """
 
+import ast
 import os
 import sys
 
@@ -389,13 +390,68 @@ def test_a_score_outside_the_unit_interval_is_clipped_not_nan():
     assert np.all(np.isfinite(th))
 
 
+def _appels_map_to_angles(chemin):
+    """Les couples (score_h, score_v) de chaque appel a `map_to_angles`.
+
+    Lu dans l'AST, pas dans le texte : une recherche de chaine teste la mise
+    en forme du fichier, pas ce que l'appel passe. Voir D-114.
+    """
+    arbre = ast.parse(open(chemin, encoding="utf-8").read())
+    couples = []
+    for node in ast.walk(arbre):
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "map_to_angles"):
+            kw = {k.arg: ast.unparse(k.value) for k in node.keywords}
+            couples.append((node.lineno, kw.get("score_h"), kw.get("score_v")))
+    return couples
+
+
+#: Les modules de `src/` qui appellent `map_to_angles` sur le chemin deploye.
+_APPELANTS_DEPLOYES = ("Simulation.refinement", "compare_rotor_budget")
+
+
 def test_the_two_qubit_families_start_identical_in_deployment():
-    """Le pipeline passe la meme carte deux fois : theta_h == theta_v."""
-    from Simulation import refinement
-    src = open(refinement.__file__, encoding="utf-8").read()
-    assert "score_h=mini_score, score_v=mini_score" in src, (
-        "l'appelant ne passe plus la meme carte aux deux familles ; c'est un "
-        "changement de comportement scientifique, a consigner")
+    """Le pipeline passe la meme carte deux fois : theta_h == theta_v.
+
+    D-114 : ce garde cherchait la chaine
+    `"score_h=mini_score, score_v=mini_score"` dans le texte de
+    `refinement.py`. Trois mesures l'ont disqualifie :
+
+      * **faux vert** — la chaine laissee en COMMENTAIRE, l'appel reel change
+        en `score_v=np.zeros_like(mini_score)` : le garde reste VERT alors
+        que les deux familles ne recoivent plus la meme carte, exactement ce
+        qu'il promet d'empecher ;
+      * **faux rouge** — le meme appel coupe sur deux lignes : le garde passe
+        au ROUGE sans qu'aucun defaut n'existe ;
+      * **portee** — il ne lisait que `refinement.py`, alors que
+        `compare_rotor_budget.py` porte le meme invariant.
+
+    L'invariant compte : c'est lui qui rend inerte l'echange de familles de
+    D-113. S'il tombe, la contraction de plaquette du bord devient fausse.
+    """
+    import importlib
+
+    vus = 0
+    for nom in _APPELANTS_DEPLOYES:
+        module = importlib.import_module(nom)
+        for ligne, score_h, score_v in _appels_map_to_angles(module.__file__):
+            vus += 1
+            assert score_h is not None and score_v is not None, (
+                f"{nom}:{ligne} appelle map_to_angles en positionnel : le "
+                "garde ne peut plus lire ce qu'il passe")
+            assert score_h == score_v, (
+                f"{nom}:{ligne} ne passe plus la meme carte aux deux "
+                f"familles ({score_h!r} contre {score_v!r}) ; c'est un "
+                "changement de comportement scientifique, a consigner — et "
+                "il rend vivant l'echange de familles de D-113")
+
+    # Un balayage vide doit crier : si les appels disparaissent ou changent
+    # de forme, le garde ne doit pas passer au vert en n'ayant rien lu.
+    assert vus == 2, (
+        f"attendu 2 appels a map_to_angles sur le chemin deploye, {vus} vus "
+        f"dans {_APPELANTS_DEPLOYES} — le garde ne teste plus ce qu'il croit")
+
     s = AngleMapper.classical_score(_random_state(10))
     th_h, th_v, _, _ = AngleMapper().map_to_angles(s, s, None, None, None, 1.0)
     assert np.array_equal(th_h, th_v)
