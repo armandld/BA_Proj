@@ -5588,7 +5588,7 @@ porte `|B|` de `K_xpoint`, sa normalisation en dx⁴, et le seuil absolu en
 | point X magnétique | 5,092e−06 | 5,437e−01 |
 | uniforme (contrôle) | 0 | 0 |
 
-**Le rapport magnétique / fluide passe de 27 500 à 0,44.** Les deux canaux
+**Le rapport fluide / magnétique passe de 27 500 à 0,44** — soit un rapport magnétique/fluide de **2,29**. *(Les deux sens ont circulé dans mes messages ; c'est bien 0,501 pour le fluide et 1,148 pour le magnétique.)* Les deux canaux
 sont désormais du même ordre — la seule chose qu'on puisse exiger de deux
 instabilités de même nature.
 
@@ -5855,3 +5855,36 @@ d'hyperparamètres non réoptimisés**. Le F1 absolu reste bas partout
 décisif. Si des hyperparamètres existent pour lesquels l'optimum de H
 coïncide avec la bonne décision, ρ doit changer de signe. Sinon, c'est la
 forme de l'hamiltonien qu'il faut revoir, pas ses réglages.
+
+---
+
+# Contrôle avant vol des coefficients
+
+**Commande.** `python study/common/preflight_coefficients.py`
+(code de sortie non nul si un contrôle échoue)
+
+Une campagne coûte ~224 h CPU. Ce module vérifie en quelques minutes que
+les coefficients font leur travail **avant** qu'on les règle — parce qu'un
+coefficient qui ne détecte pas ne se corrige pas par un réglage.
+
+| contrôle | mesure | référence |
+|---|---|---|
+| **spécificité** | vortex → `K_plaq` 0,501, `K_xpoint` 0 ; uniforme → tout à 0 | — |
+| **équilibre** | magnétique / fluide = **2,29** | dans [0,1 ; 10] |
+| **vivant** | à N=256 : `K_plaq` 0,243, `K_xpoint` 0,981 | non nuls |
+| **pertinence** | ρ(coefficient, erreur réelle) = **0,798** | > 0,6 |
+| **coïncidence** | `study/` vs circuit : **5,33e−15** | < 1e−9 |
+
+**Verdict : les cinq passent.** Les coefficients font leur travail.
+
+## Deux références corrigées en montant ce contrôle
+
+**Le rapport d'équilibre.** J'ai écrit « 0,44 » ; c'est le rapport
+**fluide/magnétique**. Le contrôle calcule magnétique/fluide, soit **2,29**.
+Même mesure — 0,501 pour le fluide, 1,148 pour le magnétique — libellé
+inversé d'un message à l'autre. Corrigé ici et dans l'entrée précédente.
+
+**La corrélation avec l'erreur réelle.** Elle vaut **0,798**, pas 0,897.
+Le 0,897 datait d'**avant** l'harmonisation des portes `g` : réveiller le
+canal magnétique a légèrement abaissé la corrélation de `K_plaquettes`
+seul. Remesuré, non ajusté — les deux valeurs sont consignées.
