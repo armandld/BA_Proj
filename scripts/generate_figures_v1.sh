@@ -21,9 +21,35 @@ export LC_NUMERIC=C
 #   3. Saves output to figures/phase<N>/
 #
 # ============================================================
+#
+# ETAT MESURE (D-111, docs/RESULTS.md) — CE LANCEUR NE TOURNE PAS EN L'ETAT.
+#
+# `ROOT_DIR` est corrige ci-dessous (il designait `<depot>/scripts` depuis le
+# deplacement du script dans `scripts/`). Mais TROIS cibles n'existent plus
+# sous AUCUNE racine, et leur correspondance dans l'arborescence actuelle est
+# une DECISION, pas une correction de chemin — elle n'est donc pas faite ici :
+#
+#   figures_code/            -> le code des figures vit dans `figures/v1_legacy/`
+#   Train_results/           -> les campagnes vivent dans
+#                               `results/hyperparams/optuna_studies/`
+#   best_hyperparams.json    -> le fichier deploye est
+#                               `results/hyperparams/best_hyperparams.json`,
+#                               une entree GELEE (voir son PROVENANCE.md) :
+#                               le regenerer ici l'ecraserait
+#
+# Le dernier point est le motif de ne pas trancher tout seul : `--output` de
+# ce script pointe vers un fichier que le depot declare gele et non
+# reproductible. Voir D-22 et D-111 avant de rebrancher quoi que ce soit.
+#
+# `tests/test_launcher_paths_resolve.py` verifie que cette note reste ici.
+# ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$SCRIPT_DIR"
+# D-111 : ce lanceur vivait a la racine, ou `$SCRIPT_DIR` ETAIT la racine.
+# Depuis son deplacement dans `scripts/`, la meme ligne designait
+# `<depot>/scripts` : `$ROOT_DIR/scripts/extract_best_hyperparams.py`
+# resolvait en `scripts/scripts/...`. Un niveau au-dessus.
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIGURES_CODE_DIR="$ROOT_DIR/figures_code"
 TRAIN_RESULTS_DIR="$ROOT_DIR/Train_results"
 
