@@ -2033,6 +2033,35 @@ SÉPARE », appliquée aux axes eux-mêmes. À retenir pour la fiche.
 
 ---
 
+## Les tests qui lisent le SOURCE — sondage, pas balayage complet
+
+D-114 a montré un garde-fou de **comportement** écrit comme une recherche de
+chaîne. `VIGIL.md` interdit la forme, et elle s'est déjà produite trois fois
+ici. La question suivante s'impose : combien d'autres ?
+
+**Mesuré** : `grep -rn "\.read()" tests/ --include=*.py`, hors `tests/tools/`
+et hors `ast.parse` — **64 sites, 41 fichiers**.
+
+**Sondés à la main cette passe — 3 sites, et un seul est un défaut :**
+
+| site | verdict |
+|---|---|
+| `tests/mapping/test_mapper_contracts.py` — invariant `theta_h ≡ theta_v` | **D-114**, corrigé : gardait un COMPORTEMENT par une chaîne |
+| `tests/pipeline/test_amr_figure_axes.py` — `assert "D-68" in src` | **légitime** — garde une **déviation documentée**, ce que `VIGIL.md` exige explicitement (« un test vérifie que la mention y reste ») ; son propre docstring dit qu'il est le seul du fichier à lire le source et pourquoi |
+| `tests/quantum/test_qaoa_arm_is_sampled.py` — aucun `seed_*` dans `src/VQA/` | **légitime** — cherche l'ABSENCE d'un jeton dans un dossier entier ; aucune formulation de code ne le contourne, et un faux positif y coûte un examen, pas une conclusion fausse |
+
+**La distinction qui tranche, et qu'il faut appliquer aux 61 sites restants** :
+lire le source est **juste** quand l'objet du test EST le texte (une mention de
+déviation qui doit rester, un jeton qui ne doit pas apparaître) ; c'est **faux**
+quand l'objet est un comportement que le texte ne fait qu'indiquer. D-114 était
+du second type ; les deux autres sondés sont du premier.
+
+**Ce sondage n'est pas un balayage.** 61 sites n'ont pas été lus. Ils sont le
+terrain neuf le plus immédiat de la prochaine passe — et le tri ci-dessus donne
+le critère.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
