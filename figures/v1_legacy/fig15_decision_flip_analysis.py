@@ -368,6 +368,14 @@ if n_scenarios == 1:
     axes = axes[np.newaxis, :]
 
 threshold = TRAINED_PARAMS['threshold_amr']
+# D-102 — PAS 0,023 en dur : ce fichier construit son HamiltMapper via
+# `_hamilt_mapper_kwargs` (fig_utils.py), dont le repli sigma est 0,05, pas
+# 0,023. 0,023 est `TRAINED_SIGMA` de `study/pipeline/config.py`, une
+# constante d'un AUTRE module que ce fichier n'importe pas. Mesure :
+# `'sigma' not in TRAINED_PARAMS` (best_hyperparams.json ne l'echantillonne
+# pas, voir D-22) -> `TRAINED_PARAMS.get('sigma', 0.05)` vaut
+# inconditionnellement 0,05 ici, jamais 0,023.
+sigma_trained = TRAINED_PARAMS.get('sigma', 0.05)
 
 for row, (label, log) in enumerate(all_logs.items()):
     if not log:
@@ -589,9 +597,11 @@ if all_records:
         print("either far above or far below the threshold, leaving no room")
         print("for the QAOA to flip decisions.")
         print()
-        print("ROOT CAUSE: With σ=0.023 (trained), the uncertainty weighting")
-        print("  exp(-((s-thr)/σ)²) is essentially zero unless the classical")
-        print("  score is within ~0.05 of the threshold. Most cells have")
+        print(f"ROOT CAUSE: With σ={sigma_trained:.3f} (TRAINED_PARAMS fallback — "
+              f"'sigma' absent from")
+        print(f"  best_hyperparams.json, see D-22), the uncertainty weighting")
+        print(f"  exp(-((s-thr)/σ)²) is essentially zero unless the classical")
+        print(f"  score is within ~{2 * sigma_trained:.2f} of the threshold. Most cells have")
         print("  scores far from threshold → ZZ coupling is suppressed →")
         print("  QAOA ≈ classical.")
         print()
