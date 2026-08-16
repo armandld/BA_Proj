@@ -1764,10 +1764,13 @@ mesure — juste écrit pour que la prochaine passe qui fait tourner `fig17`
 la première fois sache où regarder si elle le refait tourner une seconde
 fois après un changement d'hyperparamètres.
 
-## `figures/v1_legacy/` — passe du 16 août, dernier lot : fig6, fig7, fig8, fig12, fig14
+## `figures/v1_legacy/` — passe du 16 août, dernier lot : fig5, fig6, fig7, fig8, fig12, fig14
 
-Cinq fichiers, tous **lus en entier**. Ils fermaient le module :
-`fig_utils`, fig0 à fig5, fig9 à fig13 et fig15 à fig17 l'étaient déjà.
+Six fichiers, tous **lus en entier**. Ils ferment le module :
+`fig_utils`, fig0 à fig4, fig9 à fig11, fig13 et fig15 à fig17 l'étaient
+déjà. `fig5` portait **D-101** (corrigé par une passe antérieure) mais
+n'avait jamais été déclaré lu en entier — il l'est ici, et il rendait
+**D-107**.
 
 **Axes traversés** (la fiche en liste sept) : profondeur AMR `depth = 0`
 **et** `depth > 0` (`solve_max_depth = 5` mesuré à N=256, `min_size=6`) ;
@@ -1780,11 +1783,32 @@ optimiseurs autres que COBYLA — aucun de ces fichiers ne les emprunte.
 
 | fichier | verdict |
 |---|---|
+| `fig5_qaoa_detailed_analysis.py` | **D-107** (corrigé) |
 | `fig6_statistical_validation.py` | **sain sur ses valeurs**, un contrat inexact |
 | `fig7_physical_fidelity.py` | **D-104** (corrigé) et **D-105** (corrigé) |
 | `fig8_hierarchical_comparison.py` | **sain sur ses valeurs**, deux calculs morts |
 | `fig12_depth_analysis.py` | **D-106** (corrigé) |
 | `fig14_boundary_correction.py` | **abandonné par décision**, code mort |
+
+### `fig5` — lu en entier, D-107, et deux notes
+
+Au-delà de D-107 (le `dx` de la profondeur 0), deux choses relevées et
+**non corrigées**, parce qu'aucune valeur n'en dépend :
+
+- deux définitions du « meilleur patch de profondeur 1 » cohabitent dans le
+  fichier — `analyze_hamiltonian_by_depth` le choisit par `gt[...].sum()`,
+  le bloc de tracé par `np.max(gt[...])`. Elles alimentent deux panneaux
+  différents, tous deux étiquetés « Depth 1 ». Pas un défaut de valeur,
+  mais deux étiquettes identiques pour deux sélections distinctes ;
+- la profondeur 0 est analysée **deux fois** (`analyze_hamiltonian_by_depth`
+  puis `analysis_d0`), donc deux appels QAOA complets sur les mêmes
+  entrées. Les énergies de coefficients, elles, sont déterministes à `dx`
+  fixé : les deux chemins coïncident sur ce qui est tracé.
+
+Vérifié sain : `_gt_quadrant_above_threshold` compare bien à `gt.mean()`
+(la correction de D-101 est en place et sa raison est écrite à côté du
+calcul) ; `_gt_error_share` normalise par la somme du domaine, pas par
+quadrant.
 
 ### `fig6` — la question posée, et la réponse mesurée contre moi
 
