@@ -115,13 +115,65 @@ def test_real_failure_exits_nonzero(tmp_path):
     assert "etudes en echec" in out.stderr
 
 
+def _delete_study_hits(root):
+    """Cherche `delete_study` dans les fichiers SUIVIS par git de `root`.
+
+    D-103 — PAS `grep -rn` sur le systeme de fichiers : ce depot est cense
+    tourner dans un environnement Python installe a cote (conda,
+    `environment.yaml`), mais rien ne l'empeche de vivre DANS `root` — le
+    propre `.gitignore` du depot anticipe `.venv/`, `.venv_vigil/`, `env/`.
+    `grep -rn` les traverse quand meme : `optuna` (dependance installee)
+    definit et appelle `delete_study` a une douzaine d'endroits dans son
+    propre code, tous remontes comme si le depot les avait ecrits. `git
+    grep` ne regarde que les fichiers SUIVIS — c'est exactement « le depot »
+    que ce test veut dire, et il ignore de lui-meme tout ce que `.gitignore`
+    exclut, sans avoir a enumerer les noms de dossiers un par un.
+    """
+    out = subprocess.run(
+        ["git", "grep", "-n", "delete_study", "--", "*.py"],
+        cwd=root, capture_output=True, text=True)
+    return out.stdout.splitlines()
+
+
 def test_deletion_happens_only_in_this_script():
     """Une seule porte, et elle est fermee : le verifier, pas le supposer."""
     root = _repo_root()
-    hits = subprocess.run(
-        ["grep", "-rn", "--include=*.py", "delete_study", root],
-        capture_output=True, text=True).stdout.splitlines()
+    hits = _delete_study_hits(root)
     hits = [h for h in hits
-            if "/tests/" not in h and "__pycache__" not in h]
+            if "/tests/" not in h and not h.startswith("tests/")
+            and "__pycache__" not in h]
     assert hits, "le motif ne correspond a rien : balayage vide"
+    assert all("import_Neon_data_to_local.py" in h for h in hits), hits
+
+
+def test_the_scan_ignores_untracked_local_directories(tmp_path):
+    """Epingle D-103 : un `.venv/` local ne doit plus faire echouer le test.
+
+    Avant la correction, `grep -rn` sur `root` remontait tout fichier
+    portant `delete_study` sur le disque, suivi ou non par git — y compris
+    une dependance installee localement dans `root/.venv/`. Reproduit ici
+    sur un mini-depot synthetique : un fichier SUIVI qui a le droit
+    d'appeler `delete_study`, et un fichier NON SUIVI (dans un `.venv/`
+    factice, comme le ferait une dependance installee sur place) qui ne
+    devrait jamais compter.
+    """
+    root = tmp_path
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+
+    tracked = root / "import_Neon_data_to_local.py"
+    tracked.write_text("optuna.delete_study(study_name='x')\n")
+    subprocess.run(["git", "add", "import_Neon_data_to_local.py"],
+                   cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=root, check=True)
+
+    venv_pkg = root / ".venv" / "site-packages" / "optuna_stub.py"
+    venv_pkg.parent.mkdir(parents=True)
+    venv_pkg.write_text("def delete_study(): ...\n")
+
+    hits = _delete_study_hits(root)
+    assert hits, "le fichier suivi doit toujours etre trouve"
+    assert all(".venv" not in h for h in hits), (
+        f"le .venv non suivi ne doit jamais apparaitre : {hits}")
     assert all("import_Neon_data_to_local.py" in h for h in hits), hits
