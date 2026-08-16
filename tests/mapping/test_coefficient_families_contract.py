@@ -715,3 +715,75 @@ def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
         f"contre vortex {vortex['Kp']:.3e} (facteur de reference 27 500). "
         f"Si c'est une correction deliberee, REMESURER cette matrice au "
         f"lieu d'ajuster ce seuil.")
+
+
+def test_les_deux_portes_g_comparent_des_unites_differentes():
+    """LA CAUSE du desequilibre fluide / magnetique, trouvee depuis
+    l'INTERIEUR de la fonction via `_stages`.
+
+    `g_rot` compare `Q_OW` a `Q_CRIT = 2.0`. `Q_OW` vient de
+    `grid._compute_q_criterion(vx, vy, dx=dx)` : il PREND dx, donc il est
+    en unites PHYSIQUES.
+
+    `g_mag` compare `Jz_curl` a `J_CRIT = 1.0`. `Jz_curl` vient de
+    `curl_z(Bx, By)`, qui ne prend PAS dx : c'est une difference finie en
+    unites de GRILLE. Verifie ici : sur `Bx = 1 + 0.8 tanh(3 sin y)`, de
+    derivee analytique 2.4, `curl_z` rend 0.2287 = 2.4 x dx.
+
+    Les deux portes comparent donc des grandeurs de deux systemes d'unites
+    differents a des seuils de meme ordre nominal. La porte magnetique est
+    plus dure a franchir d'un facteur exactement 1/dx : 10.2 a N=64,
+    20.4 a N=128, 40.7 a N=256 -- elle se degrade quand la grille se
+    raffine. Quatrieme membre de la famille dimensionnelle de cette
+    campagne.
+
+    MESURE via `_stages`, nappe de courant a N=64 :
+        mic_jz    = 1.541e-01   <- l'etage de SEUIL est sain
+        f_Rm_cell = 8.346       <- la porte d'ECHELLE est saine
+        g_mag     = 0.000       <- la porte TOPOLOGIQUE s'annule
+        mag_comp  = 1.816e-05
+    contre `g_rot = 1.000` et `fluid_comp = 5.0e-01` sur le vortex.
+
+    EPINGLE, pas corrige : harmoniser les unites deplace TOUS les
+    coefficients magnetiques. C'est une decision de USER.
+    """
+    from Simulation.grid import curl_z
+
+    n = 64
+    gr = PeriodicGrid(n)
+    x = np.arange(n) * gr.dx
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    Bx = 1 + 0.8 * np.tanh(3 * np.sin(Y))
+    By = np.zeros_like(X)
+
+    brut = np.abs(curl_z(Bx, By, True)).max()
+    assert brut == pytest.approx(2.4 * gr.dx, rel=0.05), (
+        f"curl_z rend {brut:.4f}, attendu {2.4 * gr.dx:.4f} (derivee x dx). "
+        f"S'il divise desormais par dx, le desequilibre est corrige — "
+        f"REMESURER la matrice de specificite.")
+
+    global N
+    ancien, N = N, n
+    try:
+        sim, grid = _sim_avec(
+            lambda X_, Y_, g_: (np.zeros_like(X_), np.zeros_like(X_),
+                                1 + 0.8 * np.tanh(3 * np.sin(Y_)),
+                                np.zeros_like(X_)))
+        mapper = _mappeur(grid)
+        etat = sim.get_fluxes()
+        mapper.compute_coefficients(
+            sim, AngleMapper.classical_score(etat), etat,
+            threshold_amr=0.3, advanced_anomalies_enabled=True)
+    finally:
+        N = ancien
+
+    et = mapper._stages
+    assert np.abs(et["mic_jz"]).max() > 1e-2, (
+        f"mic_jz = {np.abs(et['mic_jz']).max():.3e} : le fautif serait "
+        f"l'etage de seuil, pas la porte — remesurer")
+    assert np.abs(et["f_Rm_cell"]).max() > 1.0, (
+        f"f_Rm_cell = {np.abs(et['f_Rm_cell']).max():.3e} : le fautif serait "
+        f"la porte d'echelle")
+    assert np.abs(et["g_mag"]).max() < 1e-3, (
+        f"g_mag = {np.abs(et['g_mag']).max():.3e} : la porte magnetique ne "
+        f"s'annule plus. Si les unites ont ete harmonisees, REMESURER.")

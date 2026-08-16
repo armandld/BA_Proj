@@ -561,6 +561,23 @@ class PhysicalMapper:
         # Even-parity: output negative so cost_hamiltonian uses as-is
         K_plaquettes = -1.0 * np.sqrt(fluid_comp**2 + mag_comp**2)
 
+        # ── Etages observables ─────────────────────────────────────
+        # Le desequilibre entre canal fluide et canal magnetique ne peut
+        # pas etre diagnostique en RECALCULANT les etages a cote : trois
+        # fois de suite, une reproduction incomplete a fait accuser du code
+        # juste. On expose donc les composantes telles que la fonction les
+        # a calculees. `_stages` n'est lu que par les tests et les
+        # diagnostics ; aucun chemin de production ne le consulte.
+        self._stages = {
+            "g_rot": g_rot, "g_mag": g_mag,
+            "f_Re_cell": f_Re_cell, "f_Rm_cell": f_Rm_cell,
+            "mic_omega": mic_omega, "mic_jz": mic_jz,
+            "omega_mag": omega_mag, "jz_mag": jz_mag,
+            "omega_crit": omega_crit_eff, "jz_crit": jz_crit_eff,
+            "fluid_comp": fluid_comp, "mag_comp": mag_comp,
+            "v0": v0, "B0": B0,
+        }
+
         # ── Build result ───────────────────────────────────────────
         # ── 0b. FILL Z BIAS with adaptive weight (global median) ────
         # The Z bias breaks the degenerate ground state of ferromagnetic
