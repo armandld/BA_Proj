@@ -5968,6 +5968,56 @@ critère physique, le comportement d'origine est conservé à l'identique,
 quelle que soit la valeur entraînée. Le percentile ne *remplace* jamais la
 physique, il ne prend le relais que là où elle est muette.
 
+## Ce qu'il coûte — et pourquoi le balayage à quatre points ne prouve rien
+
+Avant de louer des cœurs il fallait savoir si la borne basse est chère :
+un percentile bas désigne plus de cellules, donc plus de patchs, donc
+plus de circuits. Mesuré à la configuration **réelle** (N=256, Harris
+tearing, par les fonctions du module d'entraînement lui-même) :
+
+| `relative_percentile` | mur | perte |
+|---|---|---|
+| 50 | 517,8 s | 0,236030 |
+| 75 | 545,8 s | 0,245103 |
+| 90 | 553,2 s | 0,245455 |
+| 99 | 605,5 s | 0,273969 |
+
+**La direction supposée était fausse** : c'est le percentile *haut* qui
+coûte le plus. Mécanisme plausible — un percentile haut éparpille
+quelques cellules isolées, qui pavent en beaucoup de petits patchs, là où
+un percentile bas désigne des régions contiguës qui fusionnent en peu de
+grands patchs.
+
+Mais ce tableau se lit avec son **plancher de bruit**, sans quoi il ne
+vaut rien. Quatre répétitions au **même** percentile (90) :
+
+    pertes  0,253605  0,256327  0,247726  0,276318
+    moyenne 0,258494   écart-type 0,010750   étendue 0,028592
+    mur     moyenne 580,0 s      étendue 47,7 s
+
+Le bras QAOA est non déterministe, et cela suffit à effacer l'essentiel
+du balayage :
+
+- **la tendance sur la perte n'est pas établie.** p50 contre p90 vaut
+  0,0095 d'écart, soit ~0,6 σ d'une différence entre deux tirages
+  uniques : dans le bruit. Seul p50 contre p99 (0,038) atteint ~2,5 σ —
+  suggestif, pas concluant à n=1 ;
+- **la tendance sur le coût non plus.** L'étendue mur *à percentile
+  fixe* vaut 47,7 s contre 87,7 s *entre* percentiles ;
+- le p90 tiré une fois dans le balayage donne 0,2455, quand quatre
+  répétitions de la **même** configuration donnent 0,2585 : 1,2 σ entre
+  une configuration et elle-même.
+
+**Ce qui survit**, et c'est la seule chose dont la campagne avait besoin :
+l'effet du neuvième paramètre sur le coût vaut **au plus ~17 %**, et
+probablement moins. Il ne déplace pas l'estimation de la réoptimisation.
+
+**Ce qui ne survit pas** : l'idée que l'optimum se trouverait à la borne
+basse, donc que la borne choisirait à la place des données. Rien ne le
+montre. Une comparaison à un tirage n'est pas lisible sur ce bras — c'est
+précisément ce qu'une campagne Optuna de 180+ essais moyenne, et ce
+qu'un balayage à quatre points ne peut pas faire.
+
 ## Le câblage, qui est l'essentiel
 
 L'ajouter à `SEARCH_SPACE` sans le câbler aurait été **D-31 à l'identique**
