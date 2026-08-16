@@ -71,6 +71,43 @@ SHORT_NAMES = {
 }
 
 
+def perturb_trial(sims, trial, eps=1e-5, fields=('vx', 'vy', 'Bx', 'By')):
+    """Décale les sims d'un essai, en les gardant IDENTIQUES entre elles.
+
+    D-104. La version précédente créait `rng` une fois puis le consommait
+    dans la boucle `for lbl in sims` : chaque simulation recevait un tirage
+    DIFFÉRENT. Les trois sims n'étaient donc plus identiques à t=0, alors
+    que tout ce que la figure mesure — `field_l2_error(sims['qaoa'],
+    sims['dns'])` — suppose qu'elles le sont : l'écart mesuré n'était plus
+    l'erreur de l'AMR mais la divergence de deux conditions initiales
+    différentes.
+
+    Mesuré (`init_harris_tearing`, N=256, warmup=80, trial=1), avant :
+    L2(qaoa, dns) à t=0 = 1,4122e-05 au lieu de 0 ; encore 2,020e-06 après
+    le warmup, AVANT le premier pas d'AMR ; après 3 pas d'AMR, 1,6795e-05
+    contre 8,182e-07 pour le même calcul sans perturbation (× 20,5) — et
+    1,6795e-05 (Q-HAS) contre 2,104e-06 (classique), un écart × 8,0 entre
+    deux bras qui sont bit-à-bit identiques à trial 0. Après : 0,0 à t=0,
+    0,0 après le warmup, 8,695e-07 / 8,185e-07 après 3 pas d'AMR.
+
+    Le tirage reste dépendant de `trial` (l'indépendance des essais est
+    conservée) ; c'est son partage entre les sims qui est corrigé.
+    """
+    if trial <= 0:
+        return
+    rng = np.random.default_rng(trial)
+    labels = list(sims)
+    reference = sims[labels[0]]
+    perturbation = {}
+    for fn in fields:
+        f = getattr(reference, fn)
+        rms = max(np.std(f), 1e-10)
+        perturbation[fn] = eps * rms * rng.standard_normal(f.shape)
+    for lbl in labels:
+        for fn in fields:
+            setattr(sims[lbl], fn, getattr(sims[lbl], fn) + perturbation[fn])
+
+
 def _plot_with_band(ax, x, all_curves, color, label, ls='-', lw=0.9, zorder=2):
     """Plot mean line with std band from [N_TRIALS, n_steps] array."""
     mu = np.mean(all_curves, axis=0)
@@ -121,15 +158,10 @@ else:
                 getattr(s, init_method)()
                 sims[lbl] = s
 
-            # Add tiny perturbation for trial independence
-            if trial > 0:
-                rng = np.random.default_rng(trial)
-                for lbl in sims:
-                    for fn in ['vx', 'vy', 'Bx', 'By']:
-                        f = getattr(sims[lbl], fn)
-                        rms = max(np.std(f), 1e-10)
-                        setattr(sims[lbl], fn,
-                                f + 1e-5 * rms * rng.standard_normal(f.shape))
+            # Add tiny perturbation for trial independence — le MEME tirage
+            # pour les trois sims, sinon elles ne partent plus du même état
+            # et la L2 mesurée n'est plus celle de l'AMR (D-104).
+            perturb_trial(sims, trial)
 
             # Warmup — all sims evolve identically
             _m = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
