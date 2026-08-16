@@ -7,7 +7,12 @@ AMR patches and measures L2 error vs DNS, kinetic energy conservation,
 and enstrophy conservation.
 
 Each method sees its OWN simulation state for patch decisions.
-Multiple trials with error bands for statistical confidence.
+
+D-105 : `N_TRIALS = 1`. Il n'y a donc AUCUNE dispersion mesurée, et la
+bande d'incertitude n'est pas tracée — la ligne annonçait « Multiple trials
+with error bands for statistical confidence » alors que `np.std` sur un
+échantillon unique vaut 0,0 (`ddof=0`), imprimé comme une mesure. Passer
+`N_TRIALS` à 2 ou plus rétablit la bande et la dispersion.
 """
 import numpy as np
 import os, sys, json
@@ -108,12 +113,48 @@ def perturb_trial(sims, trial, eps=1e-5, fields=('vx', 'vy', 'Bx', 'By')):
             setattr(sims[lbl], fn, getattr(sims[lbl], fn) + perturbation[fn])
 
 
+def _final_l2(all_curves):
+    """Rend la L2 finale, à l'échelle où elle vit, avec sa dispersion.
+
+    D-105, deux corrections dans la même ligne :
+
+    * `%.6f` sur une grandeur de l'ordre de 1e-06 imprimait
+      `QA=0.000001  CL=0.000001` — les deux bras indiscernables, et la
+      valeur tronquée à un chiffre significatif au mieux. Mesuré
+      (`init_harris_tearing`, N=256, warmup=80, 3 pas d'AMR) : la vraie
+      valeur est **8,182e-07** pour les deux bras. La figure elle-même
+      trace cette colonne en `set_yscale('log')` — le résumé imprimé
+      contredisait l'échelle de son propre axe.
+    * `np.std` d'un essai unique vaut 0,0 sans prévenir : `+/-0.000000`
+      se lisait comme une dispersion mesurée nulle. On ne l'imprime plus
+      que s'il y a au moins deux essais.
+    """
+    all_curves = np.asarray(all_curves)
+    finals = all_curves[:, -1]
+    if finals.size < 2:
+        return f"{float(finals.mean()):.4e} (1 essai, dispersion non mesurée)"
+    return (f"{float(finals.mean()):.4e}+/-{float(np.std(finals, ddof=1)):.4e} "
+            f"(n={finals.size})")
+
+
 def _plot_with_band(ax, x, all_curves, color, label, ls='-', lw=0.9, zorder=2):
-    """Plot mean line with std band from [N_TRIALS, n_steps] array."""
+    """Plot mean line with std band from [N_TRIALS, n_steps] array.
+
+    D-105 : la bande n'est tracée que s'il y a au moins DEUX essais.
+    `np.std` d'un échantillon unique vaut 0,0 sans avertissement
+    (`ddof=0` ; avec `ddof=1` la même quantité vaut `nan` et prévient) :
+    la bande de largeur nulle se lisait comme une dispersion mesurée
+    à zéro, alors qu'elle n'était pas mesurée du tout.
+    """
+    all_curves = np.asarray(all_curves)
     mu = np.mean(all_curves, axis=0)
-    std = np.std(all_curves, axis=0)
+    n_trials = all_curves.shape[0]
+    if n_trials > 1:
+        label = f'{label} (n={n_trials})'
     ax.plot(x, mu, color=color, lw=lw, label=label, ls=ls, markersize=3, zorder=zorder)
-    ax.fill_between(x, mu - std, mu + std, color=color, alpha=0.12, zorder=zorder)
+    if n_trials > 1:
+        std = np.std(all_curves, axis=0)
+        ax.fill_between(x, mu - std, mu + std, color=color, alpha=0.12, zorder=zorder)
 
 
 CACHE_PATH = os.path.join(FIG_DIR, '.fig7_cache.json')
@@ -281,8 +322,7 @@ for row, scen_name in enumerate(scenarios):
     ax.legend(fontsize=7, loc='best', framealpha=0.7)
 
     # Print scenario summary
-    print(f"  Final L2: QA={l2_qa_all[:, -1].mean():.6f}+/-{l2_qa_all[:, -1].std():.6f}  "
-          f"CL={l2_cl_all[:, -1].mean():.6f}+/-{l2_cl_all[:, -1].std():.6f}")
+    print(f"  Final L2: QA={_final_l2(l2_qa_all)}  CL={_final_l2(l2_cl_all)}")
 
 fig.suptitle('Physical Fidelity: AMR Evolution',
              fontsize=11, fontweight='bold')
