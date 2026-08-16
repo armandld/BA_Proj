@@ -5672,3 +5672,51 @@ reste dans le test pour la cinquième.
 **1e−12**. Les deux chemins coïncident sur les jeux testés, mais un
 coefficient entre ces deux seuils serait vu par `study/` et ignoré par le
 circuit déployé. À trancher avant la réoptimisation.
+
+---
+
+# Les seuils tranchés : `study/` s'aligne sur le circuit
+
+**Commande.** `pytest tests/study/test_xpoint_reaches_study.py -q` (5 tests)
+
+`cost_hamiltonian` filtre les coefficients à `COEFF_MIN = 1e-6` ;
+`build_ising_terms` filtrait à `1e-12`. **`study/` diagonalisait donc un
+hamiltonien plus fourni que celui que le circuit résout.**
+
+## L'écart, mesuré
+
+Coefficients tombant entre les deux seuils — vus par `study/`, ignorés par
+le circuit :
+
+| scénario | dim | total | entre les deux seuils |
+|---|---|---|---|
+| `harris_tearing` | 2 | 16 | **4 (25 %)** |
+| `harris_tearing` | 4 | 64 | **16 (25 %)** |
+| `mhd_rotor` | 4 | 64 | 1 |
+| `orszag_tang` | 2, 4 | 16, 64 | 0 |
+
+**Un quart des termes à `dim = 2` sur le scénario de reconnexion** — celui
+même où D-53 a été mesuré.
+
+## La décision
+
+`study/` s'aligne sur `1e-6`. **La falsification doit décrire ce que le
+circuit exécute**, pas un hamiltonien qui lui est étranger. Les cinq seuils
+de `build_ising_terms` (biais Z, couplages ZZ, plaquettes, point X) passent
+par une constante unique `COEFF_MIN`, importable et documentée.
+
+Aligner dans l'autre sens — descendre le circuit à `1e-12` — aurait changé
+le comportement déployé, donc la science, pour faire coïncider un outil
+d'analyse avec elle. C'est l'inverse de l'ordre correct.
+
+## Ce que cela implique pour D-53
+
+Les artefacts `dim = 2` et `dim = 3` ont été produits avec **quatre**
+écarts cumulés entre `study/` et le circuit :
+
+1. `K_xpoint` absent de `build_ising_terms` ;
+2. `advanced_anomalies_enabled=False` codé en dur dans `qaoa_inputs` ;
+3. `g_mag` écrasé d'un facteur `1/dx` ;
+4. un quart des termes retenus que le circuit rejette.
+
+La relance est donc nécessaire avant toute lecture de D-45, D-47 ou D-53.
