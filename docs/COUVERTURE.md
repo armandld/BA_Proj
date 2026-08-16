@@ -2072,9 +2072,17 @@ suite passaient tous deux, et aucun des deux ne comparait le budget consommé
 il faut encore demander ce que le chemin **promet** pour voir qu'il promet
 autre chose que son voisin.
 
-**Ce qui reste, mesuré et non traversé** : `dim = 8`, déclaré dans
-`VQA_DIMS = [2, 4, 8]` et emprunté par **0** test de la suite rapide
-(2 → 367, 3 → 133, 4 → 3, 8 → 0). C'est la file de la prochaine passe.
+**Ce qui reste, et ce qui n'est PAS une file.** Le comptage donne `dim`
+2 → 367, 3 → 133, 4 → 3, 8 → **0**. Ce zéro n'ouvre rien : il est **déjà
+expliqué et consigné** plus haut dans ce fichier (§ `exact_diag`) et dans
+`DEFAUTS.md` — `dim = 4` et `dim = 8` demandent 32 et 128 qubits contre le
+plafond de **20** codé dans `exact_diagonalisation.py`, qui les saute
+explicitement. Ce n'est pas un axe non traversé, c'est une limite déclarée.
+Le noter ici évite d'y renvoyer une passe qui re-trouverait un fait connu —
+le piège que `VIGIL.md` décrit sous « lire le registre avant la passe ».
+
+**Les sept axes de la fiche sont donc traversés.** La file de la prochaine
+passe ne vient plus des axes : elle vient de `DEFAUTS.md`.
 
 **Ce que cette traversée ne pouvait pas voir, et pourquoi.** L'axe « bord
 borné » était traversé, et D-113 y est resté invisible : en déploiement
