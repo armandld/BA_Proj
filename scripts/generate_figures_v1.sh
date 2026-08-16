@@ -23,9 +23,17 @@ export LC_NUMERIC=C
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$SCRIPT_DIR"
-FIGURES_CODE_DIR="$ROOT_DIR/figures_code"
-TRAIN_RESULTS_DIR="$ROOT_DIR/Train_results"
+# ROOT_DIR valait "$SCRIPT_DIR" : le script a ete deplace dans scripts/,
+# donc la racine etait scripts/ et TOUS les chemins construits dessous
+# etaient faux -- y compris "$ROOT_DIR/scripts/extract_best_hyperparams.py",
+# qui designait scripts/scripts/.
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Les 17 scripts de figures vivent dans figures/v1_legacy/, pas dans un
+# figures_code/ qui n'existe plus. Laisse tel quel, chaque script tombait
+# dans la branche SKIP ci-dessous et le lanceur annoncait
+# "Succeeded: 0  Failed: 0" avec un code de retour 0.
+FIGURES_CODE_DIR="$ROOT_DIR/figures/v1_legacy"
+TRAIN_RESULTS_DIR="$ROOT_DIR/results/hyperparams/optuna_studies"
 
 # Defaults
 LAMBDA_COST=0.40
@@ -111,7 +119,7 @@ case $PHASE in
 esac
 
 LAMBDA_FMT=$(printf "%.4f" "$LAMBDA_COST")
-OUTPUT_DIR="$ROOT_DIR/figures/phase${PHASE}"
+OUTPUT_DIR="$ROOT_DIR/results/figures/phase${PHASE}"
 
 log "============================================================"
 log "Generating Figures: $PHASE_LABEL"
@@ -166,13 +174,17 @@ esac
 # Run the extraction script with separate quantum/classical phase filters.
 python "$ROOT_DIR/scripts/extract_best_hyperparams.py" \
     --train-dir "$TRAIN_RESULTS_DIR" \
-    --output "$ROOT_DIR/best_hyperparams.json" \
+    --output "$ROOT_DIR/results/hyperparams/best_hyperparams.regenerated.json" \
     --lambda-cost "$LAMBDA_COST" \
     --top-k 3 \
     --quantum-phase-filter "$Q_PHASE_FILTER" \
     --classical-phase-filter "$C_PHASE_FILTER"
 
-log "  best_hyperparams.json updated."
+# On n'ECRASE PAS results/hyperparams/best_hyperparams.json : c'est une
+# entree GELEE de l'etude (voir son PROVENANCE.md), le seul dossier du
+# depot qu'aucune commande ne reproduit. Un lanceur de figures qui le
+# reecrit changerait la science en produisant une image.
+log "  best_hyperparams.regenerated.json ecrit (le fichier gele est intact)."
 
 # Export phase filters for figure scripts that read rescore dirs directly
 # (e.g. fig0_pareto_lambda.py). The filter value is the phase suffix
@@ -225,10 +237,13 @@ FIGURE_SCRIPTS=(
     "fig17_topological_attribution.py"
 )
 
+SKIPPED=0
+
 for script in "${FIGURE_SCRIPTS[@]}"; do
     script_path="$FIGURES_CODE_DIR/$script"
     if [[ ! -f "$script_path" ]]; then
         log "  SKIP: $script (not found)"
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
 
@@ -254,6 +269,15 @@ log ""
 log "  Figures saved:"
 find "$OUTPUT_DIR" -type f \( -name "*.png" -o -name "*.pdf" \) -printf "    %f\n" 2>/dev/null | sort
 log "============================================================"
+
+# Un balayage vide doit crier. Sans cette clause, un FIGURES_CODE_DIR
+# errone faisait sauter les 17 scripts et rendait 0 : "aucune figure
+# produite" etait indiscernable de "toutes les figures produites".
+if [[ $SUCCEEDED -eq 0 ]]; then
+    log "ERROR: aucun script de figure n'a tourne ($SKIPPED introuvables"
+    log "       dans $FIGURES_CODE_DIR). Rien n'a ete produit."
+    exit 1
+fi
 
 if [[ $FAILED -gt 0 ]]; then
     log "WARNING: $FAILED figure(s) failed. Check output above for details."
