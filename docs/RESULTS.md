@@ -5888,3 +5888,44 @@ inversé d'un message à l'autre. Corrigé ici et dans l'entrée précédente.
 Le 0,897 datait d'**avant** l'harmonisation des portes `g` : réveiller le
 canal magnétique a légèrement abaissé la corrélation de `K_plaquettes`
 seul. Remesuré, non ajusté — les deux valeurs sont consignées.
+
+---
+
+# ρ(E_gap, F1) : le critère de décision de la campagne — option A
+
+**Commande.** `python study/common/rho_gap_f1.py results/h0_*.npz`
+
+Post-traitement : **ne tourne pas dans la boucle d'entraînement**. La
+campagne n'en porte donc aucun risque.
+
+| artefact | ρ | p | verdict |
+|---|---|---|---|
+| `..._dim3_hamiltonien_corrige` | **+0,870** | 0,0023 | l'optimum de H n'est pas la bonne décision |
+| `..._N256_dim2` | **−1,000** | 0,0000 | l'optimum de H est la bonne décision |
+
+## Deux corrections à ce que j'ai annoncé
+
+**ρ vaut +0,870, pas +0,970.** Mon calcul manuel excluait `qaoa_shots_p3` ;
+le module prend les 9 solveurs. Le signe et la conclusion sont inchangés,
+la valeur non.
+
+**Le signe s'inverse à `dim = 2`.** Je présentais « mieux résoudre H dégrade
+la décision » comme un fait général — il ne l'est pas.
+
+Mais `dim = 2` est **dégénéré**, et c'est D-45/D-47 : `classical_init` y a un
+écart de **0,0000** à l'optimum, c'est-à-dire que la règle classique *est*
+déjà l'optimum. Tous les solveurs qui l'atteignent ont le même masque, et
+les F1 tiennent dans 0,367–0,389. Un ρ = −1 sur un problème où il n'y a rien
+à départager ne prouve rien.
+
+**La lecture honnête** : ρ = +0,870 vaut à `dim = 3`, la seule taille à la
+fois certifiée et non dégénérée. À `dim = 2`, la question n'a pas de sens.
+
+## Le critère pré-enregistré
+
+- **ρ passe négatif à `dim = 3`** → il existe des hyperparamètres pour
+  lesquels l'optimum de H est la bonne décision. Le réglage suffisait.
+- **ρ reste positif** → c'est la **forme** de l'hamiltonien qu'il faut
+  revoir. Aucune campagne Optuna ne trouvera cela.
+
+À enregistrer avant de lancer, pas après.
