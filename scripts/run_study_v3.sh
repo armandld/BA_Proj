@@ -12,7 +12,7 @@
 # (study/v3/, study/results/, tests/v3/), et sa seule etape qui
 # "passait" etait un pytest sur un dossier vide -- un balayage vide
 # qui rendait 0. Chemins repointes, ROOT_DIR corrige.
-# tests/lint/test_scripts_point_somewhere.py interdit la recidive.
+# tests/lint/test_scripts_point_somewhere.py (D-116) interdit la recidive.
 #
 # Pre-requis : results/ contient les donnees phases 1-2
 # (dns_*.npz + patches_*.npz). La regeneration des DONNEES n'est

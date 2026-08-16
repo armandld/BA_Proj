@@ -89,8 +89,19 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 |---|---|---|---|
 | D-48 | `mode="hardware"` s'exécutait sur un **simulateur** sans le signaler | `Session(AerSimulator)` **acceptée** → **lève** à la construction | `pytest tests/pipeline/test_v1_partial_pockets.py -k mode` |
 
-*(D-39 à D-47 sont sur la branche `vigil/…` de l'agent, en attente de
-fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
+*(La branche `vigil/…` de l'agent numérote en continu et va **au-delà de
+D-115**. Cette note disait « la numérotation reprend à D-48 » : c'était
+vrai à l'écriture et faux ensuite — D-68 et D-69 ont été attribués des
+deux côtés à des défauts différents, collision rattrapée en renumérotant
+les miens en **D-116 / D-117**. Avant d'attribuer un numéro, lire le
+maximum réel des **deux** branches :*
+
+```bash
+git fetch origin 'refs/heads/vigil/*:refs/remotes/origin/vigil/*'
+git show origin/vigil/<branche>:docs/RESULTS.md | grep -o 'D-[0-9]\+' \
+  | sort -t- -k2 -n -u | tail -1
+```
+*)*
 
 **Les fichiers jamais audités de V1** — le dernier chantier avant la réoptimisation
 
@@ -101,8 +112,8 @@ fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
 | D-10 | `compare_rotor_budget` levait `TypeError` à l'étape 4/5, et ses défauts demandaient **69 Go** | n'a **jamais** tourné → tourne, garde posée avant le DNS | `pytest tests/pipeline/test_compare_rotor_budget.py` |
 | D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
 | D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
-| D-68 | deux lanceurs de `scripts/` pointaient **entièrement** dans le vide ; `generate_figures_v1.sh` sautait ses 17 scripts et rendait **`Succeeded: 0  Failed: 0`, code 0** | campagne verte sans **aucune** figure → échec si `SUCCEEDED == 0`, chemins repointés, `ROOT_DIR` corrigé | `pytest tests/lint/test_scripts_point_somewhere.py` |
-| D-69 | `RELATIVE_PERCENTILE` était une constante **en dur** sur le chemin de décision, alors que c'est elle qui ranime les termes à quatre corps à N=256 | non entraînable → 9ᵉ paramètre de `SEARCH_SPACE`, câblé de bout en bout | `pytest tests/pipeline/test_relative_percentile_is_trainable.py` |
+| D-116 | deux lanceurs de `scripts/` pointaient **entièrement** dans le vide ; `generate_figures_v1.sh` sautait ses 17 scripts et rendait **`Succeeded: 0  Failed: 0`, code 0** | campagne verte sans **aucune** figure → échec si `SUCCEEDED == 0`, chemins repointés, `ROOT_DIR` corrigé | `pytest tests/lint/test_scripts_point_somewhere.py` |
+| D-117 | `RELATIVE_PERCENTILE` était une constante **en dur** sur le chemin de décision, alors que c'est elle qui ranime les termes à quatre corps à N=256 | non entraînable → 9ᵉ paramètre de `SEARCH_SPACE`, câblé de bout en bout | `pytest tests/pipeline/test_relative_percentile_is_trainable.py` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -5933,7 +5944,7 @@ fois certifiée et non dégénérée. À `dim = 2`, la question n'a pas de sens.
 À enregistrer avant de lancer, pas après.
 
 
-# D-69 — le percentile du critère relatif devient entraînable
+# D-117 — le percentile du critère relatif devient entraînable
 
 `min(absolu, percentile)` est ce qui rend `K_plaquettes` et `K_xpoint`
 non nuls à la résolution d'entraînement. Le seuil de maille est **absolu**
@@ -6045,7 +6056,7 @@ Le périmètre passe de **8 à 9**. `PERIMETRE_8` devient `PERIMETRE_9` ; les
 neuf tests tombés sur cette ligne sont le comportement voulu — c'est la
 raison d'être de cette constante.
 
-# D-68 — deux lanceurs qui ne lançaient rien
+# D-116 — deux lanceurs qui ne lançaient rien
 
 Trouvé en exécutant la recette de `CLAUDE.md`.
 

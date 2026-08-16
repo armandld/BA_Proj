@@ -1,4 +1,4 @@
-"""Les lanceurs de `scripts/` nomment-ils des chemins qui existent ?
+"""D-116 — les lanceurs de `scripts/` nomment-ils des chemins qui existent ?
 
 Trouve en executant la recette de `CLAUDE.md`. Sa deuxieme commande,
 `python -m pytest tests/v3 tests/v4 -q`, rendait :
