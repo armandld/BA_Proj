@@ -1909,6 +1909,33 @@ celle que le solveur applique. **Latent, pas un défaut.**
 
 ---
 
+## `figures/v1_legacy/fig_utils.py` — la moitié « simulation », lue et croisée
+
+Dernier point resté ouvert de la section précédente : `qaoa_block_scores`,
+`run_hierarchical_comparison`, `run_single_method`, `find_optimal_threshold`,
+`patches_to_metrics` avaient été **lues, pas croisées**. Relues fonction par
+fonction, question 3 (consomment-elles ce que leur signature annonce ?) et
+question 4 (deux chemins censés coïncider) :
+
+| ce qui a été vérifié | verdict |
+|---|---|
+| `_hamilt_mapper_kwargs` (partagée par les cinq) tire `sigma`/`beta_curl`/`beta_xpoint`/`gamma_hydro`/`gamma_mag`/`kappa`/`w_z_frac` de `TRAINED_PARAMS`, comme le chemin déployé | **sain** — pas de repli silencieux propre à ces fonctions ; le repli `sigma=0,05` est le même que celui déjà documenté (D-22) |
+| `patches_to_metrics` appelle `_patches_overlap_with_gt` sans lui passer `target_dim` (reçu en argument), et le passe seulement à `_patches_total_fine_pixels` | déjà **mesuré et écarté** dans la section précédente (« piste mesurée et écartée ») — pas re-testé ici ; confirmé qu'aucune des cinq fonctions n'appelle `patches_to_metrics` avec un `target_dim ≠ 2` |
+| `find_optimal_threshold` — sélection du « genou » (candidats dans `capture_margin` du meilleur, puis min `compute_ratio`) | **sain** — la liste de candidats ne peut pas être vide (repli explicite sur `d['captured'] == best_cap`) ; le balayage grossier puis fin est dédoublonné par `already`, aucun point perdu ni compté deux fois |
+| `run_hierarchical_comparison` / `run_single_method` calculent `nu = grid.L / 800` puis ne le relisent jamais (`HamiltMapper` reçoit ses kwargs de `_hamilt_mapper_kwargs`, pas de cette variable locale) | **gaspillage, pas une valeur fausse** — la variable n'est lue nulle part, donc rien d'aval n'en dépend |
+
+**Ce que ça ne couvre pas.** Aucun test n'emprunte encore ces cinq
+fonctions — elles ne s'exercent qu'en faisant tourner une figure pour de
+vrai (DNS + VQA complets). La lecture croisée ci-dessus n'est pas un test
+qui traverserait profondeur AMR / bord / bras / backend / warm start /
+hamiltonien nul / optimiseur sur ces chemins ; ça reste à faire si l'un de
+ces scripts redevient prioritaire.
+
+`figures/v1_legacy/fig_utils.py` est maintenant lu **et** croisé en entier.
+Seul reste ouvert le point non mesuré de `fig17` (cache sans empreinte de
+configuration, ci-dessus) — qui demande de faire tourner le script pour de
+vrai, pas une relecture.
+
 ---
 
 ## Tenir ce document à jour
