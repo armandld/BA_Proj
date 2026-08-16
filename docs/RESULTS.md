@@ -5789,3 +5789,69 @@ La relance écrivait sur `h0_optimiser_equivalence_N96_dim3.npz`, l'artefact
 qui porte D-53. Il est **restauré** ; la nouvelle mesure vit sous
 `..._hamiltonien_corrige.npz`. Les deux doivent coexister : ils mesurent
 deux hamiltoniens différents, et c'est leur comparaison qui a de la valeur.
+
+---
+
+# Le défaut principal n'est PAS l'optimiseur — c'est l'hamiltonien
+
+**Artefact.** `results/h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`
+
+La colonne que je n'avais pas exploitée : le **F1 contre la vérité terrain**
+du raffinement. Elle renverse la lecture.
+
+| solveur | trouve l'optimum | écart d'énergie | **F1 vs vérité** |
+|---|---|---|---|
+| `exhaustive` (certifié) | 1,000 | 0,0000 | **0,386** |
+| `sa_warm` | 0,833 | 0,0044 | **0,378** |
+| `sa` | 0,500 | 0,0101 | 0,393 |
+| `greedy` | 0,833 | 0,0131 | 0,424 |
+| `classical_init` | 0,500 | 0,6345 | 0,460 |
+| `qaoa_p1` | 0,083 | 1,0416 | **0,481** |
+
+**Corrélation de rang entre l'écart à l'optimum et le F1 : ρ = +0,970,
+p = 0,0001, sur 8 solveurs.**
+
+## Ce que ça veut dire
+
+Un ρ **positif** signifie : **plus on s'écarte de l'optimum de H, meilleure
+est la décision de raffinement.**
+
+- Le solveur qui résout H **parfaitement** (`exhaustive`, écart 0) obtient
+  un F1 de **0,386** — parmi les pires.
+- Le solveur qui le résout **le plus mal** (`qaoa_p1`, écart 1,04) obtient
+  le **meilleur** F1, 0,481.
+- Le recuit simulé warm-start, presque parfait sur H (écart 0,0044), est le
+  **pire** de tous : F1 = 0,378.
+
+**L'état fondamental de cet hamiltonien n'est pas la bonne décision AMR.**
+Le résoudre exactement rend la décision *moins* bonne que ne pas le résoudre
+du tout.
+
+## Conséquence sur la lecture de H0
+
+Le QAOA est mauvais optimiseur — c'est établi, 0,083 contre 0,500 pour sa
+propre initialisation. Mais **ce n'est pas le défaut dominant**, et le
+corriger irait dans la mauvaise direction :
+
+**un meilleur algorithme quantique trouverait mieux l'optimum, donc
+produirait une plus mauvaise décision.** `sa_warm` le démontre — il optimise
+presque parfaitement et décide le plus mal de tous.
+
+Le QAOA obtient son F1 supérieur **par accident** : il dévie tellement de
+l'optimum qu'il reste près de son initialisation classique, qui est
+meilleure que l'optimum.
+
+## Ce qui reste à conclure, et ce qui ne l'est pas
+
+**Établi ici** : à `dim = 3`, sur un hamiltonien complet et dimensionnellement
+cohérent, mieux résoudre H dégrade la décision (ρ = +0,970, p = 1e−4).
+
+**Non établi** : que ce soit vrai à toute taille, ou pour toute famille de
+coefficients. C'est **12 instantanés, une résolution, un jeu
+d'hyperparamètres non réoptimisés**. Le F1 absolu reste bas partout
+(0,378–0,481), ce qui limite ce qu'on peut lire dans les écarts.
+
+**Ce que ça change pour la réoptimisation** : elle devient *le* test
+décisif. Si des hyperparamètres existent pour lesquels l'optimum de H
+coïncide avec la bonne décision, ρ doit changer de signe. Sinon, c'est la
+forme de l'hamiltonien qu'il faut revoir, pas ses réglages.
