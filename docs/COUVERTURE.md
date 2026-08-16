@@ -2008,20 +2008,35 @@ couverture ne dit rien du contrat.
 | `postprocess` — convention de bits et contrat d'entrée | **sain** — parcourt `bitstring[::-1]` (qubit 0 à droite, la convention de `probabilities_dict()` et de `get_counts()`), et **refuse** trois entrées qui rendraient des marginales plausibles et fausses : distribution non normalisée, chaîne multi-registres (l'espace décalerait toutes les positions suivantes), longueur ≠ `num_qubits` |
 | `runtime.VQARuntime` — mode, backend, cache d'ansatz | **sain** — `mode` hors `('simulator',)` lève (D-48 : `_init_backend` rend un simulateur quel que soit le mode, un run « hardware » tournait donc sur simulateur sans le dire), un `backend_name` inconnu lève au constructeur plutôt qu'un `AttributeError` cinquante lignes plus loin, et la clé du cache d'ansatz inclut une **empreinte des coefficients**, pas seulement la topologie |
 
-**Axes traversés — mesurés, pas supposés.** Un plugin de trace compte les
-appels réels aux deux constructeurs pendant la suite :
+**Axes traversés — mesurés sur la suite ENTIÈRE, pas supposés.** Un plugin de
+trace enrobe les points de décision et compte les appels réels :
 
 ```bash
-pytest tests/pipeline tests/amr -q -p trace_plugin -m "not slow"
+TRACE_OUT=/tmp/axes.json PYTHONPATH=src:tests/tools \
+  python -m pytest tests/ -q -m "not slow" -p trace_fiche_axes    # ~1 h
 ```
 
-| axe | mesuré |
-|---|---|
-| **bord du patch** | les DEUX côtés sont empruntés : **24 appels bornés**, **60 appels périodiques** sur `tests/pipeline` + `tests/amr` |
-| **profondeur AMR** | `depth = 0` et `depth > 0` — le bras borné n'est atteint que par `depth > 0` (`period_bound = (depth == 0)`), donc les 24 appels le prouvent |
-| **dim** | **`dim = 2` uniquement**, aux deux constructeurs. `dim = 4` et `dim = 8` ne sont traversés par aucun test de la suite rapide |
-| **Hamiltonien nul** | les deux constructeurs lèvent `NullHamiltonianError`, testé |
-| **backend, warm start, optimiseur** | non mesurés par ce plugin — ils vivent dans `execute`, pas dans les constructeurs |
+Les sept axes de la fiche, et ce que la suite emprunte vraiment :
+
+| axe | côté A | côté B | verdict |
+|---|---|---|---|
+| **bord du patch** | borné **113** | périodique **390** | **les deux** |
+| **bras** | quantique **28** | classique **11** | **les deux** |
+| **Hamiltonien** | non nul **318** | nul **2** | **les deux** |
+| **warm start** | absent **315** | présent **5** | **les deux** |
+| **profondeur AMR** | `depth = 0` | `depth > 0` | **les deux** — le bras borné n'est atteint que par `depth > 0` |
+| **backend** | `state_vector` **320** | échantillonné **0** | **UN SEUL** — le côté échantillonné n'est jamais exécuté |
+| **optimiseur** | COBYLA **317** | Powell **1**, L-BFGS-B **1**, Nelder-Mead **1** | **déséquilibré** — un appel chacun |
+
+Et l'axe qui n'est pas dans la fiche mais que le code emprunte, `dim` :
+**2 → 367**, **3 → 133**, **4 → 3**, **8 → 0**. `VQA_DIMS = [2, 4, 8]` : la
+plus grande taille déclarée n'est traversée par aucun test de la suite rapide.
+
+**Deux axes restent donc à traverser**, et ce sont des faits mesurés, pas des
+impressions : le **backend échantillonné** (0 appel) et les **optimiseurs
+autres que COBYLA** (1 appel chacun — assez pour qu'une erreur de bornes y
+survive, c'est exactement ce qui s'était produit avec Powell). C'est la file
+de la prochaine passe.
 
 **Ce que cette traversée ne pouvait pas voir, et pourquoi.** L'axe « bord
 borné » était traversé, et D-113 y est resté invisible : en déploiement
@@ -2030,6 +2045,17 @@ deux fois), donc échanger les deux familles est l'identité. **Un axe
 traversé ne suffit pas quand les deux valeurs de l'axe coïncident dans la
 configuration testée** — c'est la règle « choisir le champ d'essai qui
 SÉPARE », appliquée aux axes eux-mêmes. À retenir pour la fiche.
+
+**Et pire que « invisible » : le défaut avait colonisé ses propres témoins.**
+Trois endroits de la suite l'écrivaient noir sur blanc — le docstring de
+`test_only_the_documented_halo_cells_are_read` (« `theta_h_full` n'est lu
+qu'en colonnes 0 et -1 »), le **champ d'essai** de
+`test_a_plaquette_on_the_boundary_contracts_instead_of_wrapping` (il
+chauffait exactement les deux tableaux de la convention fausse, sous un
+commentaire disant « halo droit » au-dessus d'une écriture dans `theta_h`),
+et le code lui-même. Un test écrit à partir du code partage son modèle
+mental, donc son erreur : c'est le corollaire de `VIGIL.md` sur la
+couverture, vérifié ici une fois de plus.
 
 ---
 
