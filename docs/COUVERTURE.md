@@ -1892,6 +1892,21 @@ réelles de cette passe (tearing 300 pas, OT 500 pas, KH 400 pas : types
 observés `leaf_depth` et `coarse_leaf` uniquement), donc **latent, pas un
 défaut** — à rouvrir si un jour un bras ne trouve rien.
 
+Second point latent, même famille. `compute_local_factor` se déclare
+« Shared between solver (physics) and pipeline (cost metric) to guarantee
+consistency ». Le solveur reçoit le vrai `solve_max_depth`
+(`step_layered(patches, max_depth=solve_md, ...)`) ; les deux métriques de
+`fig_utils` lui passent `max(p['depth'] for p in patches)`, le maximum
+**présent dans la liste**. Les deux ne coïncident que si un patch atteint
+la profondeur de résolution. C'est le cas dès qu'il existe un patch
+`leaf_depth`, puisque `refinement.py` les enregistre avec `_solve_depth`.
+**Observé** sur les trois exécutions réelles de cette passe (tearing 300
+pas, OT 500 pas, KH 400 pas, `min_size=6`, N=256) : `max(depth) = 5 =
+solve_max_depth` dans les six listes de patchs. Non mesuré : le cas où
+aucun `leaf_depth` n'existe, où le facteur local — donc `compute_ratio` et
+`captured_fraction` — serait calculé sur une hiérarchie plus courte que
+celle que le solveur applique. **Latent, pas un défaut.**
+
 ---
 
 ---
