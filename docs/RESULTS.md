@@ -5618,3 +5618,57 @@ et `g_mag`. Les deux portes recevant maintenant des grandeurs physiques, il
 redevient un réglage cohérent.
 
 **Les neuf paramètres sont désormais défendables.**
+
+---
+
+# `study/` voit enfin le terme de point X
+
+**Commande.** `pytest tests/study/test_xpoint_reaches_study.py -q` (5 tests)
+
+`build_ising_terms` ne lisait que `H_edges`, `C_edges` et `K_plaquettes`.
+La diagonalisation exacte, le recuit simulé et les ablations de `study/`
+étaient donc **structurellement aveugles** au terme de point X, que la
+campagne d'entraînement active pourtant sur **6/6 scénarios**.
+`h3_term_ablation` mettait même `K_xpoint` à zéro sur l'ablation `no_ZZZZ`
+en croyant l'ablater : il annulait une clé que `ground_state_mask` ne lisait
+jamais.
+
+`qaoa_inputs.py` codait par ailleurs `advanced_anomalies_enabled=False`.
+
+## Ce qui a été fait
+
+`build_ising_terms` ajoute un **second** terme ZZZZ sur la même plaquette,
+reproduisant exactement `cost_hamiltonian` — qui empile lui aussi un terme
+séparé sur les quatre mêmes qubits, `SparsePauliOp` sommant les doublons.
+Le drapeau de `qaoa_inputs` passe à `True`.
+
+## Le test qui compte : les deux chemins coïncident
+
+Sur les **256 états** d'un problème à `dim = 2` (8 qubits), `K_xpoint`
+actif, trois graines :
+
+**écart maximal 5,3e−15** entre l'énergie du chemin `study/` et la
+diagonale de `create_period_hamiltonian`, le chemin déployé.
+
+Sans cette vérification, la falsification aurait porté sur un autre
+hamiltonien que l'entraînement.
+
+## Une erreur de ma part, la quatrième de la même famille
+
+Ma première comparaison donnait un écart de **1,88e+01** et une corrélation
+de **1,0e−04** — j'ai cru un instant que les deux chemins divergeaient. La
+cause était ma convention de bits : Qiskit est **little-endian**, le bit de
+poids faible correspond au dernier qubit. Avec l'ordre inversé, l'écart
+tombe à 5,3e−15.
+
+Quatrième fois de cette campagne qu'une reproduction incorrecte accuse du
+code juste — après le filtre `> 1e-10` de `C_scale`, le champ dont `|B|`
+s'annulait là où `|Jz|` culmine, et le champ non périodique. Le commentaire
+reste dans le test pour la cinquième.
+
+## Écart signalé, non corrigé
+
+`cost_hamiltonian` filtre les coefficients à **1e−6**, `build_ising_terms` à
+**1e−12**. Les deux chemins coïncident sur les jeux testés, mais un
+coefficient entre ces deux seuils serait vu par `study/` et ignoré par le
+circuit déployé. À trancher avant la réoptimisation.

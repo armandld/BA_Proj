@@ -118,6 +118,38 @@ def build_ising_terms(hamilt_params, dim):
                         _idx_V(i, j, dim),
                     ))
                     plaq_coef.append(kv)
+    # K_xpoint : SECOND terme ZZZZ, meme topologie de plaquette.
+    #
+    # `build_ising_terms` ne lisait que H_edges, C_edges et K_plaquettes :
+    # la diagonalisation exacte, le recuit simule et les ablations de
+    # `study/` etaient donc STRUCTURELLEMENT aveugles au terme de point X,
+    # que la campagne d'entrainement active pourtant sur 6/6 scenarios.
+    # `h3_term_ablation` mettait meme K_xpoint a zero sur l'ablation
+    # `no_ZZZZ` en croyant l'ablater -- il annulait une cle que
+    # `ground_state_mask` ne lisait jamais.
+    #
+    # `cost_hamiltonian` (le chemin DEPLOYE) ajoute un terme ZZZZ separe
+    # sur les memes quatre qubits ; SparsePauliOp somme les doublons, ce
+    # qui revient a additionner les deux coefficients. On reproduit ce
+    # comportement a l'identique.
+    #
+    # Ecart de seuil, signale et non corrige : `cost_hamiltonian` filtre a
+    # 1e-6, cette fonction a 1e-12. On garde 1e-12 ici pour rester
+    # coherent avec le traitement de K_plaquettes juste au-dessus.
+    KX = hamilt_params.get("K_xpoint")
+    if KX is not None:
+        for i in range(dim):
+            for j in range(dim):
+                kv = float(KX[i, j])
+                if abs(kv) > 1e-12:
+                    plaq_idx.append((
+                        _idx_H(i, j, dim),
+                        _idx_V(i, j + 1, dim),
+                        _idx_H(i + 1, j, dim),
+                        _idx_V(i, j, dim),
+                    ))
+                    plaq_coef.append(kv)
+
     plaq_idx = np.asarray(plaq_idx, dtype=np.int64).reshape(-1, 4)
     plaq_coef = np.asarray(plaq_coef, dtype=np.float64)
 
