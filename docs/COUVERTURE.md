@@ -2025,18 +2025,38 @@ Les sept axes de la fiche, et ce que la suite emprunte vraiment :
 | **Hamiltonien** | non nul **318** | nul **2** | **les deux** |
 | **warm start** | absent **315** | présent **5** | **les deux** |
 | **profondeur AMR** | `depth = 0` | `depth > 0` | **les deux** — le bras borné n'est atteint que par `depth > 0` |
-| **backend** | `state_vector` **320** | échantillonné **0** | **UN SEUL** — le côté échantillonné n'est jamais exécuté |
+| **backend** | `state_vector` **320** | échantillonné **0** → **traversé depuis D-118** | `aer` **sain**, `estimator` **mort** — voir plus bas |
 | **optimiseur** | COBYLA **317** | Powell **1**, L-BFGS-B **1**, Nelder-Mead **1** | **déséquilibré** — un appel chacun |
 
 Et l'axe qui n'est pas dans la fiche mais que le code emprunte, `dim` :
 **2 → 367**, **3 → 133**, **4 → 3**, **8 → 0**. `VQA_DIMS = [2, 4, 8]` : la
 plus grande taille déclarée n'est traversée par aucun test de la suite rapide.
 
-**Deux axes restent donc à traverser**, et ce sont des faits mesurés, pas des
-impressions : le **backend échantillonné** (0 appel) et les **optimiseurs
-autres que COBYLA** (1 appel chacun — assez pour qu'une erreur de bornes y
-survive, c'est exactement ce qui s'était produit avec Powell). C'est la file
-de la prochaine passe.
+**Deux axes restaient donc à traverser**, et ce sont des faits mesurés, pas
+des impressions : le **backend échantillonné** (0 appel) et les
+**optimiseurs autres que COBYLA** (1 appel chacun — assez pour qu'une erreur
+de bornes y survive, c'est exactement ce qui s'était produit avec Powell).
+
+**Le backend échantillonné est traversé depuis D-118** —
+`tests/quantum/test_estimator_backend_axis.py`, 6 cas. Ce qu'il a rendu :
+
+| côté de l'axe | verdict |
+|---|---|
+| `aer` (échantillonné, Aer idéal) | **sain** — les deux chemins finaux de `execute` coïncident à la racine de N près : écart max sur 8 marginales **0,0205 / 0,0102 / 0,0037** à 1 024 / 8 192 / 65 536 tirs, pour un bruit attendu de 0,0312 / 0,0110 / 0,0039. Mesuré à paramètres FIXÉS, sans quoi on mesure l'optimiseur |
+| `estimator` (FakeFez) | **mort — D-118**, à 100 % et à toute taille : 156 qubits physiques pour 2 comme pour 4 logiques, 156 bits classiques, `max_memory_mb` dépassé. Et le placement n'est pas l'identité (`[136, 142, 141, 143]`), donc rendre la mémoire seule produirait des marginales indexées par qubit **physique** — plausibles et fausses. Dette portée par un `xfail(strict=True)` |
+
+**Ce que la traversée a appris sur la méthode.** L'axe ne se traverse pas en
+appelant les deux backends de bout en bout : le résultat diverge alors pour
+une raison qui n'est pas le backend. `EstimatorV2` tire `default_shots`
+**même** sous `AerSimulator(method='statevector')`, donc la boucle
+d'optimisation est stochastique des deux côtés — deux exécutions du **même**
+backend `state_vector` donnent des marginales écartées de **0,143** et des
+paramètres de **0,989**. Comparer deux backends à paramètres libres, c'est
+mesurer cette dispersion, pas l'axe. Le seul geste qui sépare est de figer
+les paramètres.
+
+Reste **les optimiseurs autres que COBYLA** : c'est la file de la prochaine
+passe.
 
 **Ce que cette traversée ne pouvait pas voir, et pourquoi.** L'axe « bord
 borné » était traversé, et D-113 y est resté invisible : en déploiement
