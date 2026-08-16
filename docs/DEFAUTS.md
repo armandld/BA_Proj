@@ -742,6 +742,18 @@ python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
 
 ## D-51 — `study/` teste un Hamiltonien amputé du terme ZZZZ de point X
 
+> **DÉPASSÉE EN PARTIE — lire D-112 (`docs/RESULTS.md`) d'abord.** Le commit
+> `a0e0e02` (16 août 02:24, branche `claude/kind-babbage-927g10`) a implémenté
+> l'une des trois directions ci-dessous : `build_ising_terms` consomme
+> désormais `K_xpoint`. La section « `build_ising_terms` ne peut pas le
+> représenter » ne décrit donc plus le code. Mesuré : les coefficients de
+> plaquette passent de `(4,)` à `(8,)` à `dim = 2`. **Trois tests qui
+> épinglaient l'ancien état sont rouges depuis**, et la remesure qu'ils
+> exigent — rejouer phase 4, T13 et T26 — n'a pas été faite. Ce qui suit reste
+> exact pour tout le reste (le drapeau `advanced_anomalies_enabled` du côté
+> `qaoa_inputs`, la mesure OFF/ON, et le blocage sur D-22).
+
+
 **Où ça bloque.** Pas sur les nombres publiés — la mesure ci-dessous montre
 que le terme est **identiquement nul** à `dim = 2`, la seule résolution d'où
 sortent les nombres publiés. Ça bloque sur la **suite** : `VQA_DIMS = [2, 4, 8]`,
