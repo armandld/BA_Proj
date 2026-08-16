@@ -38,9 +38,17 @@ import train_hyperparams as TH
 #: Le perimetre decide pour la reoptimisation. Ecrit ici en toutes
 #: lettres : si quelqu'un ajoute ou retire un parametre a `SEARCH_SPACE`
 #: sans decision, ce test le dit.
-PERIMETRE_8 = (
+#:
+#: Il l'a dit. `relative_percentile` est le NEUVIEME, ajoute
+#: deliberement : le critere relatif `min(absolu, percentile)` est ce qui
+#: rend les coefficients vivants a N=256, et son percentile etait la
+#: derniere constante en dur du chemin de decision. Neuf tests de ce
+#: fichier sont tombes sur cette ligne — c'est le comportement voulu.
+#: Cablage et mutation verifies par
+#: `tests/pipeline/test_relative_percentile_is_trainable.py`.
+PERIMETRE_9 = (
     "beta", "w_z_frac", "sigma", "beta_curl", "beta_xpoint",
-    "gamma_hydro", "gamma_mag", "kappa",
+    "gamma_hydro", "gamma_mag", "kappa", "relative_percentile",
 )
 
 
@@ -48,9 +56,9 @@ PERIMETRE_8 = (
 #  1. L'espace de recherche declare est celui qu'Optuna recoit
 # ══════════════════════════════════════════════════════════════════
 
-def test_search_space_is_the_eight_parameter_perimeter():
-    assert set(TH.search_space()) == set(PERIMETRE_8)
-    assert len(TH.SEARCH_SPACE) == 8
+def test_search_space_is_the_nine_parameter_perimeter():
+    assert set(TH.search_space()) == set(PERIMETRE_9)
+    assert len(TH.SEARCH_SPACE) == 9
 
 
 def test_threshold_amr_is_fixed_not_searched():
@@ -94,7 +102,7 @@ def test_optuna_receives_exactly_what_the_module_declares():
     explorait cinq. C'est l'origine de D-22.
     """
     dists = _params_actually_offered_to_optuna()
-    assert set(dists) == set(PERIMETRE_8)
+    assert set(dists) == set(PERIMETRE_9)
     for name, (lo, hi, log) in TH.SEARCH_SPACE.items():
         assert dists[name].low == lo, name
         assert dists[name].high == hi, name
@@ -112,7 +120,7 @@ def test_suggest_hyperparams_returns_a_complete_dict():
         return 0.0
 
     study.optimize(objective, n_trials=1)
-    assert set(out) == set(PERIMETRE_8) | {"threshold_amr"}
+    assert set(out) == set(PERIMETRE_9) | {"threshold_amr"}
     assert out["threshold_amr"] == TH.CLASSICAL_BEST_THRESHOLD
 
 
@@ -489,7 +497,7 @@ def test_deployable_params_are_complete_where_best_params_are_not():
     study = _study_with_one_trial()
     assert "threshold_amr" not in study.best_params        # le manque
     params, source = TH.deployable_params(study)
-    assert set(params) == set(PERIMETRE_8) | {"threshold_amr"}
+    assert set(params) == set(PERIMETRE_9) | {"threshold_amr"}
     assert source == "trial_user_attr"
 
 
@@ -498,7 +506,7 @@ def test_deployable_params_says_so_when_it_has_to_rebuild():
     study.optimize(lambda t: float(TH.suggest_hyperparams(t)["beta"]), n_trials=1)
     params, source = TH.deployable_params(study)   # pas d'attribut resolu
     assert source == "rebuilt_from_best_params"
-    assert set(params) == set(PERIMETRE_8) | {"threshold_amr"}
+    assert set(params) == set(PERIMETRE_9) | {"threshold_amr"}
 
 
 def test_saved_json_carries_everything_needed_to_redeploy(tmp_path, monkeypatch):
@@ -509,10 +517,10 @@ def test_saved_json_carries_everything_needed_to_redeploy(tmp_path, monkeypatch)
     path = TH._save_results(p1, p2, p3, filename="out.json")
     saved = json.load(open(path))
 
-    assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_8) | {"threshold_amr"}
+    assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_9) | {"threshold_amr"}
     assert saved["provenance"]["git_commit"] != ""
     assert "argv" in saved["provenance"]
-    assert set(saved["search_space"]) == set(PERIMETRE_8)
+    assert set(saved["search_space"]) == set(PERIMETRE_9)
     assert saved["fixed_params"]["threshold_amr"] == TH.CLASSICAL_BEST_THRESHOLD
     assert saved["scenarios"]["all"] == [k for k, _ in TH.SCENARIOS_ALL]
     assert saved["lambda_cost"] == TH.LAMBDA_COST_SOFT
@@ -558,7 +566,7 @@ def test_print_space_answers_before_any_core_is_rented(capsys):
     verification qu'on fait AVANT de lancer une semaine de calcul."""
     assert TH.main(["--print-space"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert set(payload["search_space"]) == set(PERIMETRE_8)
+    assert set(payload["search_space"]) == set(PERIMETRE_9)
     assert payload["fixed_params"]["threshold_amr"] == TH.CLASSICAL_BEST_THRESHOLD
     assert payload["scenarios"]["all"] == [k for k, _ in TH.SCENARIOS_ALL]
     assert set(payload["n_trials"]) == set(TH.PHASES)
@@ -572,7 +580,7 @@ def test_print_space_from_the_command_line():
         env={**os.environ, "PYTHONPATH": os.path.join(_REPO_ROOT, "src")})
     assert out.returncode == 0, out.stderr
     payload = json.loads(out.stdout[out.stdout.index("{"):])
-    assert set(payload["search_space"]) == set(PERIMETRE_8)
+    assert set(payload["search_space"]) == set(PERIMETRE_9)
 
 
 def test_every_phase_name_the_cli_accepts_is_routable():
@@ -723,8 +731,8 @@ def test_the_full_run_writes_its_json(cheap_phases, tmp_path, monkeypatch):
     monkeypatch.setattr(TH, "_DIRS_READY", True)
     TH.main(["--phase", "all", "--seed", "3"])
     saved = json.load(open(tmp_path / "best_hyperparams.json"))
-    assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_8) | {"threshold_amr"}
-    assert set(saved["deploy"]["classical"]) == set(PERIMETRE_8) | {"threshold_amr"}
+    assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_9) | {"threshold_amr"}
+    assert set(saved["deploy"]["classical"]) == set(PERIMETRE_9) | {"threshold_amr"}
 
 
 def test_a_missing_seed_is_announced_not_silently_random(cheap_phases, capsys,

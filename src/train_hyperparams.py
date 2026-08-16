@@ -30,10 +30,18 @@ Sensitivity is SPLIT by term type:
 - β_curl:  plaquette ZZZZ (vorticity, current density — curl-like quantities)
 - β_xpoint: X-point ZZZZ (reconnection — very sparse, localized at X-points)
 
-Espace de recherche — 8 parametres, un seul, identique aux trois phases
+Espace de recherche — 9 parametres, un seul, identique aux trois phases
 ----------------------------------------------------------------------
     beta, w_z_frac, sigma, beta_curl, beta_xpoint,
-    gamma_hydro, gamma_mag, kappa
+    gamma_hydro, gamma_mag, kappa, relative_percentile
+
+`relative_percentile` est le neuvieme, ajoute apres la correction du
+dimensionnement des coefficients : le critere de maille est ABSOLU et
+croit en 1/dx^2, si bien qu'a la resolution d'entrainement N=256 aucune
+cellule ne l'atteignait et les termes a quatre corps etaient nuls sur les
+QUATRE scenarios. Le critere relatif `min(absolu, percentile)` les
+ranime ; son percentile etait la derniere constante en dur du chemin de
+decision, et rien ne justifiait de la fixer a la main.
 
 `threshold_amr` n'en fait PAS partie : il est gele a la valeur du meilleur
 essai de l'etude classique, pour que la comparaison porte sur ce que le
@@ -603,6 +611,21 @@ SEARCH_SPACE = {
     # `g_strain + g_rot == 1` exactement : kappa ne pilote qu'UN degre de
     # liberte, pas deux.
     "kappa":       (0.5,  50.0,  True),
+    # Percentile du critere RELATIF (`PhysicalMapper._effective_crit`).
+    # Le seuil effectif vaut `min(absolu, percentile(signal))` : ce
+    # parametre ne pilote QUE le regime ou aucune cellule n'atteint le
+    # critere physique de Reynolds-maille — c'est-a-dire la resolution
+    # d'entrainement N=256, ou le seuil absolu croit en 1/dx^2 et efface
+    # tout. Sans dimension : c'est un rang dans la distribution du champ
+    # courant, pas une amplitude.
+    #
+    # Bornes. 50 = la mediane : la moitie des cellules passent le seuil,
+    # ce qui sature l'AMR — deja une borne large. 99 = une cellule sur
+    # cent, en dessous du grain d'un patch (min_patch_size=6, soit 36
+    # cellules) : au-dela, le critere relatif ne designerait plus assez
+    # de cellules pour former un patch et redeviendrait le seuil absolu
+    # par un autre chemin. Echelle lineaire.
+    "relative_percentile": (50.0, 99.0, False),
 }
 
 #: Ce que l'objectif FIXE, avec sa valeur — donc ce qu'aucune campagne ne
@@ -627,7 +650,8 @@ def search_space(names_only=True):
 
 
 def suggest_hyperparams(trial, frozen=None):
-    """Propose les 8 parametres a Optuna et renvoie le dictionnaire COMPLET.
+    """Propose les parametres de `SEARCH_SPACE` a Optuna et renvoie le
+    dictionnaire COMPLET.
 
     Complet veut dire : parametres explores + parametres fixes + parametres
     geles par l'appelant. C'est ce dictionnaire-la, et non
@@ -916,6 +940,11 @@ PHASE1_SEED_GRID = {
     "gamma_hydro": [2.0],
     "gamma_mag":   [0.5],
     "kappa":       [10.0],
+    # La campagne gelee ne connaissait pas ce parametre : la graine vaut
+    # `PhysicalMapper.RELATIVE_PERCENTILE`, de sorte que le premier essai
+    # reproduise EXACTEMENT le comportement actuel et que tout ecart
+    # mesure ensuite vienne de l'exploration, pas du point de depart.
+    "relative_percentile": [90.0],
 }
 
 
@@ -935,7 +964,13 @@ def phase1_seeds():
 
 
 def _run_phase1(dns_traces, seed=None):
-    """Phase 1 : perte composite sur les 4 scenarios isoles, 8 parametres."""
+    """Phase 1 : perte composite sur les 4 scenarios isoles.
+
+    Le nombre de parametres n'est pas ecrit ici : il vaut
+    `len(SEARCH_SPACE)`, et la ligne « Training: » ci-dessous
+    l'imprime. Une valeur figee dans une docstring se serait
+    desynchronisee au premier ajout — elle l'avait deja fait.
+    """
     print("=" * 60)
     print("PHASE 1: Composite Training (4 scenarios isoles)")
     print(f"  Training: {', '.join(search_space())}")

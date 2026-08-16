@@ -67,7 +67,7 @@ class PhysicalMapper:
     def __init__(self, cs=1.0, nu=1e-3, eta_mhd=1e-3, dx=1.0,
                  gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0,
                  sigma=0.05, beta_curl=None, beta_xpoint=None,
-                 w_z_frac=0.15,
+                 w_z_frac=0.15, relative_percentile=None,
                  beta_grad=None, fixed_curl=True):
         self.cs = cs
         self.nu = nu
@@ -106,6 +106,13 @@ class PhysicalMapper:
         self.gamma_mag = gamma_mag
         self.kappa = kappa
         self.w_z_frac = w_z_frac  # Adaptive Z weight: fraction of max(|C|,|K|)
+        # Percentile du critere relatif. Reglable par instance parce qu'il
+        # est ENTRAINE (`SEARCH_SPACE`) : c'etait la derniere constante en
+        # dur du chemin de decision. `None` retient la constante de classe,
+        # donc le comportement d'avant, a l'identique.
+        self.relative_percentile = (float(relative_percentile)
+                                    if relative_percentile is not None
+                                    else self.RELATIVE_PERCENTILE)
 
     # ══════════════════════════════════════════════════════════════════
     #  f-gate: Normal-Critical scaling (absolute physical non-dimensionalization)
@@ -178,8 +185,7 @@ class PhysicalMapper:
         x = np.clip(-kappa * (np.abs(Jz_curl) / (J_crit + 1e-10) - 1.0), -500, 500)
         return 1.0 / (1.0 + np.exp(x))
 
-    @classmethod
-    def _effective_crit(cls, signal, crit_absolu):
+    def _effective_crit(self, signal, crit_absolu):
         """Seuil effectif : `min(absolu, percentile)`.
 
         Le seuil de maille est ABSOLU : `RE_CRIT nu/(dx^2 v0)`. Il croit
@@ -220,7 +226,7 @@ class PhysicalMapper:
             return crit_absolu
         if float(fini.max()) >= crit_absolu:
             return crit_absolu          # le critere physique tire deja
-        return float(np.percentile(fini, cls.RELATIVE_PERCENTILE))
+        return float(np.percentile(fini, self.relative_percentile))
 
     @staticmethod
     def _compute_det_jacobian_B(Bx, By, dx):
