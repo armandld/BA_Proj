@@ -101,6 +101,8 @@ fusion ; la numérotation reprend à D-48 pour ne pas entrer en collision.)*
 | D-10 | `compare_rotor_budget` levait `TypeError` à l'étape 4/5, et ses défauts demandaient **69 Go** | n'a **jamais** tourné → tourne, garde posée avant le DNS | `pytest tests/pipeline/test_compare_rotor_budget.py` |
 | D-49 | `recompute_lambda_scores.main` rattrapait **tout** dans un `except Exception` et rendait la main | échec total → **code 0** ; base absente comme répertoire non écrivable → **code 1**, cause réelle | `pytest tests/pipeline/test_recompute_lambda_scores.py -k d49` |
 | D-50 | `analyze_hyperparams.main` : même piège, et le message accusait **Neon** pour un fichier local absent | **code 0** → **code 1**, cause réelle ; plus aucune mention de Neon | `pytest tests/pipeline/test_analyze_hyperparams.py -k d50` |
+| D-68 | deux lanceurs de `scripts/` pointaient **entièrement** dans le vide ; `generate_figures_v1.sh` sautait ses 17 scripts et rendait **`Succeeded: 0  Failed: 0`, code 0** | campagne verte sans **aucune** figure → échec si `SUCCEEDED == 0`, chemins repointés, `ROOT_DIR` corrigé | `pytest tests/lint/test_scripts_point_somewhere.py` |
+| D-69 | `RELATIVE_PERCENTILE` était une constante **en dur** sur le chemin de décision, alors que c'est elle qui ranime les termes à quatre corps à N=256 | non entraînable → 9ᵉ paramètre de `SEARCH_SPACE`, câblé de bout en bout | `pytest tests/pipeline/test_relative_percentile_is_trainable.py` |
 
 **Le chemin d'entraînement** — audité parce qu'il produit le nombre que la campagne minimise
 
@@ -5929,3 +5931,106 @@ fois certifiée et non dégénérée. À `dim = 2`, la question n'a pas de sens.
   revoir. Aucune campagne Optuna ne trouvera cela.
 
 À enregistrer avant de lancer, pas après.
+
+
+# D-69 — le percentile du critère relatif devient entraînable
+
+`min(absolu, percentile)` est ce qui rend `K_plaquettes` et `K_xpoint`
+non nuls à la résolution d'entraînement. Le seuil de maille est **absolu**
+et croît en `1/dx²` : à N=256 aucune cellule ne l'atteignait, et le terme
+à quatre corps valait zéro sur les **quatre** scénarios. Le percentile qui
+prend le relais valait `90.0`, écrit en dur — la dernière constante du
+chemin de décision que rien ne justifiait de fixer à la main.
+
+## Ce que le paramètre pilote, mesuré
+
+Réseau de tourbillons périodique, N=64, Re=Rm=800, hyperparamètres
+déployés, à travers la **vraie** `compute_coefficients` :
+
+| `relative_percentile` | `K_plaquettes` non nuls | `\|K\|` max |
+|---|---|---|
+| 50 | 2040 / 4096 | 5,879e+00 |
+| 90 | 404 / 4096 | 4,254e-01 |
+| 99 | 32 / 4096 | 1,726e-02 |
+
+Deux ordres de grandeur d'amplitude entre les bornes de l'espace de
+recherche : ce n'est pas un réglage cosmétique, c'est le nombre de patchs
+que l'AMR ouvrira.
+
+**Bornes.** 50 = la médiane, la moitié des cellules passent le seuil, ce
+qui sature l'AMR. 99 = une cellule sur cent, sous le grain d'un patch
+(`min_patch_size = 6`, soit 36 cellules) : au-delà, le critère relatif ne
+désignerait plus assez de cellules pour former un patch et redeviendrait
+le seuil absolu par un autre chemin.
+
+**L'invariant qui rend le paramètre sûr** : dès qu'une cellule franchit le
+critère physique, le comportement d'origine est conservé à l'identique,
+quelle que soit la valeur entraînée. Le percentile ne *remplace* jamais la
+physique, il ne prend le relais que là où elle est muette.
+
+## Le câblage, qui est l'essentiel
+
+L'ajouter à `SEARCH_SPACE` sans le câbler aurait été **D-31 à l'identique**
+— un paramètre optimisé que rien ne lit, payé au prix plein de la campagne.
+C'est d'ailleurs ce qui a failli arriver : la première insertion a atterri
+dans le bloc **mort** de `pipeline.py` (un littéral triple-quote qui
+contient un `hp.get` par paramètre). Le nom n'était alors défini nulle
+part, et `PhysicalMapper(relative_percentile=…)` aurait levé `NameError`
+au premier essai.
+
+Deux gardes ferment ce trou :
+
+1. un balayage AST qui exige un `hp.get` **vivant** pour *chaque* nom de
+   `SEARCH_SPACE` — l'AST ne descend pas dans les littéraux de chaîne,
+   donc le bloc mort ne peut pas satisfaire le test ;
+2. une mutation mesurée à travers `compute_coefficients`, qui échoue si
+   `__init__` rangeait la valeur dans un attribut que personne ne lit.
+
+`_effective_crit` passe de `@classmethod` à méthode d'instance ; `None`
+retient la constante de classe, donc le comportement d'avant. La graine de
+phase 1 vaut `90.0`, pour que le premier essai reproduise exactement
+l'état actuel et que tout écart mesuré ensuite vienne de l'exploration.
+
+Le périmètre passe de **8 à 9**. `PERIMETRE_8` devient `PERIMETRE_9` ; les
+neuf tests tombés sur cette ligne sont le comportement voulu — c'est la
+raison d'être de cette constante.
+
+# D-68 — deux lanceurs qui ne lançaient rien
+
+Trouvé en exécutant la recette de `CLAUDE.md`.
+
+`scripts/run_study_v3.sh` : les **quinze** chemins qu'il nommait pointaient
+dans le vide (`study/v3/`, `study/results/`, `tests/v3/`,
+`study/phase11_upper_bound.py`) — le script datait de deux réorganisations
+en arrière. En prime `ROOT_DIR` remontait de deux crans (`../..`) alors que
+le script est descendu dans `scripts/`, un seul cran sous la racine : il
+désignait le **parent du dépôt**. Sa seule étape qui « passait » était un
+`pytest` sur `tests/v3/`, vide : *no tests ran*, code de retour **0**.
+
+`scripts/generate_figures_v1.sh` portait la version la plus dangereuse.
+`FIGURES_CODE_DIR` pointait sur un `figures_code/` disparu — les 17
+scripts vivent dans `figures/v1_legacy/` — et la boucle dit :
+
+```bash
+if [[ ! -f "$script_path" ]]; then log "  SKIP: $script"; continue; fi
+```
+
+Les 17 scripts tombaient donc dans la branche `SKIP`, le lanceur annonçait
+**`Succeeded: 0  Failed: 0`** et rendait **0**. Une campagne de figures
+verte qui ne produit aucune figure. Un compteur `SKIPPED` et une clause
+d'échec sur `SUCCEEDED == 0` ferment le trou.
+
+Sa sortie n'écrase plus `best_hyperparams.json` — **entrée gelée** de
+l'étude, le seul dossier qu'aucune commande ne reproduit — mais écrit
+`best_hyperparams.regenerated.json` à côté. Un lanceur de figures qui
+réécrit les hyperparamètres changerait la science en produisant une image.
+
+`CLAUDE.md` portait trois erreurs de fait, corrigées : le module à
+réutiliser (`phase11_upper_bound.py` n'existe pas ; les cinq fonctions
+sont dans `h2b_ceiling_random_split.py`), l'ordinal du test de
+non-régression (**quatrième**, pas troisième) et son état attendu
+(**164 OK / 16 DIFF / 0 MISSING**, pas `0 DIFF`).
+
+C'est le piège n° 3 de `COUVERTURE`, « balayage vide », appliqué aux
+**lanceurs** plutôt qu'aux tests : un lanceur qui ne lance rien ressemble
+exactement à un lanceur qui a tout lancé.
