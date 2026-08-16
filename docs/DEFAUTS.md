@@ -90,6 +90,24 @@ coïncide. Le code d'entraînement, lui, est cohérent avec les bases : il fixe
 `threshold_amr` à 0,14959824837662078, exactement le meilleur essai
 classique. **C'est le JSON qui est orphelin.**
 
+**Précision mesurée (D-108) : la ligne `sigma` ci-dessus ne dit pas ce
+qu'elle semble dire.** `sigma` est bien échantillonné par `q_has_v2_phase1.db`
+et bien absent du JSON déployé — les deux faits tiennent. Mais l'absence
+n'est pas un abandon au déploiement : le JSON **ne vient pas de cette
+base**. Il porte les clés de scénario de l'ancienne génération
+(`lamb_oseen_vortex`, `island_coalescence`), que les CSV de la campagne vive
+n'ont plus (`ot`, `rotor`), et ses 8 paramètres sont **exactement ceux qui
+survivent au défaut D-108** — l'extracteur jetait `param_beta_grad`, le
+prédécesseur de `sigma`, sur toute campagne de cette génération (579 valeurs
+jetées, mesuré). La forme à 8 paramètres est donc un **produit de
+l'extracteur**, pas un témoignage sur ce qui a été échantillonné, et elle ne
+peut pas servir d'argument sur le sort de `sigma`.
+
+Ce que la mesure **ne** change **pas** : le JSON reste orphelin. Balayage des
+13 CSV du dépôt — aucune ligne ne partage une seule valeur de paramètre ni le
+score avec lui. Le repli de `pipeline.py` sur `sigma = 0,05`, valeur
+qu'aucun essai n'a choisie, reste donc entier.
+
 **Où on en est.** Ne se corrige pas par du code seul. Seule la réoptimisation
 le règle. Trois paramètres n'ayant jamais été échantillonnés, ce sera pour eux
 une *première*, pas une reprise.

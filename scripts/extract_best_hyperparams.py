@@ -70,15 +70,41 @@ CLASSICAL_DIR_PATTERN = re.compile(
 
 
 def _detect_param_cols(header):
-    """Auto-detect whether CSV has shared or split Michelson betas."""
+    """Auto-detect whether CSV has shared or split Michelson betas.
+
+    D-108 — pourquoi l'ancienne version etait fausse. La branche testait
+    `param_beta_grad` dans l'en-tete puis renvoyait `PARAM_COLS_SPLIT`, qui
+    ne contient pas cette colonne : la generation de campagne que la fonction
+    reconnait explicitement voyait son 9e parametre jete sans un mot, et le
+    JSON ecrit portait 8 parametres la ou le CSV en portait 9. Trois
+    generations de noms coexistent (`beta_michelson` -> `beta_grad` ->
+    `sigma`) et chaque renommage rejouait le meme piege.
+
+    Mesure (avant) sur `results/hyperparams/optuna_studies/GOOD_RESERVE/
+    GOOD_reserve_v2/before_halo_fix/` : 4 campagnes quantiques a 9 colonnes
+    `param_*`, 8 parametres extraits, **579 valeurs `beta_grad`
+    echantillonnees jetees** (etendue 0,100000 a 2,000000).
+
+    On garde l'ordre canonique et on AJOUTE toute colonne `param_*` presente
+    dans l'en-tete qu'il ne nomme pas, en la signalant : une extraction ne
+    peut pas perdre en silence ce que la campagne a echantillonne (meme
+    famille que D-55/D-56, un balayage vide doit crier).
+    """
     if 'param_sigma' in header or 'param_beta_grad' in header:
-        cols = PARAM_COLS_SPLIT
+        cols = list(PARAM_COLS_SPLIT)
     elif 'param_beta_michelson' in header:
-        cols = PARAM_COLS_SHARED
+        cols = list(PARAM_COLS_SHARED)
     elif 'param_threshold_amr' in header:
-        cols = PARAM_COLS_CLASSICAL
+        cols = list(PARAM_COLS_CLASSICAL)
     else:
-        cols = PARAM_COLS_SHARED
+        cols = list(PARAM_COLS_SHARED)
+
+    extras = [c for c in header
+              if c.startswith('param_') and c not in cols]
+    if extras:
+        print(f"  [extra] colonnes hors du jeu canonique, extraites telles "
+              f"quelles : {', '.join(extras)}", file=sys.stderr)
+        cols.extend(extras)
     return cols
 
 
