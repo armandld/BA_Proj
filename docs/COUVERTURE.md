@@ -2056,9 +2056,46 @@ déviation qui doit rester, un jeton qui ne doit pas apparaître) ; c'est **faux
 quand l'objet est un comportement que le texte ne fait qu'indiquer. D-114 était
 du second type ; les deux autres sondés sont du premier.
 
-**Ce sondage n'est pas un balayage.** 61 sites n'ont pas été lus. Ils sont le
-terrain neuf le plus immédiat de la prochaine passe — et le tri ci-dessus donne
-le critère.
+**Passe suivante (16 août) — un premier tri automatisé, puis une vérification
+individuelle qui le contredit largement.** Un agent a relu les 61 sites
+restants contre le critère ci-dessus et en a classé 27 « suspects ». Trois de
+ces 27 ont été vérifiés à la main cette passe, par mutation (désactiver le
+comportement réel, garder le texte source intact, relancer le test) :
+
+| site | verdict du tri automatisé | vérifié par mutation |
+|---|---|---|
+| `test_t19_divergence_audit.py:78` (`DIVERGENCE_PENALTY`) | suspect | **faux positif** — le tri a lu au présent une docstring qui parle au passé (« était redéfinie quatre fois ») — le défaut est déjà corrigé et déjà verrouillé ailleurs par `test_the_divergence_penalty_has_a_single_definition`, qui compte les définitions par regex) |
+| `test_solver_guards_and_objective.py:138` (avertissement sigma D-22) | suspect | **surestimé** — le comportement réel (`sigma_source == "default"`) est déjà vérifié fonctionnellement par `test_train_hyperparams_smoke.py:203` ; seule la spécificité « lève bien un `RuntimeWarning` » (par opposition à seulement l'enregistrer) reste non exécutée — un écart réel mais mineur, pas la régression silencieuse annoncée |
+| `test_t28_t29_labels_and_ci.py:118` (seuil dégénéré) | suspect | **confirmé** — `relabel()` n'était jamais appelé ; un garde désactivé (`if False:`) laissait le texte du message en code mort et le test restait vert. Corrigé, mesuré, verrouillé → **D-115** ci-dessus |
+
+**Calibrage à retenir avant la prochaine passe** : sur cet échantillon de 3,
+le tri automatisé s'est trompé ou a exagéré 2 fois sur 3. Ce n'est pas le
+taux du dépôt (`CODE_REVIEW.md` : la majorité du code est juste, un défaut
+sur trois sondés à la main) — c'est le taux d'un **premier passage
+automatisé non vérifié**, et il ne suffit pas à promouvoir une entrée en
+défaut. Chaque site restant doit repasser par la vérification par mutation
+avant d'entrer dans `DEFAUTS.md`, pas seulement par la lecture qui l'a
+signalé.
+
+**24 sites restent non vérifiés** (sur les 27 signalés par le tri, candidats
+seulement — ne pas les citer comme défauts sans les rejouer) :
+`test_hyperparams_provenance_break.py:171,211` ·
+`test_objective_and_estimators_analytic.py:574` ·
+`test_h0_panel_resume.py:97,108,199` ·
+`test_provenance.py:108` ·
+`test_t22c_transfer.py:120` ·
+`test_fixed_curl_variant.py:183` ·
+`test_silent_failure_sweep.py:82` (usages 141, 165, 193) ·
+`test_hyperparams_two_sources.py:226` (usage 232) ·
+`test_v1_legacy_instrumented_bfs_score_grid.py:100` ·
+`test_t28_t29_labels_and_ci.py:103,179` ·
+`test_t24_leak_free.py:150,154,181,200,207,224,233,269,277` ·
+`test_h0_panel_guards.py:67`.
+
+**Ce sondage n'est pas un balayage.** Avec les 3 vérifiés cette passe (6 au
+total sur 64), 58 sites restent sans verdict fiable — 24 avec un tri qui
+demande confirmation, 34 jamais relus. Terrain neuf de la prochaine passe,
+dans cet ordre : d'abord confirmer ou infirmer les 24, puis lire les 34.
 
 ---
 

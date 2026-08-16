@@ -108,16 +108,38 @@ def test_the_variant_never_overwrites_the_original():
     )
 
 
-def test_the_relabeller_refuses_a_degenerate_threshold():
+def test_the_relabeller_refuses_a_degenerate_threshold(tmp_path, monkeypatch):
     """Un seuil nul labelliserait 100 % des patches comme durs.
 
     C'est ce qui arrive a N=64 dim=64 (patches de 1x1 cellule) dans
     phase2 : seuil 0.000000, 100 % durs, et rien ne crie.
+
+    Remesure du 16 aout (D-115). La version precedente cherchait les
+    chaines "seuil global degenere" et "thr_global <= 0.0" dans le
+    source de `labels_global_threshold.py`, sans jamais appeler
+    `relabel()`. Un garde desactive (`if False:` au lieu du test reel,
+    le texte du message laisse intact plus bas comme code mort) laisse
+    ce texte en place : l'ancienne version du test passait toujours.
+    Le test interroge desormais le comportement : des artefacts dont
+    les erreurs L2 sont toutes nulles doivent faire lever `SystemExit`.
     """
-    src = open(_study_file("labels_global_threshold.py"),
-               encoding="utf-8").read()
-    assert "seuil global degenere" in src
-    assert "thr_global <= 0.0" in src
+    import importlib
+    labels_global_threshold = importlib.import_module(
+        "labels_global_threshold")
+    monkeypatch.setattr(labels_global_threshold, "RESULTS_DIR",
+                         str(tmp_path))
+
+    for sc in SCENARIOS:
+        np.savez_compressed(
+            os.path.join(tmp_path, f"patches_{sc}_Re1_N4_dim4.npz"),
+            l2_errors=np.zeros(4), classical_scores=np.zeros(4),
+            is_hard=np.zeros(4, dtype=bool), l2_threshold=0.0,
+            scenario=sc, Re=1, N=4, n_patches=4, t=0.0,
+        )
+
+    with pytest.raises(SystemExit, match="seuil global degenere"):
+        labels_global_threshold.relabel(dim=4, N=4, Re=1,
+                                         outdir=str(tmp_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════
