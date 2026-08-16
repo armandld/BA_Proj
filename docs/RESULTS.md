@@ -5720,3 +5720,72 @@ Les artefacts `dim = 2` et `dim = 3` ont été produits avec **quatre**
 4. un quart des termes retenus que le circuit rejette.
 
 La relance est donc nécessaire avant toute lecture de D-45, D-47 ou D-53.
+
+---
+
+# Relance `dim = 3` sur l'hamiltonien corrigé : D-53 tient
+
+**Commande.**
+`python study/h0_selection/h0_optimiser_equivalence.py --dim 3 --N 96 --re 400`
+→ `results/h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`
+
+Relancé après les quatre corrections : `K_xpoint` branché dans
+`build_ising_terms`, drapeau des anomalies à `True`, `g_mag` en unités
+physiques, seuil aligné sur `COEFF_MIN = 1e-6`.
+
+## Mon hypothèse est réfutée
+
+J'avais avancé que D-45, D-47 et D-53 pouvaient être trois symptômes d'une
+cause unique — un hamiltonien vide. **La mesure dit non.**
+
+| | ancien | nouveau |
+|---|---|---|
+| `\|E\|` max | 4,154e+01 | 4,146e+01 |
+| `E_gap` max | 1,887e+00 | 1,886e+00 |
+| `E_gap` médian | 1,792e−01 | **2,836e−02** |
+
+L'hamiltonien **n'était pas vide** à `dim = 3` : les énergies sont
+quasi identiques avant et après. Les corrections ont resserré le paysage —
+l'écart médian au fondamental chute d'un facteur 6 — sans changer son
+échelle.
+
+## Le verdict tient
+
+| solveur | hit ancien | hit nouveau |
+|---|---|---|
+| `exhaustive` (certifié) | 1,000 | 1,000 |
+| `greedy` | 0,844 | 0,833 |
+| `sa_warm` | 0,750 | 0,833 |
+| `classical_init` | **0,500** | **0,500** |
+| `qaoa_p1` | 0,156 | **0,083** |
+| `qaoa_p2` | 0,156 | 0,083 |
+| `qaoa_p3` | 0,125 | 0,083 |
+
+**Le QAOA reste très loin sous sa propre initialisation classique.** Le
+critère pré-enregistré du module lève toujours : *« des solveurs
+déterministes n'atteignent plus l'optimum certifié […] H0 (l'échec vient de
+l'optimiseur) redevient plausible »*.
+
+**Réserve sur l'ampleur.** 0,156 → 0,083 est *dans* la dispersion
+run-to-run du bras QAOA (1,79e−1 à 3,61e−1, mesurée par ce dépôt). Je ne
+prétends donc pas que le QAOA a empiré : **le classement est identique**, et
+c'est le classement qui fait foi ici. `qaoa_shots_p3` valait `nan` dans
+l'ancien artefact — il n'y avait pas été exécuté.
+
+## Ce que ça vaut
+
+D-53 portait sur un hamiltonien auquel il manquait le terme de point X,
+dont le canal magnétique était écrasé d'un facteur `1/dx`, et dont un quart
+des termes étaient étrangers au circuit. **Il porte désormais sur un
+hamiltonien qui inclut les quatre familles, dimensionnellement cohérent, et
+identique à celui que le circuit exécute à 5,3e−15 près.**
+
+Le verdict n'en est pas affaibli — il en sort **beaucoup plus difficile à
+écarter**.
+
+## L'artefact de l'agent a été préservé
+
+La relance écrivait sur `h0_optimiser_equivalence_N96_dim3.npz`, l'artefact
+qui porte D-53. Il est **restauré** ; la nouvelle mesure vit sous
+`..._hamiltonien_corrige.npz`. Les deux doivent coexister : ils mesurent
+deux hamiltoniens différents, et c'est leur comparaison qui a de la valeur.
