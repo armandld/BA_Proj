@@ -265,3 +265,54 @@ def test_au_dessus_du_critere_absolu_le_percentile_ne_sert_a_rien():
     for p in (50.0, 75.0, 90.0, 99.0):
         assert PhysicalMapper(relative_percentile=p)._effective_crit(
             signal, crit_absolu) == crit_absolu
+
+
+def test_le_defaut_est_un_NO_OP_bit_a_bit():
+    """Le chemin par defaut doit etre INCHANGE, pas « equivalent ».
+
+    `_effective_crit` est passee de `@classmethod` a methode d'instance :
+    tout appelant qui ne passe rien doit obtenir exactement ce qu'il
+    obtenait avant. Trois tests de la suite QAOA ont echoue lors du
+    passage de recette suivant cette modification ; ils passent tous a la
+    reexecution, et le bras QAOA n'est seme NULLE PART dans `src/VQA/`
+    (`tests/quantum/test_qaoa_arm_is_sampled.py` l'epingle). Ce test
+    ferme l'autre explication -- que la valeur par defaut ait bouge --
+    par une comparaison bit-a-bit plutot que par un raisonnement.
+    """
+    from Simulation.grid import PeriodicGrid
+    from Simulation.solver import MHDSolver
+    from Simulation.PhysToAngle import AngleMapper
+
+    N, RE, RM = 64, 800, 800
+    HP = dict(gamma_hydro=2.1272, gamma_mag=2.3611, kappa=14.3321,
+              sigma=0.05, beta_curl=0.8199, beta_xpoint=0.4256,
+              w_z_frac=0.1013)
+    grid = PeriodicGrid(N)
+    sim = MHDSolver(grid, dt=1e-3, Re=RE, Rm=RM)
+    x = np.arange(N) * grid.dx
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    k = 2.0 * np.pi / grid.L
+    sim.vx = -np.cos(k * X) * np.sin(k * Y)
+    sim.vy = np.sin(k * X) * np.cos(k * Y)
+    sim.Bx = np.ones_like(X)
+    sim.By = np.zeros_like(X)
+    etat = sim.get_fluxes()
+    score = AngleMapper.classical_score(etat)
+
+    def coeffs(**extra):
+        m = PhysicalMapper(cs=1.0, nu=grid.L / RE, eta_mhd=grid.L / RM,
+                           dx=grid.dx, **HP, **extra)
+        return m.compute_coefficients(sim, score, etat, threshold_amr=0.5,
+                                      advanced_anomalies_enabled=True)
+
+    defaut = coeffs()                                          # rien de passe
+    explicite = coeffs(relative_percentile=                    # l'ancienne
+                       PhysicalMapper.RELATIVE_PERCENTILE)     # constante
+
+    assert set(defaut) == set(explicite)
+    for cle in defaut:
+        a, b = np.asarray(defaut[cle]), np.asarray(explicite[cle])
+        assert a.shape == b.shape, cle
+        assert np.array_equal(a, b), (
+            f"`{cle}` differe entre le defaut et la constante de classe : "
+            f"le chemin par defaut n'est PAS un no-op.")
