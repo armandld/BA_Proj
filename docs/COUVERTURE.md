@@ -1764,6 +1764,112 @@ mesure — juste écrit pour que la prochaine passe qui fait tourner `fig17`
 la première fois sache où regarder si elle le refait tourner une seconde
 fois après un changement d'hyperparamètres.
 
+## `figures/v1_legacy/` — passe du 16 août, dernier lot : fig6, fig7, fig8, fig12, fig14
+
+Cinq fichiers, tous **lus en entier**. Ils fermaient le module :
+`fig_utils`, fig0 à fig5, fig9 à fig13 et fig15 à fig17 l'étaient déjà.
+
+**Axes traversés** (la fiche en liste sept) : profondeur AMR `depth = 0`
+**et** `depth > 0` (`solve_max_depth = 5` mesuré à N=256, `min_size=6`) ;
+bord de patch périodique **et** borné (les deux constructeurs, via
+`run_adaptive_vqa`/`run_adaptive_classical`) ; bras quantique **et**
+classique ; backend `state_vector` ; Hamiltonien non nul ; COBYLA ;
+`AdvAnomaliesEnable = True` (`run_hierarchical_comparison`). **Non
+traversés** : backend échantillonné, warm start, Hamiltonien nul,
+optimiseurs autres que COBYLA — aucun de ces fichiers ne les emprunte.
+
+| fichier | verdict |
+|---|---|
+| `fig6_statistical_validation.py` | **sain sur ses valeurs**, un contrat inexact |
+| `fig7_physical_fidelity.py` | **D-104** (corrigé) et **D-105** (corrigé) |
+| `fig8_hierarchical_comparison.py` | **sain sur ses valeurs**, deux calculs morts |
+| `fig12_depth_analysis.py` | **D-106** (corrigé) |
+| `fig14_boundary_correction.py` | **abandonné par décision**, code mort |
+
+### `fig6` — la question posée, et la réponse mesurée contre moi
+
+Le module annonce *« Each seed creates a genuinely different simulation
+(tiny initial perturbation) so the captured-fraction samples are
+independent »*, et `perturb_sim` promet un décalage *« large enough to
+produce different VQA decisions and different GT error maps »*. Deux
+raisons de douter : la perturbation est appliquée **après** les `n_steps`,
+donc ce n'est pas une perturbation *initiale* et la simulation n'est jamais
+rejouée ; et son amplitude est de `1e-4 × rms`. Si les dix graines
+rendaient la même valeur, l'IC bootstrap serait de largeur nulle et la
+p-valeur de permutation vaudrait 2⁻¹⁰ ≈ 0,001 — « *** » — par construction.
+
+**Mesuré** (`init_kelvin_helmholtz`, N=256, 400 pas, `TARGET_DIM=2`,
+`MIN_SIZE=6`, `K_opt=40`, seuils du dépôt, 3 graines) : les trois graines
+rendent **trois valeurs distinctes**. Q-HAS 0,9921 / 0,9882 / 0,9979
+(étendue 9,7e-03), classique 0,9943 / 0,9949 / 0,9912 (étendue 3,7e-03) ;
+déviation relative max de la carte GT 7,7e-03. **Le contrat tient** : les
+échantillons ne sont pas dégénérés, la p-valeur n'est pas fabriquée.
+
+Reste **inexact et non corrigé** (ni valeur ni décision n'en dépendent) :
+la perturbation n'est pas *initiale*, et `make_sim` est rejoué à l'identique
+à chaque graine (déterministe, aucun tirage) — dix simulations complètes
+pour un état qui ne change pas. Écrit ici, pas dans le code.
+
+Vérifié aussi : `permutation_pvalue` est bien le test de signe unilatéral
+que sa docstring annonce ; `cohens_d` est le `d_z` apparié (`ddof=1`) avec
+son garde `d_std > 1e-12` ; les seuils des deux bras sont **distincts**
+(`TRAINED_PARAMS` pour Q-HAS, `CLASSICAL_PARAMS` pour le classique) — pas
+le défaut de D-101.
+
+### `fig8` — sain sur ses valeurs, deux calculs morts et deux commentaires faux
+
+Aucun défaut de valeur. Le panneau D construit ses trois simulations
+identiques **sans** perturbation d'essai : il n'a pas D-104.
+
+Deux choses écrites ici plutôt que corrigées, parce qu'aucun nombre n'en
+dépend :
+
+- `# Find optimal thresholds via fine-grained search` est suivi de
+  `sim0, Phi0 = make_sim(...)` et `gt0 = ground_truth_errors(...)`, **jamais
+  utilisés** — une simulation MHD complète (80 à 120 pas à N=256) jetée par
+  scénario — puis de deux constantes. Aucune recherche n'a lieu, alors que
+  `find_optimal_threshold` existe dans `fig_utils`. Même forme au panneau D
+  (`gt_fid`, également inutilisé). C'est le patron « repli silencieux » de
+  `VIGIL.md` : le commentaire décrit un calibrage, le code lit une constante.
+- Les barres d'erreur du bras **classique** (panneaux A) sont nulles par
+  construction : `make_sim` est déterministe et `run_adaptive_classical`
+  aussi, donc les `N_TRIALS = 2` essais sont identiques. Ce zéro-là est
+  **vrai** (le bras n'a pas de dispersion), contrairement à celui de D-105.
+
+### `fig14` — abandonné, et son code est inatteignable
+
+`sys.exit(0)` à la ligne 18, avant tout import : les ~600 lignes qui
+suivent ne s'exécutent jamais. Même statut que `fig10`. Une seule note :
+la docstring d'abandon invoque *« σ=0.023 suppression »* — la valeur d'un
+autre module, exactement l'erreur que **D-102** a corrigée dans `fig15`,
+alors que le `SIGMA` du fichier vaut `TRAINED_PARAMS.get('sigma', 0.05)`.
+Non corrigé : c'est du texte dans du code mort.
+
+### Une piste mesurée et écartée — pour ne pas la re-chercher
+
+`_patches_overlap_with_gt` (`fig_utils.py`) **infère** `target_dim` depuis
+les patchs alors que son appelant `patches_to_metrics` le reçoit en
+argument et le passe à l'autre moitié du calcul
+(`_patches_total_fine_pixels`). Soupçon : le `break` sortirait de la boucle
+au premier patch quel qu'il soit, laissant `target_dim = 2` par défaut.
+**Mesuré** sur un arbre `target_dim = 4` construit dans les deux ordres
+(patch `depth=0` en tête, puis en queue) : `captured_fraction` **identique**
+(0,00781250, contre 0,01953125 si `target_dim = 2` était utilisé). Le
+`break` est bien à l'intérieur du `if p['depth'] == 0`. **Pas un défaut.**
+
+Reste une **asymétrie latente, non mesurée en production** : un patch de
+type `fallback` (« l'AMR n'a rien trouvé, on repasse en complet ») est
+ignoré par `_patches_overlap_with_gt` (poids 0) mais compté par
+`_patches_total_fine_pixels`. Mesure structurelle sur un unique patch
+`fallback` couvrant tout le domaine : `captured_fraction = 0,0` et
+`compute_ratio = 0,25`. Les deux moitiés du même dictionnaire ne décrivent
+pas le même patch. Aucun `fallback` n'est apparu dans les exécutions
+réelles de cette passe (tearing 300 pas, OT 500 pas, KH 400 pas : types
+observés `leaf_depth` et `coarse_leaf` uniquement), donc **latent, pas un
+défaut** — à rouvrir si un jour un bras ne trouve rien.
+
+---
+
 ---
 
 ## Tenir ce document à jour
