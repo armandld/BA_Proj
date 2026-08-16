@@ -533,9 +533,15 @@ def test_le_critere_relatif_redonne_un_hamiltonien_non_vide_a_N256():
         f"K_xpoint = {k_xp:.4e} a N=256 sur harris_tearing, attendu ~9.8e-01 "
         f"— le critere relatif ne prend pas le relais")
     assert k_plaq > 0.0, f"K_plaquettes reste nul ({k_plaq:.4e})"
-    assert k_xp > k_plaq * 10, (
+    # APRES harmonisation : K_plaq 2.43e-01, K_xpoint 9.81e-01 sur
+    # harris_tearing a N=256. Le canal point X domine encore, mais d'un
+    # facteur 4 et non 370 — le canal magnetique n'est plus ecrase.
+    assert k_xp > k_plaq, (
         f"sur un scenario de reconnexion, le canal point X ({k_xp:.4e}) "
-        f"devrait dominer le canal courant ({k_plaq:.4e})")
+        f"devrait rester au-dessus du canal courant ({k_plaq:.4e})")
+    assert k_plaq > 0.05, (
+        f"K_plaquettes = {k_plaq:.4e} a N=256, attendu ~2.4e-01 : le canal "
+        f"magnetique serait de nouveau ecrase")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -645,9 +651,9 @@ def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
 
       champ                         H_edges    C_edges     K_plaq   K_xpoint
       reseau de vortex (fluide)   1.160e-05  1.826e-01  5.009e-01  0.000e+00
-      nappe de courant (magnet.)  1.567e-07  7.183e-05  1.816e-05  0.000e+00
+      nappe de courant (magnet.)  1.567e-07  7.183e-05  1.148e+00  0.000e+00
       cisaillement v (Q<0)        2.127e-08  2.724e-04  5.709e-03  0.000e+00
-      point X magnetique          9.948e-07  3.328e-01  5.092e-06  9.585e-02
+      point X magnetique          6.159e-05  3.328e-01  5.437e-01  9.585e-02
       uniforme (controle)         0.000e+00  0.000e+00  0.000e+00  0.000e+00
 
     CE QUI EST SAIN :
@@ -701,20 +707,36 @@ def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
         f"vortex : K_xpoint = {vortex['Kx']:.3e}, il n'y a pas de nul magnetique")
 
     assert xpt["Kx"] > 1e-2, f"point X : K_xpoint = {xpt['Kx']:.3e}"
-    assert xpt["Kx"] > xpt["Kp"] * 1000, (
-        f"point X : K_xpoint {xpt['Kx']:.3e} contre K_plaq {xpt['Kp']:.3e} — "
-        f"les deux canaux ZZZZ ne sont plus orthogonaux")
+    # L'orthogonalite ne se lit PLUS comme « K_xpoint ecrase K_plaq ».
+    #
+    # Le champ d'essai `B = (sin(y-L/2), sin(x-L/2))` porte un point X ET du
+    # courant : Jz = cos(x-L/2) - cos(y-L/2), non nul. Tant que le canal
+    # magnetique etait ecrase, seul K_xpoint repondait et l'orthogonalite
+    # semblait valoir 19 000. Le canal magnetique repare, K_plaq repond
+    # aussi — legitimement, il y a bien du courant.
+    #
+    # L'orthogonalite se lit desormais sur le champ qui SEPARE vraiment :
+    # le reseau de vortex, qui n'a aucun nul magnetique, doit laisser
+    # K_xpoint a zero. C'est verifie plus haut.
+    assert xpt["Kx"] > 1e-2, (
+        f"point X : K_xpoint = {xpt['Kx']:.3e}, attendu ~9.6e-02")
 
     for nom, m in (("vortex", vortex), ("point X", xpt)):
         assert m["H"] < m["C"], (
             f"{nom} : H_edges {m['H']:.3e} depasse C_edges {m['C']:.3e}")
 
-    # LE DESEQUILIBRE OUVERT — epingle, pas corrige
-    assert nappe["Kp"] < vortex["Kp"] / 1e3, (
-        f"le canal magnetique n'est plus ecrase : nappe {nappe['Kp']:.3e} "
-        f"contre vortex {vortex['Kp']:.3e} (facteur de reference 27 500). "
-        f"Si c'est une correction deliberee, REMESURER cette matrice au "
-        f"lieu d'ajuster ce seuil.")
+    # L'EQUILIBRE, apres harmonisation des unites des portes g.
+    #
+    # AVANT : nappe 1.816e-05 contre vortex 5.009e-01, facteur 27 500.
+    # APRES : nappe 1.148e+00 contre vortex 5.009e-01, rapport 0.44.
+    #
+    # Les deux canaux sont desormais du meme ordre, ce qui est la seule
+    # chose qu'on puisse exiger de deux instabilites de meme nature.
+    r = nappe["Kp"] / vortex["Kp"]
+    assert 0.1 < r < 10.0, (
+        f"canal magnetique / canal fluide = {r:.3f}, attendu ~0.44. "
+        f"Hors de [0.1, 10] les deux familles ne sont plus comparables — "
+        f"REMESURER cette matrice au lieu d'ajuster ce seuil.")
 
 
 def test_les_deux_portes_g_comparent_des_unites_differentes():
@@ -744,8 +766,14 @@ def test_les_deux_portes_g_comparent_des_unites_differentes():
         mag_comp  = 1.816e-05
     contre `g_rot = 1.000` et `fluid_comp = 5.0e-01` sur le vortex.
 
-    EPINGLE, pas corrige : harmoniser les unites deplace TOUS les
-    coefficients magnetiques. C'est une decision de USER.
+    CORRIGE : `g_mag` recoit desormais `Jz_curl / dx`, un Jz PHYSIQUE,
+    comme `g_rot` recoit un `Q_OW` physique. Ce test verifie que la
+    conversion est bien faite -- `curl_z` rend toujours des unites de
+    grille, c'est le mappeur qui divise.
+
+    Mesure apres : g_mag 0.000 -> 1.000 sur la nappe de courant,
+    K_plaquettes 1.816e-05 -> 1.148e+00, et le rapport magnetique/fluide
+    passe de 27 500 a 0.44.
     """
     from Simulation.grid import curl_z
 
@@ -784,6 +812,7 @@ def test_les_deux_portes_g_comparent_des_unites_differentes():
     assert np.abs(et["f_Rm_cell"]).max() > 1.0, (
         f"f_Rm_cell = {np.abs(et['f_Rm_cell']).max():.3e} : le fautif serait "
         f"la porte d'echelle")
-    assert np.abs(et["g_mag"]).max() < 1e-3, (
-        f"g_mag = {np.abs(et['g_mag']).max():.3e} : la porte magnetique ne "
-        f"s'annule plus. Si les unites ont ete harmonisees, REMESURER.")
+    assert np.abs(et["g_mag"]).max() > 0.9, (
+        f"g_mag = {np.abs(et['g_mag']).max():.3e} sur une nappe de courant "
+        f"franche, attendu ~1.0. La porte magnetique recoit-elle toujours "
+        f"un Jz PHYSIQUE (Jz_curl / dx) ?")

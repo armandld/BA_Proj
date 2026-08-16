@@ -531,7 +531,27 @@ class PhysicalMapper:
 
         # g-gates: decoupled topological switches
         g_rot = self._g_rot(Q_OW, self.Q_CRIT, self.kappa)
-        g_mag = self._g_mag(Jz_curl, self.J_CRIT, self.kappa)
+        # `Jz_curl` sort de `curl_z`, qui ne divise PAS par dx : c'est une
+        # difference finie en unites de GRILLE. `Q_OW`, lui, vient de
+        # `_compute_q_criterion(..., dx=dx)` et est en unites PHYSIQUES.
+        #
+        # Les deux portes topologiques comparaient donc des grandeurs de
+        # deux systemes d'unites differents a des seuils de meme ordre
+        # nominal (Q_CRIT = 2.0, J_CRIT = 1.0). La porte magnetique etait
+        # plus dure a franchir d'un facteur exactement 1/dx -- 10.2 a
+        # N=64, 20.4 a N=128, 40.7 a N=256 : elle se degradait quand la
+        # grille se raffine.
+        #
+        # Mesure avant, nappe de courant a N=64 : mic_jz = 1.541e-01 et
+        # f_Rm_cell = 8.346 (les deux sains), mais g_mag = 0.000, d'ou
+        # mag_comp = 1.816e-05 contre fluid_comp = 5.009e-01 sur un
+        # reseau de vortex -- un facteur 27 500 entre deux instabilites de
+        # meme nature.
+        #
+        # `g_mag` recoit desormais un Jz PHYSIQUE, comme `g_rot` recoit un
+        # Q_OW physique. Voir RESULTS.md.
+        Jz_phys = Jz_curl / max(dx, 1e-10)
+        g_mag = self._g_mag(Jz_phys, self.J_CRIT, self.kappa)
 
         # f-gates for plaquette: Re for fluid component, Rm for magnetic
         Re_cell = (np.sqrt(vx**2 + vy**2) * dx) / max(self.nu, 1e-10)
