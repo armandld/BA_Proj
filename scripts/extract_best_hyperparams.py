@@ -117,7 +117,20 @@ def _detect_scenario_cols(header):
 
 
 def parse_rescore_dir(dirpath, top_k=3):
-    """Parse a rescore directory and return top-k trials with per-scenario data."""
+    """Parse a rescore directory.
+
+    Returns `(top, every)` : les `top_k` meilleurs essais au score AGRÉGÉ —
+    c'est le bloc de données brutes `training_phases` — et la liste
+    **complète** des essais, qui est ce sur quoi les sélections doivent
+    porter.
+
+    D-109 — pourquoi l'ancienne version était fausse. Elle ne rendait que
+    `top`, et `main()` construisait `all_quantum_trials` avec. Le nom
+    promettait tous les essais et en portait trois : `_pick_best_for_scenario`
+    (« Among all trials ») ne pouvait donc choisir l'optimum d'un scénario
+    que parmi les 3 meilleurs du score agrégé. `--top-k` borne la donnée
+    brute écrite, il n'a jamais eu vocation à borner la sélection.
+    """
     csvs = [f for f in os.listdir(dirpath) if f.endswith('.csv')]
     if not csvs:
         print(f"  SKIP {dirpath}: no CSV found", file=sys.stderr)
@@ -176,7 +189,7 @@ def parse_rescore_dir(dirpath, top_k=3):
             })
 
     trials.sort(key=lambda t: t['new_score'])
-    return trials[:top_k]
+    return trials[:top_k], trials
 
 
 def _pick_best_for_scenario(all_trials, scenario_name):
@@ -273,6 +286,10 @@ def main():
 
     quantum_phases = {}
     classical_phases = {}
+    # D-109 : les selections portent sur TOUS les essais, pas sur les top-K
+    # ecrits dans `training_phases`. Deux dictionnaires, deux usages.
+    quantum_all = {}
+    classical_all = {}
 
     # Scan all rescore directories
     # Separate filters for quantum and classical (with fallback to shared filter)
@@ -296,12 +313,15 @@ def main():
             if q_phase_filter and raw_phase != q_phase_filter:
                 continue
             print(f"[quantum] phase={raw_phase}, lambda={lam}")
-            top = parse_rescore_dir(dirpath, top_k=args.top_k)
-            if top is None:
+            parsed = parse_rescore_dir(dirpath, top_k=args.top_k)
+            if parsed is None:
                 continue
+            top, every = parsed
             if raw_phase not in quantum_phases:
                 quantum_phases[raw_phase] = {}
+                quantum_all[raw_phase] = {}
             quantum_phases[raw_phase][f"lambda_{lam}"] = top
+            quantum_all[raw_phase][f"lambda_{lam}"] = every
             continue
 
         # Classical
@@ -312,12 +332,15 @@ def main():
             if c_phase_filter and phase != c_phase_filter:
                 continue
             print(f"[classical] phase={phase}, lambda={lam}")
-            top = parse_rescore_dir(dirpath, top_k=args.top_k)
-            if top is None:
+            parsed = parse_rescore_dir(dirpath, top_k=args.top_k)
+            if parsed is None:
                 continue
+            top, every = parsed
             if phase not in classical_phases:
                 classical_phases[phase] = {}
+                classical_all[phase] = {}
             classical_phases[phase][f"lambda_{lam}"] = top
+            classical_all[phase][f"lambda_{lam}"] = every
             continue
 
     if not quantum_phases and not classical_phases:
@@ -327,9 +350,14 @@ def main():
     # ── Build structured output ──────────────────────────────────
 
     # Collect ALL quantum trials from target lambda for selection
+    # D-109 : on lit `quantum_all`, pas `quantum_phases`. Le second ne porte
+    # que les top-K du score AGREGE ; choisir l'optimum d'un scenario dedans,
+    # c'est le choisir parmi 3 essais sur 178. Mesure : sur la campagne vive,
+    # `phys_kh` 0.00360466 (choisi parmi les 3) contre 0.00131972 (vrai
+    # optimum, essai 13) — un facteur 2.7 sur un nombre annonce comme optimal.
     all_quantum_trials = []
-    for phase_key in sorted(quantum_phases.keys()):
-        lambdas = quantum_phases[phase_key]
+    for phase_key in sorted(quantum_all.keys()):
+        lambdas = quantum_all[phase_key]
         for lam_key, trials in lambdas.items():
             lam_val = lam_key.replace('lambda_', '')
             if lam_val == target_lambda or lam_val == target_lambda_alt:
@@ -337,20 +365,20 @@ def main():
 
     # If no target lambda found, use all trials
     if not all_quantum_trials:
-        for phase_key in sorted(quantum_phases.keys()):
-            for trials in quantum_phases[phase_key].values():
+        for phase_key in sorted(quantum_all.keys()):
+            for trials in quantum_all[phase_key].values():
                 all_quantum_trials.extend(trials)
 
     # Same for classical
     all_classical_trials = []
-    for phase_key in sorted(classical_phases.keys()):
-        for lam_key, trials in classical_phases[phase_key].items():
+    for phase_key in sorted(classical_all.keys()):
+        for lam_key, trials in classical_all[phase_key].items():
             lam_val = lam_key.replace('lambda_', '')
             if lam_val == target_lambda or lam_val == target_lambda_alt:
                 all_classical_trials.extend(trials)
     if not all_classical_trials:
-        for phase_key in sorted(classical_phases.keys()):
-            for trials in classical_phases[phase_key].values():
+        for phase_key in sorted(classical_all.keys()):
+            for trials in classical_all[phase_key].values():
                 all_classical_trials.extend(trials)
 
     # ── Defaults: best overall trial ──
