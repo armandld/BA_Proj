@@ -13,10 +13,6 @@ precise : un identifiant different, mais code en dur, doit tomber lui aussi.
 
 import os
 import re
-import subprocess
-import sys
-
-import pytest
 
 
 def _repo_root():
@@ -72,13 +68,9 @@ def test_the_pattern_can_fire(tmp_path):
     assert not _URL_WITH_PASSWORD.search('url = "sqlite:///local.db"')
 
 
-def test_script_refuses_to_run_without_a_url(tmp_path):
-    """Le comportement, pas le texte : sans URL, le script s'arrete."""
-    env = dict(os.environ)
-    env.pop("NEON_DB_URL", None)
-    out = subprocess.run(
-        [sys.executable, os.path.join(_SRC, "import_Neon_data_to_local.py"),
-         "--train-dir", str(tmp_path)],
-        capture_output=True, text=True, timeout=300, env=env)
-    assert out.returncode != 0
-    assert "NEON_DB_URL" in out.stderr
+# `test_script_refuses_to_run_without_a_url` vivait ici : il lancait
+# `src/import_Neon_data_to_local.py` sans URL et exigeait un code non nul.
+# Le script est supprime depuis `fdc7b03` (decision de USER, voir
+# docs/RESULTS.md § « Architecture Neon supprimée »), donc ce test n'a plus
+# de sujet. Les deux ci-dessus ne dependaient pas de lui : ils balaient
+# `src/` en entier et gardent la porte fermee pour le fichier SUIVANT.

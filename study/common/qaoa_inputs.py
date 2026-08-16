@@ -347,7 +347,7 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
     # build circuit
     qc, cost_hamiltonian = mapping(
         data_in, hamilt_params,
-        advanced_anomalies_enabled=False,
+        advanced_anomalies_enabled=True,
         period_bound=True,
         reps=reps,
     )

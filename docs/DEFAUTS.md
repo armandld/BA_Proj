@@ -1090,42 +1090,6 @@ doublé, le fondamental peut cesser d'être insensible à ce doublon.
 pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py
 ```
 
-## D-65 — l'identifiant Neon est publié dans un dépôt public, et l'historique le garde
-
-**Où ça bloque.** Rien de calculatoire. Ce qui bloque est une action que le
-code ne peut pas faire à la place de USER : **changer le mot de passe côté
-Neon**. Tant qu'il n'est pas changé, la base de la campagne est ouverte à
-qui lit le dépôt.
-
-**Comment on est tombé dessus.** En lisant `src/import_Neon_data_to_local.py`
-en entier pour la première fois (76 lignes, jamais auditées), pendant la
-passe qui a produit D-64 dans le même fichier.
-
-**Ce qui est établi.** La ligne 16 portait
-`postgresql://neondb_owner:<mot de passe>@ep-patient-hall-abitnl4g-pooler.eu-west-2.aws.neon.tech/neondb`
-comme valeur **par défaut** de `--in-url`. `armandld/BA_Proj` est **public**
-(`visibility: public`, vérifié par l'API le 13 août 2026). La valeur est
-entrée dans l'historique git : elle y reste, quel que soit le commit qui la
-retire du fichier.
-
-**Ce qui est fait.** La valeur par défaut est supprimée : le script lit
-`--in-url`, sinon la variable d'environnement `NEON_DB_URL`, sinon il
-s'arrête en le disant. Un test refuse toute URL portant un mot de passe dans
-`src/`. **Cela n'annule pas la publication** — cela empêche la suivante.
-
-**Où on en est.** Deux gestes restent, et ils sont pour USER :
-
-1. faire tourner le mot de passe `neondb_owner` sur Neon — c'est le seul qui
-   ferme l'accès déjà publié ;
-2. décider si l'historique doit être réécrit. Réécrire casse tous les hashes
-   déjà cités dans `RESULTS.md` — le remède peut coûter plus que le mal une
-   fois le mot de passe changé. Mesurer avant de trancher : ce document ne
-   recommande rien ici.
-
-```bash
-pytest tests/pipeline/test_no_credential_in_source.py
-```
-
 ## D-68 — l'image de la figure AMR est transposée par rapport au reste du dépôt : décision
 
 **Où ça bloque.** Nulle part sur un nombre. Ce qui reste ouvert est un

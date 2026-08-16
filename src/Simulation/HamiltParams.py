@@ -53,6 +53,11 @@ class PhysicalMapper:
     # can no longer resolve the physics and refinement is needed.
     # (v8 used RE_CRIT=10 which required extreme under-resolution to trigger,
     # making the Hamiltonian empty for most simulation-resolution grids.)
+    #: Percentile du critere RELATIF (voir `_effective_crit`).
+    #: Reglage NOUVEAU : il entre dans le perimetre de reoptimisation,
+    #: qui passe donc de 8 a 9 parametres.
+    RELATIVE_PERCENTILE = 90.0
+
     RE_CRIT = 1.0      # Cell Reynolds: advection > diffusion at cell scale
     RM_CRIT = 1.0      # Magnetic Reynolds: same criterion for B-field
     MACH_CRIT = 1.0    # Sonic transition
@@ -172,6 +177,50 @@ class PhysicalMapper:
         """
         x = np.clip(-kappa * (np.abs(Jz_curl) / (J_crit + 1e-10) - 1.0), -500, 500)
         return 1.0 / (1.0 + np.exp(x))
+
+    @classmethod
+    def _effective_crit(cls, signal, crit_absolu):
+        """Seuil effectif : `min(absolu, percentile)`.
+
+        Le seuil de maille est ABSOLU : `RE_CRIT nu/(dx^2 v0)`. Il croit
+        donc en 1/dx^2, et il est le MEME pour tous les scenarios. Deux
+        consequences mesurees :
+
+          - il meurt au raffinement. Sur un champ physique fixe (rotation
+            solide), `K_plaquettes` passe de 1.00e+02 a N=32 a EXACTEMENT
+            0 a N=256, la resolution d'entrainement.
+
+          - il ne peut pas servir deux instabilites d'amplitudes
+            differentes. |omega| vaut au maximum 1.55e-02 sur
+            harris_tearing et 1.96e+01 sur mhd_rotor : trois ordres de
+            grandeur, pour un seuil unique de 13.04.
+
+        Or l'information EST la. Contraste max/mediane du signal brut a
+        N=256 : 1104 sur harris_tearing (sqrt(det)), 223 sur
+        island_coalescence, 752 sur mhd_rotor. Ce n'est pas la structure
+        qui manque, c'est le seuil absolu qui l'efface.
+
+        D'ou `min(absolu, percentile)` :
+
+          - des qu'une cellule franchit le critere physique, l'absolu
+            l'emporte et le comportement d'origine est conserve A
+            L'IDENTIQUE ;
+          - sinon le relatif prend le relais et distingue les cellules les
+            plus instables DU CHAMP COURANT.
+
+        Un champ rigoureusement uniforme n'a pas de cellule « plus
+        instable » : son percentile vaut son maximum, le contraste seuille
+        rend zero partout. Le critere ne fabrique donc pas de signal a
+        partir de rien -- c'est l'invariant que teste
+        `test_le_critere_relatif_ne_fabrique_pas_de_signal`.
+        """
+        fini = np.asarray(signal, dtype=float)
+        fini = fini[np.isfinite(fini)]
+        if fini.size == 0:
+            return crit_absolu
+        if float(fini.max()) >= crit_absolu:
+            return crit_absolu          # le critere physique tire deja
+        return float(np.percentile(fini, cls.RELATIVE_PERCENTILE))
 
     @staticmethod
     def _compute_det_jacobian_B(Bx, By, dx):
@@ -482,7 +531,27 @@ class PhysicalMapper:
 
         # g-gates: decoupled topological switches
         g_rot = self._g_rot(Q_OW, self.Q_CRIT, self.kappa)
-        g_mag = self._g_mag(Jz_curl, self.J_CRIT, self.kappa)
+        # `Jz_curl` sort de `curl_z`, qui ne divise PAS par dx : c'est une
+        # difference finie en unites de GRILLE. `Q_OW`, lui, vient de
+        # `_compute_q_criterion(..., dx=dx)` et est en unites PHYSIQUES.
+        #
+        # Les deux portes topologiques comparaient donc des grandeurs de
+        # deux systemes d'unites differents a des seuils de meme ordre
+        # nominal (Q_CRIT = 2.0, J_CRIT = 1.0). La porte magnetique etait
+        # plus dure a franchir d'un facteur exactement 1/dx -- 10.2 a
+        # N=64, 20.4 a N=128, 40.7 a N=256 : elle se degradait quand la
+        # grille se raffine.
+        #
+        # Mesure avant, nappe de courant a N=64 : mic_jz = 1.541e-01 et
+        # f_Rm_cell = 8.346 (les deux sains), mais g_mag = 0.000, d'ou
+        # mag_comp = 1.816e-05 contre fluid_comp = 5.009e-01 sur un
+        # reseau de vortex -- un facteur 27 500 entre deux instabilites de
+        # meme nature.
+        #
+        # `g_mag` recoit desormais un Jz PHYSIQUE, comme `g_rot` recoit un
+        # Q_OW physique. Voir RESULTS.md.
+        Jz_phys = Jz_curl / max(dx, 1e-10)
+        g_mag = self._g_mag(Jz_phys, self.J_CRIT, self.kappa)
 
         # f-gates for plaquette: Re for fluid component, Rm for magnetic
         Re_cell = (np.sqrt(vx**2 + vy**2) * dx) / max(self.nu, 1e-10)
@@ -499,8 +568,11 @@ class PhysicalMapper:
         jz_mag = np.abs(Jz_curl / B0)
         omega_crit = self.RE_CRIT * self.nu / (max(dx, 1e-10)**2 * max(v0, 1e-10))
         jz_crit = self.RM_CRIT * self.eta_mhd / (max(dx, 1e-10)**2 * max(B0, 1e-10))
-        mic_omega = self._threshold_contrast(omega_mag, omega_crit, self.beta_curl)
-        mic_jz = self._threshold_contrast(jz_mag, jz_crit, self.beta_curl)
+        # Critere RELATIF : voir `_effective_crit`.
+        omega_crit_eff = self._effective_crit(omega_mag, omega_crit)
+        jz_crit_eff = self._effective_crit(jz_mag, jz_crit)
+        mic_omega = self._threshold_contrast(omega_mag, omega_crit_eff, self.beta_curl)
+        mic_jz = self._threshold_contrast(jz_mag, jz_crit_eff, self.beta_curl)
 
         # Decoupled components with Michelson normalization
         fluid_comp = g_rot * f_Re_cell * mic_omega
@@ -508,6 +580,23 @@ class PhysicalMapper:
 
         # Even-parity: output negative so cost_hamiltonian uses as-is
         K_plaquettes = -1.0 * np.sqrt(fluid_comp**2 + mag_comp**2)
+
+        # ── Etages observables ─────────────────────────────────────
+        # Le desequilibre entre canal fluide et canal magnetique ne peut
+        # pas etre diagnostique en RECALCULANT les etages a cote : trois
+        # fois de suite, une reproduction incomplete a fait accuser du code
+        # juste. On expose donc les composantes telles que la fonction les
+        # a calculees. `_stages` n'est lu que par les tests et les
+        # diagnostics ; aucun chemin de production ne le consulte.
+        self._stages = {
+            "g_rot": g_rot, "g_mag": g_mag,
+            "f_Re_cell": f_Re_cell, "f_Rm_cell": f_Rm_cell,
+            "mic_omega": mic_omega, "mic_jz": mic_jz,
+            "omega_mag": omega_mag, "jz_mag": jz_mag,
+            "omega_crit": omega_crit_eff, "jz_crit": jz_crit_eff,
+            "fluid_comp": fluid_comp, "mag_comp": mag_comp,
+            "v0": v0, "B0": B0,
+        }
 
         # ── Build result ───────────────────────────────────────────
         # ── 0b. FILL Z BIAS with adaptive weight (global median) ────
@@ -579,8 +668,14 @@ class PhysicalMapper:
             # la coherence dimensionnelle impose. Voir RESULTS.md.
             xpoint_grad = np.sqrt(xpoint_signal) / max(B0, 1e-10)
 
+            # Meme critere relatif, mais sur la distribution DE CE CANAL :
+            # `sqrt(det)` et |Jz| n'ont pas les memes percentiles, et c'est
+            # precisement ce qui rend le canal point X discriminant la ou
+            # le canal courant ne l'est pas (contraste 1104 contre 49.5 sur
+            # harris_tearing).
+            xpoint_crit_eff = self._effective_crit(xpoint_grad, jz_crit)
             mic_xpoint = self._threshold_contrast(
-                xpoint_grad, jz_crit, self.beta_xpoint
+                xpoint_grad, xpoint_crit_eff, self.beta_xpoint
             )
 
             # PAS de `f_Rm_cell` ici : cette porte vaut

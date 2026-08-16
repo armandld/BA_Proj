@@ -346,34 +346,29 @@ def test_le_champ_calme_reste_calme_jusqu_au_circuit():
 #  Tenue en resolution — le meme champ physique, plusieurs grilles
 # ══════════════════════════════════════════════════════════════════════
 
-def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
+def test_le_critere_relatif_empeche_l_effondrement_en_resolution():
     """Sur un champ physique FIXE, seule la resolution changeant.
 
-    MESURE (rotation solide, hyperparametres deployes) :
+    AVANT le critere relatif (seuil ABSOLU seul) :
 
         N       H_edges      C_edges      K_plaquettes
         32     2.10e-01     1.04e+01       1.00e+02
         64     6.02e-03     1.78e+00       9.48e+01
        128     2.89e-05     3.43e-01       1.86e+01
-       256     2.27e-05     8.32e-02       0.00e+00
+       256     2.27e-05     8.32e-02       0.00e+00   <- mort
 
-    Les trois familles s'effondrent, et `K_plaquettes` atteint **exactement
-    zero a N=256** — la resolution d'entrainement.
+    APRES :
 
-    Ce n'est PAS un defaut d'implementation : les seuils sont des Reynolds
-    de maille (`omega_crit = RE_CRIT nu / (dx^2 v0)`), qui croissent en
-    1/dx^2. Une grille plus fine resout mieux, donc demande moins de
-    raffinement. La logique AMR est correcte.
+       256     2.27e-05     8.32e-02       6.59e+01   <- vivant
 
-    Mais la CONSEQUENCE doit rester visible : a la configuration
-    d'entrainement (N=256, Re=Rm=800), l'hamiltonien perd sa structure ZZZZ
-    sur les champs canoniques. C'est le meme fait que le verdict deja
-    publie « le terme ZZZZ etait numeriquement mort », vu ici au niveau du
-    coefficient plutot que du circuit.
+    Le seuil de maille croit en 1/dx^2 : a N=256 plus aucune cellule ne le
+    franchit, et le terme a quatre corps disparaissait EXACTEMENT a la
+    resolution d'entrainement. Le relais relatif le maintient.
 
-    Ce test EPINGLE la mesure. Il tombera si un changement de
-    normalisation, de seuil ou d'hyperparametres deplace cet equilibre —
-    et il faudra alors remesurer, pas ajuster.
+    `H_edges` et `C_edges` decroissent toujours : ils sont gouvernes par
+    la fenetre gaussienne et par `C_scale`, pas par le seuil de maille.
+    C'est un mecanisme different, et ce test ne le confond pas avec
+    celui-ci.
     """
     valeurs = {}
     for n in (32, 64, 128, 256):
@@ -382,23 +377,442 @@ def test_les_coefficients_s_effondrent_quand_la_grille_se_raffine():
         try:
             sim, grid = _sim_avec(_rotation_solide)
             c, _ = _coeffs(sim, grid, 0.3)
-            valeurs[n] = (
-                max(np.abs(np.asarray(a)).max() for a in c["H_edges"]),
-                max(np.abs(np.asarray(a)).max() for a in c["C_edges"]),
-                np.abs(np.asarray(c["K_plaquettes"])).max(),
-            )
+            valeurs[n] = np.abs(np.asarray(c["K_plaquettes"])).max()
         finally:
             N = ancien
 
-    # decroissance monotone des trois familles
-    for i, nom in enumerate(("H_edges", "C_edges", "K_plaquettes")):
-        suite = [valeurs[n][i] for n in (32, 64, 128, 256)]
-        assert suite == sorted(suite, reverse=True), (
-            f"{nom} n'est plus monotone decroissant en resolution : {suite}")
-
-    assert valeurs[32][2] > 50.0, (
-        f"K_plaquettes vaut {valeurs[32][2]:.3e} a N=32, attendu ~1.0e+02 — "
+    assert valeurs[32] > 50.0, (
+        f"K_plaquettes vaut {valeurs[32]:.3e} a N=32, attendu ~1.0e+02 — "
         f"sans structure a la grille grossiere, ce test ne separerait rien")
-    assert valeurs[256][2] == pytest.approx(0.0, abs=1e-12), (
-        f"K_plaquettes vaut {valeurs[256][2]:.3e} a N=256 : l'equilibre a "
-        f"change, remesurer la table de la docstring")
+    assert valeurs[256] > 1.0, (
+        f"K_plaquettes vaut {valeurs[256]:.3e} a N=256, attendu ~6.6e+01 : "
+        f"le terme a quatre corps meurt de nouveau a la resolution "
+        f"d'entrainement")
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le signal brut porte-t-il l'instabilite ? (avant tout seuil)
+# ══════════════════════════════════════════════════════════════════════
+
+def test_le_signal_brut_discrimine_meme_quand_le_seuil_absolu_ne_tire_pas():
+    """A N=256, les seuils absolus ne sont pas franchis — mais le signal
+    BRUT porte un contraste enorme.
+
+    MESURE (N=256, Re=Rm=800, seuil de maille = 1.304e+01) :
+
+      scenario            grandeur     max/mediane   max/seuil
+      orszag_tang         |omega|             2.8      0.1612
+      orszag_tang         sqrt(det)          36.3      0.1088
+      harris_tearing      |Jz|               49.5      0.2714
+      harris_tearing      sqrt(det)        1104.3      0.0135
+      island_coalescence  |Jz|               68.0      0.3393
+      island_coalescence  sqrt(det)         222.8      0.0256
+      mhd_rotor           |omega|           752.3      1.5038
+
+    Deux lectures, toutes deux dans les chiffres :
+
+    1. L'INFORMATION EXISTE. Un facteur 1104 entre le maximum et la mediane
+       sur harris_tearing signifie que les cellules a raffiner se
+       distinguent tres nettement. C'est le seuil ABSOLU qui l'efface, pas
+       l'absence de structure.
+
+    2. UN SEUIL UNIQUE NE PEUT PAS SERVIR TOUS LES SCENARIOS. |omega| vaut
+       1.55e-02 au maximum sur harris_tearing et 1.96e+01 sur mhd_rotor —
+       trois ordres de grandeur d'ecart. Le meme seuil de 13.04 pour les
+       deux ne peut pas etre le bon pour les deux.
+
+    3. `sqrt(det)` est le canal le PLUS discriminant sur trois scenarios
+       sur quatre (36x, 1104x, 223x contre 2.6x, 49.5x, 68x pour |Jz|).
+       C'est le terme de point X qui porte le plus d'information — et
+       c'etait celui qui etait doublement casse.
+
+    Ce test epingle la mesure. Il ne prescrit rien : passer a un critere
+    RELATIF est une decision de conception, pas une correction.
+    """
+    from Simulation.HamiltParams import PhysicalMapper as PM
+
+    n = 256
+    g = PeriodicGrid(n)
+    sim = MHDSolver(g, dt=1e-3, Re=RE, Rm=RM)
+    sim.init_harris_tearing()
+    for _ in range(200):
+        sim.step_full()
+
+    st = sim.get_fluxes()
+    dx, eta = g.dx, g.L / RM
+    crit = 1.0 * eta / dx ** 2
+
+    jz = np.abs(st["Jz"])
+    xp = np.sqrt(np.maximum(
+        0.0, -PM._compute_det_jacobian_B(st["Bx"], st["By"], dx)))
+
+    for nom, v, contraste_min in (("|Jz|", jz, 20.0), ("sqrt(det)", xp, 100.0)):
+        med = np.median(v)
+        assert med > 0, f"{nom} : mediane nulle, le contraste serait indefini"
+        contraste = v.max() / med
+        assert contraste > contraste_min, (
+            f"{nom} : contraste max/mediane = {contraste:.1f}, attendu "
+            f"> {contraste_min} — le signal ne discrimine plus")
+        assert v.max() < crit, (
+            f"{nom} : max {v.max():.3e} franchit le seuil {crit:.3e} — "
+            f"l'equilibre a change, remesurer la table de la docstring")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le critere RELATIF
+# ══════════════════════════════════════════════════════════════════════
+
+def test_le_critere_relatif_ne_fabrique_pas_de_signal():
+    """L'invariant de surete, et le plus important de ce fichier.
+
+    Un champ rigoureusement uniforme n'a AUCUNE cellule « plus instable »
+    que les autres. Son percentile vaut son maximum, le contraste seuille
+    rend zero partout. Si ce test tombait, le critere relatif inventerait
+    du raffinement sur du vide — et tout ce qu'il produit ailleurs serait
+    sans valeur.
+    """
+    sim, grid = _sim_avec(_calme)
+    c, _ = _coeffs(sim, grid, 0.3)
+    for nom in ("K_plaquettes", "K_xpoint"):
+        v = np.abs(np.asarray(c[nom])).max()
+        assert v == pytest.approx(0.0, abs=1e-12), (
+            f"{nom} vaut {v:.4e} sur un champ uniforme : le critere relatif "
+            f"fabrique du signal a partir de rien")
+
+
+def test_l_absolu_l_emporte_quand_il_tire():
+    """`min(absolu, percentile)` : des qu'une cellule franchit le critere
+    physique, le comportement d'origine doit etre conserve A L'IDENTIQUE.
+
+    Sans cette clause, le critere relatif remplacerait la physique au lieu
+    de la completer.
+    """
+    from Simulation.HamiltParams import PhysicalMapper as PM
+    signal = np.array([0.1, 0.5, 2.0, 10.0])      # le max franchit 1.0
+    assert PM._effective_crit(signal, 1.0) == 1.0
+
+    signal_faible = np.array([0.01, 0.02, 0.05])   # aucun ne franchit
+    eff = PM._effective_crit(signal_faible, 1.0)
+    assert eff < 1.0, f"le relatif n'a pas pris le relais : {eff}"
+    assert eff == pytest.approx(
+        np.percentile(signal_faible, PM.RELATIVE_PERCENTILE))
+
+
+def test_le_critere_relatif_redonne_un_hamiltonien_non_vide_a_N256():
+    """MESURE avant / apres, a la resolution d'entrainement.
+
+        scenario              K_plaq avant -> apres   K_xpoint avant -> apres
+        orszag_tang              0 -> 2.78e-01           0 -> 8.34e-02
+        harris_tearing           0 -> 2.66e-03           0 -> 9.81e-01
+        island_coalescence       0 -> 1.54e-02           0 -> 5.55e-01
+        mhd_rotor                0 -> 6.68e+01           0 -> 1.00e+01
+
+    Le terme a quatre corps existait sur AUCUN des quatre scenarios ; il
+    existe desormais sur les quatre.
+
+    A noter, et coherent avec le contraste du signal brut : sur les deux
+    scenarios de reconnexion, le canal point X DOMINE le canal courant --
+    0.981 contre 0.0027 sur harris_tearing (facteur 370), 0.555 contre
+    0.0154 sur island_coalescence (facteur 36). C'est ce que la physique
+    predit, et c'est le canal qui etait doublement casse.
+    """
+    global N
+    ancien, N = N, 256
+    try:
+        sim, grid = _sim_avec(_calme)      # place le solveur
+        sim.init_harris_tearing()
+        for _ in range(200):
+            sim.step_full()
+        c, _ = _coeffs(sim, grid, 0.3)
+    finally:
+        N = ancien
+
+    k_plaq = np.abs(np.asarray(c["K_plaquettes"])).max()
+    k_xp = np.abs(np.asarray(c["K_xpoint"])).max()
+
+    assert k_xp > 0.1, (
+        f"K_xpoint = {k_xp:.4e} a N=256 sur harris_tearing, attendu ~9.8e-01 "
+        f"— le critere relatif ne prend pas le relais")
+    assert k_plaq > 0.0, f"K_plaquettes reste nul ({k_plaq:.4e})"
+    # APRES harmonisation : K_plaq 2.43e-01, K_xpoint 9.81e-01 sur
+    # harris_tearing a N=256. Le canal point X domine encore, mais d'un
+    # facteur 4 et non 370 — le canal magnetique n'est plus ecrase.
+    assert k_xp > k_plaq, (
+        f"sur un scenario de reconnexion, le canal point X ({k_xp:.4e}) "
+        f"devrait rester au-dessus du canal courant ({k_plaq:.4e})")
+    assert k_plaq > 0.05, (
+        f"K_plaquettes = {k_plaq:.4e} a N=256, attendu ~2.4e-01 : le canal "
+        f"magnetique serait de nouveau ecrase")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Le test qui compte : le coefficient pointe-t-il ou l'erreur EST ?
+# ══════════════════════════════════════════════════════════════════════
+
+def test_les_coefficients_pointent_ou_le_raffinement_est_necessaire():
+    """Correlation de rang entre le coefficient et l'erreur REELLE.
+
+    Tous les tests precedents verifient des contrats internes : signes,
+    seuils, invariance. Celui-ci verifie la seule chose qui justifie le
+    modele -- le coefficient designe-t-il les blocs ou la solution
+    grossiere s'ecarte vraiment du DNS ?
+
+    Protocole : meme scenario a N=128 (reference) et N=32 (grossier), meme
+    nombre de pas ; erreur relative par bloc sur 8x8 = 64 blocs ; Spearman
+    contre le coefficient moyen du bloc.
+
+    MESURE :
+
+      scenario              K_plaq   K_xpoint   max(K)   score classique
+      harris_tearing         0.897     0.434     0.788        0.814
+      island_coalescence     0.877     0.408     0.760        0.912
+      mhd_rotor              0.755     0.680     0.759        0.528
+      orszag_tang            0.249     0.311     0.443        0.422
+
+    Trois lectures :
+
+    1. `K_plaquettes` correle FORTEMENT (0.75 a 0.90) sur trois scenarios
+       sur quatre. Le coefficient pointe bien ou le raffinement est
+       necessaire — c'est le contrat central du modele, et il est tenu.
+
+    2. Sur `mhd_rotor`, le coefficient BAT le score classique : 0.755
+       contre 0.528. C'est la premiere preuve quantitative, dans ce depot,
+       que le terme a quatre corps apporte quelque chose que l'indicateur
+       lineaire n'a pas — et c'est precisement le scenario autour duquel
+       `compare_rotor_budget` a ete construit.
+
+    3. `orszag_tang` est faible pour TOUT (0.25 a 0.44), coefficients et
+       score classique confondus. Ce n'est pas un defaut des coefficients :
+       c'est le scenario le plus difficile pour n'importe quel indicateur
+       local.
+
+    Ce test est LENT (quatre paires de simulations). Il est le dernier du
+    fichier pour cette raison.
+    """
+    pytest.importorskip("scipy")
+    from scipy.stats import spearmanr
+    from Simulation.HamiltParams import PhysicalMapper as PM
+
+    nb = 8
+
+    def _bloc_moy(a):
+        n = a.shape[0]
+        b = n // nb
+        return a.reshape(nb, b, nb, b).mean(axis=(1, 3))
+
+    NF, NC, pas = 128, 32, 200
+    gf = PeriodicGrid(NF)
+    sf = MHDSolver(gf, dt=1e-3, Re=RE, Rm=RM)
+    sf.init_harris_tearing()
+    gc = PeriodicGrid(NC)
+    sc = MHDSolver(gc, dt=1e-3, Re=RE, Rm=RM)
+    sc.init_harris_tearing()
+    for _ in range(pas):
+        sf.step_full()
+    for _ in range(pas):
+        sc.step_full()
+
+    ff, fc = sf.get_fluxes(), sc.get_fluxes()
+    err = np.zeros((nb, nb))
+    for v in ("vx", "vy", "Bx", "By"):
+        d = _bloc_moy(ff[v])
+        c_ = _bloc_moy(np.repeat(np.repeat(fc[v], NF // NC, 0), NF // NC, 1))
+        err += np.abs(d - c_) / (np.abs(d).mean() + 1e-12)
+
+    m = PM(cs=1.0, nu=gf.L / RE, eta_mhd=gf.L / RM, dx=gf.dx, **HP)
+    st = sf.get_fluxes()
+    score = AngleMapper.classical_score(st)
+    co = m.compute_coefficients(sf, score, st, threshold_amr=0.3,
+                                advanced_anomalies_enabled=True)
+
+    kp = _bloc_moy(np.abs(np.asarray(co["K_plaquettes"])))
+    assert np.ptp(kp) > 0, (
+        "K_plaquettes est constant sur les 64 blocs — la correlation serait "
+        "indefinie et ce test ne verifierait rien")
+    assert np.ptp(err) > 0, "l'erreur est constante — le controle est vide"
+
+    rho = spearmanr(kp.ravel(), err.ravel()).statistic
+    assert rho > 0.6, (
+        f"correlation de rang coefficient/erreur = {rho:.3f} sur "
+        f"harris_tearing, mesure de reference 0.897. En dessous de 0.6, le "
+        f"coefficient ne designe plus les blocs a raffiner.")
+
+
+def test_matrice_de_specificite_chaque_famille_repond_a_son_instabilite():
+    """Chaque champ isole UNE instabilite ; quelle famille repond ?
+
+    TOUS LES CHAMPS SONT PERIODIQUES. La premiere version de ce test
+    utilisait une rotation solide `v = (-(y-L/2), x-L/2)`, qui est
+    DISCONTINUE au raccord periodique. Son `K_plaquettes` valait 9.48e+01
+    avec un maximum dans le coin (63, 63) : un artefact de bord, pas une
+    mesure. Le reseau de vortex `v = (-sin y, sin x)` donne 5.01e-01, dans
+    l'interieur. J'avais donc surestime le canal fluide d'un facteur 190.
+
+    MESURE (N=64, hyperparametres deployes, via la vraie fonction) :
+
+      champ                         H_edges    C_edges     K_plaq   K_xpoint
+      reseau de vortex (fluide)   1.160e-05  1.826e-01  5.009e-01  0.000e+00
+      nappe de courant (magnet.)  1.567e-07  7.183e-05  1.148e+00  0.000e+00
+      cisaillement v (Q<0)        2.127e-08  2.724e-04  5.709e-03  0.000e+00
+      point X magnetique          6.159e-05  3.328e-01  5.437e-01  9.585e-02
+      uniforme (controle)         0.000e+00  0.000e+00  0.000e+00  0.000e+00
+
+    CE QUI EST SAIN :
+
+      - le controle uniforme rend zero sur les QUATRE familles ;
+      - le reseau de vortex allume `K_plaquettes` (5.01e-01) et laisse
+        `K_xpoint` a zero : le canal fluide ne deborde pas ;
+      - le point X allume `K_xpoint` (9.59e-02) et laisse `K_plaquettes` a
+        5.09e-06, soit 19 000 fois moins. Les deux canaux ZZZZ sont
+        ORTHOGONAUX, ce qui est leur raison d'etre ;
+      - `H_edges` reste subordonne partout.
+
+    CE QUI RESTE OUVERT — le desequilibre fluide / magnetique :
+
+      vortex 5.01e-01 contre nappe de courant 1.82e-05, soit un facteur
+      **27 500** pour deux instabilites de meme nature. C'est beaucoup
+      moins que les 10^6 que j'avais annonces sur le champ non periodique,
+      mais c'est toujours un desequilibre reel.
+
+      La cause n'est PAS localisee et je m'abstiens de la nommer : trois
+      fois deja dans cette campagne, une reproduction incomplete d'un
+      calcul m'a fait accuser du code juste.
+
+    Ce test fige la matrice. Il tombera si l'equilibre change -- y compris
+    si quelqu'un corrige le canal magnetique, et c'est voulu.
+    """
+    def _mesure(champ, seuil=0.3):
+        sim, grid = _sim_avec(champ)
+        c, _ = _coeffs(sim, grid, seuil)
+        a = lambda v: np.abs(np.asarray(v)).max()
+        return dict(H=max(a(v) for v in c["H_edges"]),
+                    C=max(a(v) for v in c["C_edges"]),
+                    Kp=a(c["K_plaquettes"]), Kx=a(c["K_xpoint"]))
+
+    z = lambda X: np.zeros_like(X)
+    o = lambda X: np.ones_like(X)
+    # PERIODIQUES : un reseau de vortex, pas une rotation solide.
+    vortex = _mesure(lambda X, Y, g: (-np.sin(Y), np.sin(X), o(X), z(X)))
+    nappe = _mesure(lambda X, Y, g: (z(X), z(X), 1 + 0.8 * np.tanh(3 * np.sin(Y)), z(X)))
+    xpt = _mesure(lambda X, Y, g: (z(X), z(X),
+                                   np.sin(Y - g.L / 2), np.sin(X - g.L / 2)))
+    calme = _mesure(_calme)
+
+    for k, v in calme.items():
+        assert v == pytest.approx(0.0, abs=1e-12), (
+            f"champ uniforme : {k} vaut {v:.3e}")
+
+    assert vortex["Kp"] > 0.1, (
+        f"reseau de vortex : K_plaq = {vortex['Kp']:.3e}, attendu ~5.0e-01")
+    assert vortex["Kx"] == pytest.approx(0.0, abs=1e-12), (
+        f"vortex : K_xpoint = {vortex['Kx']:.3e}, il n'y a pas de nul magnetique")
+
+    assert xpt["Kx"] > 1e-2, f"point X : K_xpoint = {xpt['Kx']:.3e}"
+    # L'orthogonalite ne se lit PLUS comme « K_xpoint ecrase K_plaq ».
+    #
+    # Le champ d'essai `B = (sin(y-L/2), sin(x-L/2))` porte un point X ET du
+    # courant : Jz = cos(x-L/2) - cos(y-L/2), non nul. Tant que le canal
+    # magnetique etait ecrase, seul K_xpoint repondait et l'orthogonalite
+    # semblait valoir 19 000. Le canal magnetique repare, K_plaq repond
+    # aussi — legitimement, il y a bien du courant.
+    #
+    # L'orthogonalite se lit desormais sur le champ qui SEPARE vraiment :
+    # le reseau de vortex, qui n'a aucun nul magnetique, doit laisser
+    # K_xpoint a zero. C'est verifie plus haut.
+    assert xpt["Kx"] > 1e-2, (
+        f"point X : K_xpoint = {xpt['Kx']:.3e}, attendu ~9.6e-02")
+
+    for nom, m in (("vortex", vortex), ("point X", xpt)):
+        assert m["H"] < m["C"], (
+            f"{nom} : H_edges {m['H']:.3e} depasse C_edges {m['C']:.3e}")
+
+    # L'EQUILIBRE, apres harmonisation des unites des portes g.
+    #
+    # AVANT : nappe 1.816e-05 contre vortex 5.009e-01, facteur 27 500.
+    # APRES : nappe 1.148e+00 contre vortex 5.009e-01, rapport 0.44.
+    #
+    # Les deux canaux sont desormais du meme ordre, ce qui est la seule
+    # chose qu'on puisse exiger de deux instabilites de meme nature.
+    r = nappe["Kp"] / vortex["Kp"]
+    assert 0.1 < r < 10.0, (
+        f"canal magnetique / canal fluide = {r:.3f}, attendu ~0.44. "
+        f"Hors de [0.1, 10] les deux familles ne sont plus comparables — "
+        f"REMESURER cette matrice au lieu d'ajuster ce seuil.")
+
+
+def test_les_deux_portes_g_comparent_des_unites_differentes():
+    """LA CAUSE du desequilibre fluide / magnetique, trouvee depuis
+    l'INTERIEUR de la fonction via `_stages`.
+
+    `g_rot` compare `Q_OW` a `Q_CRIT = 2.0`. `Q_OW` vient de
+    `grid._compute_q_criterion(vx, vy, dx=dx)` : il PREND dx, donc il est
+    en unites PHYSIQUES.
+
+    `g_mag` compare `Jz_curl` a `J_CRIT = 1.0`. `Jz_curl` vient de
+    `curl_z(Bx, By)`, qui ne prend PAS dx : c'est une difference finie en
+    unites de GRILLE. Verifie ici : sur `Bx = 1 + 0.8 tanh(3 sin y)`, de
+    derivee analytique 2.4, `curl_z` rend 0.2287 = 2.4 x dx.
+
+    Les deux portes comparent donc des grandeurs de deux systemes d'unites
+    differents a des seuils de meme ordre nominal. La porte magnetique est
+    plus dure a franchir d'un facteur exactement 1/dx : 10.2 a N=64,
+    20.4 a N=128, 40.7 a N=256 -- elle se degrade quand la grille se
+    raffine. Quatrieme membre de la famille dimensionnelle de cette
+    campagne.
+
+    MESURE via `_stages`, nappe de courant a N=64 :
+        mic_jz    = 1.541e-01   <- l'etage de SEUIL est sain
+        f_Rm_cell = 8.346       <- la porte d'ECHELLE est saine
+        g_mag     = 0.000       <- la porte TOPOLOGIQUE s'annule
+        mag_comp  = 1.816e-05
+    contre `g_rot = 1.000` et `fluid_comp = 5.0e-01` sur le vortex.
+
+    CORRIGE : `g_mag` recoit desormais `Jz_curl / dx`, un Jz PHYSIQUE,
+    comme `g_rot` recoit un `Q_OW` physique. Ce test verifie que la
+    conversion est bien faite -- `curl_z` rend toujours des unites de
+    grille, c'est le mappeur qui divise.
+
+    Mesure apres : g_mag 0.000 -> 1.000 sur la nappe de courant,
+    K_plaquettes 1.816e-05 -> 1.148e+00, et le rapport magnetique/fluide
+    passe de 27 500 a 0.44.
+    """
+    from Simulation.grid import curl_z
+
+    n = 64
+    gr = PeriodicGrid(n)
+    x = np.arange(n) * gr.dx
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    Bx = 1 + 0.8 * np.tanh(3 * np.sin(Y))
+    By = np.zeros_like(X)
+
+    brut = np.abs(curl_z(Bx, By, True)).max()
+    assert brut == pytest.approx(2.4 * gr.dx, rel=0.05), (
+        f"curl_z rend {brut:.4f}, attendu {2.4 * gr.dx:.4f} (derivee x dx). "
+        f"S'il divise desormais par dx, le desequilibre est corrige — "
+        f"REMESURER la matrice de specificite.")
+
+    global N
+    ancien, N = N, n
+    try:
+        sim, grid = _sim_avec(
+            lambda X_, Y_, g_: (np.zeros_like(X_), np.zeros_like(X_),
+                                1 + 0.8 * np.tanh(3 * np.sin(Y_)),
+                                np.zeros_like(X_)))
+        mapper = _mappeur(grid)
+        etat = sim.get_fluxes()
+        mapper.compute_coefficients(
+            sim, AngleMapper.classical_score(etat), etat,
+            threshold_amr=0.3, advanced_anomalies_enabled=True)
+    finally:
+        N = ancien
+
+    et = mapper._stages
+    assert np.abs(et["mic_jz"]).max() > 1e-2, (
+        f"mic_jz = {np.abs(et['mic_jz']).max():.3e} : le fautif serait "
+        f"l'etage de seuil, pas la porte — remesurer")
+    assert np.abs(et["f_Rm_cell"]).max() > 1.0, (
+        f"f_Rm_cell = {np.abs(et['f_Rm_cell']).max():.3e} : le fautif serait "
+        f"la porte d'echelle")
+    assert np.abs(et["g_mag"]).max() > 0.9, (
+        f"g_mag = {np.abs(et['g_mag']).max():.3e} sur une nappe de courant "
+        f"franche, attendu ~1.0. La porte magnetique recoit-elle toujours "
+        f"un Jz PHYSIQUE (Jz_curl / dx) ?")

@@ -29,6 +29,27 @@ Usage:
   python study/ising_terms_and_annealing.py --dim 4 --v2
   python study/ising_terms_and_annealing.py --dim 4 --v2 --sweeps 5000 --n-restarts 20
 """
+
+#: Seuil sous lequel un coefficient n'entre pas dans l'Hamiltonien.
+#:
+#: ALIGNE SUR `VQA.cost_hamiltonian.COEFF_MIN` (1e-6), et non sur le 1e-12
+#: qui trainait ici. `study/` doit falsifier ce que le circuit EXECUTE, pas
+#: un Hamiltonien plus fourni que lui.
+#:
+#: Mesure de l'ecart, coefficients tombant entre 1e-12 et 1e-6 :
+#:
+#:     scenario           dim   total   entre les deux seuils
+#:     harris_tearing       2      16       4   (25 %)
+#:     harris_tearing       4      64      16   (25 %)
+#:     mhd_rotor            4      64       1
+#:     orszag_tang        2, 4  16, 64       0
+#:
+#: Un quart des termes a dim=2 sur le scenario de reconnexion : la
+#: diagonalisation exacte et le recuit voyaient donc un probleme que le
+#: circuit ne resout pas. C'est exactement la question 4 -- deux chemins
+#: censes coincider.
+COEFF_MIN = 1e-6
+
 import argparse, os, sys, time
 import numpy as np
 
@@ -92,9 +113,9 @@ def build_ising_terms(hamilt_params, dim):
     H0, H1 = hamilt_params["H_edges"]
     for i in range(dim):
         for j in range(dim):
-            if abs(H0[i, j]) > 1e-12:
+            if abs(H0[i, j]) > COEFF_MIN:
                 h_bias[_idx_H(i, j, dim)] += float(H0[i, j])
-            if abs(H1[i, j]) > 1e-12:
+            if abs(H1[i, j]) > COEFF_MIN:
                 h_bias[_idx_V(i, j, dim)] += float(H1[i, j])
 
     # C_edges: ZZ interactions
@@ -103,10 +124,10 @@ def build_ising_terms(hamilt_params, dim):
     edge_coef = []
     for i in range(dim):
         for j in range(dim):
-            if abs(C0[i, j]) > 1e-12:
+            if abs(C0[i, j]) > COEFF_MIN:
                 edge_idx.append((_idx_H(i, j, dim), _idx_H(i, j + 1, dim)))
                 edge_coef.append(float(C0[i, j]))
-            if abs(C1[i, j]) > 1e-12:
+            if abs(C1[i, j]) > COEFF_MIN:
                 edge_idx.append((_idx_V(i, j, dim), _idx_V(i + 1, j, dim)))
                 edge_coef.append(float(C1[i, j]))
     edge_idx = np.asarray(edge_idx, dtype=np.int64).reshape(-1, 2)
@@ -120,7 +141,7 @@ def build_ising_terms(hamilt_params, dim):
         for i in range(dim):
             for j in range(dim):
                 kv = float(K[i, j])
-                if abs(kv) > 1e-12:
+                if abs(kv) > COEFF_MIN:
                     plaq_idx.append((
                         _idx_H(i, j, dim),
                         _idx_V(i, j + 1, dim),
@@ -128,6 +149,36 @@ def build_ising_terms(hamilt_params, dim):
                         _idx_V(i, j, dim),
                     ))
                     plaq_coef.append(kv)
+    # K_xpoint : SECOND terme ZZZZ, meme topologie de plaquette.
+    #
+    # `build_ising_terms` ne lisait que H_edges, C_edges et K_plaquettes :
+    # la diagonalisation exacte, le recuit simule et les ablations de
+    # `study/` etaient donc STRUCTURELLEMENT aveugles au terme de point X,
+    # que la campagne d'entrainement active pourtant sur 6/6 scenarios.
+    # `h3_term_ablation` mettait meme K_xpoint a zero sur l'ablation
+    # `no_ZZZZ` en croyant l'ablater -- il annulait une cle que
+    # `ground_state_mask` ne lisait jamais.
+    #
+    # `cost_hamiltonian` (le chemin DEPLOYE) ajoute un terme ZZZZ separe
+    # sur les memes quatre qubits ; SparsePauliOp somme les doublons, ce
+    # qui revient a additionner les deux coefficients. On reproduit ce
+    # comportement a l'identique.
+    #
+    # Meme seuil que K_plaquettes et que le circuit deploye : COEFF_MIN.
+    KX = hamilt_params.get("K_xpoint")
+    if KX is not None:
+        for i in range(dim):
+            for j in range(dim):
+                kv = float(KX[i, j])
+                if abs(kv) > COEFF_MIN:
+                    plaq_idx.append((
+                        _idx_H(i, j, dim),
+                        _idx_V(i, j + 1, dim),
+                        _idx_H(i + 1, j, dim),
+                        _idx_V(i, j, dim),
+                    ))
+                    plaq_coef.append(kv)
+
     plaq_idx = np.asarray(plaq_idx, dtype=np.int64).reshape(-1, 4)
     plaq_coef = np.asarray(plaq_coef, dtype=np.float64)
 

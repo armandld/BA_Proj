@@ -5620,3 +5620,460 @@ pas seulement sur une reconstruction.
 résolutions. Les nappes de courant y sont plus épaisses que le seuil
 n'exige. Ce n'est pas un défaut du coefficient — c'est que ces scénarios,
 à Rm = 800, sont résolus.
+
+---
+
+# Le critère devient RELATIF
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(19 tests)
+
+Décision de USER après mesure. `src/Simulation/HamiltParams.py` :
+le seuil effectif vaut désormais `min(seuil_absolu, percentile(signal))`.
+
+## Pourquoi
+
+Le seuil de maille est **absolu** — `RE_CRIT·ν/(dx²·v0)`. Deux conséquences,
+toutes deux mesurées :
+
+**Il meurt au raffinement.** Sur un champ physique fixe (rotation solide),
+`K_plaquettes` passe de 1,00e+02 à N=32 à **exactement 0** à N=256 — la
+résolution d'entraînement.
+
+**Il ne peut pas servir deux instabilités.** `|omega|` vaut au maximum
+1,55e−02 sur `harris_tearing` et 1,96e+01 sur `mhd_rotor` — trois ordres de
+grandeur, pour un seuil unique de 13,04.
+
+Or l'information est là. Contraste max/médiane du signal brut à N=256 :
+**1104** sur `harris_tearing` (`√det`), 223 sur `island_coalescence`, 752 sur
+`mhd_rotor`. Ce n'est pas la structure qui manque, c'est le seuil absolu qui
+l'efface.
+
+## Ce que ça donne — mesure avant / après, N=256
+
+| scénario | `K_plaq` avant → après | `K_xpoint` avant → après |
+|---|---|---|
+| `orszag_tang` | 0 → **2,78e−01** | 0 → 8,34e−02 |
+| `harris_tearing` | 0 → 2,66e−03 | 0 → **9,81e−01** |
+| `island_coalescence` | 0 → 1,54e−02 | 0 → **5,55e−01** |
+| `mhd_rotor` | 0 → **6,68e+01** | 0 → 1,00e+01 |
+
+Le terme à quatre corps n'existait sur **aucun** des quatre scénarios ; il
+existe désormais sur les quatre.
+
+**Et il se répartit comme la physique le prédit.** Sur les deux scénarios de
+reconnexion, le canal point X **domine** le canal courant — 0,981 contre
+0,0027 sur `harris_tearing` (facteur **370**), 0,555 contre 0,0154 sur
+`island_coalescence` (facteur 36). C'est exactement ce qu'annonçait le
+contraste brut (`√det` 1104× contre `|Jz|` 49,5×), et c'est le canal qui
+était doublement cassé.
+
+## Les deux clauses qui rendent le critère sûr
+
+**L'absolu l'emporte quand il tire.** Dès qu'une cellule franchit le critère
+physique, le comportement d'origine est conservé **à l'identique**. Le
+relatif ne remplace pas la physique, il la complète.
+
+**Il ne fabrique pas de signal.** Un champ rigoureusement uniforme n'a aucune
+cellule « plus instable » : son percentile vaut son maximum, le contraste
+seuillé rend zéro partout. C'est l'invariant le plus important du fichier de
+tests, et il est vérifié sur `K_plaquettes` comme sur `K_xpoint`.
+
+## Ce que le test d'épinglage a fait
+
+`test_les_coefficients_s_effondrent_quand_la_grille_se_raffine` figeait
+`K_plaquettes = 0` à N=256. Il est **tombé** — c'est son rôle. Remesuré, pas
+ajusté : la table de sa docstring porte maintenant l'avant *et* l'après.
+
+`H_edges` et `C_edges` continuent de décroître en résolution : ils sont
+gouvernés par la fenêtre gaussienne et par `C_scale`, pas par le seuil de
+maille. Mécanisme différent, non confondu.
+
+## Conséquence pour la réoptimisation
+
+`RELATIVE_PERCENTILE = 90` est un **réglage nouveau**. Le périmètre passe de
+**8 à 9 paramètres**.
+
+---
+
+# Les coefficients pointent-ils où le raffinement est nécessaire ?
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(20 tests)
+
+Tous les autres tests vérifient des contrats internes — signes, seuils,
+invariance. Celui-ci vérifie la seule chose qui justifie le modèle.
+
+**Protocole.** Même scénario à N=128 (référence) et N=32 (grossier), même
+nombre de pas. Erreur relative par bloc sur 8×8 = 64 blocs. Corrélation de
+rang de Spearman contre le coefficient moyen du bloc.
+
+| scénario | `K_plaq` | `K_xpoint` | `max(K)` | score classique |
+|---|---|---|---|---|
+| `harris_tearing` | **0,897** | 0,434 | 0,788 | 0,814 |
+| `island_coalescence` | **0,877** | 0,408 | 0,760 | 0,912 |
+| `mhd_rotor` | **0,755** | 0,680 | 0,759 | 0,528 |
+| `orszag_tang` | 0,249 | 0,311 | 0,443 | 0,422 |
+
+## Trois lectures
+
+**Le contrat central est tenu.** `K_plaquettes` corrèle de **0,75 à 0,90**
+sur trois scénarios sur quatre. Le coefficient désigne bien les blocs où la
+solution grossière s'écarte du DNS.
+
+**Sur `mhd_rotor`, le coefficient bat le score classique — 0,755 contre
+0,528.** C'est la première preuve quantitative, dans ce dépôt, que le terme
+à quatre corps apporte quelque chose que l'indicateur linéaire n'a pas. Et
+c'est précisément le scénario autour duquel `compare_rotor_budget` a été
+construit, avec l'argument « le classique ne distingue pas forte vorticité
+sans Jz de forte vorticité **et** fort Jz ». La mesure va dans ce sens.
+
+**`orszag_tang` est faible pour tout** — 0,25 à 0,44, coefficients et score
+classique confondus. Ce n'est pas un défaut des coefficients : c'est le
+scénario le plus difficile pour n'importe quel indicateur local.
+
+*À noter : ces corrélations sont mesurées avec le critère relatif en place.
+Avant lui, `K_plaquettes` était identiquement nul à N=256 et la corrélation
+n'aurait pas été définie.*
+
+## Architecture Neon supprimée
+
+`src/import_Neon_data_to_local.py` est supprimé sur décision de USER. Le
+fichier portait D-64 (il effaçait la destination avant de lire la source,
+5 essais perdus à code 0) et D-65 (identifiant PostgreSQL en dur dans un
+dépôt public). Le mot de passe reste dans l'historique git ; sa rotation
+n'est plus nécessaire puisque l'architecture est abandonnée.
+
+**Note 🦉 (ce qui reste vrai après la décision, pour que personne ne le
+redécouvre).** Abandonner l'architecture retire l'*usage* du mot de passe,
+pas le mot de passe : l'identifiant `neondb_owner` publié le 13 août reste
+valide côté Neon tant qu'il n'est pas changé là-bas, et l'historique git le
+sert toujours. La décision de ne pas faire tourner est celle de USER et
+n'est pas rediscutée ici ; elle est écrite ici pour qu'elle ne soit pas
+prise pour un oubli — et parce que `D-65` sort de `DEFAUTS.md` avec elle.
+Ce qui subsiste côté dépôt est le garde-fou : `pytest
+tests/pipeline/test_no_credential_in_source.py` refuse toute URL portant un
+mot de passe dans `src/` (2 tests, balayage vide inclus).
+
+La configuration de pooling de `train_hyperparams._get_storage` est
+conservée : elle vaut pour n'importe quel Postgres distant, pas seulement
+pour Neon. Son commentaire est généralisé en conséquence.
+
+---
+
+# Équilibre entre les familles : trois faits sains, un déséquilibre ouvert
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(21 tests)
+
+## Une correction de ma part, d'abord
+
+La première version de cette matrice utilisait une **rotation solide**
+`v = (−(y−L/2), x−L/2)` comme champ fluide. Ce champ est **discontinu au
+raccord périodique** : son `K_plaquettes` valait 9,48e+01 avec un maximum
+dans le coin (63, 63). Un artefact de bord, pas une mesure.
+
+Le réseau de vortex `v = (−sin y, sin x)`, périodique, donne **5,01e−01**
+dans l'intérieur. **J'avais donc surestimé le canal fluide d'un facteur
+190**, et annoncé un déséquilibre de 10⁶ là où il est de 2,75·10⁴.
+
+C'est la même famille de piège que le champ d'essai qui ne sépare pas :
+un champ analytique qui viole une hypothèse du solveur mesure le solveur,
+pas la physique.
+
+## La matrice, champs périodiques uniquement
+
+| champ | `H_edges` | `C_edges` | `K_plaq` | `K_xpoint` |
+|---|---|---|---|---|
+| réseau de vortex (fluide) | 1,16e−05 | 1,83e−01 | **5,01e−01** | 0 |
+| nappe de courant (magnét.) | 1,57e−07 | 7,18e−05 | **1,82e−05** | 0 |
+| cisaillement v (Q<0) | 2,13e−08 | 2,72e−04 | 5,71e−03 | 0 |
+| point X magnétique | 9,95e−07 | 3,33e−01 | 5,09e−06 | **9,59e−02** |
+| uniforme (contrôle) | 0 | 0 | 0 | 0 |
+
+## Ce qui est sain
+
+**Le contrôle rend zéro** sur les quatre familles.
+
+**Le réseau de vortex allume `K_plaquettes` et laisse `K_xpoint` à zéro** —
+le canal fluide ne déborde pas.
+
+**Les deux canaux ZZZZ sont orthogonaux.** Le point X allume `K_xpoint`
+(9,59e−02) et laisse `K_plaquettes` à 5,09e−06 — **19 000 fois moins**.
+C'est leur raison d'être, et elle est vérifiée.
+
+**`H_edges` reste subordonné** partout.
+
+## Le déséquilibre, ouvert
+
+**Vortex 5,01e−01 contre nappe de courant 1,82e−05 : facteur 27 500**, pour
+deux instabilités de même nature — l'une hydrodynamique, l'autre magnétique.
+
+**La cause n'est pas localisée, et je m'abstiens de la nommer.** Trois fois
+dans cette campagne, une reproduction incomplète d'un calcul m'a fait
+accuser du code juste : le filtre `> 1e-10` de `C_scale`, un champ d'essai
+dont `|B|` s'annulait là où `|Jz|` culmine, et maintenant un champ non
+périodique.
+
+**Ce qui est établi** : la localisation spatiale du canal magnétique est
+correcte — le maximum tombe là où `|Jz|` culmine. Le canal désigne le bon
+endroit, avec la mauvaise amplitude.
+
+C'est la prochaine chose à instruire, et elle porte directement sur
+`gamma_mag`, l'un des neuf paramètres à réoptimiser.
+
+---
+
+# Le déséquilibre fluide / magnétique : cause trouvée et corrigée
+
+**Commande.** `pytest tests/mapping/test_coefficient_families_contract.py -q`
+(22 tests)
+
+## Trouvée depuis l'intérieur de la fonction
+
+`compute_coefficients` expose désormais `self._stages` — les composantes
+**telles qu'elle les calcule**, et non recalculées à côté. C'était
+nécessaire : trois fois de suite, une reproduction incomplète m'avait fait
+accuser du code juste.
+
+Sur la nappe de courant à N=64 :
+
+| étage | valeur | verdict |
+|---|---|---|
+| `mic_jz` | 1,541e−01 | **sain** — l'étage de seuil |
+| `f_Rm_cell` | 8,346 | **sain** — la porte d'échelle |
+| `g_mag` | **0,000** | ← le coupable |
+
+## La cause
+
+`g_rot` compare `Q_OW` à `Q_CRIT = 2,0`. `Q_OW` vient de
+`grid._compute_q_criterion(vx, vy, dx=dx)` : il **prend dx**, il est en
+unités **physiques**.
+
+`g_mag` comparait `Jz_curl` à `J_CRIT = 1,0`. `Jz_curl` vient de
+`curl_z(Bx, By)`, qui ne prend **pas** dx : différence finie en unités de
+**grille**. Vérifié — sur `Bx = 1 + 0,8·tanh(3 sin y)`, de dérivée
+analytique 2,4, `curl_z` rend **0,2287 = 2,4 × dx**.
+
+Les deux portes topologiques comparaient donc des grandeurs de **deux
+systèmes d'unités différents** à des seuils de même ordre nominal. La porte
+magnétique était plus dure à franchir d'un facteur exactement **1/dx** :
+10,2 à N=64, 20,4 à N=128, **40,7 à N=256**. Elle se dégradait quand la
+grille se raffine.
+
+Quatrième membre de la famille dimensionnelle de cette campagne, après la
+porte `|B|` de `K_xpoint`, sa normalisation en dx⁴, et le seuil absolu en
+1/dx².
+
+## La correction et son effet
+
+`g_mag` reçoit désormais `Jz_curl / dx`.
+
+| champ | `K_plaq` avant | `K_plaq` après |
+|---|---|---|
+| réseau de vortex | 5,009e−01 | 5,009e−01 |
+| **nappe de courant** | **1,816e−05** | **1,148e+00** |
+| point X magnétique | 5,092e−06 | 5,437e−01 |
+| uniforme (contrôle) | 0 | 0 |
+
+**Le rapport magnétique / fluide passe de 27 500 à 0,44.** Les deux canaux
+sont désormais du même ordre — la seule chose qu'on puisse exiger de deux
+instabilités de même nature.
+
+Sur `harris_tearing` à N=256 : `K_plaq` 2,43e−01 et `K_xpoint` 9,81e−01. Le
+canal point X domine encore, mais d'un facteur **4** au lieu de 370.
+
+## Une lecture que la correction invalide
+
+J'avais écrit que les deux canaux ZZZZ étaient orthogonaux « d'un facteur
+19 000 » sur le champ de point X. **C'était un artefact du canal magnétique
+écrasé.** Le champ d'essai `B = (sin(y−L/2), sin(x−L/2))` porte un point X
+**et** du courant — `Jz = cos(x−L/2) − cos(y−L/2)`, non nul. Le canal
+magnétique réparé, `K_plaquettes` y répond légitimement.
+
+L'orthogonalité se lit désormais sur le champ qui **sépare** vraiment : le
+réseau de vortex, qui n'a aucun nul magnétique, laisse `K_xpoint` à zéro.
+
+## Conséquence sur le périmètre de réoptimisation
+
+`gamma_mag` était **non entraînable** tant que la porte qui le précède
+s'annulait : l'optimiseur aurait compensé un facteur 1/dx sans signification
+physique, et la valeur trouvée aurait été spécifique à la résolution.
+**La correction le rend entraînable.**
+
+`kappa` était suspect pour la même raison — il règle simultanément `g_rot`
+et `g_mag`. Les deux portes recevant maintenant des grandeurs physiques, il
+redevient un réglage cohérent.
+
+**Les neuf paramètres sont désormais défendables.**
+
+---
+
+# `study/` voit enfin le terme de point X
+
+**Commande.** `pytest tests/study/test_xpoint_reaches_study.py -q` (5 tests)
+
+`build_ising_terms` ne lisait que `H_edges`, `C_edges` et `K_plaquettes`.
+La diagonalisation exacte, le recuit simulé et les ablations de `study/`
+étaient donc **structurellement aveugles** au terme de point X, que la
+campagne d'entraînement active pourtant sur **6/6 scénarios**.
+`h3_term_ablation` mettait même `K_xpoint` à zéro sur l'ablation `no_ZZZZ`
+en croyant l'ablater : il annulait une clé que `ground_state_mask` ne lisait
+jamais.
+
+`qaoa_inputs.py` codait par ailleurs `advanced_anomalies_enabled=False`.
+
+## Ce qui a été fait
+
+`build_ising_terms` ajoute un **second** terme ZZZZ sur la même plaquette,
+reproduisant exactement `cost_hamiltonian` — qui empile lui aussi un terme
+séparé sur les quatre mêmes qubits, `SparsePauliOp` sommant les doublons.
+Le drapeau de `qaoa_inputs` passe à `True`.
+
+## Le test qui compte : les deux chemins coïncident
+
+Sur les **256 états** d'un problème à `dim = 2` (8 qubits), `K_xpoint`
+actif, trois graines :
+
+**écart maximal 5,3e−15** entre l'énergie du chemin `study/` et la
+diagonale de `create_period_hamiltonian`, le chemin déployé.
+
+Sans cette vérification, la falsification aurait porté sur un autre
+hamiltonien que l'entraînement.
+
+## Une erreur de ma part, la quatrième de la même famille
+
+Ma première comparaison donnait un écart de **1,88e+01** et une corrélation
+de **1,0e−04** — j'ai cru un instant que les deux chemins divergeaient. La
+cause était ma convention de bits : Qiskit est **little-endian**, le bit de
+poids faible correspond au dernier qubit. Avec l'ordre inversé, l'écart
+tombe à 5,3e−15.
+
+Quatrième fois de cette campagne qu'une reproduction incorrecte accuse du
+code juste — après le filtre `> 1e-10` de `C_scale`, le champ dont `|B|`
+s'annulait là où `|Jz|` culmine, et le champ non périodique. Le commentaire
+reste dans le test pour la cinquième.
+
+## Écart signalé, non corrigé
+
+`cost_hamiltonian` filtre les coefficients à **1e−6**, `build_ising_terms` à
+**1e−12**. Les deux chemins coïncident sur les jeux testés, mais un
+coefficient entre ces deux seuils serait vu par `study/` et ignoré par le
+circuit déployé. À trancher avant la réoptimisation.
+
+---
+
+# Les seuils tranchés : `study/` s'aligne sur le circuit
+
+**Commande.** `pytest tests/study/test_xpoint_reaches_study.py -q` (5 tests)
+
+`cost_hamiltonian` filtre les coefficients à `COEFF_MIN = 1e-6` ;
+`build_ising_terms` filtrait à `1e-12`. **`study/` diagonalisait donc un
+hamiltonien plus fourni que celui que le circuit résout.**
+
+## L'écart, mesuré
+
+Coefficients tombant entre les deux seuils — vus par `study/`, ignorés par
+le circuit :
+
+| scénario | dim | total | entre les deux seuils |
+|---|---|---|---|
+| `harris_tearing` | 2 | 16 | **4 (25 %)** |
+| `harris_tearing` | 4 | 64 | **16 (25 %)** |
+| `mhd_rotor` | 4 | 64 | 1 |
+| `orszag_tang` | 2, 4 | 16, 64 | 0 |
+
+**Un quart des termes à `dim = 2` sur le scénario de reconnexion** — celui
+même où D-53 a été mesuré.
+
+## La décision
+
+`study/` s'aligne sur `1e-6`. **La falsification doit décrire ce que le
+circuit exécute**, pas un hamiltonien qui lui est étranger. Les cinq seuils
+de `build_ising_terms` (biais Z, couplages ZZ, plaquettes, point X) passent
+par une constante unique `COEFF_MIN`, importable et documentée.
+
+Aligner dans l'autre sens — descendre le circuit à `1e-12` — aurait changé
+le comportement déployé, donc la science, pour faire coïncider un outil
+d'analyse avec elle. C'est l'inverse de l'ordre correct.
+
+## Ce que cela implique pour D-53
+
+Les artefacts `dim = 2` et `dim = 3` ont été produits avec **quatre**
+écarts cumulés entre `study/` et le circuit :
+
+1. `K_xpoint` absent de `build_ising_terms` ;
+2. `advanced_anomalies_enabled=False` codé en dur dans `qaoa_inputs` ;
+3. `g_mag` écrasé d'un facteur `1/dx` ;
+4. un quart des termes retenus que le circuit rejette.
+
+La relance est donc nécessaire avant toute lecture de D-45, D-47 ou D-53.
+
+---
+
+# Relance `dim = 3` sur l'hamiltonien corrigé : D-53 tient
+
+**Commande.**
+`python study/h0_selection/h0_optimiser_equivalence.py --dim 3 --N 96 --re 400`
+→ `results/h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`
+
+Relancé après les quatre corrections : `K_xpoint` branché dans
+`build_ising_terms`, drapeau des anomalies à `True`, `g_mag` en unités
+physiques, seuil aligné sur `COEFF_MIN = 1e-6`.
+
+## Mon hypothèse est réfutée
+
+J'avais avancé que D-45, D-47 et D-53 pouvaient être trois symptômes d'une
+cause unique — un hamiltonien vide. **La mesure dit non.**
+
+| | ancien | nouveau |
+|---|---|---|
+| `\|E\|` max | 4,154e+01 | 4,146e+01 |
+| `E_gap` max | 1,887e+00 | 1,886e+00 |
+| `E_gap` médian | 1,792e−01 | **2,836e−02** |
+
+L'hamiltonien **n'était pas vide** à `dim = 3` : les énergies sont
+quasi identiques avant et après. Les corrections ont resserré le paysage —
+l'écart médian au fondamental chute d'un facteur 6 — sans changer son
+échelle.
+
+## Le verdict tient
+
+| solveur | hit ancien | hit nouveau |
+|---|---|---|
+| `exhaustive` (certifié) | 1,000 | 1,000 |
+| `greedy` | 0,844 | 0,833 |
+| `sa_warm` | 0,750 | 0,833 |
+| `classical_init` | **0,500** | **0,500** |
+| `qaoa_p1` | 0,156 | **0,083** |
+| `qaoa_p2` | 0,156 | 0,083 |
+| `qaoa_p3` | 0,125 | 0,083 |
+
+**Le QAOA reste très loin sous sa propre initialisation classique.** Le
+critère pré-enregistré du module lève toujours : *« des solveurs
+déterministes n'atteignent plus l'optimum certifié […] H0 (l'échec vient de
+l'optimiseur) redevient plausible »*.
+
+**Réserve sur l'ampleur.** 0,156 → 0,083 est *dans* la dispersion
+run-to-run du bras QAOA (1,79e−1 à 3,61e−1, mesurée par ce dépôt). Je ne
+prétends donc pas que le QAOA a empiré : **le classement est identique**, et
+c'est le classement qui fait foi ici. `qaoa_shots_p3` valait `nan` dans
+l'ancien artefact — il n'y avait pas été exécuté.
+
+## Ce que ça vaut
+
+D-53 portait sur un hamiltonien auquel il manquait le terme de point X,
+dont le canal magnétique était écrasé d'un facteur `1/dx`, et dont un quart
+des termes étaient étrangers au circuit. **Il porte désormais sur un
+hamiltonien qui inclut les quatre familles, dimensionnellement cohérent, et
+identique à celui que le circuit exécute à 5,3e−15 près.**
+
+Le verdict n'en est pas affaibli — il en sort **beaucoup plus difficile à
+écarter**.
+
+## L'artefact de l'agent a été préservé
+
+La relance écrivait sur `h0_optimiser_equivalence_N96_dim3.npz`, l'artefact
+qui porte D-53. Il est **restauré** ; la nouvelle mesure vit sous
+`..._hamiltonien_corrige.npz`. Les deux doivent coexister : ils mesurent
+deux hamiltoniens différents, et c'est leur comparaison qui a de la valeur.
