@@ -324,13 +324,35 @@ def test_the_four_plaquette_qubits_are_all_distinct():
 
 def test_a_plaquette_on_the_boundary_contracts_instead_of_wrapping():
     """Au bord, le qubit manquant devient un coefficient — pas un voisin
-    de l'autre cote du patch."""
+    de l'autre cote du patch.
+
+    SEUIL REMESURE (D-113), et la garantie n'a pas bouge. Ce test chauffait
+    `theta_h[1:-1, -1]` pour le membre Droite et `theta_v[-1, 1:-1]` pour le
+    membre Bas — c'est-a-dire exactement les deux tableaux que la version
+    d'avant lisait, familles echangees. Ses commentaires disaient « halo
+    droit » au-dessus d'une ecriture dans `theta_h` : le champ d'essai etait
+    construit sur la convention fausse.
+
+    Le membre Droite d'une plaquette est un lien **V** et le membre Bas un
+    lien **H** : les cellules a chauffer sont `theta_v[1:-1, -1]` et
+    `theta_h[-1, 1:-1]`.
+
+    Remesure a l'identique (dim = 3, plaquette de coin `K[DIM, DIM] = -2.0`,
+    tout le reste a `pi/2` donc `<Z> = 0`) :
+
+      * anciennes cellules, code corrige : **0 terme** — c'est l'echec ;
+      * bonnes cellules, code corrige    : **1 terme**, `ZZ` sur
+        `{idx_H(2,2), idx_V(2,2)} = {8, 17}`, coefficient **-2.0** ;
+      * bonnes cellules, code d'avant    : **0 terme**.
+
+    L'assertion, elle, est inchangee. Ce qui a change est le champ d'essai.
+    """
     K = np.zeros((P, P))
     K[DIM, DIM] = -2.0                  # derniere cellule de coeur
     tv = np.full((P, P), np.pi / 2.0)
     th = np.full((P, P), np.pi / 2.0)
-    th[1:-1, -1] = 0.0                  # halo droit <Z> = 1
-    tv[-1, 1:-1] = 0.0                  # halo bas   <Z> = 1
+    tv[1:-1, -1] = 0.0                  # liens V du halo droit -> membre Droite
+    th[-1, 1:-1] = 0.0                  # liens H du halo bas   -> membre Bas
     op, *_ = _build(_params(K=K), angles=(th, tv, np.zeros((P, P)),
                                           np.zeros((P, P))))
     t = _terms(op)
@@ -339,6 +361,31 @@ def test_a_plaquette_on_the_boundary_contracts_instead_of_wrapping():
     label, qubits = keys[0]
     assert label == "ZZ", f"attendu une contraction a deux corps, obtenu {label}"
     assert set(qubits) == {_idx_H(DIM - 1, DIM - 1), _idx_V(DIM - 1, DIM - 1)}
+    assert t[keys[0]] == pytest.approx(-2.0)
+
+
+def test_the_boundary_plaquette_ignores_the_other_link_family():
+    """Le pendant du test ci-dessus, et ce qui le rend discriminant (D-113).
+
+    Chauffer les cellules de l'AUTRE famille — `theta_h` a droite, `theta_v`
+    en bas — ne doit rien produire : ces liens-la n'appartiennent pas a la
+    plaquette de coin. Sur la version d'avant, cette configuration rendait au
+    contraire l'unique terme `ZZ` a **-2.0**, et celle du test precedent n'en
+    rendait aucun : les deux tests sont exactement inverses d'une version a
+    l'autre.
+    """
+    K = np.zeros((P, P))
+    K[DIM, DIM] = -2.0
+    tv = np.full((P, P), np.pi / 2.0)
+    th = np.full((P, P), np.pi / 2.0)
+    th[1:-1, -1] = 0.0                  # liens H du halo droit : hors plaquette
+    tv[-1, 1:-1] = 0.0                  # liens V du halo bas   : hors plaquette
+    op, *_ = _build(_params(K=K), angles=(th, tv, np.zeros((P, P)),
+                                          np.zeros((P, P))))
+    t = _terms(op)
+    assert [k for k in t if abs(t[k]) > 1e-9] == [], (
+        "la plaquette du bord se contracte encore sur l'autre famille de "
+        "liens — c'est le defaut D-113")
 
 
 def test_no_qubit_index_is_ever_minus_one():
