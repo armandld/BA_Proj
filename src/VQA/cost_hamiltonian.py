@@ -119,6 +119,31 @@ def create_bounded_hamiltonian(
     w_z_frac = hamilt_params.get('w_z_frac', 1.0)
     z_threshold = 1.0 - 2.0 * threshold_amr
 
+    # Valeurs <Z> brutes des liens du halo que les PLAQUETTES contractent.
+    #
+    # Une plaquette a quatre membres : Haut = H(i,j), Droite = V(i,j+1),
+    # Bas = H(i+1,j), Gauche = V(i,j). Sur la colonne de droite (j = dim-1)
+    # le membre manquant est un lien V ; sur la ligne du bas (i = dim-1)
+    # c'est un lien H. Le <Z> qui remplace un qubit manquant doit venir du
+    # theta de CE lien : theta_v_full pour un lien V, theta_h_full pour un
+    # lien H (init_qbits_state place theta_h sur les qubits idx_H et theta_v
+    # sur les qubits idx_V).
+    #
+    # Le code lisait ici z_halo_right_raw (issu de theta_h_full) pour le
+    # membre Droite, qui est un lien V, et z_halo_bottom_raw (issu de
+    # theta_v_full) pour le membre Bas, qui est un lien H : les deux familles
+    # etaient echangees. Les POSITIONS etaient bonnes, seul le tableau lu
+    # etait le mauvais -- defaut present depuis le premier commit (cf93ba3).
+    #
+    # Mesure (D-113, docs/RESULTS.md) : en deploiement theta_h et theta_v
+    # sont le MEME tableau (`refinement._prepare_vqa_input` passe `mini_score`
+    # deux fois, `PhysToAngle.map_to_angles` le documente), donc l'echange
+    # etait sans effet : 36 configurations aleatoires, operateur identique
+    # bit a bit avant/apres. Sur theta_h != theta_v il change le signe du
+    # terme (k = -0.5 rendu +0.5) et peut l'annuler entierement.
+    z_plaq_right_raw  = get_expected_Z(theta_v_full[1:-1, -1])
+    z_plaq_bottom_raw = get_expected_Z(theta_h_full[-1, 1:-1])
+
     z_halo_top    = w_z_frac * (z_halo_top_raw    - z_threshold)
     z_halo_bottom = w_z_frac * (z_halo_bottom_raw  - z_threshold)
     z_halo_left   = w_z_frac * (z_halo_left_raw    - z_threshold)
@@ -239,8 +264,8 @@ def create_bounded_hamiltonian(
                     # Liste des potentiels candidats
                     candidates = [
                         (idx_H(i, j),   1.0),                  # Top (Toujours in)
-                        (idx_V(i, j+1), z_halo_right_raw[i]),  # Right (Peut être out)
-                        (idx_H(i+1, j), z_halo_bottom_raw[j]), # Bottom (Peut être out)
+                        (idx_V(i, j+1), z_plaq_right_raw[i]),  # Right : lien V -> theta_v
+                        (idx_H(i+1, j), z_plaq_bottom_raw[j]), # Bottom : lien H -> theta_h
                         (idx_V(i, j),   1.0)                   # Left (Toujours in)
                     ]
 
@@ -270,10 +295,12 @@ def create_bounded_hamiltonian(
                 if hamilt_params.get('K_xpoint') is not None:
                     kx_val = hamilt_params['K_xpoint'][ci, cj]
                     if abs(kx_val) > 1e-6:
+                        # Meme topologie que K_plaquettes, donc meme correction
+                        # de famille (D-113).
                         candidates_xp = [
                             (idx_H(i, j),   1.0),
-                            (idx_V(i, j+1), z_halo_right_raw[i]),
-                            (idx_H(i+1, j), z_halo_bottom_raw[j]),
+                            (idx_V(i, j+1), z_plaq_right_raw[i]),
+                            (idx_H(i+1, j), z_plaq_bottom_raw[j]),
                             (idx_V(i, j),   1.0)
                         ]
                         active_qubits_xp = []
