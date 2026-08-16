@@ -6,9 +6,16 @@ Analyzes what the QAOA actually does at each level of the hierarchy:
 - What Hamiltonian coefficients are active?
 - Does the QAOA correct classical false negatives/positives?
 
-IMPORTANT: Analyzes both the FULL-GRID depth-0 call AND deeper
-patches where the effective dx is small enough to trigger physical
-thresholds (Re_cell, Rm_cell > critical).
+IMPORTANT: Analyzes both the FULL-GRID depth-0 call AND deeper patches.
+
+D-107 : la phrase qui suivait — « deeper patches where the effective dx is
+small enough to trigger physical thresholds (Re_cell, Rm_cell > critical) »
+— était fausse deux fois. `dx_eff = patch_phys_size / target_dim` DÉCROÎT
+avec la profondeur (3,14159 / 1,57080 / 0,78540 / 0,39270 à N=256,
+`target_dim=2`), donc les patchs profonds franchissent MOINS les seuils, pas
+plus ; et si la profondeur 0 ne déclenchait rien, ce n'était pas la physique
+mais un `dx` 128 fois trop petit — voir le commentaire de
+`analyze_vqa_at_patch`.
 
 Uses 256×256 grid with 2×2 VQA patches (8 qubits).
 """
@@ -94,16 +101,43 @@ def analyze_vqa_at_patch(sim, N, Phi_prev, threshold, bounds=None, target_dim=2)
         local_phi_h = Phi['phi_horizontal'][y0:y1, x0:x1]
         local_phi_v = Phi['phi_vertical'][y0:y1, x0:x1]
         patch_size = (y1 - y0)
-        # Compute effective dx for this patch level
-        dx_eff = (patch_size / N) * grid.L / target_dim
         is_periodic = False
     else:
         local_state = physics_state
         local_score = full_score
         local_phi_h = Phi['phi_horizontal']
         local_phi_v = Phi['phi_vertical']
-        dx_eff = None  # use grid.dx
+        patch_size = N
         is_periodic = True
+
+    # Taille de cellule VQA du patch — MÊME formule à toutes les
+    # profondeurs, et la même que `refinement._run_level` :
+    # `dx_eff = patch_phys_size / target_dim`.
+    #
+    # D-107. La branche `bounds is None` (profondeur 0) passait
+    # `dx_override=None`, donc `grid.dx = L/N` : le pas de la grille FINE
+    # là où toutes les autres profondeurs passent le pas de la CELLULE VQA.
+    # À N=256 et `target_dim=2` c'est un facteur **128** (0,024544 contre
+    # 3,141593). `compute_coefficients` en tire `Re_cell = |v|·dx/ν` : à
+    # `dx = grid.dx`, aucun `Re_cell` n'atteint `RE_CRIT`, et le
+    # Hamiltonien de la profondeur 0 sortait **identiquement nul**.
+    #
+    # Mesuré (`init_harris_tearing`, N=256, 300 pas, seuils du dépôt) :
+    #
+    #   profondeur | dx      | Σ|H_edges| | Σ|C_edges| | Σ|K_plaquettes|
+    #   0 (avant)  | 0,02454 | 0,000000   | 0,000e+00  | 0,000e+00
+    #   0 (après)  | 3,14159 | 0,238940   | 1,6579e+05 | 8,3461e+04
+    #   1          | 1,57080 | 0,038764   | 2,1036e+04 | 1,4071e+04
+    #   2          | 0,78540 | 0,003722   | 4,4755e+03 | 3,1925e+03
+    #   3          | 0,39270 | 0,001872   | 5,0236e+02 | 1,4181e+03
+    #
+    # La courbe passe d'« un zéro puis une bosse » à une **décroissance
+    # monotone** : la profondeur 0 porte les coefficients les PLUS forts,
+    # pas aucun. La docstring du module attribuait ce zéro à la physique
+    # (« deeper patches where the effective dx is small enough to trigger
+    # physical thresholds ») — c'est l'inverse : `dx_eff` DÉCROÎT avec la
+    # profondeur, donc les patchs profonds déclenchent MOINS.
+    dx_eff = (patch_size / N) * grid.L / target_dim
 
     # Compute Hamiltonian coefficients with proper dx
     hamilt_params = HamiltMapper.compute_coefficients(
