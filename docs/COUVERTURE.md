@@ -1983,6 +1983,56 @@ l'axe réel de ce module.
 
 ---
 
+## `src/VQA/` — module lu en entier (passe du 16 août), un défaut
+
+Les sept fichiers du dossier, **1 026 lignes** (`wc -l src/VQA/*.py`) :
+`cost_hamiltonian.py` (414), `execute.py` (256), `runtime.py` (189),
+`postprocess.py` (61), `mapping.py` (50), `optimize.py` (35),
+`init_qbits_state.py` (22). Le
+dossier figurait à **100 % de couverture de ligne** dans le tableau plus
+haut — c'est exactement le cas que la mission de `VIGIL.md` décrit : la
+couverture ne dit rien du contrat.
+
+| ce qui a été vérifié | verdict |
+|---|---|
+| `create_bounded_hamiltonian` — contraction de plaquette au bord | **D-113** — le qubit manquant était remplacé par le `<Z>` de l'AUTRE famille de liens (Droite = lien V lisant `theta_h`, Bas = lien H lisant `theta_v`). Corrigé, verrouillé |
+| `create_bounded_hamiltonian` — contraction de CISAILLEMENT aux quatre bords | **saine** — chaque bord lit sa propre famille (`theta_h` colonnes 0/-1 pour les liens H, `theta_v` lignes 0/-1 pour les liens V) et le bon coefficient de couplage (`C_edges[0][ci,0]` à gauche, correction antérieure). C'est la comparaison avec elle qui a levé D-113 |
+| `create_bounded_hamiltonian` — centrage `z_threshold = 1 − 2·threshold_amr` | **sain** — `theta = 2·arcsin(√score)` donne `cos θ = 1 − 2·score`, donc le centrage est bien sur la frontière de décision, et le facteur `w_z_frac` n'est appliqué qu'aux contractions 1-corps, comme son commentaire l'annonce |
+| `create_bounded_hamiltonian` — garde de forme A0 | **saine** — refuse tout tableau qui n'est pas `(dim+2, dim+2)`, dans les deux sens (trop grand comme trop petit) |
+| `create_period_hamiltonian` | **sain sur ses valeurs**, déviation `dim = 2` documentée (D-59) et épinglée par un test. **N'a PAS l'équivalent de la garde A0** : un `hamilt_params` trop grand y serait lu par son coin haut-gauche sans erreur. Aucun appelant du dépôt ne le fait — `build_patch_hamiltonian` rend bien `(dim, dim)` — donc **observation, pas défaut** |
+| `init_qbits_state` — quel `theta` va sur quel qubit | **sain**, et c'est le contrat qui tranche D-113 : qubits `0 … dim²−1` ← `theta_h`, qubits `dim² … 2dim²−1` ← `theta_v` |
+| `execute` — bornes du mixeur par méthode | **sain** — `bounds` pour L-BFGS-B et Powell, `constraints` pour COBYLA, et un `raise` explicite pour toute autre méthode plutôt qu'une borne perdue en silence (correction antérieure, D-38) |
+| `execute` — ordre des paramètres `[β…, γ…]` | **sain** — les bornes et les contraintes indexent `x[0:reps]` comme β, ce qui est l'ordre que `QAOAAnsatz` expose (β avant γ) |
+| `execute` — restauration de `default_shots` après une lecture MPS | **saine** — le `sampler` peut être partagé par toute la campagne, la valeur d'origine est remise |
+| `optimize` — les trois backends | **sain** — `state_vector` force `opt_level = 0`, et un backend inconnu lève |
+| `postprocess` — convention de bits et contrat d'entrée | **sain** — parcourt `bitstring[::-1]` (qubit 0 à droite, la convention de `probabilities_dict()` et de `get_counts()`), et **refuse** trois entrées qui rendraient des marginales plausibles et fausses : distribution non normalisée, chaîne multi-registres (l'espace décalerait toutes les positions suivantes), longueur ≠ `num_qubits` |
+| `runtime.VQARuntime` — mode, backend, cache d'ansatz | **sain** — `mode` hors `('simulator',)` lève (D-48 : `_init_backend` rend un simulateur quel que soit le mode, un run « hardware » tournait donc sur simulateur sans le dire), un `backend_name` inconnu lève au constructeur plutôt qu'un `AttributeError` cinquante lignes plus loin, et la clé du cache d'ansatz inclut une **empreinte des coefficients**, pas seulement la topologie |
+
+**Axes traversés — mesurés, pas supposés.** Un plugin de trace compte les
+appels réels aux deux constructeurs pendant la suite :
+
+```bash
+pytest tests/pipeline tests/amr -q -p trace_plugin -m "not slow"
+```
+
+| axe | mesuré |
+|---|---|
+| **bord du patch** | les DEUX côtés sont empruntés : **24 appels bornés**, **60 appels périodiques** sur `tests/pipeline` + `tests/amr` |
+| **profondeur AMR** | `depth = 0` et `depth > 0` — le bras borné n'est atteint que par `depth > 0` (`period_bound = (depth == 0)`), donc les 24 appels le prouvent |
+| **dim** | **`dim = 2` uniquement**, aux deux constructeurs. `dim = 4` et `dim = 8` ne sont traversés par aucun test de la suite rapide |
+| **Hamiltonien nul** | les deux constructeurs lèvent `NullHamiltonianError`, testé |
+| **backend, warm start, optimiseur** | non mesurés par ce plugin — ils vivent dans `execute`, pas dans les constructeurs |
+
+**Ce que cette traversée ne pouvait pas voir, et pourquoi.** L'axe « bord
+borné » était traversé, et D-113 y est resté invisible : en déploiement
+`theta_h ≡ theta_v` (`refinement._prepare_vqa_input` passe `mini_score`
+deux fois), donc échanger les deux familles est l'identité. **Un axe
+traversé ne suffit pas quand les deux valeurs de l'axe coïncident dans la
+configuration testée** — c'est la règle « choisir le champ d'essai qui
+SÉPARE », appliquée aux axes eux-mêmes. À retenir pour la fiche.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
