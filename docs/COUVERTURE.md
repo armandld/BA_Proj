@@ -2223,6 +2223,25 @@ et une fois en commentaire. **Vérifier si la chaîne cherchée apparaît plus
 d'une fois dans le fichier visé** est un tri à un coup de `grep -c`, et il
 aurait désigné ce site sans aucune exécution.
 
+**Le tri par `grep -c`, exécuté sur tout `tests/` la même nuit — et il ne rend
+rien de plus.** Il fallait le mesurer plutôt que de l'annoncer : un script
+apparie chaque `assert "…" in src` à sa cible, puis compte les occurrences de
+la chaîne **hors code exécutable** (commentaires et docstrings, par
+tokenisation et AST — pas par `grep`, qui ne distingue pas). Sur l'arbre
+entier : **3 candidats**, et aucun n'est un défaut.
+
+| candidat | pourquoi ce n'en est pas un |
+|---|---|
+| `test_t24_leak_free.py:278` → `is_ic_variation` | les 2 occurrences sont des **clés de dictionnaire** (`h4_physics_robustness.py:411,491`), donc du code exécutable — l'heuristique compte tout littéral de chaîne, elle a sur-signalé |
+| `test_t24_leak_free.py:73` → `DIFFERENT operating points` | l'objet du test **EST** le texte : il garde une réserve documentée. Type légitime, celui que le critère de cette section autorise |
+| `test_objective_and_estimators_analytic.py:335` → la formule `w = 1 + 0,25 × (…)` | idem : une formule citée dans un commentaire, gardée comme mention |
+
+**Ce que ça vaut.** Le tri est bon marché et sans faux négatif sur sa propre
+question, mais sa question est étroite : il n'aurait trouvé que D-124 des trois
+défauts de cette passe. D-123 (`and` → `or`) et D-125 (un consommateur sur deux
+non couvert) ne laissent **aucune trace textuelle** — seule la mutation les
+voit. À garder comme premier filtre, jamais comme balayage.
+
 **Calibrage cumulé** : 3 défauts sur 4 sites sondés cette passe, contre 1 sur
 3 aux deux précédentes. Ce n'est pas une dérive du taux du dépôt — c'est que
 le bloc `test_t24_leak_free.py` a été écrit d'un seul tenant, dans un style
