@@ -2529,12 +2529,37 @@ l'appel `update(dict(...))` par l'AST et exige leur **égalité** avec les
 clés que `decision_agreement` produit à l'exécution — les deux chemins
 noués l'un à l'autre, au lieu d'être approchés par une distance.
 
-**Reste de cette file : 9 sites.** Deux d'entre eux
-(`test_fig_utils_output_dir.py:57,135`, `test_t10_aggregate.py:121`) portent
-sur la **sortie d'un programme** ou un CSV, pas sur du texte de source :
-`splitlines()[-1]` y est un analyseur de sortie, pas une fenêtre autour
-d'une ancre — à ne pas confondre avec la forme. Le compte utile est donc
-plus proche de **6**.
+**Le recomptage de cette file — et « 12 restants » était un surcompte.**
+Compté, pas estimé :
+
+```bash
+grep -rnE '\.index\(|\.find\(|splitlines\(\)\[|src\[[^]]*:' tests/ \
+     --include=*.py | grep -v '^tests/tools/'
+```
+
+**10 sites**, dont **4 ne sont pas de cette forme** : ils découpent la
+**sortie d'un programme**, un CSV ou une liste de données, pas du texte de
+source — `test_train_hyperparams_contracts.py:582` (JSON dans `stdout`),
+`test_fig_utils_output_dir.py:57,135` (`stdout`), `test_t10_aggregate.py:121`
+(en-tête CSV), `test_phase11e_gap_is_a_reduction_not_physics.py:158`
+(`list.index` sur des données). Un analyseur de sortie n'est pas une fenêtre
+autour d'une ancre textuelle : ne pas les confondre, et ne pas les compter.
+
+Restent **6 sites de la forme**, et **tous portent désormais un verdict** :
+
+| site | verdict |
+|---|---|
+| `test_no_private_curl_survives.py:161` | sain — 8 assertions positives dans la fenêtre |
+| `test_padded_rescale_contracts.py:437` | sain — assertion positive **et** garde comportemental exact ailleurs |
+| `test_solver_convergence.py:613` | sain — 4 assertions positives, moitié comportementale assertée à côté |
+| `test_h0_panel_resume.py:245` | **résolu par D-127** — le texte est gardé délibérément, avec son garde comportemental juste en dessous et la mesure écrite dans les deux docstrings |
+| `test_fig11_uncertainty_weight.py:82` | **D-138**, corrigé |
+| `test_h0_panel_resume.py:98` | **D-139**, corrigé |
+
+**Cette file est donc vide.** Le « 12 restants » de la passe précédente
+comptait 14 relevés moins 2 vérifiés, sans que les 14 aient été recomptés —
+le compte de tête inexact que ce document reproche ailleurs, commis ici.
+Le nombre à citer est **6**, mesuré par la commande ci-dessus.
 
 ---
 
