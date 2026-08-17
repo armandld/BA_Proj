@@ -6759,6 +6759,17 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   lui-même passe. Le fichier reste donc sans filet contre le balayage vide
   que `_FROZEN = {}` a créé. Correctif estimé à ~5 lignes : peupler `_FROZEN`
   via `monkeypatch` sur un lanceur temporaire, et appeler la vraie fonction.
+- **`D-132` désigne deux défauts différents selon le document.**
+  `DEFAUTS.md` → « le bras QAOA ne classe plus, sur une partie de l'espace »
+  (renuméroté depuis D-118 le 17 août, le maximum de la branche de revue
+  étant alors lu comme D-131). `RESULTS.md` ligne de registre → « le garde
+  qui empêche le retour de D-96 se contourne en retirant deux espaces ».
+  Même nuit, deux branches, même numéro. `D-133` est dans le même cas côté
+  registre. Aucun des deux ne peut être renuméroté par la règle de la fiche
+  — *« renuméroter le sien, jamais celui qui est déjà publié dans un
+  commentaire de PR »* — les deux le sont. C'est une décision, pas une
+  correction : un lecteur qui cherche D-132 dans `RESULTS.md` trouve un
+  garde de test là où le brief le renvoie à une bisection.
 - **`CLAUDE.md` § Tests de recette annonce `180 / 164 / 16 / 0`.**
   L'agrégateur rend **180 / 176 / 4 / 0** depuis que D-58 est clos. Même
   incohérence entre `docs/BRIEF_REPRISE.md` §7 (juste) et §8 (périmé).
