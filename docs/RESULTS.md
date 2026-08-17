@@ -6673,3 +6673,59 @@ sélectionné.
 
 Vérifier : `python src/compare_rotor_budget.py` puis
 `pytest tests/pipeline/test_compare_rotor_budget.py -q` → **14 passed**.
+
+
+# D-59 — corrigé AVANT la campagne : le lien ZZ dupliqué à `dim = 2`
+
+**Le défaut.** L'Hamiltonien est périodique : chaque cellule émet un lien
+ZZ vers sa voisine. À `dim >= 3` cela fait `dim` liens distincts par
+direction. À **`dim = 2`** l'anneau dégénère — `(i,0)->(i,1)` et
+`(i,1)->(i,0 mod 2)` relient la **même paire de qubits** — et les deux
+itérations ajoutaient chacune une entrée au lieu d'être fusionnées.
+
+Les coefficients étant symétriques par construction
+(`C_edges[0][i,0] == C_edges[0][i,1]` au bit près), le couplage shear était
+appliqué **deux fois** : poids effectif **×2**. `K_plaquettes` n'a pas ce
+défaut. Repéré sur un décompte de termes affichant `"IIIIIIZZ"` deux fois
+avec exactement `-2.4290271580758453` des deux côtés.
+
+**Corrigé aux DEUX sites**, qui doivent coïncider :
+`src/VQA/cost_hamiltonian.create_period_hamiltonian` (QAOA / diagonalisation)
+et `study/common/ising_terms_and_annealing.build_ising_terms` (SA /
+exhaustif). Déduplication par paire non ordonnée de qubits.
+
+**Portée de la correction**, coefficients aléatoires (donc ZZ vivant) :
+
+| | ZZ avant → après | opérateur identique |
+|---|---|---|
+| dim = 2 | 8 → **4** | **NON** (max\|ΔH\| = 3,285) |
+| dim = 3 | 18 → 18 | OUI |
+| dim = 4 | 32 → 32 | OUI |
+| dim = 5 | 50 → 50 | OUI |
+
+Elle ne mord donc **qu'à `dim = 2`**.
+
+**Impact sur les nombres publiés : exactement nul.** Aux hyperparamètres
+déployés, 4 scénarios canoniques × 3 instantanés (Re=400, N=256) :
+
+    décisions de fondamental exact changées : 0 / 12
+    max|ΔE| global                          : 0,000e+00
+
+Zéro **exact**, pas « petit ». La raison est D-47 : la fenêtre gaussienne
+vaut au plus 1,15e−31 au réglage déployé, donc `|C_edges| < 1e-6` et
+**aucun terme ZZ n'est émis**. Dédupliquer n'a rien à retirer.
+Corollaire noté au passage : le fondamental vaut **255** sur les 12
+instantanés — 8 qubits tous à 1, « raffiner partout », cohérent avec D-47.
+
+**Pourquoi maintenant et pas après la campagne.** L'impact est nul
+aujourd'hui, donc la correction est **gratuite** : aucun nombre publié ne
+bouge, et la coïncidence `study/` ↔ circuit reste à **3,55e−15**. Mais la
+réoptimisation rééquilibre précisément les poids qui rendent le défaut
+invisible : si `w_z_frac` se resserre ou `σ` s'élargit — ce que la campagne
+peut choisir — le ZZ redevient actif et le facteur 2 devient réel, à
+`dim = 2`, la seule taille de toutes les campagnes publiées. Corriger après
+coup obligerait à tout rejouer.
+
+Vérifier : `pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py -q`
+→ **9 passed**, dont un test qui vérifie que le champ d'essai a bien du ZZ
+vivant — écrit sur les coefficients déployés, tout le banc passerait à vide.

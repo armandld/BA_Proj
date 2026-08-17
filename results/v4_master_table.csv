@@ -1,4 +1,4 @@
-# git_hash=b06e8e93bab459cbed83ea3b37a211dad28ddc7e
+# git_hash=95571d16e4779c330c8f9d4c837886f963be3b33
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK

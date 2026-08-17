@@ -122,14 +122,37 @@ def build_ising_terms(hamilt_params, dim):
     C0, C1 = hamilt_params["C_edges"]
     edge_idx = []
     edge_coef = []
+    # D-59 : deduplication par PAIRE NON ORDONNEE de qubits. A dim = 2
+    # l'anneau periodique degenere -- (i,0)->(i,1) et (i,1)->(i,0 mod 2)
+    # relient la MEME paire -- et les deux iterations ajoutaient chacune une
+    # entree, doublant le couplage shear effectif. A dim >= 3 aucune paire
+    # ne se repete, donc les tableaux rendus sont INCHANGES bit a bit.
+    #
+    # Ce chemin (SA/exhaustif) et `cost_hamiltonian.create_period_hamiltonian`
+    # (QAOA/diagonalisation) doivent coincider : la meme deduplication est
+    # appliquee des deux cotes, et `preflight_coefficients.py` verifie que
+    # les deux rendent la meme energie.
+    _liens_zz_emis = set()
+
+    def _lien_zz_neuf(a, b):
+        cle = (a, b) if a <= b else (b, a)
+        if cle in _liens_zz_emis:
+            return False
+        _liens_zz_emis.add(cle)
+        return True
+
     for i in range(dim):
         for j in range(dim):
             if abs(C0[i, j]) > COEFF_MIN:
-                edge_idx.append((_idx_H(i, j, dim), _idx_H(i, j + 1, dim)))
-                edge_coef.append(float(C0[i, j]))
+                a, b = _idx_H(i, j, dim), _idx_H(i, j + 1, dim)
+                if _lien_zz_neuf(a, b):
+                    edge_idx.append((a, b))
+                    edge_coef.append(float(C0[i, j]))
             if abs(C1[i, j]) > COEFF_MIN:
-                edge_idx.append((_idx_V(i, j, dim), _idx_V(i + 1, j, dim)))
-                edge_coef.append(float(C1[i, j]))
+                a, b = _idx_V(i, j, dim), _idx_V(i + 1, j, dim)
+                if _lien_zz_neuf(a, b):
+                    edge_idx.append((a, b))
+                    edge_coef.append(float(C1[i, j]))
     edge_idx = np.asarray(edge_idx, dtype=np.int64).reshape(-1, 2)
     edge_coef = np.asarray(edge_coef, dtype=np.float64)
 
