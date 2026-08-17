@@ -2258,7 +2258,7 @@ ce qu'on y assied : une assertion **positive** dans la fenêtre transforme
 (`X not in bloc`) passe au vert sur une fenêtre vide. D-126 et D-128 n'avaient
 que des assertions satisfaites par l'absence ou par le voisinage.
 
-12 sites de cette forme restent à sonder.
+12 sites de cette forme restent à sonder. *(Repris à la passe du 17 août au soir : 3 de plus sondés, 2 défauts — D-138, D-139 — et 1 sain ; voir plus bas.)*
 
 **Un balayage latent, mesuré et NON promu en défaut.**
 `test_hyperparams_two_sources.py::_live_pipeline_keys` retrouve par regex les
@@ -2489,6 +2489,52 @@ cet ordre :
    (14 relevés, 2 vérifiés sains) ;
 2. les sites `.read()` **jamais relus** — le recomptage du 17 août donne
    **85 sites, 45 fichiers** au total, dont 16 portent désormais un verdict.
+
+---
+
+## Passe du 17 août (fin) — la fenêtre de proximité rend ses deux premiers défauts
+
+La seconde file de la fiche — les **14 sites de la forme « fenêtre de
+proximité »**, dont 2 étaient vérifiés sains — a été reprise. Trois de plus
+sondés : **2 défauts** (D-138, D-139), **1 sain**.
+
+| site | ce qui délimite la fenêtre | verdict |
+|---|---|---|
+| `test_fig11_uncertainty_weight.py:82` | `0 < i_calcul - i_mention < 1500`, une **distance en caractères** | **D-138** — côté **faux rouge**. Marge du jour : distance **1171** pour une borne de **1500**, soit **329 caractères**. Ajouter au bloc de déviation les lignes de mesure que `VIGIL.md` exige qu'il porte : **+4 → 1479, vert ; +5 → 1556, ROUGE ; +6 → 1633, ROUGE** |
+| `test_h0_panel_resume.py:98` | `src[i:i+300]` autour de l'ancre du repli | **D-139** — côté **faux vert**. La fenêtre déborde sur les commentaires qui suivent l'appel : clé retirée du dict, nom laissé dans un commentaire dessous → **22 passed**, alors que `:799` fait `r["exact_match"]` en indexation nue et que `--no-exact` lève après le calcul |
+| `test_solver_convergence.py:613` | `src[:src.index("def _projected_rhs")]` | **sain** — et il montre la parade : **4 assertions positives** dans la fenêtre (une fenêtre vide les fait toutes rougir), **plus** la moitié comportementale assertée directement à côté (`assert _Solver.PROJECT_RHS is False`). C'est la configuration que ce document décrivait déjà comme celle qui sauve |
+
+**Ce que les deux défauts ajoutent à la forme.** Ce document disait que ce
+qui distingue les sains des défauts est une **assertion positive dans la
+fenêtre**. C'est vrai, et insuffisant : D-139 **a** ses deux assertions
+positives, et il tombe quand même — parce que la fenêtre attrape un
+**commentaire**, qui satisfait une assertion positive aussi bien que du
+code. Le critère complet est donc :
+
+> une assertion positive sauve une fenêtre **décalée**, pas une fenêtre
+> **trop large**. Contre celle-ci, seul compte ce qui distingue le code du
+> commentaire — `tokenize` ou l'AST, jamais une tranche de texte.
+
+**Et D-138 nomme le coût du côté faux rouge**, celui que D-126 avait fait
+mordre en direct : le test punit exactement le geste que la méthode impose.
+`VIGIL.md` exige qu'une déviation non corrigée s'écrive dans le fichier
+concerné **avec sa mesure** ; ici, cinq lignes de mesure de plus faisaient
+rougir la suite. Une règle et son garde qui se contredisent, c'est le garde
+qui a tort.
+
+**Les deux corrections délimitent par la structure**, comme prescrit :
+D-138 remonte à la **fonction englobante** du calcul et cherche la mention
+dans ses **commentaires** (`tokenize`) ; D-139 relève les **mots-clés** de
+l'appel `update(dict(...))` par l'AST et exige leur **égalité** avec les
+clés que `decision_agreement` produit à l'exécution — les deux chemins
+noués l'un à l'autre, au lieu d'être approchés par une distance.
+
+**Reste de cette file : 9 sites.** Deux d'entre eux
+(`test_fig_utils_output_dir.py:57,135`, `test_t10_aggregate.py:121`) portent
+sur la **sortie d'un programme** ou un CSV, pas sur du texte de source :
+`splitlines()[-1]` y est un analyseur de sortie, pas une fenêtre autour
+d'une ancre — à ne pas confondre avec la forme. Le compte utile est donc
+plus proche de **6**.
 
 ---
 
