@@ -1388,31 +1388,59 @@ d'élagage est dominé par une grandeur qui n'appartient pas à l'essai.**
 La configuration de campagne (`N = 256`, `HYBRID_DT = 0,10`) n'est pas
 rejouée — coût. La mesure porte sur `N = 32`.
 
-**Pourquoi rien n'est corrigé.** Le correctif tient en un caractère
-(`step - 1` → `step`), et c'est ce qui le rend trompeur. Aux pas hybrides
-de la campagne, `dns_trace[step]` ne porte en général **pas** de
-`'fluxes'` — les instantanés sont posés aux frontières hybrides, et
-`step` est le pas *suivant* une frontière. La lecture du code dit qu'on
-tomberait alors dans la branche `elif sim_temoin is not None`, qui compare
-au témoin **du bon instant** : l'alignement serait réparé, mais la
-référence changerait de nature, DNS → témoin, sur la majorité des pas.
-Changer ce que l'élagueur voit, c'est changer quels essais survivent à une
+**Pourquoi le code lit `step - 1`, et pourquoi ce n'est pas une excuse.**
+L'instantané DNS est posé **à** la frontière hybride, et la notation a
+lieu **après** que le pas franchissant cette frontière a été intégré.
+`step - 1` est donc le seul index qui porte des `'fluxes'` : le décalage
+n'est pas une faute de frappe, c'est la conséquence d'avoir noté après le
+pas alors que la référence est posée avant. Cela explique le défaut ; cela
+ne le rend pas inoffensif, puisque la valeur rapportée reste dominée par
+un terme étranger à l'essai.
+
+**Pourquoi rien n'est corrigé — mesuré, et non déduit.** Le correctif
+tient en un caractère (`step - 1` → `step`), et c'est ce qui le rend
+trompeur. Appliqué seul dans la configuration ci-dessus, il rend :
+
+| rapport | avant | après le correctif d'un caractère |
+|---|---|---|
+| 21, 22, 23 | 0,2857143 + 3,1e−02 de parasite | **0,2857143** — juste |
+| 24 | idem | 0,2936544 — **toujours faux**, c'est l'entrée réécrite |
+| 25 (dernier) | 0,2857143 — juste | **10,0 = `DIVERGENCE_PENALTY`** |
+
+Le dernier rapport bascule sur la pénalité de divergence d'un run
+parfaitement sain. Mécanisme vérifié dans le code : `dns_trace[step]`
+n'existe pas au dernier pas, donc `dns_entry` est vide ; et le repli
+`elif sim_temoin is not None` est **mort** dès qu'une trace DNS est
+fournie — `pipeline.py:327` et `:338` laissent `sim_temoin = None`
+précisément dans ce cas (« *No need for `sim_temoin` — `dns_trace` is the
+reference* »). Il reste `score_result = None`, donc `nan`, donc
+`DIVERGENCE_PENALTY`, rapporté à `should_prune()`.
+
+C'est le piège que `VIGIL.md` appelle *vérifier la portée d'une correction
+avant de l'activer* : un correctif juste sur trois pas sur cinq en casse
+un cinquième, sur le chemin qui décide quels essais survivent à une
 campagne de ~224 h CPU. `VIGIL.md` : *mesurer, documenter, ne pas
 corriger, demander.*
 
 **Trois options, aucune appliquée.**
 
-1. **Aligner sur `step`** et accepter le repli sur le témoin. Le plus
-   simple ; change la nature de la référence sur la majorité des pas.
+1. **Noter avant d'intégrer.** Déplacer le bloc de notation au-dessus de
+   `step_layered`, là où le bras est encore à l'instant de la frontière
+   hybride et où l'instantané existe. Aucun index à changer, aucune
+   référence à changer de nature — mais le rapport `k` porte alors le pas
+   `k−1`, ce qui décale la courbe vue par l'élagueur d'un cran.
 2. **Remonter au dernier instantané disponible**, comme le fait déjà le
    chemin de divergence (`while last_ok >= 0 and 'fluxes' not in …`), et
    **rapporter l'écart de temps** avec le score. Garde la DNS pour
    référence, rend le décalage visible au lieu de le taire — mais ne le
    supprime pas.
 3. **Poser un instantané DNS au pas qui suit chaque frontière hybride**,
-   dans `pre_compute_dns.py`. Supprime le décalage à la racine ; coûte un
-   `get_fluxes()` de plus par frontière et change la trace, donc à
-   remesurer de bout en bout.
+   dans `pre_compute_dns.py`. Supprime le décalage à la racine et rend le
+   correctif d'un caractère sûr ; coûte un `get_fluxes()` de plus par
+   frontière et change la trace, donc à remesurer de bout en bout.
+
+Le correctif d'un caractère seul n'est **pas** une option : mesuré
+ci-dessus, il fabrique un `DIVERGENCE_PENALTY` sur un run sain.
 
 ```bash
 pytest tests/pipeline/test_intermediate_score_time_alignment.py -q
