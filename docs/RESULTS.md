@@ -6832,6 +6832,15 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   Avec le paquet : **3 passed**. C'est le seul `importorskip` au niveau
   module de toute la suite (les autres portent sur des modules du dépôt,
   dans des fixtures).
+- **La docstring de `precompute_dns` renvoie à un chemin de test qui
+  n'existe plus.** Elle écrit *« `tests/test_precompute_dns_contracts.py`
+  fige les deux [conventions] »* ; le fichier vit à
+  `tests/solver/test_precompute_dns_contracts.py` depuis la
+  réorganisation `17d983d`. Même famille que D-142 (dix chemins `pytest`
+  périmés dans `RESULTS.md`), mais hors de sa portée : le garde de D-142
+  balaie `RESULTS.md`, pas les docstrings de `src/`. Le renvoi est le seul
+  fil entre une convention subtile et le test qui la fige — et ce fil est
+  cassé. Une ligne à corriger, aucune mesure en jeu.
 - **Le repli `patch_ratio = 1,0` du chemin de divergence est MORT, et il
   rejouerait D-67 s'il revivait.** `pipeline.py:678` écrit
   `total_pixel_used / (step_simulated * N**2) if step_simulated > 0 else 1.0`.

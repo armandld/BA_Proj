@@ -1278,6 +1278,16 @@ déjà été incrémenté ; l'instantané DNS qui leur correspond est donc
 l'évolution propre de la DNS sur un pas de temps — une grandeur qui ne
 dépend d'aucun hyperparamètre de l'essai.
 
+**Le producteur, lui, documente et TESTE la convention que les
+consommateurs lisent de travers.** La docstring de `precompute_dns` écrit
+noir sur blanc : *« `dns_trace[k]['fluxes']` l'état AVANT le pas k, pour
+tout k sauf le dernier »*, et
+`tests/solver/test_precompute_dns_contracts.py::test_intermediate_snapshots_hold_the_state_before_their_step`
+la fige. Ce n'est donc pas une convention ambiguë sur laquelle deux
+lectures se vaudraient : l'entrée `k` est l'état à `t_k`, le bras après
+`step += 1` est à `t_step`, et l'index aligné est `step`. Le producteur
+est juste ; ce sont ses deux consommateurs qui lisent un cran trop tôt.
+
 **Comment on est tombé dessus.** Question 4 de `VIGIL.md` : deux chemins
 censés coïncider coïncident-ils encore ? Le score **final**, vingt lignes
 plus bas, choisit son index autrement :
@@ -1327,9 +1337,13 @@ le bras est **bit-à-bit** `dns_trace[step]['fluxes']` à l'epsilon machine.
 
 **Pourquoi le dernier rapport, lui, est juste.** `pre_compute_dns.py:126`
 réécrit `dns_trace[step-1]['fluxes']` après la boucle avec l'état de
-**fin** de run (« AJOUT CRITIQUE »). La dernière entrée de la trace ne
-suit donc pas la convention des autres, et c'est précisément ce qui
-réaligne le dernier rapport — par accident, pas par construction.
+**fin** de run (« AJOUT CRITIQUE »). Cette double convention est
+**voulue, écrite et testée** — elle sert le score final, qui compare les
+deux bras une fois tous les pas faits, et
+`test_the_last_snapshot_holds_the_state_after_its_step` la fige. Ne pas
+la « corriger ». Ce qui est accidentel, c'est que le **dernier rapport
+intermédiaire** en bénéficie : il lit cette entrée-là et tombe donc
+aligné, sans que rien ne l'ait voulu. Un point sur cinq.
 
 **Le pas 24 est écarté de la mesure, et non tu.** C'est l'entrée réécrite :
 le bras y diffère de `trace[24]` de **6,964e−04**, donc `trace[24]` n'est
