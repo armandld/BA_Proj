@@ -6,6 +6,41 @@ d'avancer, comment on est tombé dessus, et où on en est pour le lever.
 Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 `RESULTS.md` avec sa mesure et sa commande de vérification.
 
+## Règle d'arrêt — ce qui entre dans ce fichier
+
+Écrite parce que le taux de découverte a dépassé le taux de résolution.
+Comptés sur les défauts D-39 à D-131 des deux branches :
+
+| zone | commits |
+|---|---|
+| `src/` + `study/` — le chemin scientifique | 98 |
+| figures et lanceurs | 42 |
+| gardes de test (faux verts, mutations) | 37 |
+
+**Près de la moitié de l'effort récent ne touche ni un nombre du papier ni
+la campagne.** Le travail est juste — les faux verts de D-123 à D-131 sont
+de vrais défauts — mais sa valeur marginale s'est effondrée, et c'est ce
+qui donne l'impression d'avancer de plus en plus lentement : on découvre
+plus vite qu'on ne ferme, sur des objets de moins en moins décisifs.
+
+Un défaut est **bloquant**, et n'entre ici, que s'il satisfait l'un des
+deux critères :
+
+1. **il porte une lecture publiée** — un nombre ou une phrase que le
+   manuscrit contiendra ; ou
+2. **il empêche la réoptimisation** de mesurer ce qu'elle prétend mesurer.
+
+Tout le reste — rendu des figures, hygiène des tests, lanteurs hors
+chemin — est **enregistré et groupé**, traité en un lot unique APRÈS la
+campagne. Un défaut hors chemin critique se note en une ligne dans
+`RESULTS.md` et ne s'ouvre pas ici.
+
+Ce n'est pas un abandon de rigueur : c'est le même principe que
+« mesurer avant d'affirmer », appliqué à l'allocation du temps. Un audit
+qui ne finit jamais ne protège aucune conclusion, parce qu'il n'y a pas de
+conclusion.
+
+
 | | |
 |---|---|
 | **ouverts** — décision ou campagne requise | **5** |
