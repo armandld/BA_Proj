@@ -6832,6 +6832,19 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   Avec le paquet : **3 passed**. C'est le seul `importorskip` au niveau
   module de toute la suite (les autres portent sur des modules du dépôt,
   dans des fixtures).
+- **Le repli `patch_ratio = 1,0` du chemin de divergence est MORT, et il
+  rejouerait D-67 s'il revivait.** `pipeline.py:678` écrit
+  `total_pixel_used / (step_simulated * N**2) if step_simulated > 0 else 1.0`.
+  `step_simulated += 1` est à la ligne 622, dans la même itération et
+  au-dessus : au point du repli, `step_simulated >= 1` toujours. La branche
+  `else` est donc inatteignable — mais si elle l'était, elle rendrait
+  `patch_ratio = 1,0` sur un run qui n'a rien intégré, donc
+  `combined = lambda/(1+lambda)`, le nombre parfaitement plausible que D-67
+  a fait interdire dans `score()` (qui, lui, LÈVE sur `total_steps <= 0`).
+  Deux chemins censés coïncider, dont un seul crie. Le chemin final, lui,
+  est bien gardé : `pipeline.py:751` passe `step_simulated` à `score()`,
+  donc un run vide y lève. Hors chemin critique parce que la branche est
+  morte ; noté parce qu'un réordonnancement la réarmerait en silence.
 - **`D-132` désigne deux défauts différents selon le document.**
   `DEFAUTS.md` → « le bras QAOA ne classe plus, sur une partie de l'espace »
   (renuméroté depuis D-118 le 17 août, le maximum de la branche de revue
