@@ -155,6 +155,82 @@ def test_every_cli_choice_group_is_acted_upon(script):
 
 AGG = re.compile(r"np\.(mean|std|median|sum)\s*\(")
 
+#: Les reducteurs numpy qui, appliques a une liste de tirages, produisent le
+#: nombre publie. `np.sum` compte, les trois autres moyennent.
+_REDUCTEURS = ("mean", "std", "median", "sum")
+
+
+def _aggregations_sur_tirages(tree):
+    """Appels `np.<reducteur>(...)` dont l'argument mentionne une liste de
+    tirages, avec la ligne ou ils commencent.
+
+    D-128 — la version precedente cherchait `np.mean(` et `_runs` sur la
+    MEME ligne du source. Aucune des deux agregations reelles du depot n'est
+    ecrite ainsi : elles tiennent sur deux lignes, la liste etant nommee un
+    peu plus haut. Mesure : **0 ligne selectionnee sur 65 scripts**, pour
+    **2 agregations reelles** — un balayage vide, dans le fichier qui existe
+    pour detecter les balayages vides. L'AST voit la structure, pas la mise
+    en forme : un retour a la ligne ne le desarme pas.
+    """
+    trouves = []
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and n.func.attr in _REDUCTEURS
+                and isinstance(n.func.value, ast.Name)
+                and n.func.value.id == "np"):
+            continue
+        noms = set()
+        for c in ast.walk(n):
+            if isinstance(c, ast.Name):
+                noms.add(c.id)
+            elif isinstance(c, ast.Attribute):
+                noms.add(c.attr)
+            elif isinstance(c, ast.Constant) and isinstance(c.value, str):
+                noms.add(c.value)
+        if any(x == "runs" or x.endswith("_runs") for x in noms):
+            trouves.append((n, n.lineno))
+    return trouves
+
+
+def _mentionne_completed(node):
+    for c in ast.walk(node):
+        if isinstance(c, ast.Constant) and c.value == "completed":
+            return True
+        if isinstance(c, (ast.Name, ast.Attribute)):
+            nom = getattr(c, "id", None) or getattr(c, "attr", "")
+            if nom in ("completed", "n_ok", "runs_ok"):
+                return True
+    return False
+
+
+def _liste_agregee_est_filtree(appel, tree):
+    """Le filtre `completed` est-il DANS l'appel, ou dans la liaison du nom
+    que l'appel agrege ?
+
+    D-128 — la version precedente cherchait la chaine `completed` dans les
+    12 lignes precedentes. Ce voisinage contient `\"n_completed\": len(runs)`,
+    un champ de COMPTE-RENDU qui n'a rien d'un filtre : retirer le vrai
+    filtre laissait le garde vert. On remonte donc du nom agrege a sa
+    liaison, et on exige le filtre la.
+    """
+    if _mentionne_completed(appel):
+        return True
+    # noms iteres par les comprehensions de l'appel, ou passes directement
+    sources = set()
+    for c in ast.walk(appel):
+        if isinstance(c, ast.comprehension) and isinstance(c.iter, ast.Name):
+            sources.add(c.iter.id)
+        elif isinstance(c, ast.Name):
+            sources.add(c.id)
+    for n in ast.walk(tree):
+        if not isinstance(n, ast.Assign):
+            continue
+        cibles = {t.id for t in n.targets if isinstance(t, ast.Name)}
+        if cibles & sources and _mentionne_completed(n.value):
+            return True
+    return False
+
 
 @pytest.mark.parametrize("script", TASK_SCRIPTS)
 def test_aggregations_over_runs_filter_completed(script):
@@ -162,18 +238,32 @@ def test_aggregations_over_runs_filter_completed(script):
 
     C'est le defaut qui a fait publier a T16 une moyenne de 0.3328 pour
     `rotor` la ou les tirages valides donnaient 0.1473."""
-    src = _source(script)
-    for i, line in enumerate(src.splitlines(), 1):
-        if not AGG.search(line):
-            continue
-        if "_runs" not in line:
-            continue
-        # la ligne agrege des executions : le filtre doit etre visible
-        # dans un voisinage proche (meme ligne ou definition juste avant)
-        window = "\n".join(src.splitlines()[max(0, i - 12):i])
-        assert "completed" in window or "_ok" in line, (
+    tree = _tree(script)
+    lignes = _source(script).splitlines()
+    for appel, i in _aggregations_sur_tirages(tree):
+        assert _liste_agregee_est_filtree(appel, tree), (
             f"{script}:{i} agrege des executions sans filtrer les avortees:\n"
-            f"    {line.strip()}")
+            f"    {lignes[i - 1].strip()}")
+
+
+def test_the_aggregation_sweep_is_not_empty():
+    """Un balayage qui ne selectionne rien doit crier.
+
+    D-128 : le garde ci-dessus passait sur les 65 scripts en n'examinant
+    AUCUN site. Ce test compte ce qui est reellement examine, pour qu'une
+    reecriture qui le redesarme se voie — c'est la regle « verifier le
+    nombre de cas SELECTIONNES, pas seulement le code de retour ».
+
+    Le nombre est ecrit ici pour qu'une derive se voie : **2** agregations
+    sur tirages a la date de D-128, toutes deux dans
+    `closed_loop_leak_free_summary.py` (lignes 126 et 127). Il peut monter
+    legitimement ; il ne doit pas tomber a zero.
+    """
+    total = sum(len(_aggregations_sur_tirages(_tree(s))) for s in TASK_SCRIPTS)
+    assert total >= 2, (
+        f"le balayage des agregations sur tirages n'examine plus que "
+        f"{total} site(s) sur {len(TASK_SCRIPTS)} scripts — il passerait "
+        "au vert sans rien verifier, ce qui est le defaut D-128")
 
 
 # ---------------------------------------------------------------- (c)

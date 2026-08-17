@@ -2223,6 +2223,28 @@ et une fois en commentaire. **Vérifier si la chaîne cherchée apparaît plus
 d'une fois dans le fichier visé** est un tri à un coup de `grep -c`, et il
 aurait désigné ce site sans aucune exécution.
 
+**Deux défauts de la même nuit ne viennent PAS du sondage `.read()` mais de
+ce qu'il a rendu visible en chemin** — et tous deux sont des fenêtres de
+proximité :
+
+* **D-126** — un garde prenait la **première** occurrence d'une phrase non
+  unique et lisait les 600 caractères suivants ; un commentaire ajouté plus
+  haut a fait tomber la fenêtre à côté, et le test a rougi sans qu'aucun
+  défaut n'existe.
+* **D-128** — un garde cherchait la chaîne `completed` dans les **12 lignes**
+  précédant une agrégation ; ce voisinage contient `"n_completed": len(runs)`,
+  un champ de compte rendu. Le vrai filtre retiré, le garde restait vert.
+
+**La forme à chercher, maintenant nommée : la fenêtre de proximité.** Un garde
+qui délimite sa zone d'examen par un décalage de lignes ou de caractères
+autour d'une ancre textuelle. Elle échoue **des deux côtés** — faux rouge
+quand l'ancre bouge, faux vert quand la fenêtre attrape autre chose. Le
+remède est le même dans les deux cas : l'AST délimite par la **structure**
+(la liaison d'un nom, le corps d'une fonction), jamais par une distance.
+
+Sites de cette forme restant à sonder : tout `assert … in src[i:i + N]`, tout
+`src.splitlines()[i - N:i]`, et tout `src.index(...)` suivi d'une tranche.
+
 **Le tri par `grep -c`, exécuté sur tout `tests/` la même nuit — et il ne rend
 rien de plus.** Il fallait le mesurer plutôt que de l'annoncer : un script
 apparie chaque `assert "…" in src` à sa cible, puis compte les occurrences de
