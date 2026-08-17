@@ -2260,6 +2260,18 @@ que des assertions satisfaites par l'absence ou par le voisinage.
 
 12 sites de cette forme restent à sonder.
 
+**Un 5ᵉ site du sondage `.read()` vérifié la même nuit, et il est sain** :
+`test_provenance.py:108` (`test_long_tasks_no_longer_stamp_at_save_time`,
+`assert "git_commit_hash()" not in src`). Assertion **négative** sur le texte,
+donc a priori de la mauvaise forme — mais l'invariant qu'elle garde (D-15 : le
+hash écrit est celui pris au DÉPART) est tenu à l'intérieur de
+`provenance.finish`, pas aux sites d'appel, et il y est vérifié
+fonctionnellement : `test_provenance.py:51-53` assertent
+`out["git_hash"] == p["git_hash_at_start"]`. Le texte n'est qu'une ceinture
+au-dessus des bretelles. **Verdict : surestimé, pas défaut** — 2ᵉ cas où la
+question « et qui couvre le comportement, alors ? » sauve un site plutôt que
+d'en condamner un.
+
 **Le tri par `grep -c`, exécuté sur tout `tests/` la même nuit — et il ne rend
 rien de plus.** Il fallait le mesurer plutôt que de l'annoncer : un script
 apparie chaque `assert "…" in src` à sa cible, puis compte les occurrences de
