@@ -154,9 +154,17 @@ Vérifier avant de lancer, sans rien calculer :
 `python src/train_hyperparams.py --print-space`
 
 **Coût mesuré** : 56 min CPU par essai quantique (médiane, 178 essais).
-180–450 essais → 168–420 h CPU, soit ~5–13 h sur 32 cœurs. Appliquer
-**×1,7** pour l'efficacité parallèle mesurée (59 % : la campagne gelée a
-obtenu 5,3× avec 9 essais simultanés, pas 9×).
+180–450 essais → 168–420 h CPU, soit ~5–13 h sur 32 cœurs. **Pas de majoration** : les heures CPU sont les heures facturées.
+*(Correction : une version antérieure de ce document appliquait ×1,7 pour
+une « efficacité de 59 % ». C'était une mauvaise lecture de `PROVENANCE.md` —
+le 5,3× y est la concurrence moyenne RÉELLEMENT obtenue, 159,8 h CPU /
+30,4 h de mur = 5,26, pas une perte. Le 9 est un pic, pas une cible.)*
+Ce qui reste incertain n'est pas l'efficacité mais le **passage à
+l'échelle** : la campagne gelée n'a jamais dépassé ~9 workers simultanés.
+
+**Mise en place complète** (machine louée ou cluster) :
+`docs/MODE_EMPLOI_CAMPAGNE.md` — du clone au `best_hyperparams.json`, avec
+la répétition à faire AVANT de payer.
 
 **Lancer** (le `--phase` attend `1`, pas `phase1`) :
 
