@@ -2310,7 +2310,7 @@ voit. À garder comme premier filtre, jamais comme balayage.
 le bloc `test_t24_leak_free.py` a été écrit d'un seul tenant, dans un style
 qui garde tout par le texte. Les grappes se sondent ensemble.
 
-**23 sites restent non vérifiés** (sur les 27 signalés par le tri, candidats
+**23 sites restent non vérifiés** *(à cette date — cette liste est **épuisée** depuis la passe du 17 août au soir, voir plus bas : les cinq derniers ont rendu D-136, D-137, deux surestimés et un légitime)* (sur les 27 signalés par le tri, candidats
 seulement — ne pas les citer comme défauts sans les rejouer ; `:171` de la
 première entrée est sorti de cette liste, vérifié et devenu D-121) :
 `test_hyperparams_provenance_break.py:211` ·
@@ -2419,6 +2419,76 @@ corrections sont entièrement dans les tests, parce que dans les six cas le
 code est juste et c'est sa couverture qui manquait. Aucun nombre publié ne
 bouge. Les axes de la fiche ne sont pas re-traversés : ils l'étaient déjà
 depuis D-119.
+
+---
+
+## Passe du 17 août (suite) — la liste des 23 candidats est VIDE
+
+Cinq derniers sites du tri automatisé vérifiés par mutation : **2 défauts**
+(D-136, D-137), **2 surestimés**, **1 devenu couvert**. La file ouverte le
+15 août sur les 27 candidats du tri est épuisée.
+
+| site | mutation A′ (comportement cassé, texte intact) | verdict |
+|---|---|---|
+| `test_t24_leak_free.py:224` — l'exclusion des conditions vacues du décompte de direction | filtre retiré du chemin **principal** seul, la chaîne survit sur `--recompute` → **26 passed** | **D-136**, confirmé |
+| `test_t24_leak_free.py:233` — le refus d'extrapoler la frontière classique | garde en code mort, chaîne intacte : budget 0,20 → **0,700**, budget 0,05 → **1,000**, sans refus ni plantage → **28 passed** | **D-137**, confirmé |
+| `test_t24_leak_free.py:269` — `--recompute` re-dérive les verdicts | la re-dérivation sautée, les deux chaînes intactes → **1 failed** | **désormais couvert** — le garde comportemental de D-136 exécute `--recompute` de bout en bout, donc le texte est redondant |
+| `test_t24_leak_free.py:277` — `is_ic_variation` | les deux sites forcés à `True`, chaîne intacte → **28 passed** | **surestimé** — évadable, mais la clé n'est **lue par rien** dans le dépôt (0 consommateur hors ce test) ; même verdict que `test_h0_panel_resume.py:108`, réintroduire une clé morte ne fabrique pas une valeur plausible et fausse. L'expression est juste par ailleurs : `cond` est un **dict**, donc `"re" not in cond` teste bien une clé, pas une sous-chaîne |
+| `test_h0_panel_guards.py:101` — le retour silencieux sur « aucun enregistrement » | retour silencieux réintroduit sous une **autre orthographe** (`print("no records."); return`), les deux chaînes cherchées toujours absentes → **2 failed** | **légitime** — et pour la bonne raison : `test_an_empty_sweep_exits_nonzero` et `test_the_empty_sweep_message_names_what_is_missing`, **dans le même fichier**, lancent le panel en sous-processus et mordent. La configuration que ce document appelle acceptable (cf. `test_qaoa_arm_is_sampled`) |
+
+**La forme que D-136 ajoute à la liste : la chaîne qui existe DEUX fois en
+code exécutable.** Le tri par `grep -c` de la passe précédente compte les
+occurrences **hors code exécutable** — commentaires et docstrings — parce
+qu'il cherchait la forme de D-124 (un nom qui survit dans un commentaire).
+D-136 lui échappe entièrement : ses deux occurrences sont **toutes deux du
+code**, une par chemin de comptage, et une seule suffit à satisfaire
+`assert … in src`. C'est la forme de D-125 — un consommateur sur deux non
+couvert — vue depuis le texte.
+
+Le tri à un coup de `grep` qui l'aurait désigné est donc plus simple que
+celui déjà écrit : **compter les occurrences de la chaîne cherchée
+n'importe où dans le fichier visé, code compris. N > 1 veut dire qu'un
+consommateur peut tomber sans réveiller le garde.** À joindre au premier
+filtre, avec la même réserve : jamais un balayage.
+
+**Ce que les deux défauts de cette passe ont en commun avec la mission.**
+D-137 est l'instance la plus pure rencontrée jusqu'ici : sous la garde
+neutralisée, la fonction rend un nombre **fini, positif, dans l'intervalle
+d'un `phys_score`** pour un budget qu'aucune mesure ne couvre — et le biais
+a un **sens**, l'erreur classique inventée croît quand le budget décroît,
+donc `ratio_vs_frontier = qe / ref` diminue et le bras Q-HAS paraît
+meilleur. La docstring de `frontier_verdict` désigne elle-même ce piège
+comme *« exactement le motif traqué par cette campagne »*. Le garde écrit
+contre lui ne le voyait pas.
+
+**Deux tests source-text retirés, pas affaiblis.** Celui de D-136 et celui
+de D-137 rougissaient tous deux sur une réécriture **équivalente**
+(`c.get("condition_is_weak", False)` ; `min(xs) <= qp <= max(xs)`) — 5ᵉ et
+6ᵉ faux rouges de cette forme ici — tout en restant verts sur le défaut
+qu'ils annonçaient empêcher. Chacun est remplacé par ce qui le
+surclasse dans les deux sens : un garde comportemental, et pour D-136 un
+garde **AST** qui exige le filtre sur **chacune** des deux liaisons de
+`dec` et crie s'il en trouve moins de 2.
+
+**Calibrage cumulé, recompté** : sur les **16 sites** sondés à la main
+depuis le 15 août — **9 défauts**, **5 surestimés**, **2 légitimes**. Le
+tri automatisé reste à ~1 sur 3. La règle qui a rendu le plus tient
+toujours : vérifier un « surestimé » n'est pas du temps perdu — les deux de
+cette passe ont chacun désigné ce qui couvre vraiment le comportement.
+
+**Ce que cette passe n'a PAS fait** : aucun code de `src/`, `study/` ou
+`figures/` n'est modifié — les deux corrections sont entièrement dans les
+tests, parce que dans les deux cas le code est juste et c'est sa couverture
+qui manquait. Aucun nombre publié ne bouge. Les axes de la fiche ne sont pas
+re-traversés : ils le sont depuis D-119.
+
+**La file qui reste**, maintenant que les 23 candidats sont épuisés, dans
+cet ordre :
+
+1. les **12 sites de la forme « fenêtre de proximité »** encore à sonder
+   (14 relevés, 2 vérifiés sains) ;
+2. les sites `.read()` **jamais relus** — le recomptage du 17 août donne
+   **85 sites, 45 fichiers** au total, dont 16 portent désormais un verdict.
 
 ---
 
