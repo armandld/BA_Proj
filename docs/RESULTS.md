@@ -6605,3 +6605,71 @@ c'est voulu.
 
 Vérifier : `python study/common/preflight_coefficients.py` → 5/5, dont
 « coïncidence — study/ et le circuit rendent la même énergie ».
+
+
+# D-91 — clos : la « vérité terrain » du rotor était une erreur RELATIVE
+
+**Ce qui bloquait**, et depuis une note déjà publiée (D-10) : la sélection
+dite *« ground truth »* de `compare_rotor_budget.py` rendait une erreur L2
+de **0,3079** — pire que l'absence d'AMR (**0,3074**) — quand classique et
+Q-HAS obtenaient **0,0208**. Une vérité terrain battue par l'absence de
+raffinement n'est pas une vérité terrain. La note constatait l'anomalie
+sans en donner la cause.
+
+**La cause.** `compute_block_errors` normalisait **chaque bloc par sa
+propre amplitude** :
+
+```python
+diff = sqrt(mean((dns_block - coarse_block)**2))
+ref  = sqrt(mean(dns_block**2)) + 1e-10      # <- LOCAL, et seul plancher
+total_err += diff / ref
+```
+
+Seul le dénominateur porte un plancher. Deux blocs partageant le **même
+écart absolu** reçoivent donc des scores dans le rapport inverse de leurs
+amplitudes — le bruit de fond bat la vraie structure. Mesuré sur un champ
+qui sépare (écart absolu identique au bit près) :
+
+| | bloc de bruit (DNS ~ 1e−6) | bloc de structure (DNS = 10,0) |
+|---|---|---|
+| avant | **2,000e−01** | 2,000e−08 |
+| après | 4,000e−08 | 4,000e−08 |
+
+Le bruit dominait d'un facteur **1,0e+07** à écart identique.
+
+**La correction.** Ce que la fonction promet — *« which blocks truly need
+refinement »* — se lit contre la quantité que la campagne minimise :
+l'erreur L2 **globale**. Le bloc à raffiner est celui qui **contribue** le
+plus à cette erreur, pas celui dont l'erreur relative à son propre contenu
+est la plus grande. La normalisation devient donc **globale par champ**,
+ce qui conserve la seule raison d'être d'une normalisation ici — rendre
+`vx` et `Jz` comparables malgré des amplitudes différentes — sans donner
+de prime à un bloc vide.
+
+**Remesure, configuration par défaut (N=96, 3×3 blocs, Re=Rm=800) :**
+
+| méthode | L2 | vs. grille grossière | accord avec la vérité terrain |
+|---|---|---|---|
+| sans AMR | 0,307359 | référence | — |
+| **vérité terrain** | **0,020786** | **+93,2 %** | — |
+| classique | 0,020786 | +93,2 % | **3/3 blocs** |
+| Q-HAS | 0,020786 | +93,2 % | **3/3 blocs** |
+
+L'anomalie disparaît : la vérité terrain corrigée sélectionne exactement
+les mêmes blocs que les deux bras, et atteint le même L2. **Les trois
+nombres de la note D-10 sont remplacés** — 0,3079 était un artefact de
+métrique, pas un résultat.
+
+**Ce que ce banc ne dit plus.** Les trois sélections coïncidant à 3/3, ce
+scénario **ne départage plus les deux bras** : « Classical wins by 0.0 % ».
+Il valide la chaîne (le raffinement des bons blocs vaut +93 %), il
+n'arbitre pas entre classique et quantique. Ne pas lui faire dire l'un
+pour l'autre.
+
+Le test qui épinglait le défaut est **remesuré, pas supprimé** : il affirme
+désormais l'égalité à écart absolu égal, et un second vérifie la promesse —
+à erreur *relative* égale, c'est le bloc de forte amplitude qui doit être
+sélectionné.
+
+Vérifier : `python src/compare_rotor_budget.py` puis
+`pytest tests/pipeline/test_compare_rotor_budget.py -q` → **14 passed**.

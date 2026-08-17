@@ -16,3 +16,8 @@ results/.checkpoints/
 # Mesures de bisection en cours : la trace utile vit dans DEFAUTS.md D-132,
 # pas a la racine du depot.
 .culprit_*.txt
+
+# Sortie de `src/compare_rotor_budget.py` : artefact recalculable par une
+# commande, pas un resultat a versionner (son chemin par defaut est
+# `../data/` relatif a src/).
+data/
