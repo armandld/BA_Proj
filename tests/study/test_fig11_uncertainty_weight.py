@@ -78,8 +78,61 @@ def test_la_deviation_reste_ecrite_dans_le_fichier_concerne():
     with open(chemin, encoding="utf-8") as f:
         src = f.read()
     assert "D-100" in src, "la mention de la deviation D-100 a quitte fig11"
-    # la mention doit accompagner le calcul concerne, pas vivre en tete de fichier
-    i_mention = src.index("D-100")
-    i_calcul = src.index("uncertainty = np.exp(")
-    assert 0 < i_calcul - i_mention < 1500, (
-        "la mention de D-100 s'est eloignee du calcul qu'elle documente")
+
+
+def test_la_mention_de_la_deviation_accompagne_son_calcul():
+    """La mention de D-100 vit dans la fonction qui porte le calcul.
+
+    D-138 : ce test mesurait la proximite par une DISTANCE en caracteres
+    (`0 < i_calcul - i_mention < 1500`). C'est la fenetre de proximite que
+    `COUVERTURE.md` nomme depuis D-126, et elle mordait du mauvais cote :
+    la distance du jour vaut 1171 pour une borne de 1500, soit 329
+    caracteres de marge. Ajouter au bloc de deviation les lignes de mesure
+    que `VIGIL.md` EXIGE qu'il porte faisait rougir la suite sans qu'aucun
+    defaut n'existe -- mesure : +4 lignes -> 1479, vert ; +5 -> 1556,
+    ROUGE ; +6 -> 1633, ROUGE.
+
+    L'AST delimite ici par la STRUCTURE : la fonction englobante du calcul.
+    Un commentaire, jamais une chaine de code -- `tokenize` les distingue.
+    """
+    chemin = os.path.join(_V1_LEGACY, "fig11_hamiltonian_design.py")
+    with open(chemin, encoding="utf-8") as f:
+        src = f.read()
+
+    arbre = ast.parse(src)
+    parents = {}
+    for n in ast.walk(arbre):
+        for enfant in ast.iter_child_nodes(n):
+            parents[enfant] = n
+
+    cibles = [n for n in ast.walk(arbre)
+              if isinstance(n, ast.Assign)
+              and any(isinstance(t, ast.Name) and t.id == "uncertainty"
+                      for t in n.targets)
+              and isinstance(n.value, ast.Call)]
+    # Un balayage vide doit crier : sans cible, tout ce qui suit passerait.
+    assert cibles, ("aucune affectation `uncertainty = <appel>` trouvee dans "
+                    "fig11 : le calcul a ete renomme ou deplace, la mention "
+                    "de D-100 ne garde peut-etre plus rien")
+
+    import io
+    import tokenize
+    commentaires = [(t.start[0], t.string) for t in
+                    tokenize.generate_tokens(io.StringIO(src).readline)
+                    if t.type == tokenize.COMMENT]
+
+    for cible in cibles:
+        englobante, n = None, cible
+        while n in parents:
+            n = parents[n]
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                englobante = n
+                break
+        assert englobante is not None, (
+            f"le calcul ligne {cible.lineno} n'a pas de fonction englobante : "
+            f"la mention de D-100 ne peut plus etre rattachee a une structure")
+        assert any(englobante.lineno <= ligne < cible.lineno
+                   and "D-100" in texte for ligne, texte in commentaires), (
+            f"la mention de D-100 n'est plus dans `{englobante.name}` "
+            f"au-dessus du calcul ligne {cible.lineno} : une deviation "
+            f"connue non consignee la ou elle vit se fait recorriger")
