@@ -2479,11 +2479,20 @@ jour où le contrôle gagne un critère de discrimination, donc le jour où
 D-141 est tranché. Vérifié en mutant le seuil du contrôle de 0,6 à 0,85 :
 **2 failed** — ils suivent bien le critère et ne sont pas décoratifs.
 
+**Les quatre autres contrôles sont sondés par mutation**, dans le même
+fichier : on mute la sortie de `PhysicalMapper.compute_coefficients` et on
+regarde lesquels mordent. Matrice complète dans `DEFAUTS.md`, D-141.
+`test_the_cheap_controls_are_blind_to_a_spatial_shuffle` (rapide) épingle
+que `specificite` et `equilibre` restent verts sur un coefficient dont la
+structure spatiale est détruite ; `test_the_full_mutation_matrix_of_the_gate`
+(marqué `slow`, ~73 s) rejoue les quatre mutations sur les quatre contrôles,
+pour que la matrice citée soit refaisable.
+
 **Ce que ce fichier ne couvre PAS**, écrit pour ne pas le croire couvert :
-les contrôles `specificite`, `equilibre`, `vivant` et `coincidence` sont
-**exécutés** par le preflight mais **aucun test ne les sonde** — on ne sait
-pas, pour eux, sur quelle entrée ils échoueraient. Seul `pertinence` a été
-pris pour cible, parce que c'est celui dont le libellé porte le verdict.
+`coincidence` n'est sondé par aucune mutation — il n'appelle pas
+`PhysicalMapper`, il compare deux chemins de calcul d'énergie sur des
+coefficients tirés au hasard, donc cette famille de mutations ne l'atteint
+pas. On ne sait toujours pas sur quelle entrée il échouerait.
 
 ## Tenir ce document à jour
 

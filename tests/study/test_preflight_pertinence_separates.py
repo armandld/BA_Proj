@@ -150,3 +150,126 @@ def test_only_one_of_the_four_channels_is_looked_at(rhos):
     assert rhos["K_xpoint"] < SEUIL, (
         f"K_xpoint passe desormais a {rhos['K_xpoint']:+.4f} — remesurer "
         "D-141, sa portee a change")
+
+
+# ── D-141, portee : lesquels des cinq controles voient la STRUCTURE ? ──
+#
+# La porte rend OK/ECHEC. Un controle qui reste vert sur un mappeur
+# manifestement faux ne garde rien. On mute la SORTIE de
+# `PhysicalMapper.compute_coefficients` -- jamais le controle -- et on
+# regarde lesquels mordent.
+#
+# Matrice mesuree (deux executions identiques), `coincidence` exclu : il
+# n'appelle pas `PhysicalMapper` du tout, il compare deux chemins de calcul
+# d'energie sur des coefficients tires au hasard.
+#
+#   mutation                          specificite equilibre vivant pertinence
+#   aucune (reference)                     OK        OK       OK       OK
+#   axes transposes                        OK        OK       OK     ECHEC
+#   K_plaq <-> K_xpoint                  ECHEC     ECHEC      OK     ECHEC
+#   tout x1000                             OK        OK       OK       OK
+#   K_xpoint mis a zero                    OK        OK     ECHEC      OK
+#   coefficient = bruit                  ECHEC       OK       OK     ECHEC
+#   melange spatial (meme distribution)    OK        OK       OK     ECHEC
+#
+# Lecture : `pertinence` est le SEUL des quatre a voir ou le coefficient
+# met sa masse. Les trois autres sont des controles d'amplitude, et leurs
+# docstrings ne promettent rien d'autre -- ce n'est pas un defaut de leur
+# part. Ce qui compte pour D-141 est la conjonction : le seul controle
+# sensible a la structure est aussi celui que la baseline franchit mieux.
+#
+# `tout x1000` passe les cinq, et c'est JUSTE : l'etat fondamental d'un
+# Ising est invariant par mise a l'echelle positive uniforme des
+# couplages. Ce n'est pas un trou, c'est une symetrie.
+
+def _mute(transformation):
+    """Applique une mutation a la sortie du mappeur, rend {controle: ok}."""
+    import contextlib
+    import io
+
+    from Simulation.HamiltParams import PhysicalMapper
+
+    vrai = PhysicalMapper.compute_coefficients
+    PhysicalMapper.compute_coefficients = (
+        lambda self, *a, **k: transformation(vrai(self, *a, **k)))
+    try:
+        out = {}
+        for nom, fn, _desc in P.CONTROLES:
+            with contextlib.redirect_stdout(io.StringIO()):
+                out[nom] = bool(fn()[0])
+        return out
+    finally:
+        PhysicalMapper.compute_coefficients = vrai
+
+
+def _melange_spatial(coeffs):
+    """Meme distribution de valeurs, structure spatiale detruite.
+
+    C'est le champ d'essai qui SEPARE « le coefficient porte de
+    l'information » de « le coefficient a la bonne amplitude » : les deux
+    hypotheses donnent des reponses differentes ici, et seulement ici.
+    """
+    rng = np.random.default_rng(0)
+    out = dict(coeffs)
+    for k in ("K_plaquettes", "K_xpoint"):
+        a = np.asarray(out[k]).copy()
+        plat = a.ravel()
+        rng.shuffle(plat)
+        out[k] = plat.reshape(a.shape)
+    return out
+
+
+def test_the_cheap_controls_are_blind_to_a_spatial_shuffle():
+    """`specificite` et `equilibre` restent verts sur un coefficient dont
+    la structure spatiale est detruite. Les deux controles bon marche de la
+    porte ne regardent que des amplitudes."""
+    res = _mute(_melange_spatial)
+    assert res["specificite"] is True, (
+        "`specificite` mord desormais sur le melange spatial — la porte a "
+        "gagne en portee, remesurer la matrice de D-141")
+    assert res["equilibre"] is True, (
+        "`equilibre` mord desormais sur le melange spatial — idem")
+
+
+@pytest.mark.slow
+def test_the_full_mutation_matrix_of_the_gate():
+    """La matrice entiere, ~2 min : quatre mutations, quatre controles.
+
+    Marque `slow` parce qu'elle rejoue `vivant` (200 pas a N=256) et
+    `pertinence` (deux simulations) une fois par mutation. La commande
+    existe pour que la matrice citee dans D-141 soit refaisable — un
+    resultat qu'on ne sait pas refaire n'est pas un resultat.
+    """
+    def transposer(c):
+        out = dict(c)
+        for k in ("K_plaquettes", "K_xpoint"):
+            out[k] = np.asarray(out[k]).T
+        for k in ("C_edges", "H_edges"):
+            out[k] = tuple(np.asarray(x).T for x in out[k])
+        return out
+
+    def eteindre_kxpoint(c):
+        out = dict(c)
+        out["K_xpoint"] = np.zeros_like(np.asarray(out["K_xpoint"]))
+        return out
+
+    attendu = {
+        "aucune": ({}, dict(specificite=True, equilibre=True,
+                            vivant=True, pertinence=True)),
+        "transposee": (transposer, dict(specificite=True, equilibre=True,
+                                        vivant=True, pertinence=False)),
+        "kxpoint_zero": (eteindre_kxpoint, dict(specificite=True, equilibre=True,
+                                                vivant=False, pertinence=True)),
+        "melange": (_melange_spatial, dict(specificite=True, equilibre=True,
+                                           vivant=True, pertinence=False)),
+    }
+    ecarts = []
+    for nom, (mut, att) in attendu.items():
+        res = _mute(mut if mut else (lambda c: c))
+        for controle, valeur in att.items():
+            if res[controle] is not valeur:
+                ecarts.append(f"{nom}/{controle} : mesure {res[controle]}, "
+                              f"matrice de D-141 {valeur}")
+    assert not ecarts, (
+        "la matrice de D-141 ne se reproduit plus — c'est un RESULTAT, pas "
+        f"une reparation : remesurer et relire D-141. {ecarts}")

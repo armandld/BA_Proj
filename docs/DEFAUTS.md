@@ -1249,9 +1249,41 @@ corriger, demander.*
    `patch_l2_errors` mesurerait autre chose. Nouvelle mesure de bout en
    bout ; ni les nombres de 1 ni ceux de 2 ne s'y transportent.
 
+**Portée mesurée : lequel des cinq contrôles voit la structure ?** On mute
+la **sortie** de `PhysicalMapper.compute_coefficients` — jamais le contrôle
+— et on regarde lesquels mordent. `coincidence` est exclu : il n'appelle
+pas le mappeur, il compare deux chemins de calcul d'énergie sur des
+coefficients tirés au hasard. Deux exécutions, matrice identique.
+
+| mutation | `specificite` | `equilibre` | `vivant` | `pertinence` |
+|---|---|---|---|---|
+| aucune (référence) | OK | OK | OK | OK |
+| **axes transposés** | OK | OK | OK | **ÉCHEC** |
+| `K_plaq` ↔ `K_xpoint` | ÉCHEC | ÉCHEC | OK | ÉCHEC |
+| tout ×1000 | OK | OK | OK | OK |
+| `K_xpoint` mis à zéro | OK | OK | ÉCHEC | OK |
+| coefficient = bruit | ÉCHEC | OK | OK | ÉCHEC |
+| **mélange spatial** (même distribution) | OK | OK | OK | **ÉCHEC** |
+
+**`pertinence` est le seul des quatre à voir OÙ le coefficient met sa
+masse.** Les trois autres sont des contrôles d'amplitude — et leurs
+docstrings ne promettent rien d'autre, donc ce n'est pas un défaut de leur
+part. Ce qui compte pour D-141 est la **conjonction** : le seul contrôle
+sensible à la structure est aussi celui que la baseline franchit mieux. Une
+transposition d'axes — la famille de défauts la plus fréquente de ce dépôt,
+D-1, D-17, T31 — n'est vue que par lui.
+
+**`tout ×1000` passe les cinq, et c'est juste** : l'état fondamental d'un
+Ising est invariant par mise à l'échelle positive uniforme des couplages.
+Ce n'est pas un trou, c'est une symétrie — noté pour qu'il ne soit pas
+« corrigé » par erreur.
+
 ```bash
 python study/common/preflight_coefficients.py          # 5/5, rho = 0.798
-pytest tests/study/test_preflight_pertinence_separates.py   # 5 passed, ~10 s
+pytest tests/study/test_preflight_pertinence_separates.py -m "not slow"
+                                                        # 6 passed, ~29 s
+pytest tests/study/test_preflight_pertinence_separates.py -m slow
+                                                        # 1 passed, ~73 s
 ```
 
 Le second est un test de **déviation** : il échoue le jour où le contrôle
