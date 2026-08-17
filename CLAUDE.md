@@ -34,18 +34,20 @@ src/                    V1 — solveur MHD (FD4/RK4), grille, raffinement,
 tests/                  tests de src/ ; tests/study/ et tests/study/ testent study/
 study/
   pipeline/             DNS → patches durs → coefficients → diagonalisation
-                        (config.py, phase0–phase4, t8_dns_extension)
+                        (config, dns_*, hard_patch_labels,
+                         exact_diagonalisation, sanity_check…)
   h0_selection/         l'échec vient-il de l'optimiseur variationnel ?
-                        (t11, t11b, phase5–phase7)          → RÉFUTÉ
+                        (h0_optimiser_equivalence,
+                         h0_qaoa_displacement)   → voir ci-dessous, NUANCÉ
   h1_solver/            les défauts numériques sont-ils secondaires ?
                         (h1_solver_convergence,
                          h1_curl_convention_gap)             → PARTIEL
   h2b_prediction/       un modèle ML libre s'en sortirait-il ?
-                        (phase10–phase12, t1, t1b, t4–t7)    → RÉFUTÉ
+                        (h2b_*, 19 scripts)                  → RÉFUTÉ
   h3_representation/    l'information des voisins est-elle inutile ?
-                        (t12, t13, t17, t18, t26, t9, phase8) → ÉTABLI
+                        (h3_*, 7 scripts)          → À REPRENDRE (D-58)
   h4_transfer/          transfert sur conditions inédites
-                        (t22, t22c, t22d, t25)               → CONJECTURE
+                        (h4_*, 4 scripts)                    → CONJECTURE
   closed_loop/          campagne niveau 3 (t15, t15b, t15c, t19–t21, t23,
                         t24, level3_status)
   common/               provenance, statistiques, agrégateurs
@@ -63,6 +65,33 @@ results/hyperparams/    entrées gelées : campagne Optuna (~1 semaine) et
 results/v1_runs/        sorties de l'ère V1
 results/logs_v2/        journaux de la campagne V2 (lus par figures/)
 ```
+
+## État des hypothèses — à lire avant de citer un verdict
+
+**H0 n'est PAS réfutée sans qualificatif.** La réfutation publiée reposait
+entièrement sur `dim = 2`, où l'état fondamental exact est le prédicteur
+constant « tout raffiner » sur 40 instantanés sur 40 (D-45 / D-47) : tous
+les solveurs y atteignent l'optimum parce qu'il n'y a rien à départager.
+À `dim = 3` — 18 qubits, la seule taille à la fois **certifiée et non
+dégénérée** jamais exécutée — le critère d'acceptation du module **lève** :
+le QAOA atteint l'optimum sur **0,062–0,156** des instantanés contre 1,000
+exigé, **sous** la règle classique dont il part (0,500). Voir D-53.
+
+La formulation juste sépare les deux sous-questions :
+
+| | verdict |
+|---|---|
+| **H0a** — l'optimiseur atteint-il l'optimum de son hamiltonien ? | **NON** à `dim = 3` |
+| **H0b** — mieux l'atteindre aiderait-il ? | **NON** — ρ(E_gap, F1) = +0,870 : mieux résoudre H *dégrade* la décision |
+
+Soit : **l'optimiseur échoue vraiment, et le réparer ne servirait à rien.**
+
+**H3 est à reprendre.** D-58 a rétracté la lecture publiée « ZZ is
+numerically dead on three of four classes » : la fenêtre conserve en fait
+3–12 % de la masse ZZ en boucle ouverte et 34–59 % au réglage Level-3.
+L'explication causale des ablations nulles de T13 et de la progression
+quasi nulle de T11b **tombe avec elle** — ces deux résultats restent à
+expliquer.
 
 ## Garde-fous
 

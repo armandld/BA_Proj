@@ -6472,3 +6472,101 @@ il dit désormais l'inverse et porte la mesure avant/après. C'est la règle
 changement de code subi.
 
 Vérifier : `pytest tests/pipeline/test_amr_figure_axes.py -q` → **6 passed**.
+
+
+# D-53 — la seule taille certifiée non dégénérée contredit la réfutation de H0
+
+**Le résultat le plus fort du dépôt, et il n'était écrit nulle part.**
+`dim3` n'apparaissait pas une seule fois dans ce fichier alors que trois
+artefacts `dim = 3` vivent dans `results/`.
+
+## Ce qui était publié, et sur quoi
+
+`CLAUDE.md` portait `h0_selection … → RÉFUTÉ` sans qualificatif, et T11
+concluait *« Pre-registered rule fires: quantum optimisation is not the
+source of any gain »*. Les deux reposent **entièrement sur `dim = 2`**,
+8 qubits — la taille dont ce fichier note lui-même que *« the optimum
+itself is uniform, so the solvers agree on a trivial problem »*.
+
+C'est D-45 et D-47 : à `dim = 2` l'état fondamental exact est le
+prédicteur constant « tout raffiner » sur **40 instantanés sur 40**. Tous
+les solveurs atteignent donc l'optimum, parce qu'il n'y a rien à
+départager. **Réfuter H0 là-dessus, c'est la réfuter sur un problème
+vide.**
+
+## Ce que dit `dim = 3`
+
+`results/h0_optimiser_equivalence_N96_dim3.npz` — **18 qubits, donc
+certifié** (l'optimum y est énuméré exactement), 4 scénarios canoniques,
+32 instantanés :
+
+| solveur | hit optimum | mask match | exigé |
+|---|---|---|---|
+| exhaustive (certifié) | 1,000 | 1,000 | — |
+| `classical_init` (règle classique seule) | **0,500** | **0,500** | exclu du critère |
+| greedy | 0,844 | 0,844 | 1,000 |
+| sa / sa_warm | 0,594 / 0,750 | 0,938 / 0,875 | rapporté |
+| `qaoa_p1` … `qaoa_p6` | **0,156 → 0,062** | **0,156 → 0,219** | 1,000 |
+
+**Le QAOA tombe plus loin de l'optimum certifié que la règle classique
+dont il part** : 0,156–0,219 contre 0,500. Ce n'est pas un écart de
+tirage — la dispersion mesurée du bras vaut 1,79e−1 à 3,61e−1, et
+0,062 contre 1,000 est hors de cette échelle.
+
+**Ce n'est pas un problème de budget.** C'est l'objection que
+`--scale-kopt` existe pour lever : sur l'artefact qui l'utilise
+(harris_tearing, 6 instantanés), le QAOA passe à **0,000** sur les quatre
+profondeurs, `greedy` restant à **1,000**. Donner plus d'itérations ne
+rapproche pas le QAOA de l'optimum, cela l'en éloigne.
+
+**Le critère du module lui-même tranche**, rejoué sur les artefacts :
+
+| artefact | verdict de `check_expected_behaviour` |
+|---|---|
+| `..._N256_dim2.npz` | `[ACCEPTANCE] … H0 réfutée à cette taille` |
+| `..._N96_dim3.npz` | **lève** — *« H0 redevient plausible »* |
+| `..._N96_dim3_scalekopt.npz` | **lève** — `{qaoa_p1: 0.0, … qaoa_p6: 0.0}` |
+
+## La lecture juste : H0a et H0b se séparent
+
+C'est le point qui compte, et il ne se voit qu'en combinant D-53 avec la
+mesure de ρ :
+
+| | question | verdict |
+|---|---|---|
+| **H0a** | l'optimiseur atteint-il l'optimum de son propre hamiltonien ? | **NON** — 0,062–0,156 contre 1,000 exigé, à la seule taille certifiée non dégénérée |
+| **H0b** | mieux l'atteindre améliorerait-il la tâche ? | **NON** — ρ(E_gap, F1) = **+0,870** sur 9 solveurs à `dim = 3` : mieux résoudre H **dégrade** la décision AMR |
+
+Les deux ensemble disent quelque chose de plus fort que chacun seul :
+**l'optimiseur échoue vraiment, et le réparer ne servirait à rien.** Le
+QAOA n'atteint pas le fondamental de son hamiltonien ; et les solveurs qui
+l'atteignent prennent de plus mauvaises décisions de raffinement.
+
+C'est exactement ce que `PLAN_PREPRINT.md` §7 désignait comme l'argument
+de fermeture : *« H0b ferme l'approche plus directement que H3 — c'est la
+valeur de l'optimisation qui est attaquée, précisément ce qu'on paierait
+en qubits. »*
+
+## Ce qu'il faut corriger ailleurs
+
+`h0_selection → RÉFUTÉ` est **faux sans qualificatif**. La formulation
+exacte est : **réfutée à `dim = 2`, où le problème est dégénéré ; redevient
+plausible à `dim = 3`, la seule taille à la fois certifiée et non
+dégénérée jamais exécutée.** Corrigé dans `CLAUDE.md`.
+
+## Une réserve, écrite parce qu'elle est réelle
+
+D-122 : les deux artefacts `--scale-kopt` sont **deux exécutions de la même
+condition**, pas deux conditions — le second porte `--zero-psi` sans
+`--with-psi`, donc psi valait zéro exactement avant l'ablation. Mesuré :
+même `git_hash`, même graine, et les 5 solveurs déterministes **bit à bit
+identiques sur 30/30 lignes**.
+
+Le QAOA à 0,000 **tient** : il est mesuré deux fois sur deux tirages
+indépendants, c'est une réplication et elle renforce le point. Ce qui
+tombe est la lecture implicite du nom : **l'ablation psi de ce module n'a
+jamais été exécutée**, et rien ici ne dit ce que psi apporte.
+
+Vérifier : `python study/h0_selection/h0_optimiser_equivalence.py --check
+results/h0_optimiser_equivalence_N96_dim3.npz` → lève, avec le dictionnaire
+des solveurs sous le seuil.

@@ -43,7 +43,7 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **16** |
+| **ouverts** — décision ou campagne requise | **15** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -911,115 +911,6 @@ pytest tests/study/test_xpoint_term_absent_from_study.py
 ```
 
 ---
-
-## D-53 — la seule taille certifiée **non dégénérée** jamais exécutée contredit le critère de H0, et son résultat n'est écrit nulle part
-
-**Où ça bloque.** Sur une **lecture publiée**. `CLAUDE.md` porte
-`h0_selection … → RÉFUTÉ` sans qualificatif, et `RESULTS.md` T11 conclut
-*« Pre-registered rule fires: quantum optimisation is not the source of any
-gain »*. Les deux reposent sur `dim = 2` — 8 qubits, la taille où
-`RESULTS.md` note lui-même que *« the optimum itself is uniform, so the
-solvers agree on a trivial problem »* (c'est D-45 / D-47). Trois artefacts à
-`dim = 3` existent dans `results/`, disent l'inverse, et **`dim3`
-n'apparaît pas une seule fois dans `docs/RESULTS.md`**.
-
-**Comment on est tombé dessus.** En vérifiant le commentaire de référence de
-`MIN_HIT` / `MIN_MASK_MATCH` — *« les huit solveurs … atteignent l'optimum
-certifié sur 100 % des instantanés »* — contre les artefacts réellement
-stockés (question 2 de `VIGIL.md` : lire le contrat, puis le vérifier point
-par point). Il est vrai à `dim = 2`. À `dim = 3` il est faux.
-
-**Ce qui est établi.** `results/h0_optimiser_equivalence_N96_dim3.npz`,
-18 qubits — donc **certifié**, l'optimum y est énuméré exactement — 4
-scénarios canoniques, 32 instantanés :
-
-| solveur | hit optimum | mask match | exigé par le critère |
-|---|---|---|---|
-| exhaustive (certifié) | 1,000 | 1,000 | — |
-| `classical_init` (règle classique seule) | **0,500** | **0,500** | exclu du critère |
-| greedy | 0,844 | 0,844 | 1,000 |
-| sa / sa_warm | 0,594 / 0,750 | 0,938 / 0,875 | rapporté, pas exigé |
-| `qaoa_p1` … `qaoa_p6` | **0,156 → 0,062** | **0,156 → 0,219** | 1,000 |
-| `qaoa_shots_p6` | 0,062 | 0,219 | 1,000 |
-
-Deux lectures, toutes deux directement dans l'artefact :
-
-1. **Le QAOA tombe plus loin de l'optimum certifié que la règle classique
-   dont il part** — 0,156–0,219 contre 0,500 de `classical_init`. Ce n'est
-   pas un écart de tirage : le bras QAOA est stochastique (dispersion
-   1,79e−1 à 3,61e−1, fiche), 0,062 contre 1,000 ne l'est pas.
-2. **Ce n'est pas un problème de budget.** C'est l'objection que
-   `--scale-kopt` existe pour lever ; sur les deux artefacts qui l'utilisent
-   (`_scalekopt`, `_zeropsi_scalekopt`, harris_tearing, 6 instantanés), le
-   QAOA passe à **0,000** sur les quatre profondeurs, `greedy` restant à
-   1,000.
-
-   > ⚠ **D-122 — « les deux artefacts » n'en font qu'un.** Le second a été
-   > produit avec `--zero-psi` **sans** `--with-psi` : psi vaut alors zéro
-   > exactement avant l'ablation, qui ne retire donc rien. Mesuré : même
-   > `git_hash` (`53a8dfc`), même `seed`, `cli_args` différant du seul
-   > `zero_psi`, et les **5 solveurs déterministes bit à bit identiques sur
-   > 30/30 lignes** (`max|ΔE| = 0`) ; seuls les 4 bras QAOA diffèrent, à la
-   > dispersion connue du bras. Ce sont **deux exécutions de la même
-   > condition**, pas deux conditions.
-   >
-   > **Ce que ça change à la lecture ci-dessus, et ce que ça n'y change
-   > pas.** Le QAOA à 0,000 tient : il est mesuré deux fois, sur deux
-   > tirages indépendants — c'est une **réplication**, et elle renforce le
-   > point 2 plutôt qu'elle ne l'affaiblit. Ce qui tombe, c'est la lecture
-   > implicite du nom : rien ici ne dit ce que psi apporte ou n'apporte
-   > pas, dans un sens ou dans l'autre. **L'ablation psi de ce module n'a
-   > jamais été exécutée.** Non corrigé : la refaire demande une campagne
-   > `--with-psi --zero-psi` contre `--with-psi` seul, et le nom de
-   > l'artefact publié n'est pas réécrit ici.
-
-**Le critère du module lui-même tranche.** `check_expected_behaviour`,
-rejoué sur ces artefacts :
-
-| artefact | verdict |
-|---|---|
-| `..._N256_dim2.npz` | `[ACCEPTANCE] … H0 refutee a cette taille` |
-| `..._N96_dim3.npz` | **lève** — *« des solveurs deterministes n'atteignent plus l'optimum certifie : {greedy: 0.844, qaoa_p1: 0.156, … qaoa_p6: 0.062}. H0 (l'echec vient de l'optimiseur) **redevient plausible**. »* |
-| `..._N96_dim3_scalekopt.npz` | **lève** — `{qaoa_p1: 0.0, qaoa_p3: 0.0, qaoa_p6: 0.0, qaoa_shots_p6: 0.0}` |
-
-Le critère existait **avant** ce balayage : il est arrivé en `70a3306`,
-le balayage `dim = 3` en `a334712`, et le `git_hash` inscrit dans l'artefact
-(`d99b9a6`) descend de `70a3306`. Le script écrit son artefact **avant** de
-juger (choix délibéré et commenté). La campagne a donc levé, l'artefact a
-été commité, et le résultat n'est entré dans aucun document.
-
-`aggregate_master_table.collect` lit `h0_optimiser_equivalence_N{N}_dim{dim}`
-avec `N=256, dim=2` par défaut : les 44 instantanés à `dim = 3` ne sont dans
-aucune des 180 lignes. Rien de publié ne bouge — **rien de publié ne les
-voit**.
-
-**Ce que ça ne dit pas.** `dim = 3` n'est pas la taille déployée : la boucle
-fermée tourne à `dim = 2`. La phrase que le script imprime est d'ailleurs
-correctement bornée — *« H0 refutee **a cette taille** »*. Ce qui perd la
-borne, c'est le `RÉFUTÉ` non qualifié de `CLAUDE.md` et la conclusion de T11.
-Et la règle pré-enregistrée du module couvre le cas : *« si QAOA dévie de
-l'optimum, la déviation est rapportée comme une approximation … jamais comme
-un avantage »*. Elle n'a simplement jamais été rapportée.
-
-**Où on en est — non corrigé, et ce n'est pas un défaut de code.** Trois
-directions, la moins chère d'abord :
-
-1. **Publier les 44 instantanés `dim = 3` dans `RESULTS.md`** et borner le
-   `RÉFUTÉ` de `CLAUDE.md` à `dim = 2`. Aucun calcul, aucun nombre déplacé.
-2. **Rejouer `dim = 3` sur le tip courant** (le balayage date de `d99b9a6`,
-   avant D-37/D-38/D-45/D-46/D-52) avant d'en conclure quoi que ce soit —
-   c'est la seule direction qui demande du calcul, ~44 instantanés.
-3. **Requalifier le critère** : `MIN_HIT`/`MIN_MASK_MATCH` = 1,000 est
-   calibré sur la seule taille dégénérée. Soit il est borné à `dim = 2` dans
-   le code, soit il devient une mesure rapportée comme celle du recuit. C'est
-   le même arbitrage que D-50 : `VIGIL.md` dit de changer la **grandeur**,
-   pas le seuil.
-
-Rien n'est appliqué : les trois touchent une lecture publiée.
-
-```bash
-pytest tests/study/test_h0_certified_dim3_contradicts_criterion.py
-```
 
 
 ## D-59 — à dim = 2, la topologie périodique double le lien ZZ shear (pas le ZZZZ), sans conséquence mesurée sur les décisions publiées
