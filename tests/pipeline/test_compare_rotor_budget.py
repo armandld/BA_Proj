@@ -189,22 +189,30 @@ def test_compute_solution_error_croit_avec_l_ecart(crb):
 #  D-91 — la "verite terrain" par bloc est une erreur RELATIVE, pas absolue
 # ══════════════════════════════════════════════════════════════════════
 
-def test_d91_le_bruit_de_fond_bat_la_vraie_structure(crb):
-    """`compute_block_errors` divise par `ref = sqrt(mean(dns_block**2))
-    + 1e-10` : SEUL le denominateur porte un plancher. Deux blocs qui
-    partagent le MEME ecart absolu recoivent un score d'erreur qui depend
-    presque uniquement de l'amplitude du signal DNS dans chacun -- pas de
-    l'ecart lui-meme. Champ qui SEPARE : un bloc quasi-vide (bruit) et un
-    bloc a forte structure, avec un ecart DNS/grossier identique au bit
-    pres sur les deux.
+def test_d91_la_vraie_structure_bat_le_bruit_de_fond(crb):
+    """SEUIL REMESURE — D-91 est CORRIGE, ce test dit desormais l'inverse.
 
-    C'est le mecanisme derriere la note deja publiee dans RESULTS.md
-    (D-10) : sur le rotor MHD reel, la selection "ground truth" (top-K par
-    ce score) rend une erreur L2 globale de 0.3079 -- a peine mieux que
-    l'absence d'AMR (0.3074) -- alors que la selection classique/QAOA,
-    qui ne pese pas par un `ref` quasi nul, rend 0.0208 (93% de mieux).
-    Rapporte dans DEFAUTS.md (D-91), non corrige : changer la metrique
-    changerait ces deux nombres deja ecrits dans RESULTS.md."""
+    Il epinglait le defaut : `ref = sqrt(mean(dns_block**2)) + 1e-10`
+    normalisait CHAQUE bloc par sa propre amplitude, seul le denominateur
+    portant un plancher. Deux blocs au MEME ecart absolu recevaient donc
+    des scores dans le rapport inverse de leurs amplitudes.
+
+    Champ d'essai qui SEPARE : un bloc quasi-vide (DNS ~ 1e-6) et un bloc
+    a forte structure (DNS = 10.0), avec un ecart DNS/grossier identique
+    au bit pres sur les deux. Un champ ou les deux blocs auraient la meme
+    amplitude ne separerait rien.
+
+    Mesure, meme champ d'essai, avant et apres :
+
+        avant : bloc de bruit 2.000e-01, bloc de structure 2.000e-08
+                -> le bruit domine d'un facteur 1.000e+07
+        apres : bloc de bruit 4.000e-08, bloc de structure 4.000e-08
+                -> a ecart absolu egal, contribution egale
+
+    La normalisation est desormais GLOBALE (RMS du champ sur tout le
+    domaine), ce qui garde la comparabilite entre champs d'amplitudes
+    differentes sans donner de prime a un bloc vide.
+    """
     import numpy as np
     N, n_blocks = 4, 2
     zeros = lambda: np.zeros((N, N))
@@ -220,9 +228,36 @@ def test_d91_le_bruit_de_fond_bat_la_vraie_structure(crb):
     coarse["Jz"][2:4, 2:4] = 10.0 + ecart_absolu
 
     errors = crb.compute_block_errors(dns, coarse, N, n_blocks)
-    assert errors[0, 0] > 1e3 * errors[1, 1], (
-        f"le bloc de bruit ({errors[0, 0]:.3e}) devrait dominer le bloc "
-        f"structure ({errors[1, 1]:.3e}) de plusieurs ordres de grandeur "
-        "sous la metrique relative actuelle, a ecart absolu identique -- "
-        "si ce n'est plus vrai, D-91 a change de forme, remesurer avant "
-        "de fermer l'entree")
+    assert errors[0, 0] == pytest.approx(errors[1, 1], rel=1e-9), (
+        f"a ecart absolu IDENTIQUE, le bloc de bruit ({errors[0, 0]:.3e}) "
+        f"et le bloc de structure ({errors[1, 1]:.3e}) doivent contribuer "
+        "autant : la normalisation ne doit plus dependre de l'amplitude "
+        "locale (D-91)")
+
+
+def test_d91_le_bloc_qui_porte_la_structure_est_selectionne(crb):
+    """Ce que la fonction PROMET : « which blocks truly need refinement ».
+
+    A ecart RELATIF egal mais amplitude differente, c'est le bloc de forte
+    amplitude qui contribue le plus a l'erreur L2 globale — la quantite
+    que la campagne minimise — donc c'est lui qu'il faut raffiner. Sous
+    l'ancienne metrique les deux etaient a egalite, et le bruit gagnait
+    des qu'il etait un peu plus errone en relatif.
+    """
+    import numpy as np
+    N, n_blocks = 4, 2
+    zeros = lambda: np.zeros((N, N))
+    dns = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+    coarse = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+
+    # meme erreur RELATIVE (10 %), amplitudes separees par 1e7
+    dns["Jz"][0:2, 0:2] = 1e-6
+    coarse["Jz"][0:2, 0:2] = 1e-6 * 1.10
+    dns["Jz"][2:4, 2:4] = 10.0
+    coarse["Jz"][2:4, 2:4] = 10.0 * 1.10
+
+    errors = crb.compute_block_errors(dns, coarse, N, n_blocks)
+    assert errors[1, 1] > 1e5 * errors[0, 0], (
+        f"le bloc de structure ({errors[1, 1]:.3e}) doit dominer le bloc "
+        f"de bruit ({errors[0, 0]:.3e}) : c'est lui qui porte l'erreur L2 "
+        "globale, donc lui qui a besoin d'etre raffine")

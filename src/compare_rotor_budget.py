@@ -50,15 +50,53 @@ from hyperparams_loader import load_hyperparams
 
 
 def compute_block_errors(dns_fluxes, coarse_fluxes, N, n_blocks):
-    """
-    Compute per-block L2 error between DNS and coarse solution.
+    """Erreur L2 par bloc entre DNS et solution grossiere.
 
-    Returns (n_blocks, n_blocks) array of relative L2 errors.
+    D-91 — CORRIGE. La normalisation etait LOCALE :
+    `ref = sqrt(mean(dns_block**2)) + 1e-10`, c'est-a-dire l'amplitude du
+    signal DNS *dans ce bloc-la*. Seul le denominateur portait un plancher.
+    Consequence : deux blocs partageant le MEME ecart absolu recevaient des
+    scores dans un rapport egal a l'inverse de leurs amplitudes — le bruit
+    de fond battait la vraie structure.
+
+    Mesure du mecanisme (champ d'essai qui separe, ecart absolu identique
+    au bit pres sur les deux blocs) :
+
+        bloc de bruit    (DNS ~ 1e-6) -> erreur ~ 1e+0
+        bloc de structure (DNS = 10.0) -> erreur ~ 1e-7
+
+    Sur le rotor MHD reel, la selection dite « ground truth » ne contenait
+    donc PAS le bloc central, celui qui porte la structure : elle rendait
+    une erreur L2 globale de 0,3079, a peine mieux que l'absence d'AMR
+    (0,3074), quand la selection classique/QAOA rendait 0,0208.
+
+    Ce que promet cette fonction — « quels blocs ont VRAIMENT besoin d'etre
+    raffines » — se lit contre la quantite que la campagne minimise :
+    l'erreur L2 **globale**. Le bloc qui merite le raffinement est celui qui
+    CONTRIBUE le plus a cette erreur globale, pas celui dont l'erreur
+    relative a son propre contenu est la plus grande.
+
+    La normalisation est donc GLOBALE : chaque champ est divise par sa RMS
+    sur tout le domaine. Cela garde la comparabilite entre champs
+    d'amplitudes differentes (vx et Jz ne vivent pas a la meme echelle) —
+    la seule raison d'etre d'une normalisation ici — sans donner de prime a
+    un bloc vide.
+
+    Rend un tableau (n_blocks, n_blocks).
     """
     block_h = N // n_blocks
     block_w = N // n_blocks
     errors = np.zeros((n_blocks, n_blocks))
     fields = ['vx', 'vy', 'Bx', 'By', 'Jz']
+
+    # Plancher GLOBAL, calcule une fois par champ. Un champ identiquement
+    # nul sur tout le domaine ne doit pas diviser par zero — mais il ne
+    # doit pas non plus fabriquer du signal : son ecart est nul partout,
+    # donc sa contribution reste nulle quel que soit le plancher.
+    ref_global = {}
+    for var in fields:
+        rms = float(np.sqrt(np.mean(dns_fluxes[var] ** 2)))
+        ref_global[var] = rms if rms > 1e-12 else 1.0
 
     for bi in range(n_blocks):
         for bj in range(n_blocks):
@@ -70,8 +108,7 @@ def compute_block_errors(dns_fluxes, coarse_fluxes, N, n_blocks):
                 dns_block = dns_fluxes[var][y0:y1, x0:x1]
                 coarse_block = coarse_fluxes[var][y0:y1, x0:x1]
                 diff = np.sqrt(np.mean((dns_block - coarse_block) ** 2))
-                ref = np.sqrt(np.mean(dns_block ** 2)) + 1e-10
-                total_err += diff / ref
+                total_err += diff / ref_global[var]
             errors[bi, bj] = total_err / len(fields)
 
     return errors
