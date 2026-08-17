@@ -144,7 +144,15 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if not configs:
-        print("no input."); return
+        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
+        # la campagne precedente. Une campagne qui n'avait rien mesure etait
+        # indiscernable d'une campagne reussie. Onze autres modules de
+        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        raise RuntimeError(
+            "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
+            "arguments donnes. Le script sortait ici avec le code 0 et sans "
+            "artefact, donc sans se distinguer d'une campagne reussie.")
 
     t0 = time.time()
     per_sc = gather_by_scenario(configs, args.dim, args.max_snaps)

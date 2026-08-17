@@ -234,8 +234,13 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
           else np.clip(np.asarray(theta_init, dtype=float),
                        THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]))
     c0_, thr0_ = decode_theta(x0)
+    # D-87 : `hits_bound` n'etait evalue que sur le theta FINAL. Un x0 pose sur
+    # une borne — ce que l'init analytique produisait pour 3 lignes sur 4 —
+    # n'apparaissait nulle part, ni a l'ecran ni dans l'artefact.
+    x0_bnd = hits_bound(x0)
     print(f"  [{tag}] x0: c_bias={c0_:.3f}  thr={thr0_:.3f}  "
-          f"(source: {'analytical' if theta_init is not None else 'default'})")
+          f"(source: {'analytical' if theta_init is not None else 'default'})"
+          f"{'  [x0 SUR UNE BORNE, D-87]' if x0_bnd else ''}")
     lb, ub = THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]
     use_cma = (optimiser_name == "cma") and HAS_CMA
     if optimiser_name == "cma" and not HAS_CMA:
@@ -324,6 +329,11 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
         classical_f1=best_cf,
         delta=best_f1v - best_cf,
         hits_bound=bnd,
+        # D-87 : sans ces trois cles, un run parti d'un coin de la boite et un
+        # run parti de l'interieur sont le meme artefact.
+        x0_theta=np.asarray(x0, dtype=float),
+        x0_hits_bound=x0_bnd,
+        x0_from_analytical=bool(theta_init is not None),
         train_pairs=np.array(train_pairs, dtype=int),
         val_pairs=np.array(val_pairs, dtype=int),
         val_fixed=np.array(val_fixed, dtype=int),
@@ -387,6 +397,51 @@ def print_comparison(results):
 
 
 # -------------------------------------------------------------------
+# Analytical init (phase 10a)
+# -------------------------------------------------------------------
+
+def build_init_map(tags, thr_star, c_bias_star, degenerate):
+    """tag -> theta_init = (log10 c_bias*, thr*), lignes degenerees ecartees.
+
+    Returns (init_map, n_skipped).
+
+    D-86 : extrait de `main()` pour etre testable sans rejouer la campagne
+    (meme geste que D-46/D-50/D-52/D-85). La phase 10a marque desormais les
+    lignes dont la courbe F1(c_bias) est plate : leur `c_bias*` n'est pas un
+    optimum mais le bord GAUCHE de la grille, rendu par `argmax` faute de
+    mieux. Les prendre pour `theta_init` demarrait l'optimiseur a
+    `log10 c_bias = -1`, le bord du domaine, sur la foi d'une mesure qui
+    n'avait rien mesure — et cela arrivait sur 14 des 52 configurations
+    parcourues. Une ligne degeneree (ou NaN, pour un scenario dont tous les
+    Re le sont) est ecartee : le module retombe sur son x0 par defaut,
+    exactement comme si la phase 10a n'avait pas tourne.
+    """
+    init_map, n_skipped = {}, 0
+    for t, th, cb, dg in zip(tags, thr_star, c_bias_star, degenerate):
+        if bool(dg) or not (np.isfinite(cb) and np.isfinite(th)):
+            n_skipped += 1
+            continue
+        theta_raw = np.array([np.log10(max(float(cb), 0.1)), float(th)])
+        theta_x0 = np.clip(theta_raw, THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1])
+        # D-87 : `np.clip` ne dit rien. `thr*` est cherche par la phase 10a sur
+        # une grille qui deborde la boite — mesure, `--dim 4 --N 256
+        # --max-snaps 8 --seed 0`, Re=400 : 0,6777 (harris_tearing) et 0,6908
+        # (kelvin_helmholtz) contre une borne haute de 0,60, rabotes sur la
+        # borne. Un x0 pose SUR une borne est par ailleurs exactement ce que
+        # `hits_bound` sert a signaler — il n'etait evalue que sur le theta
+        # FINAL. Mesure, meme configuration : vrai sur 3 lignes sur 4.
+        if not np.allclose(theta_raw, theta_x0):
+            print(f"  [{t}] init analytique RABOTE sur la boite (D-87) : "
+                  f"(log10 c, thr) {theta_raw} -> {theta_x0}")
+        if hits_bound(theta_x0):
+            print(f"  [{t}] x0 analytique est SUR une borne de la boite "
+                  f"(D-87) : l'optimiseur y demarre au coin, et le vrai "
+                  f"optimum peut etre au-dela.")
+        init_map[str(t)] = theta_x0
+    return init_map, n_skipped
+
+
+# -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
 
@@ -442,8 +497,15 @@ def main():
                 print(f"  SKIP {sc} Re={re}: missing input")
 
     if not configs:
-        print("no input found.")
-        return
+        # D-56 : ce garde imprimait un message et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui
+        # de la campagne precedente. Une campagne qui n'avait rien mesure
+        # etait indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            "balayage vide : aucune configuration n'a d'artefact d'entree "
+            "pour les arguments donnes. Le script sortait ici avec le code "
+            "0 et sans artefact, donc sans se distinguer d'une campagne "
+            "reussie.")
 
     # load once
     snaps_all = [load_snapshots(dp, pp) for _, _, dp, pp in configs]
@@ -466,11 +528,21 @@ def main():
             ana = np.load(ana_path, allow_pickle=False)
             tags = ana["tags"]; thr_s = ana["thr_star"]
             c_s = ana["c_bias_star"]
-            for t, th, cb in zip(tags, thr_s, c_s):
-                init_map[str(t)] = np.array(
-                    [np.log10(max(float(cb), 0.1)), float(th)])
+            # D-86 : la phase 10a marque desormais les lignes dont la courbe
+            # F1(c_bias) est plate — leur `c_bias*` n'est pas un optimum mais
+            # le bord gauche de la grille, rendu par `argmax` faute de mieux.
+            # Les prendre pour theta_init demarrait l'optimiseur au bord du
+            # domaine sur la foi d'une mesure qui n'avait rien mesure. Une
+            # ligne degeneree (ou NaN, pour un scenario dont tous les Re le
+            # sont) est ecartee : le module retombe sur son x0 par defaut,
+            # exactement comme si la phase 10a n'avait pas tourne.
+            degen = ana["degenerate"] if "degenerate" in ana.files \
+                else np.zeros(len(tags), dtype=bool)
+            init_map, n_skip = build_init_map(tags, thr_s, c_s, degen)
             print(f"  analytical init loaded from "
-                  f"{os.path.basename(ana_path)}: {len(init_map)} entries\n")
+                  f"{os.path.basename(ana_path)}: {len(init_map)} entries"
+                  + (f", {n_skip} degenerees ecartees (D-86)"
+                     if n_skip else "") + "\n")
         else:
             print(f"  no analytical init at {ana_path} -> "
                   f"using default x0\n")
@@ -489,10 +561,20 @@ def main():
         print(f"  [{tag}] wall-time: {time.time()-t0:.0f}s\n")
         fname = f"train_{tag.replace(':', '-').replace(' ', '_')}_" \
                 f"N{args.N}_dim{args.dim}.npz"
+        # D-80 : ce filtre `not isinstance(v, str)` ecartait les deux seules
+        # chaines de `res` — `tag`, reajoutee juste apres sous `tag_str`, et
+        # `optimiser`, qui ne l'etait pas. Or `optimiser` est la SEULE trace
+        # du repli : si `cma` n'est pas installe, le script previent sur une
+        # ligne parmi des centaines puis tourne en Nelder-Mead, et l'artefact
+        # etait alors indiscernable d'un vrai run CMA-ES. Mesure : sur un
+        # conteneur sans `cma`, l'artefact ne portait aucune cle `optimiser`.
         np.savez_compressed(
             os.path.join(RESULTS_DIR, fname),
             **{k: v for k, v in res.items() if not isinstance(v, str)},
-            tag_str=tag)
+            tag_str=tag,
+            optimiser=res["optimiser"],
+            optimiser_requested=args.optimiser,
+            cma_available=HAS_CMA)
         print(f"  saved: {fname}")
         return res
 
@@ -529,6 +611,12 @@ def main():
         classical_f1=np.array([r["classical_f1"] for r in all_results]),
         delta=np.array([r["delta"] for r in all_results]),
         hits_bound=np.array([r["hits_bound"] for r in all_results]),
+        # D-80 : la table de comparaison croise les modes ; sans cette
+        # colonne, deux lignes optimisees par deux optimiseurs differents
+        # y sont indiscernables.
+        optimiser=np.array([r["optimiser"] for r in all_results]),
+        optimiser_requested=args.optimiser,
+        cma_available=HAS_CMA,
     )
     print(f"\n  saved compare: {os.path.basename(compare_path)}")
     print("\nPhase 10 complete.")

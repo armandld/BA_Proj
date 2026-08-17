@@ -54,7 +54,29 @@ def patches_to_fine_mask(patches, N):
 
 
 def pixel_prf(patches, gt, N):
-    """Pixel-level precision, recall, F1 against GT > mean."""
+    """Pixel-level precision, recall, F1 against GT > mean.
+
+    D-98 — DEVIATION CONNUE, MESUREE, NON CORRIGEE (decision en attente,
+    voir docs/DEFAUTS.md). La reference `needs` est RELATIVE au champ
+    lui-meme : `gt > gt.mean()`. Elle ne porte donc aucune information
+    absolue — multiplier `gt` par 1000 laisse `needs` bit-a-bit identique.
+
+    Consequence sur la 4e ligne de la figure, `make_uniform_noise`, qui
+    s'annonce « negative control -> false positive rate » : sur un champ
+    SANS anomalie, `gt.mean()` coupe le bruit en deux et **46,6 % des
+    pixels** sont declares « a raffiner » (mesure N=256, 50 pas ; 47,1 %
+    a N=64). Il n'existe donc pas de faux positif a compter : la ligne ne
+    borne aucun taux de faux positifs, et ses barres P/R/F1 se lisent
+    pourtant a cote de celles des trois lignes a signal.
+
+    Les trois autres lignes ne sont PAS touchees : la reference relative y
+    sert a comparer deux bras sur le MEME champ, ou elle est defendable
+    (les deux bras voient le meme `needs`). C'est le controle negatif seul
+    qui demande une reference ABSOLUE — ou son retrait.
+
+    Ne pas « corriger » sans trancher : choisir un seuil absolu change les
+    quatre lignes de la figure.
+    """
     refined = patches_to_fine_mask(patches, N)
     needs = gt > gt.mean()
     tp = np.sum(refined & needs)
@@ -80,7 +102,15 @@ def make_vortex_core(N):
     """Smooth vortex flow — curl anomaly at center."""
     grid = PeriodicGrid(resolution_N=N)
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
-    y, x = np.mgrid[0:N, 0:N] / N * 2 * np.pi
+    # `x, y`, PAS `y, x` : `np.mgrid[0:N, 0:N]` varie le long de l'axe 0 en
+    # premier, et la convention du depot (grid.py) est AXIS_X=0, AXIS_Y=1.
+    # L'ancien depaquetage nommait "y" le tableau qui variait en realite le
+    # long de X (et reciproquement) : Bx=cos(y)*0.5 variait donc le long de
+    # SON PROPRE axe X au lieu de Y, et div B n'etait pas nul.
+    # Mesure (N=256) : max|div B| = 0.0245 pour une echelle de champ 0.5
+    # (5 %) avant ; 0.0 (bit a bit) apres, avec le meme operateur que le
+    # depot (Simulation.grid.divergence, fixed_curl=True). Voir D-97.
+    x, y = np.mgrid[0:N, 0:N] / N * 2 * np.pi
     sim.vx = -np.sin(y)
     sim.vy = np.sin(x)
     sim.Bx = np.cos(y) * 0.5
@@ -101,9 +131,16 @@ def make_current_sheet(N):
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
     x = np.arange(N) / N
     # Strong sheared flow + magnetic field with sharp gradient
-    sim.vy = 0.5 * np.tanh((x - 0.5) * 40)[np.newaxis, :] * np.ones((N, 1))
+    # `[:, np.newaxis]`, PAS `[np.newaxis, :]` : le docstring promet un
+    # gradient "at x=N/2" — X est l'axe 0 (grid.py). L'ancien broadcast
+    # diffusait `x` le long de l'axe 1 (Y), donnant By=By(Y) et Bx=cte : la
+    # nappe de courant etait en realite orientee selon Y, et div B n'etait
+    # pas nul. Mesure (N=256) : max|div B| = 2.0 pour une echelle de champ
+    # 1.0 (200 %, persiste a 0.96 apres 20 pas) avant ; 0.0 (bit a bit)
+    # apres. Voir D-97.
+    sim.vy = 0.5 * np.tanh((x - 0.5) * 40)[:, np.newaxis] * np.ones((1, N))
     sim.vx[:] = 0
-    sim.By[:] = np.tanh((x - 0.5) * 40)[np.newaxis, :]
+    sim.By[:] = np.tanh((x - 0.5) * 40)[:, np.newaxis]
     sim.Bx[:] = 0.3
     for _ in range(20):
         sim.adapt_dt(cfl_target=0.4)
@@ -115,7 +152,11 @@ def make_xpoint(N):
     """Reconnection X-point — complex topology with strong gradients."""
     grid = PeriodicGrid(resolution_N=N)
     sim = MHDSolver(grid, dt=1e-3, Re=800, Rm=800)
-    y_arr, x_arr = np.mgrid[0:N, 0:N] / N
+    # `x_arr, y_arr`, PAS `y_arr, x_arr` : meme echange que make_vortex_core.
+    # Mesure (N=256) : max|div B| = 3.175 pour une echelle de champ 1.5
+    # (212 %, persiste a 1.90 apres 20 pas) avant ; 0.0 (bit a bit) apres.
+    # Voir D-97.
+    x_arr, y_arr = np.mgrid[0:N, 0:N] / N
     # Stronger fields for clearer signal
     sim.By = 1.5 * (np.tanh((x_arr - 0.25) * 30) - np.tanh((x_arr - 0.75) * 30) - 1.0)
     sim.Bx = 1.5 * np.tanh((y_arr - 0.5) * 30)

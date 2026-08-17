@@ -28,8 +28,8 @@ DEUX NIVEAUX D'ANALYSE, explicitement separes :
 
 Sorties : results/t15c_fold_synthesis.json  (+ table markdown sur stdout)
 Usage :
-  python study/v4/t15c_fold_synthesis.py
-  python study/v4/t15c_fold_synthesis.py --folds ot kh rotor tearing
+  python study/closed_loop/closed_loop_fold_synthesis.py
+  python study/closed_loop/closed_loop_fold_synthesis.py --folds ot kh rotor tearing
 """
 import argparse, json, os, sys
 

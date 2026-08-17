@@ -1,4 +1,11 @@
 #!/bin/bash
+# D-76 : la reorganisation `17d983d` a deplace ET renomme chaque script
+# invoque ci-dessous ; ce lanceur portait encore les chemins d'avant et
+# mourait sur son PREMIER appel Python (`can't open file ...`, code 2).
+# Meme defaut que D-71, qui n'avait couvert que `run_fold.sh` et
+# `run_leak_free_campaign.sh`. Chemins verifies fichier par fichier, et
+# chaque drapeau CLI passe ici confirme present dans le `--help` de sa
+# nouvelle cible.
 # =============================================================================
 # Q-HAS v2 Hamiltonian Quantum-Advantage Study
 #
@@ -157,43 +164,43 @@ run_phase() {
 for phase in $PHASES; do
     case "$phase" in
         1)  # DNS sweep
-            run_phase 1 study/dns_sweep.py \
+            run_phase 1 study/pipeline/dns_sweep.py \
                 --N "$N_GRID" \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         2)  # Hard-patch identification (dim=2 and dim=4)
-            run_phase 2 study/hard_patch_labels.py \
+            run_phase 2 study/pipeline/hard_patch_labels.py \
                 --N "$N_GRID" --dim $DIM_QUBIT $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         2b) # Percentile sensitivity: does the LOSO delta change sign
             # when the hard-patch percentile threshold moves?
-            run_phase 2b study/label_percentile_sensitivity.py \
+            run_phase 2b study/pipeline/label_percentile_sensitivity.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             ;;
         3)  # Hamiltonian coefficients (v2, dim=4)
-            run_phase 3 study/hamiltonian_coefficients.py \
+            run_phase 3 study/pipeline/hamiltonian_coefficients.py \
                 --N "$N_GRID" --dim $DIM_COEFF --v2 \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 3 study/hamiltonian_coefficients.py \
+                run_phase 3 study/pipeline/hamiltonian_coefficients.py \
                     --N "$N_GRID" --dim $DIM_COEFF \
                     --scenario $SCENARIOS \
                     --re $RE_LIST
             fi
             ;;
         4)  # Exact diagonalization (v2, dim=2 = 8 qubits)
-            run_phase 4 study/exact_diagonalisation.py \
+            run_phase 4 study/pipeline/exact_diagonalisation.py \
                 --N "$N_GRID" --dim $DIM_QUBIT --v2 \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 4 study/exact_diagonalisation.py \
+                run_phase 4 study/pipeline/exact_diagonalisation.py \
                     --N "$N_GRID" --dim $DIM_QUBIT \
                     --scenario $SCENARIOS \
                     --re $RE_LIST
@@ -204,14 +211,14 @@ for phase in $PHASES; do
             [ "$USE_WARM" -eq 1 ] && extra_args+=( --warm-start )
             [ -n "$PRUNE_EPS" ] && extra_args+=( --prune-eps "$PRUNE_EPS" )
 
-            run_phase 5 study/phase5_qaoa_eval.py \
+            run_phase 5 study/common/qaoa_inputs.py \
                 --N "$N_GRID" --dim $DIM_QUBIT_LIST --v2 \
                 --reps 2 --K_opt 80 \
                 "${extra_args[@]+${extra_args[@]}}" \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 5 study/phase5_qaoa_eval.py \
+                run_phase 5 study/common/qaoa_inputs.py \
                     --N "$N_GRID" --dim $DIM_QUBIT_LIST \
                     --reps 2 --K_opt 80 \
                     "${extra_args[@]+${extra_args[@]}}" \
@@ -220,12 +227,12 @@ for phase in $PHASES; do
             fi
             ;;
         6)  # Hard-patch detection: Hamiltonian vs classical
-            run_phase 6 study/phase6_verify.py \
+            run_phase 6 study/pipeline/pipeline_verification.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 6 study/phase6_verify.py \
+                run_phase 6 study/pipeline/pipeline_verification.py \
                     --N "$N_GRID" --dim $DIM_COEFF --v1 \
                     --scenario $SCENARIOS \
                     --re $RE_LIST
@@ -234,14 +241,14 @@ for phase in $PHASES; do
         7)  # SA baseline on the same Hamiltonian (the fair classical baseline)
             sa_args=()
             [ "$USE_WARM" -eq 1 ] && sa_args+=( --classical-warm )
-            run_phase 7 study/phase7_sa_baseline.py \
+            run_phase 7 study/common/ising_terms_and_annealing.py \
                 --N "$N_GRID" --dim $DIM_QUBIT_LIST $DIM_COEFF \
                 --sweeps $SA_SWEEPS --n-restarts $SA_RESTARTS \
                 "${sa_args[@]+${sa_args[@]}}" \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
             if [ "$RUN_V1" -eq 1 ]; then
-                run_phase 7 study/phase7_sa_baseline.py \
+                run_phase 7 study/common/ising_terms_and_annealing.py \
                     --N "$N_GRID" --dim $DIM_QUBIT_LIST $DIM_COEFF \
                     --sweeps $SA_SWEEPS --n-restarts $SA_RESTARTS \
                     --v1 \
@@ -253,7 +260,7 @@ for phase in $PHASES; do
         8)  # Circuit depth & pruning report
             eps_list="0.0 0.05 0.1 0.2"
             [ -n "$PRUNE_EPS" ] && eps_list="0.0 $PRUNE_EPS"
-            run_phase 8 study/phase8_depth_report.py \
+            run_phase 8 study/h3_representation/h3_depth_report.py \
                 --N "$N_GRID" --dim $DIM_QUBIT_LIST $DIM_COEFF \
                 --reps 2 --prune-eps $eps_list \
                 --scenario $SCENARIOS \
@@ -262,11 +269,11 @@ for phase in $PHASES; do
         10) # MF analytical init (10a) + closed-loop training (10) of
             # v2 (c_bias, thr_amr). 10a is fast and writes
             # analytical_N{N}_dim{D}.npz that 10 picks up automatically.
-            run_phase 10a study/phase10a_analytical.py \
+            run_phase 10a study/h2b_prediction/h2b_analytical_solution.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST
-            run_phase 10 study/phase10_train_hamiltonian.py \
+            run_phase 10 study/h2b_prediction/h2b_train_linear_hamiltonian.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -278,7 +285,7 @@ for phase in $PHASES; do
             #   Q1 (mean-field ceiling):  LR, RF, GBT on per-site features
             #   Q2 (neighbourhood ceiling): GBT on stencil (self + 4 nbrs)
             # Verdict printed + saved to upper_bound_N{N}_dim{D}.npz
-            run_phase 11 study/phase11_upper_bound.py \
+            run_phase 11 study/h2b_prediction/h2b_ceiling_random_split.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -288,7 +295,7 @@ for phase in $PHASES; do
             # Tests whether the F1 ~= 0.99 reported by phase 11 is a
             # genuine per-site property or partially inter-scenario
             # memorisation.
-            run_phase 11b study/phase11b_loso.py \
+            run_phase 11b study/h2b_prediction/h2b_loso_transfer.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -298,7 +305,7 @@ for phase in $PHASES; do
             # (logistic regression on the 9 per-site features).
             # This is the effective Hamiltonian that reaches the
             # phase 11 ceiling. --loso also evaluates cross-scenario.
-            run_phase 11c study/phase11c_learned_h.py \
+            run_phase 11c study/h2b_prediction/h2b_learned_meanfield_h.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -307,7 +314,7 @@ for phase in $PHASES; do
         11b2) # LOSO with snapshot-level paired bootstrap CIs.
             # Upgrades phase 11B's fold-std to snapshot-level CIs +
             # one-sided p-value per fold for H0: F1_site >= F1_class.
-            run_phase 11b2 study/phase11b2_bootstrap.py \
+            run_phase 11b2 study/h2b_prediction/h2b_loso_bootstrap.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -317,7 +324,7 @@ for phase in $PHASES; do
             # Measures how much of the LOSO collapse is a scenario-
             # transfer problem by evaluating each scenario's H on
             # every other scenario.
-            run_phase 11d study/phase11d_specialisation.py \
+            run_phase 11d study/h2b_prediction/h2b_scenario_specialisation.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -328,7 +335,7 @@ for phase in $PHASES; do
             # input-side score as a tight proxy for the QAOA pipeline.
             # Includes per-fold snapshot-level paired bootstrap CI +
             # p-value on the delta F1(v1+psi) - F1(v2_class).
-            run_phase 11e study/phase11e_v1h_loso.py \
+            run_phase 11e study/h2b_prediction/h2b_v1_hamiltonian_loso.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -337,7 +344,7 @@ for phase in $PHASES; do
         11f) # Multi-seed wrapper (10 seeds, matches V1 Fig. 6).
             # Re-runs phase 11 (random split) + 11B (LOSO) at seeds
             # 0..9; reports mean +/- std per fold across seeds.
-            run_phase 11f study/phase11f_multiseed.py \
+            run_phase 11f study/h2b_prediction/h2b_multiseed.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -347,7 +354,7 @@ for phase in $PHASES; do
             # to the 9-feature vector under LOSO. Mechanistic test of
             # whether the collapse is feature-locality (recoverable
             # by knowing scenario) or something more fundamental.
-            run_phase 11g study/phase11g_scenario_ablation.py \
+            run_phase 11g study/h2b_prediction/h2b_scenario_ablation.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -356,7 +363,7 @@ for phase in $PHASES; do
         11h) # Random-split bootstrap CI on the 0.989 ceiling.
             # Snapshot-level paired bootstrap + 95% CIs for
             # F1_class / F1_site / F1_stencil and paired deltas.
-            run_phase 11h study/phase11h_random_split_bootstrap.py \
+            run_phase 11h study/h2b_prediction/h2b_random_split_bootstrap.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -366,7 +373,7 @@ for phase in $PHASES; do
             # Probes the *other* quantum paradigm -- bypass the
             # Hamiltonian, use a quantum circuit as a classifier
             # directly. Slow (COBYLA over a 4-qubit ansatz).
-            run_phase 12 study/phase12_vqc.py \
+            run_phase 12 study/h2b_prediction/h2b_variational_classifier.py \
                 --N "$N_GRID" --dim $DIM_COEFF \
                 --scenario $SCENARIOS \
                 --re $RE_LIST \
@@ -375,7 +382,7 @@ for phase in $PHASES; do
             ;;
         13) # Cross-phase aggregation: builds SUMMARY_N{N}_dim{D}.txt
             # and .csv from every available upstream .npz.
-            run_phase 13 study/aggregate_v2.py \
+            run_phase 13 study/common/aggregate_v2.py \
                 --N "$N_GRID" --dim $DIM_COEFF
             ;;
     esac
@@ -386,5 +393,5 @@ echo "============================================================"
 echo "  ALL PHASES COMPLETE"
 echo "============================================================"
 echo ""
-echo "Results in: study/results/"
-ls -lh study/results/*.npz 2>/dev/null | tail -20 || echo "  (no results yet)"
+echo "Results in: results/"
+ls -lh results/*.npz 2>/dev/null | tail -20 || echo "  (no results yet)"

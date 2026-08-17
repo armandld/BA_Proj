@@ -1,6 +1,6 @@
 """
 Figure 0: Pareto Front — Physics Error vs Compute Cost
-Produces: figures/fig0_pareto_*.png
+Produces: results/figures/fig0_pareto_*.png
 
 Plots phys_score vs patch_ratio across lambda_cost values for both
 quantum (Q-HAS) and classical AMR.  Generates:
@@ -8,7 +8,7 @@ quantum (Q-HAS) and classical AMR.  Generates:
   - Grouped graphs (simple 4-scenario, complex 2-scenario)
   - Combined overview
 
-Reads directly from Train_results/rescore_*_lambda*/trials_*.csv
+Reads directly from results/hyperparams/optuna_studies/rescore_*_lambda*/trials_*.csv
 to access per-scenario breakdown columns.
 """
 import csv
@@ -36,9 +36,32 @@ from fig_utils import apply_style, COLORS, FIG_DIR
 apply_style()
 
 # ── Paths ──
-PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..')
-TRAIN_DIR = os.path.join(PROJECT_ROOT, 'Train_results')
-JSON_PATH = os.path.join(PROJECT_ROOT, 'best_hyperparams.json')
+# D-94. Meme cause que D-93 dans fig_utils.py : `PROJECT_ROOT` ne montait que
+# d'un niveau, juste tant que le fichier vivait dans `figures_code/` a la
+# racine, faux depuis que 17d983d l'a descendu dans `figures/v1_legacy/`. Ici
+# la consequence n'etait pas silencieuse mais fatale : `Train_results/` a en
+# plus quitte la racine (17d983d l'a mis dans `attic/`, 12a163e a vide
+# l'attic), si bien que `load_all_trials` mourait sur
+# `FileNotFoundError: .../figures/v1_legacy/../Train_results` — le script
+# n'a pas pu produire une seule figure depuis la reorganisation.
+# Les repertoires `rescore_{q_has,classical}_v2_phase*_lambda*` que cherchent
+# QUANTUM_PATTERN / CLASSICAL_PATTERN existent toujours, sous
+# `results/hyperparams/optuna_studies/` (entree gelee, voir son PROVENANCE.md).
+PROJECT_ROOT = _REPO_ROOT
+TRAIN_DIR = os.path.join(PROJECT_ROOT, 'results', 'hyperparams', 'optuna_studies')
+
+# JSON_PATH ne pointe DELIBEREMENT pas sur
+# `results/hyperparams/best_hyperparams.json`, malgre son nom d'origine.
+# Ce fichier est une entree GELEE : son PROVENANCE.md le donne pour le seul
+# dossier non reproductible par une commande (campagne Optuna d'une semaine).
+# Le bloc de fin de ce script REECRIT le JSON qu'il designe ; le faire pointer
+# sur le fichier gele mettrait une regeneration de figure en position de muter
+# un artefact qu'on ne sait pas refaire. Mesure qui autorise ce choix : aucune
+# des cles ecrites ici (`pareto_front_quantum`, `pareto_best_quantum`) n'existe
+# dans le fichier gele, et aucun fichier du depot ne les lit — la sortie va
+# donc dans son propre artefact, sans consommateur a casser.
+JSON_PATH = os.path.join(PROJECT_ROOT, 'results', 'figures',
+                         'fig0_pareto_front_quantum.json')
 ## FIG_DIR imported from fig_utils (phase-aware)
 
 # ── Scenario definitions ──
@@ -203,16 +226,32 @@ def plot_pareto_scenario(quantum_data, classical_data,
     q_phys, q_patch, q_scores = _collect_points(quantum_data, phys_col, patch_col, center_lambda)
     c_phys, c_patch, c_scores = _collect_points(classical_data, phys_col, patch_col, center_lambda)
 
-    v_min, v_max = None, None
-    if len(q_scores) > 0:
-        v_min = np.min(q_scores)
-        v_max = np.max(q_scores)
-
-    if v_min is not None and len(c_scores) > 0:
-        mask = (c_scores >= v_min) & (c_scores <= v_max)
-        c_phys = c_phys[mask]
-        c_patch = c_patch[mask]
-        c_scores = c_scores[mask]
+    # D-95. Ici, `v_min`/`v_max` etaient pris sur le SEUL bras quantique, puis
+    # servaient a deux choses : l'echelle de couleur commune (leur role, elles
+    # partent en vmin/vmax de scatter) et — c'est le defaut — un FILTRE sur les
+    # donnees classiques. Or v_min = min(q_scores) : tout essai classique
+    # meilleur que TOUT le quantique tombait hors fenetre et etait jete, par
+    # construction. Le front de Pareto classique et l'etoile « Best Classical »
+    # etaient ensuite calcules sur ce reste tronque.
+    # Mesure sur les CSV geles (results/hyperparams/optuna_studies/, lambda 0.40) :
+    #   kelvin_helmholtz  56 essais classiques sur 172 jetes SOUS la fenetre ;
+    #                     « Best Classical » annonce S=0,306590 quand le vrai
+    #                     minimum classique est S=0,129020 (2,4x meilleur) ;
+    #                     front classique 169 points -> 45.
+    #   orszag_tang       47 jetes ; S=0,348250 annonce contre 0,326180.
+    #   mhd_rotor          6 jetes ; S=0,192481 annonce contre 0,183508.
+    #   harris_tearing     0 jete — le scenario qui NE SEPARE PAS : un test
+    #                     ecrit sur lui seul serait passe sans rien verifier.
+    # Le biais est a sens unique et va toujours contre le bras classique, du
+    # cote precisement ou la comparaison se joue. Correction : on ne filtre
+    # plus rien, et l'echelle de couleur commune se prend sur la REUNION des
+    # deux bras — sinon les points classiques restitues saturent tous.
+    scores_reunis = [s for s in (q_scores, c_scores) if len(s) > 0]
+    if scores_reunis:
+        v_min = float(min(np.min(s) for s in scores_reunis))
+        v_max = float(max(np.max(s) for s in scores_reunis))
+    else:
+        v_min, v_max = None, None
 
     has_q = len(q_phys) > 0
     has_c = len(c_phys) > 0
@@ -289,16 +328,14 @@ def plot_grouped_pareto(quantum_data, classical_data,
     q_phys, q_patch, q_scores = _collect_grouped_points(quantum_data, scenario_dict, lam_cost)
     c_phys, c_patch, c_scores = _collect_grouped_points(classical_data, scenario_dict, lam_cost)
 
-    v_min, v_max = None, None
-    if len(q_scores) > 0:
-        v_min = np.min(q_scores)
-        v_max = np.max(q_scores)
-
-    if v_min is not None and len(c_scores) > 0:
-        mask = (c_scores >= v_min) & (c_scores <= v_max)
-        c_phys = c_phys[mask]
-        c_patch = c_patch[mask]
-        c_scores = c_scores[mask]
+    # D-95, second site : meme troncature du bras classique a la fenetre du
+    # bras quantique, sur la planche agregee. Voir plot_pareto_scenario.
+    scores_reunis = [s for s in (q_scores, c_scores) if len(s) > 0]
+    if scores_reunis:
+        v_min = float(min(np.min(s) for s in scores_reunis))
+        v_max = float(max(np.max(s) for s in scores_reunis))
+    else:
+        v_min, v_max = None, None
 
     has_q = len(q_phys) > 0
     has_c = len(c_phys) > 0
@@ -348,87 +385,92 @@ def plot_grouped_pareto(quantum_data, classical_data,
 #  MAIN
 # ═══════════════════════════════════════════════════════════════
 
-print("Loading trial data from CSVs...")
-# Optional phase filters from environment (set by generate_figures.sh)
-Q_PHASE_FILTER = os.environ.get('FIGURE_Q_PHASE_FILTER', None)
-C_PHASE_FILTER = os.environ.get('FIGURE_C_PHASE_FILTER', None)
-if Q_PHASE_FILTER:
-    print(f"[fig0] Quantum phase filter: {Q_PHASE_FILTER}")
-if C_PHASE_FILTER:
-    print(f"[fig0] Classical phase filter: {C_PHASE_FILTER}")
+# D-94. Ce bloc s'executait a l'IMPORT. Deux consequences : le module etait
+# intestable (l'importer relancait toute la campagne de figures, et mourait),
+# et un simple `import fig0_pareto_lambda` REECRIVAIT le JSON de JSON_PATH.
+# Le corps ci-dessous est inchange, seulement indente sous la garde.
+if __name__ == "__main__":
+    print("Loading trial data from CSVs...")
+    # Optional phase filters from environment (set by generate_figures.sh)
+    Q_PHASE_FILTER = os.environ.get('FIGURE_Q_PHASE_FILTER', None)
+    C_PHASE_FILTER = os.environ.get('FIGURE_C_PHASE_FILTER', None)
+    if Q_PHASE_FILTER:
+        print(f"[fig0] Quantum phase filter: {Q_PHASE_FILTER}")
+    if C_PHASE_FILTER:
+        print(f"[fig0] Classical phase filter: {C_PHASE_FILTER}")
 
-quantum_data = load_all_trials(TRAIN_DIR, QUANTUM_PATTERN, phase_filter=Q_PHASE_FILTER)
-classical_data = load_all_trials(TRAIN_DIR, CLASSICAL_PATTERN, phase_filter=C_PHASE_FILTER)
+    quantum_data = load_all_trials(TRAIN_DIR, QUANTUM_PATTERN, phase_filter=Q_PHASE_FILTER)
+    classical_data = load_all_trials(TRAIN_DIR, CLASSICAL_PATTERN, phase_filter=C_PHASE_FILTER)
 
-print(f"  Quantum:   {len(quantum_data)} phase/lambda combos, "
-      f"{sum(len(r) for r in quantum_data.values())} total trials")
-print(f"  Classical: {len(classical_data)} phase/lambda combos, "
-      f"{sum(len(r) for r in classical_data.values())} total trials")
+    print(f"  Quantum:   {len(quantum_data)} phase/lambda combos, "
+          f"{sum(len(r) for r in quantum_data.values())} total trials")
+    print(f"  Classical: {len(classical_data)} phase/lambda combos, "
+          f"{sum(len(r) for r in classical_data.values())} total trials")
 
-# ── 1. Per-scenario graphs ──
-for sc_name, sc_info in SCENARIOS_ALL.items():
-    fig = plot_pareto_scenario(quantum_data, classical_data,
-                               sc_info['phys'], sc_info['patch'],
-                               f"Pareto Front: {sc_info['label']}")
-    out = os.path.join(FIG_DIR, f'fig0_pareto_{sc_name}.png')
+    # ── 1. Per-scenario graphs ──
+    for sc_name, sc_info in SCENARIOS_ALL.items():
+        fig = plot_pareto_scenario(quantum_data, classical_data,
+                                   sc_info['phys'], sc_info['patch'],
+                                   f"Pareto Front: {sc_info['label']}")
+        out = os.path.join(FIG_DIR, f'fig0_pareto_{sc_name}.png')
+        fig.savefig(out, dpi=300)
+        plt.close(fig)
+        print(f"  Saved: {out}")
+
+    # ── 2. Grouped: all scenarios ──
+    fig = plot_grouped_pareto(quantum_data, classical_data,
+                              SCENARIOS_ALL,
+                              'Pareto Front: All Scenarios (KH + Tearing + OT + Rotor)')
+    out = os.path.join(FIG_DIR, 'fig0_pareto_all_combined.png')
     fig.savefig(out, dpi=300)
     plt.close(fig)
     print(f"  Saved: {out}")
 
-# ── 2. Grouped: all scenarios ──
-fig = plot_grouped_pareto(quantum_data, classical_data,
-                          SCENARIOS_ALL,
-                          'Pareto Front: All Scenarios (KH + Tearing + OT + Rotor)')
-out = os.path.join(FIG_DIR, 'fig0_pareto_all_combined.png')
-fig.savefig(out, dpi=300)
-plt.close(fig)
-print(f"  Saved: {out}")
+    # ── 5. Update best_hyperparams.json with Pareto front data ──
+    # Compute overall Pareto front from quantum trials (phys_score vs patch_ratio)
+    all_q_phys, all_q_patch, all_q_trials = [], [], []
+    for (phase, lam_val), rows in quantum_data.items():
+        for row in rows:
+            p = _safe_float(row.get('phys_score'))
+            r = _safe_float(row.get('patch_ratio'))
+            if p is not None and r is not None and p < 5.0:
+                all_q_phys.append(p)
+                all_q_patch.append(r)
+                all_q_trials.append({
+                    'trial': int(row.get('trial', -1)),
+                    'phase': phase,
+                    'lambda': lam_val,
+                    'phys_score': p,
+                    'patch_ratio': r,
+                })
 
-# ── 5. Update best_hyperparams.json with Pareto front data ──
-# Compute overall Pareto front from quantum trials (phys_score vs patch_ratio)
-all_q_phys, all_q_patch, all_q_trials = [], [], []
-for (phase, lam_val), rows in quantum_data.items():
-    for row in rows:
-        p = _safe_float(row.get('phys_score'))
-        r = _safe_float(row.get('patch_ratio'))
-        if p is not None and r is not None and p < 5.0:
-            all_q_phys.append(p)
-            all_q_patch.append(r)
-            all_q_trials.append({
-                'trial': int(row.get('trial', -1)),
-                'phase': phase,
-                'lambda': lam_val,
-                'phys_score': p,
-                'patch_ratio': r,
-            })
+    if all_q_phys:
+        q_phys_arr = np.array(all_q_phys)
+        q_patch_arr = np.array(all_q_patch)
+        pareto_mask = extract_pareto_front(q_phys_arr, q_patch_arr)
 
-if all_q_phys:
-    q_phys_arr = np.array(all_q_phys)
-    q_patch_arr = np.array(all_q_patch)
-    pareto_mask = extract_pareto_front(q_phys_arr, q_patch_arr)
+        pareto_front = []
+        for i, is_p in enumerate(pareto_mask):
+            if is_p:
+                pareto_front.append(all_q_trials[i])
+        pareto_front.sort(key=lambda x: x['phys_score'])
 
-    pareto_front = []
-    for i, is_p in enumerate(pareto_mask):
-        if is_p:
-            pareto_front.append(all_q_trials[i])
-    pareto_front.sort(key=lambda x: x['phys_score'])
+        # Update JSON
+        if os.path.isfile(JSON_PATH):
+            with open(JSON_PATH, 'r') as f:
+                json_data = json.load(f)
+        else:
+            json_data = {}
 
-    # Update JSON
-    if os.path.isfile(JSON_PATH):
-        with open(JSON_PATH, 'r') as f:
-            json_data = json.load(f)
-    else:
-        json_data = {}
+        json_data['pareto_front_quantum'] = pareto_front
 
-    json_data['pareto_front_quantum'] = pareto_front
+        # Pareto best = lowest combined score
+        if pareto_front:
+            best = min(pareto_front, key=lambda x: x['phys_score'] + TARGET_LAMBDA * x['patch_ratio'])
+            json_data['pareto_best_quantum'] = best
 
-    # Pareto best = lowest combined score
-    if pareto_front:
-        best = min(pareto_front, key=lambda x: x['phys_score'] + TARGET_LAMBDA * x['patch_ratio'])
-        json_data['pareto_best_quantum'] = best
+        with open(JSON_PATH, 'w') as f:
+            json.dump(json_data, f, indent=4)
+        print(f"\nUpdated {JSON_PATH} with Pareto front ({len(pareto_front)} points).")
 
-    with open(JSON_PATH, 'w') as f:
-        json.dump(json_data, f, indent=4)
-    print(f"\nUpdated {JSON_PATH} with Pareto front ({len(pareto_front)} points).")
-
-print("\nDone. All fig0_pareto_*.png saved to figures/")
+    print(f"\nDone. All fig0_pareto_*.png saved to {FIG_DIR}")

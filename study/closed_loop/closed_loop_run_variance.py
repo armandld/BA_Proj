@@ -36,7 +36,7 @@ c'est precisement le defaut a documenter.
 
 Sortie : results/t20_qhas_run_variance_{fold}.json
 Usage :
-  python study/v4/t20_qhas_run_variance.py --fold kh --repeats 5
+  python study/closed_loop/closed_loop_run_variance.py --fold kh --repeats 5
 """
 import argparse, contextlib, io, json, os, sys, time
 

@@ -100,15 +100,39 @@ def prune_hamilt_params(hamilt_params, eps):
 # -------------------------------------------------------------------
 
 def classical_warm_start_params(score_vqa, threshold_amr, reps):
-    """Build QAOA warm-start (beta, gamma) from the classical AMR decision.
+    """Schedule (beta, gamma) CONSTANT — ne lit NI `score_vqa` NI `threshold_amr`.
 
-    The exact warm-start of Egger et al. rewrites the mixer so each
-    qubit is initialised in the direction of its classical-relaxation
-    solution. For the simpler Goemans-style variant we leave the
-    ansatz unchanged and pick a small (beta, gamma) schedule: if the
-    classical solution is already good, a low-amplitude cost layer
-    followed by a low-amplitude mixer makes only small corrections.
+    D-48. Le nom, l'ancienne docstring (« from the classical AMR decision »)
+    et l'aide CLI de `--warm-start` (« classical-score-derived ») annoncaient
+    un warm start derive de la decision classique. Il n'en est rien : le
+    corps ne consomme aucun des deux premiers arguments et rend
+    `beta = 0.05` partout, `gamma = 0.15 / k`, pour tout champ et tout seuil.
+
+    Mesure du contrat (6 entrees couvrant tout l'intervalle : score nul,
+    score unite, score aleatoire, seuil 0 / 1 / 1e9) : sortie identique
+    BIT-A-BIT, ecart maximal **0,0e+00**. Les deux arguments sont morts.
+
+    Cela compte parce que les appelants les passent a cote de warm starts
+    qui, eux, sont reels — `sa_warm` et `greedy` demarrent sur
+    `classical_init_spins(score_vqa, thr_amr, dim)` dans
+    `h0_optimiser_equivalence.solver_panel` — et parce que la fiche d'audit
+    compte « warm start present » parmi les axes que les etudes h0/h3
+    traversent. Elles ne le traversent pas : elles traversent une
+    initialisation constante.
+
+    NON CORRIGE — decision, pas defaut de code. Rendre le schedule
+    reellement dependant du score deplacerait `progress` (T11b,
+    `RESULTS.md`), un nombre publie : voir la mesure dans `DEFAUTS.md` D-48.
+    Le schedule reste donc bit-a-bit celui sur lequel les nombres publies
+    ont ete obtenus. `tests/study/test_warm_start_is_constant.py` epingle
+    cette independance : le jour ou quelqu'un la lie au score, le test
+    tombe et la mesure doit etre refaite.
+
+    Les deux arguments sont conserves dans la signature parce que les quatre
+    sites d'appel les passent ; les retirer serait un changement d'API sans
+    rapport avec la question posee.
     """
+    del score_vqa, threshold_amr        # D-48 : jamais lus, explicitement.
     # Small ramp: large-ish gamma on first layer so the cost Hamiltonian
     # nudges amplitudes in the classical direction; tiny beta to avoid
     # flattening the distribution.
@@ -462,7 +486,8 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
 
         # pick warm-start:
         #   - previous optimal params if available (warm across snapshots)
-        #   - else classical-derived params if enabled
+        #   - else the FIXED schedule if enabled (D-48 : « classical » de nom
+        #     seulement, il ne lit pas score_vqa)
         #   - else None (use linear ramp default)
         this_warm = warm_start
         if this_warm is None and warm_start_classical:
@@ -606,8 +631,9 @@ def main():
                         help="Aer simulation method (use matrix_product_state "
                              "for dim>=3 scaling)")
     parser.add_argument("--warm-start", action="store_true",
-                        help="Initialise QAOA from classical-score-derived "
-                             "(beta, gamma) schedule")
+                        help="Initialise QAOA from a FIXED (beta, gamma) "
+                             "schedule instead of execute()'s E_max-scaled "
+                             "ramp. Ne derive pas du score classique (D-48)")
     parser.add_argument("--prune-eps", type=float, default=0.0,
                         help="Prune |coeff| < eps * max per block before "
                              "QAOA (0 = no pruning)")

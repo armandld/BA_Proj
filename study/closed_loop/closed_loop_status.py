@@ -8,8 +8,8 @@ que le driver tourne. Affiche une ligne par fold : essais termines par
 etude, presence des sorties t15 / t15b.
 
 Usage :
-  python study/v4/level3_status.py
-  python study/v4/level3_status.py --folds kh rotor tearing --oneline
+  python study/closed_loop/closed_loop_status.py
+  python study/closed_loop/closed_loop_status.py --folds kh rotor tearing --oneline
 """
 import argparse, os, sqlite3, sys
 

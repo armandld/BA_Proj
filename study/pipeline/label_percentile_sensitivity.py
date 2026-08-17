@@ -125,6 +125,32 @@ def loso_site_vs_class(by_sc, seed):
     return rows
 
 
+def interpretation_message(rows_summary, percentiles):
+    """Interpret the swept deltas against the module's own robustness
+    criterion: robust iff the gap never turns positive (delta < 0
+    everywhere), not merely small. Returns None if there is nothing to
+    interpret.
+    """
+    if not rows_summary:
+        return None
+    deltas = [r["delta"] for r in rows_summary if np.isfinite(r["delta"])]
+    if not deltas:
+        return None
+    if max(deltas) < 0:
+        return (f"  * max(F1_site - F1_class) = {max(deltas):+.3f} "
+                f"over p in {percentiles}  "
+                f"==> the LOSO collapse is ROBUST to the percentile "
+                f"choice. The local-Hamiltonian hypothesis fails for "
+                f"ANY reasonable hard-patch definition.")
+    i = int(np.argmax(deltas))
+    best_p = rows_summary[i]["percentile"]
+    return (f"  * at p={best_p:.0f}, F1_site beats classical by "
+            f"{max(deltas):+.3f}  ==> the result is SENSITIVE to the "
+            f"percentile cut-off. Investigate whether that specific "
+            f"percentile corresponds to a physically meaningful "
+            f"L2 error scale.")
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Phase 2B: L2_PERCENTILE sensitivity of the LOSO result")
@@ -155,7 +181,14 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if len(configs) < 2:
-        print("Need at least 2 configs with data."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : la sensibilite au percentile exige au moins 2 "
+            f"configurations avec artefacts d'entree, {len(configs)} trouvee(s). "
+            "Le script sortait ici avec le code 0 et sans artefact (D-75).")
     print(f"  {len(configs)} configs available across "
           f"{len(set(sc for sc,*_ in configs))} scenario(s)")
 
@@ -212,23 +245,9 @@ def main():
 
     print()
     print("  INTERPRETATION:")
-    if rows_summary:
-        deltas = [r["delta"] for r in rows_summary
-                  if np.isfinite(r["delta"])]
-        if deltas and max(deltas) < 0.05:
-            print(f"  * max(F1_site - F1_class) = {max(deltas):+.3f} "
-                  f"over p in {args.percentiles}  "
-                  f"==> the LOSO collapse is ROBUST to the percentile "
-                  f"choice. The local-Hamiltonian hypothesis fails for "
-                  f"ANY reasonable hard-patch definition.")
-        elif deltas:
-            i = int(np.argmax(deltas))
-            best_p = rows_summary[i]["percentile"]
-            print(f"  * at p={best_p:.0f}, F1_site beats classical by "
-                  f"{max(deltas):+.3f}  ==> the result is SENSITIVE to the "
-                  f"percentile cut-off. Investigate whether that specific "
-                  f"percentile corresponds to a physically meaningful "
-                  f"L2 error scale.")
+    msg = interpretation_message(rows_summary, args.percentiles)
+    if msg:
+        print(msg)
 
     # -- save --
     out = os.path.join(RESULTS_DIR,

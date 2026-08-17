@@ -183,3 +183,46 @@ def test_compute_solution_error_croit_avec_l_ecart(crb):
     e1 = crb.compute_solution_error(proche, base)
     e2 = crb.compute_solution_error(loin, base)
     assert 0 < e1 < e2, f"erreurs non ordonnees : {e1} puis {e2}"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-91 — la "verite terrain" par bloc est une erreur RELATIVE, pas absolue
+# ══════════════════════════════════════════════════════════════════════
+
+def test_d91_le_bruit_de_fond_bat_la_vraie_structure(crb):
+    """`compute_block_errors` divise par `ref = sqrt(mean(dns_block**2))
+    + 1e-10` : SEUL le denominateur porte un plancher. Deux blocs qui
+    partagent le MEME ecart absolu recoivent un score d'erreur qui depend
+    presque uniquement de l'amplitude du signal DNS dans chacun -- pas de
+    l'ecart lui-meme. Champ qui SEPARE : un bloc quasi-vide (bruit) et un
+    bloc a forte structure, avec un ecart DNS/grossier identique au bit
+    pres sur les deux.
+
+    C'est le mecanisme derriere la note deja publiee dans RESULTS.md
+    (D-10) : sur le rotor MHD reel, la selection "ground truth" (top-K par
+    ce score) rend une erreur L2 globale de 0.3079 -- a peine mieux que
+    l'absence d'AMR (0.3074) -- alors que la selection classique/QAOA,
+    qui ne pese pas par un `ref` quasi nul, rend 0.0208 (93% de mieux).
+    Rapporte dans DEFAUTS.md (D-91), non corrige : changer la metrique
+    changerait ces deux nombres deja ecrits dans RESULTS.md."""
+    import numpy as np
+    N, n_blocks = 4, 2
+    zeros = lambda: np.zeros((N, N))
+    dns = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+    coarse = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+
+    ecart_absolu = 1e-6
+    # bloc (0,0) : bruit de fond, signal DNS quasi nul
+    dns["Jz"][0:2, 0:2] = 1e-6
+    coarse["Jz"][0:2, 0:2] = 1e-6 + ecart_absolu
+    # bloc (1,1) : vraie structure, meme ecart absolu que le bloc de bruit
+    dns["Jz"][2:4, 2:4] = 10.0
+    coarse["Jz"][2:4, 2:4] = 10.0 + ecart_absolu
+
+    errors = crb.compute_block_errors(dns, coarse, N, n_blocks)
+    assert errors[0, 0] > 1e3 * errors[1, 1], (
+        f"le bloc de bruit ({errors[0, 0]:.3e}) devrait dominer le bloc "
+        f"structure ({errors[1, 1]:.3e}) de plusieurs ordres de grandeur "
+        "sous la metrique relative actuelle, a ecart absolu identique -- "
+        "si ce n'est plus vrai, D-91 a change de forme, remesurer avant "
+        "de fermer l'entree")

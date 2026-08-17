@@ -21,7 +21,7 @@ zero changement, ce qui valide la chaine de mesure elle-meme.
 
 Sortie : results/t13_term_ablation_N{N}_dim{D}.npz
 Usage :
-  python study/v4/t13_term_ablation.py --N 64 --dim 2 --n-snaps 2
+  python study/h3_representation/h3_term_ablation.py --N 64 --dim 2 --n-snaps 2
 """
 import argparse, json, os, sys
 import numpy as np
@@ -87,6 +87,35 @@ def ground_state_mask(hamilt_params, dim):
     return (dh | dv), float(E), int(n_opt), mask_uniformity(gs)
 
 
+def coefficients_removed(hamilt_params, hamilt_params_ablated, dim):
+    """max|Delta| de ce que `build_ising_terms` produit REELLEMENT.
+
+    D-54 : le controle `full` ne peut pas distinguer « ablation qui retire un
+    terme sans effet causal » de « ablation qui ne retire rien ». Mesure
+    faite avec l'operateur assorti — pas sur les cles de `hamilt_params`,
+    mais sur les trois tableaux que `ground_state_mask` consomme : mettre a
+    zero une cle que `build_ising_terms` ne lit pas rend 0,0 ici, et c'est
+    exactement le cas de `K_xpoint` (D-51).
+    """
+    h0, e0, p0 = build_ising_terms(hamilt_params, dim)
+    h1, e1, p1 = build_ising_terms(hamilt_params_ablated, dim)
+    deltas = [float(np.max(np.abs(np.asarray(h0) - np.asarray(h1))))
+              if len(h0) else 0.0]
+    # `build_ising_terms` n'emet un terme que si |coefficient| > 1e-12 : une
+    # ablation RACCOURCIT donc les listes d'index au lieu d'y mettre des
+    # zeros. Comparer les tableaux position par position n'a pas de sens ;
+    # on les compare indexes par leur tuple de qubits, sur l'union des deux.
+    for (idx0, c0), (idx1, c1) in ((e0, e1), (p0, p1)):
+        d0 = {tuple(int(q) for q in row): float(c)
+              for row, c in zip(np.asarray(idx0), np.asarray(c0, dtype=float))}
+        d1 = {tuple(int(q) for q in row): float(c)
+              for row, c in zip(np.asarray(idx1), np.asarray(c1, dtype=float))}
+        keys = set(d0) | set(d1)
+        deltas.append(max((abs(d0.get(k, 0.0) - d1.get(k, 0.0))
+                           for k in keys), default=0.0))
+    return float(max(deltas))
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 Task 13: causal term ablations")
@@ -141,35 +170,47 @@ def main():
                         uniform=bool(uni), n_optima=n_opt,
                         f1=f1_from_masks(mask, gt),
                         refined=float(np.mean(mask)),
+                        # D-54 : sans cette colonne, « changed = 0 » sur une
+                        # ablation qui n'a rien retire est indiscernable d'un
+                        # terme reellement inerte — les deux impriment 0,0000.
+                        removed_max=coefficients_removed(hp, hp_ab, args.dim),
                         dE=float(E - base_E)))
                 print(f"  {sc:<18} Re={re} snap={si:<3} "
                       f"base_uniform={base_uni}")
 
     if not rows:
-        print("no input."); return
+        # D-55 : le script imprimait « no input. » et sortait avec le code 0,
+        # sans ecrire d'artefact — donc en laissant en place celui d'une
+        # campagne precedente, indiscernable d'une campagne reussie. Meme
+        # defaut, meme formulation que la correction deja faite dans
+        # `h0_optimiser_equivalence.main`.
+        raise RuntimeError(
+            f"balayage vide : aucun des scenarios {args.scenario} n'a "
+            f"d'artefacts d'entree a N={args.N} dim={args.dim} "
+            f"(dns_*_N{args.N}.npz et patches_*_N{args.N}_dim{args.dim}.npz "
+            f"dans {RESULTS_DIR}). La tache sortait ici avec le code 0, sans "
+            "artefact : celui de la campagne precedente restait en place et "
+            "une campagne qui n'avait rien mesure etait indiscernable d'une "
+            "campagne reussie.")
 
     names = [n for n, _ in ABLATIONS]
-    print("\n  " + "=" * 80)
-    print(f"  {'ablation':<18} {'changed':>9} {'uniform':>9} "
-          f"{'refined':>9} {'F1':>8} {'n_optima':>10}")
-    print("  " + "-" * 80)
+    print("\n  " + "=" * 92)
+    print(f"  {'ablation':<18} {'changed':>9} {'removed_max':>12} "
+          f"{'uniform':>9} {'refined':>9} {'F1':>8} {'n_optima':>10}")
+    print("  " + "-" * 92)
     for n in names:
         rs = [r for r in rows if r["ablation"] == n]
         if not rs:
             continue
         print(f"  {n:<18} {np.mean([r['changed'] for r in rs]):>9.4f} "
+              f"{np.max([r['removed_max'] for r in rs]):>12.4e} "
               f"{np.mean([r['uniform'] for r in rs]):>9.3f} "
               f"{np.mean([r['refined'] for r in rs]):>9.3f} "
               f"{np.mean([r['f1'] for r in rs]):>8.3f} "
               f"{np.mean([r['n_optima'] for r in rs]):>10.1f}")
-    print("  " + "-" * 80)
+    print("  " + "-" * 92)
 
-    ctrl = np.mean([r["changed"] for r in rows if r["ablation"] == "full"])
-    print(f"\n  control ('full' ablation) changed fraction = {ctrl:.6f} "
-          f"(must be 0.0)")
-    print("  READING: a term whose removal changes no decision is inert for "
-          "the deployed\n  decision at this grid size, whatever its "
-          "magnitude in the cost function.")
+    print("\n" + control_and_reading(rows))
 
     # Le nom porte le mappeur : sans lui, relancer la tache avec l'autre
     # mappeur ECRASAIT silencieusement le resultat precedent, alors que la
@@ -190,6 +231,8 @@ def main():
         n_optima=np.array([r["n_optima"] for r in rows]),
         f1=np.array([r["f1"] for r in rows]),
         refined=np.array([r["refined"] for r in rows]),
+        # D-54 : ce que `build_ising_terms` a reellement produit en moins.
+        removed_max=np.array([r["removed_max"] for r in rows]),
         dE=np.array([r["dE"] for r in rows]),
         seed=args.seed, git_hash=git_commit_hash(),
         cli_args=json.dumps(vars(args)),
@@ -203,6 +246,66 @@ def main():
         shutil.copyfile(out, legacy)
         print(f"  also written as: {os.path.basename(legacy)} (legacy name)")
     print("\nV4 Task 13 complete.")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  CONTROLE — D-54
+# ══════════════════════════════════════════════════════════════════════
+#
+#  Le controle `full` compare `ground_state_mask(zero_hamiltonian_terms(hp,
+#  ()))` a `ground_state_mask(hp)` : la MEME fonction sur la MEME entree.
+#  Il vaut 0 par construction et ne peut echouer que sur un indeterminisme
+#  d'`exhaustive_ground_state`, qui n'en a pas.
+#
+#  Mesure : en sabotant `TERM_KEYS` pour que plus rien ne soit jamais mis a
+#  zero (orszag_tang Re=400 N=64 dim=2, 2 instantanes), le controle rend
+#  0,000000 des DEUX cotes, et `no_ZZ` / `no_ZZZZ` / `Z_only` rendent
+#  0,0000 des deux cotes — les trois lignes memes qui portent la lecture
+#  « causalement inertes ». Le controle ne les distingue pas.
+#
+#  Ce qui les distingue est `removed_max` : ce que `build_ising_terms`
+#  produit reellement en moins. Une ablation a `changed = 0` ET
+#  `removed_max = 0` n'a rien retire — c'est le cas de `K_xpoint` (D-51) —
+#  et ne dit rien de l'inertie du terme.
+CONTROL_ABLATION = "full"
+
+
+def control_and_reading(rows):
+    """Le bloc de conclusion, extrait pour etre testable sans rejouer le
+    balayage (meme decoupage que D-46 / D-50 / D-52). Leve si le controle
+    ne vaut pas exactement 0 : il etait jusqu'ici imprime avec la mention
+    « (must be 0.0) » et rien ne l'exigeait."""
+    ctrl_rows = [r for r in rows if r["ablation"] == CONTROL_ABLATION]
+    if not ctrl_rows:
+        raise RuntimeError(
+            f"aucune ligne de controle '{CONTROL_ABLATION}' : la chaine de "
+            "mesure n'est pas verifiee du tout")
+    ctrl = float(np.mean([r["changed"] for r in ctrl_rows]))
+    if ctrl != 0.0:
+        raise RuntimeError(
+            f"le controle '{CONTROL_ABLATION}' vaut {ctrl:.6f} au lieu de 0 : "
+            "rejouer le hamiltonien complet ne redonne pas la meme decision, "
+            "donc aucune ablation n'est interpretable")
+
+    out = [f"  control ('{CONTROL_ABLATION}' ablation) changed fraction = "
+           f"{ctrl:.6f} (required 0.0, checked)"]
+
+    # Une ablation qui n'a rien retire n'est pas une ablation.
+    empty = sorted({r["ablation"] for r in rows
+                    if r["ablation"] != CONTROL_ABLATION
+                    and max(x["removed_max"] for x in rows
+                            if x["ablation"] == r["ablation"]) == 0.0})
+    if empty:
+        out.append("  EMPTY ABLATIONS (removed_max = 0 -- build_ising_terms "
+                   "produced exactly the same operator): "
+                   + ", ".join(empty))
+        out.append("  Their 'changed = 0' says NOTHING about the term's "
+                   "causal role: nothing was removed. See D-51 / D-54.")
+    out.append("  READING: a term whose removal changes no decision -- AND "
+               "whose removal is\n  visible in removed_max -- is inert for "
+               "the deployed decision at this grid size,\n  whatever its "
+               "magnitude in the cost function.")
+    return "\n".join(out)
 
 
 if __name__ == "__main__":

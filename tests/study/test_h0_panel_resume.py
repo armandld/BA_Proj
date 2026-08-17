@@ -195,8 +195,69 @@ def test_the_checkpoint_name_follows_the_artefact_name(panel):
 
 
 def test_each_line_is_flushed_to_disk(panel):
-    """Sans fsync, une mort brutale perd des instantanes deja annonces."""
+    """Sans fsync, une mort brutale perd des instantanes deja annonces.
+
+    Ce test lit le SOURCE. Il est garde tel quel — il n'est pas faux — mais
+    il ne mesure PAS la durabilite : D-127 l'a montre par mutation dans les
+    deux sens. Le garde comportemental est
+    `test_the_line_is_on_disk_before_fsync_returns` ci-dessous.
+    """
     src = open(_PANEL, encoding="utf-8").read()
     i = src.index("def _append_checkpoint")
     body = src[i:i + 900]
     assert "fh.flush()" in body and "os.fsync(fh.fileno())" in body
+
+
+def test_the_line_is_on_disk_before_fsync_returns(panel, tmp_path, monkeypatch):
+    """D-127 : la durabilite mesuree, pas lue dans le texte du source.
+
+    Le test ci-dessus cherche `fh.flush()` et `os.fsync(fh.fileno())` dans
+    les 900 premiers caracteres de `_append_checkpoint`. Mesure par mutation,
+    les deux sens :
+
+    * **A'** — `flush`/`fsync` deplaces sous `if os.environ.get(...)` faux,
+      les deux chaines INTACTES dans la fenetre : la durabilite a disparu et
+      le fichier reste **21 passed**. Faux vert.
+    * **B** — reecriture EQUIVALENTE `_fd = fh.fileno()` puis `os.fsync(_fd)`,
+      comportement bit a bit identique : le test passe **ROUGE**. Faux rouge
+      sur un changement voulu — 5e cas de cette forme dans ce depot.
+
+    Ce que promet `_append_checkpoint` (son propre docstring) : « une mort
+    brutale ne doit pas tronquer une ligne deja annoncee comme ecrite ».
+    Donc, AU MOMENT ou `fsync` est appele, la ligne doit deja etre lisible
+    par un descripteur independant — c'est `flush()` qui le garantit — et
+    `fsync` doit etre appele sur le descripteur de CE fichier.
+
+    L'entree qui SEPARE : lire le fichier depuis un second descripteur
+    pendant l'appel a `fsync`. Retirer `flush()` laisse la ligne dans le
+    tampon Python et le second lecteur voit un fichier vide ; retirer
+    `fsync` fait que le tampon d'essai n'est jamais rempli.
+    """
+    ckpt = str(tmp_path / "c.jsonl")
+    seen = {}
+
+    real_fsync = os.fsync
+
+    def spy(fd):
+        #  Ce qu'un lecteur independant voit AU MOMENT du fsync.
+        with open(ckpt, encoding="utf-8") as other:
+            seen.setdefault("bytes", other.read())
+        #  Releve l'inode ICI : le descripteur est ferme a la sortie du `with`.
+        seen.setdefault("inodes", []).append(os.fstat(fd).st_ino)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(panel.os, "fsync", spy)
+    panel._append_checkpoint(ckpt, _args(), "orszag_tang", 400, 3,
+                             [{"solver": "sa", "E": 1.0}], True)
+
+    assert seen.get("inodes"), (
+        "os.fsync n'a pas ete appele : une mort brutale peut perdre une "
+        "ligne deja annoncee comme ecrite")
+    #  Le descripteur doit etre celui du point de sauvegarde, pas un autre.
+    assert seen["inodes"][0] == os.stat(ckpt).st_ino, (
+        "fsync porte sur un autre fichier que le point de sauvegarde")
+    #  flush() avant fsync() : sinon la ligne est encore dans le tampon.
+    assert seen["bytes"], (
+        "au moment du fsync le fichier est encore vide : `flush()` ne "
+        "precede pas `fsync()`, donc rien n'est rendu durable")
+    assert json.loads(seen["bytes"])["snap"] == 3

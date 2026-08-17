@@ -61,6 +61,22 @@ V1_THRESHOLD = 0.1496
 V2_THRESHOLD = 0.15
 
 
+def marginals_converged(marg, tol=0.01):
+    """
+    Le QAOA a-t-il converge ? Le critere est : les marginales ne sont pas
+    TOUTES a 0.5 — donc la distance a 0.5, pas la dispersion.
+
+    Rend (converged, max|m-0.5|, min|m-0.5|, std(m)).
+
+    Fonction de module, et non une fermeture dans `run_scenario`, pour
+    qu'un test puisse l'interroger sans rejouer un scenario complet.
+    """
+    marg = np.asarray(marg, dtype=float)
+    dist = np.abs(marg - 0.5)
+    return (bool(dist.max() > tol), float(dist.max()),
+            float(dist.min()), float(np.std(marg)))
+
+
 def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
     """
     Run one scenario and compare v1 vs v2 Hamiltonian.
@@ -224,16 +240,37 @@ def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
         print(f"    Score per patch:      {score_vqa.flatten()}")
 
         # did QAOA converge? (marginals should not all be 0.5)
-        spread = np.std(marg)
-        converged = spread > 0.01
-        print(f"    Marginal spread: {spread:.4f}  "
-              f"({'converged' if converged else 'NOT converged (flat)'})")
+        #
+        # D-44 : le critere etait `np.std(marg) > 0.01`, c'est-a-dire la
+        # DISPERSION des marginales, pas leur distance a 0.5 — la grandeur
+        # que le commentaire ci-dessus annonce. Les deux ne coincident pas :
+        # un bras qui repond 0.976-0.980 partout est unanime et maximalement
+        # tranche, et son ecart-type vaut 1.9e-03. Mesure sur les defauts du
+        # script (Re=400, N=32, dim=2, les 4 scenarios), les deux runs que
+        # l'ancien critere declarait « NOT converged (flat) » sont les DEUX
+        # PLUS TRANCHES des huit :
+        #
+        #   scenario          bras  std(marg)  max|m-0.5|  ancien verdict
+        #   harris_tearing    v1      0.0019      0.4800   NOT converged
+        #   kelvin_helmholtz  v1      0.0014      0.2393   NOT converged
+        #   orszag_tang       v1      0.0585      0.1769   converged
+        #
+        # et orszag_tang v1, declare converge, porte une marginale a 0.517,
+        # soit 0.0169 de 0.5 — indecise. Le critere inversait le verdict
+        # aux deux extremes. La tolerance 0.01 est conservee, portee sur la
+        # bonne grandeur.
+        converged, decisiveness, weakest, spread = marginals_converged(marg)
+        print(f"    Distance to 0.5: max={decisiveness:.4f} min={weakest:.4f}  "
+              f"(std={spread:.4f})  "
+              f"({'converged' if converged else 'NOT converged (all marginals at 0.5)'})")
 
         return {
             "marginals": marg,
             "decisions": decisions,
             "classical": classical_decisions,
             "converged": converged,
+            "decisiveness": decisiveness,
+            "weakest": weakest,
             "spread": spread,
         }
 

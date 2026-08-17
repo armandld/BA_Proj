@@ -115,19 +115,25 @@ def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
     fit_s = time.time() - t0
 
     # predict_proba via the score marginal
-    try:
-        p_va = vqc.predict_proba(Xva_s)[:, 1]
-    except Exception:
-        pred = vqc.predict(Xva_s)
-        p_va = pred.astype(float)
+    def _proba(X):
+        try:
+            return vqc.predict_proba(X)[:, 1]
+        except Exception:
+            return vqc.predict(X).astype(float)
 
-    thr, f1 = best_threshold_f1(p_va, Yva,
-                                 grid=np.linspace(0.05, 0.95, 91))
+    p_va = _proba(Xva_s)
+    p_tr = _proba(Xtr_s)
+    # D-81 : voir `run_qke` — seuil sur le TRAIN, comme les bras classiques.
+    grid = np.linspace(0.05, 0.95, 91)
+    thr, _ = best_threshold_f1(p_tr, Ytr, grid=grid)
+    f1 = float(f1_score(Yva, (p_va > thr).astype(int), zero_division=0))
+    _, f1_thr_on_val = best_threshold_f1(p_va, Yva, grid=grid)
     try:
         auc = roc_auc_score(Yva, p_va)
     except Exception:
         auc = float("nan")
-    return dict(f1=f1, auc=auc, thr=thr, fit_s=fit_s, p_va=p_va)
+    return dict(f1=f1, f1_thr_on_val=f1_thr_on_val, auc=auc, thr=thr,
+                fit_s=fit_s, p_va=p_va)
 
 
 # -------------------------------------------------------------------
@@ -161,13 +167,22 @@ def run_qke(Xtr, Ytr, Xva, Yva, d_q, reps_fm, seed):
     fit_s = time.time() - t0
 
     p_va = svc.predict_proba(K_va)[:, 1]
-    thr, f1 = best_threshold_f1(p_va, Yva,
-                                 grid=np.linspace(0.05, 0.95, 91))
+    p_tr = svc.predict_proba(K_tr)[:, 1]
+    # D-81 : le seuil se choisit sur le TRAIN, comme `fit_eval` le fait pour
+    # les bras classiques auxquels ce F1 est compare. Il etait choisi sur
+    # `(p_va, Yva)` — les labels de validation — ce qui donnait au bras
+    # quantique un avantage que son concurrent n'avait pas.
+    grid = np.linspace(0.05, 0.95, 91)
+    thr, _ = best_threshold_f1(p_tr, Ytr, grid=grid)
+    f1 = float(f1_score(Yva, (p_va > thr).astype(int), zero_division=0))
+    # l'ancien nombre, garde pour que le biais reste mesurable
+    _, f1_thr_on_val = best_threshold_f1(p_va, Yva, grid=grid)
     try:
         auc = roc_auc_score(Yva, p_va)
     except Exception:
         auc = float("nan")
-    return dict(f1=f1, auc=auc, thr=thr, fit_s=fit_s, p_va=p_va)
+    return dict(f1=f1, f1_thr_on_val=f1_thr_on_val, auc=auc, thr=thr,
+                fit_s=fit_s, p_va=p_va)
 
 
 # -------------------------------------------------------------------
@@ -217,7 +232,15 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if not configs:
-        print("no input."); return
+        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
+        # la campagne precedente. Une campagne qui n'avait rien mesure etait
+        # indiscernable d'une campagne reussie. Onze autres modules de
+        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        raise RuntimeError(
+            "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
+            "arguments donnes. Le script sortait ici avec le code 0 et sans "
+            "artefact, donc sans se distinguer d'une campagne reussie.")
 
     X_site, _, Y_snap, S_snap, tags = build_dataset(
         configs, args.dim, args.max_snaps)
@@ -276,7 +299,9 @@ def main():
                              seed=args.seed)
             results["qke"] = r_qke
             print(f"    qke     F1={r_qke['f1']:.3f}  "
-                  f"AUC={r_qke['auc']:.3f}  fit={r_qke['fit_s']:.1f}s")
+                  f"AUC={r_qke['auc']:.3f}  fit={r_qke['fit_s']:.1f}s"
+                  f"   [seuil sur val, biaise, D-81 : "
+                  f"{r_qke['f1_thr_on_val']:.3f}]")
         except Exception as e:
             print(f"    QKE failed: {e!r}")
 
@@ -291,7 +316,9 @@ def main():
                              maxiter=args.maxiter, seed=args.seed)
             results["vqc"] = r_vqc
             print(f"    vqc     F1={r_vqc['f1']:.3f}  "
-                  f"AUC={r_vqc['auc']:.3f}  fit={r_vqc['fit_s']:.1f}s")
+                  f"AUC={r_vqc['auc']:.3f}  fit={r_vqc['fit_s']:.1f}s"
+                  f"   [seuil sur val, biaise, D-81 : "
+                  f"{r_vqc['f1_thr_on_val']:.3f}]")
         except Exception as e:
             print(f"    VQC failed: {e!r}")
 
@@ -312,6 +339,11 @@ def main():
     f1_q_best  = max(
         (results[k]["f1"] for k in ("qke", "vqc") if k in results),
         default=-1.0)
+    quantum_arms = [k for k in ("qke", "vqc") if k in results]
+    if len(quantum_arms) < 2:
+        print(f"\n  ATTENTION : bras quantiques effectivement executes = "
+              f"{quantum_arms or 'aucun'} — le verdict ci-dessous ne porte "
+              f"que sur ceux-la (D-81).")
     if f1_q_best < 0:
         print("\n  (no quantum model ran; skipping verdict)")
     else:
@@ -339,12 +371,21 @@ def main():
         f1_lr_pca =results["class_lr_pca"]["f1"],
         f1_gbt_pca=results["class_gbt_pca"]["f1"],
     )
+    # D-81 : `f1_*_thr_on_val` est l'ancien nombre — seuil choisi sur les
+    # labels de validation. Il est conserve pour que l'ecart reste
+    # mesurable, jamais compare aux bras classiques.
     if "qke" in results:
         save_kw["f1_qke"]  = results["qke"]["f1"]
         save_kw["auc_qke"] = results["qke"]["auc"]
+        save_kw["f1_qke_thr_on_val"] = results["qke"]["f1_thr_on_val"]
     if "vqc" in results:
         save_kw["f1_vqc"]  = results["vqc"]["f1"]
         save_kw["auc_vqc"] = results["vqc"]["auc"]
+        save_kw["f1_vqc_thr_on_val"] = results["vqc"]["f1_thr_on_val"]
+    # quels bras ont reellement tourne : un bras qui a leve laisse le verdict
+    # se calculer sur les autres sans le dire (mesure : VQC est tombe sur
+    # `qiskit.algorithms` absent, et le verdict s'est imprime quand meme).
+    save_kw["arms_that_ran"] = np.array(sorted(results))
     np.savez_compressed(out, **save_kw)
     print(f"\n  saved: {os.path.basename(out)}")
     print("\nPhase 12 complete.")

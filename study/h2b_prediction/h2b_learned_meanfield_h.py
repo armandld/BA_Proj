@@ -63,7 +63,21 @@ from sklearn.metrics import f1_score
 
 def fit_learned_h(Xtr, Ytr, seed=0, C_reg=1.0):
     """Fit logistic regression -> effective (w, b) in standardised feature
-    space. Decision: h_i = w . phi_i - b > 0  <=>  refine."""
+    space.
+
+    Le champ rendu est ADDITIF dans les deux espaces :
+
+        h_i = z_i . w_std + b_std          (espace standardise, `predict_h`)
+            = x_i . w_raw + b_raw          (unites physiques)
+
+    Verifie numeriquement : les deux expressions coincident a 3,6e-15 sur
+    400 points a 9 features. La docstring annoncait `h_i = w . phi_i - b` ;
+    appliquee telle quelle au `b_raw` rendu, elle decale le champ de 2*b_raw
+    (mesure : ecart max 2,01 sur le meme echantillon). Aucun consommateur du
+    depot n'etait touche — `h2b_blocked_split` et `h2b_scenario_specialisation`
+    passent tous deux par `predict_h` — mais le contrat est aligne sur le
+    calcul plutot que l'inverse.
+    """
     scaler = StandardScaler().fit(Xtr)
     Zt = scaler.transform(Xtr)
     lr = LogisticRegression(
@@ -122,7 +136,15 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if not configs:
-        print("no input."); return
+        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
+        # la campagne precedente. Une campagne qui n'avait rien mesure etait
+        # indiscernable d'une campagne reussie. Onze autres modules de
+        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        raise RuntimeError(
+            "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
+            "arguments donnes. Le script sortait ici avec le code 0 et sans "
+            "artefact, donc sans se distinguer d'une campagne reussie.")
 
     t0 = time.time()
     X_site, X_sten, Y_snap, S_snap, tags = build_dataset(

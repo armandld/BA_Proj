@@ -99,6 +99,22 @@ def main():
         zz_trained, z_bias, _, _, _ = compute_zz_maps(sim, score, threshold, sigma_trained)
         zz_alwayson, _, _, _, _     = compute_zz_maps(sim, score, threshold, 100.0)
 
+        # D-100 — DEVIATION MESUREE, NON CORRIGEE (decision en attente, voir
+        # docs/DEFAUTS.md). Ce poids est recalcule ICI a partir du score
+        # PAR CELLULE. Ce n'est pas celui que le hamiltonien applique :
+        # `HamiltParams.py:469-473` le calcule sur le score moyenne PAR ARETE
+        # (`0.5 * (s + roll(s, -1, axis))`), et en produit DEUX champs
+        # distincts, horizontal et vertical. Mesure (N=64, sigma=0,0500,
+        # threshold=0,3044), part des cellules a w > 0,1 :
+        #   Kelvin-Helmholtz  panneau 9,89 %  |  aretes h 10,40 % / v 9,91 %
+        #   Harris Tearing    panneau 1,27 %  |  aretes h  5,52 % / v 1,27 %
+        # Sur la nappe de tearing, les aretes horizontales sont donc 4,3x plus
+        # actives que ce que le panneau affiche, et l'anisotropie que le
+        # hamiltonien voit (h != v) n'apparait pas du tout ici.
+        # Ne PAS corriger sans trancher : afficher w_h, w_v, leur moyenne ou
+        # leur max est un choix de presentation, pas une correction mecanique.
+        # (Le nombre « ZZ reduced by X% » du panneau C, lui, vient bien du
+        # mappeur reel via compute_zz_maps : il n'est pas concerne.)
         uncertainty = np.exp(-((score - threshold) / max(sigma_trained, 1e-6)) ** 2)
 
         # ── Panel A: Classical score ──

@@ -56,7 +56,7 @@ un nombre de Reynolds different, ce qui est declare comme tel.
 
 Sortie : results/t22_unseen_{mode}_{fold}.json
 Usage :
-  python study/v4/t22_unseen_conditions.py --fold kh --mode unseen-ic
+  python study/h4_transfer/h4_unseen_conditions.py --fold kh --mode unseen-ic
 """
 import argparse, contextlib, io, json, os, sys, time
 
@@ -173,6 +173,59 @@ def build_traces(T, key, cfg, scenario, unseen):
     return tr
 
 
+#: Les champs qu'un point de sauvegarde doit partager avec la relance pour
+#: que ses tirages soient comparables. `fold` et `mode` sont lus a la racine
+#: de l'artefact, les deux autres dans son `cli_args`.
+_RESUME_KEYS = ("fold", "mode", "repeats", "matched_reference")
+
+
+def checkpoint_is_reusable(prev, args):
+    """Le point de sauvegarde `prev` a-t-il ete ecrit sous la MEME config ?
+
+    Reprendre sous une AUTRE configuration melangerait des tirages
+    incomparables dans une seule moyenne publiee — la forme exacte de defaut
+    que ce module traque. On refuse plutot que de deviner.
+
+    D-123 — cette decision etait en ligne dans `main()`, et son seul garde
+    etait `test_resume_reuses_only_matching_configurations`, qui cherchait
+    les quatre chaines dans le TEXTE du fichier. Mesure : remplacer un seul
+    `and` par un `or` casse la decision (`fold` et `mode` egaux suffisent
+    alors a accepter un point ecrit sous un autre `--repeats`) en laissant
+    les quatre chaines en place — `pytest tests/study/test_t24_leak_free.py`
+    rendait **26 passed**. Extraite ici pour qu'un test puisse l'appeler.
+    """
+    cli = prev.get("cli_args", {}) or {}
+    return (prev.get("fold") == args.fold
+            and prev.get("mode") == args.mode
+            and cli.get("repeats") == args.repeats
+            and cli.get("matched_reference") == args.matched_reference)
+
+
+def apply_leak_free_threshold(hp_q, rec):
+    """Remplace le seuil QAOA fuyant par celui du bras classique du fold.
+
+    Extrait de `main()` par D-134 pour etre mesurable sans rejouer les
+    heures de DNS d'un fold : les quatre chaines que
+    `test_no_leak_mode_is_gone_and_leak_free_is_wired` cherchait dans ce
+    fichier restaient toutes presentes quand on reecrivait le seuil sur
+    `LEAKED_THRESHOLD` une ligne plus bas — 35 tests verts sous un artefact
+    nomme `leak-free`. Le corps est INCHANGE, seul son emplacement bouge.
+
+    D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les QUATRE
+    classes, classe tenue comprise. Celui du bras classique de ce fold vient
+    de `train_classical_threshold_excluding`, donc des seules classes
+    d'entrainement : le reprendre supprime la fuite.
+    """
+    leak_free_thr = float(rec["classical_params"]["threshold_amr"])
+    assert abs(hp_q["threshold_amr"] - LEAKED_THRESHOLD) < 1e-9, (
+        "the QAOA arm was not at the leaked threshold; check the fold")
+    hp_q["threshold_amr"] = leak_free_thr
+    print(f"  LEAK-FREE: QAOA threshold {LEAKED_THRESHOLD:.6f} "
+          f"-> {leak_free_thr:.6f} (tuned on training classes only)",
+          flush=True)
+    return hp_q
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 T22: leak-free tuning and unseen initial conditions")
@@ -213,17 +266,7 @@ def main():
 
     hp_q = dict(rec["hyperparams"])
     if args.mode == "leak-free":
-        # D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les
-        # QUATRE classes, classe tenue comprise. Celui du bras classique de
-        # ce fold vient de `train_classical_threshold_excluding`, donc des
-        # seules classes d'entrainement : le reprendre supprime la fuite.
-        leak_free_thr = float(rec["classical_params"]["threshold_amr"])
-        assert abs(hp_q["threshold_amr"] - LEAKED_THRESHOLD) < 1e-9, (
-            "the QAOA arm was not at the leaked threshold; check the fold")
-        hp_q["threshold_amr"] = leak_free_thr
-        print(f"  LEAK-FREE: QAOA threshold {LEAKED_THRESHOLD:.6f} "
-              f"-> {leak_free_thr:.6f} (tuned on training classes only)",
-              flush=True)
+        apply_leak_free_threshold(hp_q, rec)
     # Le bras classique doit partir d'un point de fonctionnement QUI TERMINE :
     # sur `rotor` le seuil regle diverge, et comparer Q-HAS a une trajectoire
     # tronquee ne mesure rien (le piege a deja fausse T15, T20 et un premier
@@ -368,12 +411,7 @@ def main():
         except ValueError:
             prev = None
         if prev is not None and prev.get("status") == "partial":
-            same = (prev.get("fold") == args.fold
-                    and prev.get("mode") == args.mode
-                    and prev.get("cli_args", {}).get("repeats")
-                    == args.repeats
-                    and prev.get("cli_args", {}).get("matched_reference")
-                    == args.matched_reference)
+            same = checkpoint_is_reusable(prev, args)
             if same:
                 _resume = prev.get("arms", {})
                 print(f"  RESUMING from checkpoint "

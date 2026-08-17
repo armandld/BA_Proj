@@ -1,4 +1,11 @@
 #!/bin/bash
+# D-76 : la reorganisation `17d983d` a deplace ET renomme chaque script
+# invoque ci-dessous ; ce lanceur portait encore les chemins d'avant et
+# mourait sur son PREMIER appel Python (`can't open file ...`, code 2).
+# Meme defaut que D-71, qui n'avait couvert que `run_fold.sh` et
+# `run_leak_free_campaign.sh`. Chemins verifies fichier par fichier, et
+# chaque drapeau CLI passe ici confirme present dans le `--help` de sa
+# nouvelle cible.
 # =============================================================================
 # Master script for the Q-HAS performance evaluation study.
 #
@@ -77,19 +84,19 @@ run_phase() {
 for phase in $PHASES; do
     case "$phase" in
         1)
-            run_phase 1 study/dns_sweep.py $RE_ARGS
+            run_phase 1 study/pipeline/dns_sweep.py $RE_ARGS
             ;;
         2)
-            run_phase 2 study/hard_patch_labels.py $RE_ARGS $DIM_ARGS
+            run_phase 2 study/pipeline/hard_patch_labels.py $RE_ARGS $DIM_ARGS
             ;;
         3)
-            run_phase 3 study/hamiltonian_coefficients.py $RE_ARGS $DIM_ARGS
+            run_phase 3 study/pipeline/hamiltonian_coefficients.py $RE_ARGS $DIM_ARGS
             ;;
         4)
-            run_phase 4 study/exact_diagonalisation.py $RE_ARGS $DIM_ARGS
+            run_phase 4 study/pipeline/exact_diagonalisation.py $RE_ARGS $DIM_ARGS
             ;;
         5)
-            run_phase 5 study/phase5_qaoa_eval.py $RE_ARGS $DIM_ARGS
+            run_phase 5 study/common/qaoa_inputs.py $RE_ARGS $DIM_ARGS
             ;;
     esac
 done
@@ -98,5 +105,5 @@ echo "============================================"
 echo "  ALL PHASES COMPLETE"
 echo "============================================"
 echo ""
-echo "Results saved in: study/results/"
-ls -lh study/results/*.npz 2>/dev/null || echo "  (no results yet)"
+echo "Results saved in: results/"
+ls -lh results/*.npz 2>/dev/null || echo "  (no results yet)"

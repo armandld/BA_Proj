@@ -163,7 +163,18 @@ def instrumented_bfs(sim, N, Phi_prev, threshold_amr, target_dim, max_depth,
             pad = 1 if depth > 0 else 0
             local_score_raw = get_periodic_patch(full_score, y_s, y_e, x_s, x_e, pad=pad)
             is_periodic = (depth == 0)
-            score_map_padded = _process_score(local_score_raw, is_periodic, target_dim + 2 * pad if pad > 0 else target_dim)
+            # `target_dim`, PAS `target_dim + 2*pad` : a depth > 0, `_process_score`
+            # emprunte `_resize_padded_maxpool`, dont le contrat est « entree
+            # (N+2, M+2) -> sortie (t_dim+2, t_dim+2) » — le halo est deja ajoute
+            # par la fonction. Regression de D-37 (voir refinement.py) : demander
+            # target_dim+2 fait rendre un coeur 4x4 pour target_dim=2, et la boucle
+            # `for i in range(target_dim)` ne lit alors QUE son quart haut-gauche —
+            # classical_score decrit une sous-region differente de qaoa_prob.
+            # Mesure sur Harris tearing (N=256, 30 pas, patch depth=1) : ecart
+            # jusqu'a 0.525 sur des scores dont l'echelle max vaut 0.656 (80%),
+            # et 2 des 4 decisions binaires (score >= threshold_amr=0.3228)
+            # basculaient. Voir D-96.
+            score_map_padded = _process_score(local_score_raw, is_periodic, target_dim)
             if depth > 0:
                 score_map = score_map_padded[1:-1, 1:-1]
             else:
@@ -357,6 +368,14 @@ if n_scenarios == 1:
     axes = axes[np.newaxis, :]
 
 threshold = TRAINED_PARAMS['threshold_amr']
+# D-102 — PAS 0,023 en dur : ce fichier construit son HamiltMapper via
+# `_hamilt_mapper_kwargs` (fig_utils.py), dont le repli sigma est 0,05, pas
+# 0,023. 0,023 est `TRAINED_SIGMA` de `study/pipeline/config.py`, une
+# constante d'un AUTRE module que ce fichier n'importe pas. Mesure :
+# `'sigma' not in TRAINED_PARAMS` (best_hyperparams.json ne l'echantillonne
+# pas, voir D-22) -> `TRAINED_PARAMS.get('sigma', 0.05)` vaut
+# inconditionnellement 0,05 ici, jamais 0,023.
+sigma_trained = TRAINED_PARAMS.get('sigma', 0.05)
 
 for row, (label, log) in enumerate(all_logs.items()):
     if not log:
@@ -578,9 +597,11 @@ if all_records:
         print("either far above or far below the threshold, leaving no room")
         print("for the QAOA to flip decisions.")
         print()
-        print("ROOT CAUSE: With σ=0.023 (trained), the uncertainty weighting")
-        print("  exp(-((s-thr)/σ)²) is essentially zero unless the classical")
-        print("  score is within ~0.05 of the threshold. Most cells have")
+        print(f"ROOT CAUSE: With σ={sigma_trained:.3f} (TRAINED_PARAMS fallback — "
+              f"'sigma' absent from")
+        print(f"  best_hyperparams.json, see D-22), the uncertainty weighting")
+        print(f"  exp(-((s-thr)/σ)²) is essentially zero unless the classical")
+        print(f"  score is within ~{2 * sigma_trained:.2f} of the threshold. Most cells have")
         print("  scores far from threshold → ZZ coupling is suppressed →")
         print("  QAOA ≈ classical.")
         print()

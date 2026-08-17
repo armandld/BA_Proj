@@ -53,6 +53,27 @@ from exact_diagonalisation import build_patch_hamiltonian
 from ising_terms_and_annealing import (
     build_ising_terms, spins_to_decisions, _metrics, _build_incidence,
 )
+# D-87 : la boite de recherche a UNE source, celle de la phase 10 qui la fait
+# respecter. Deux copies se separent silencieusement.
+from h2b_train_linear_hamiltonian import THETA_BOUNDS
+
+
+# D-86 : au-dessous de cet ecart max-min, la courbe F1(c_bias) est plate et
+# son `argmax` ne designe rien. Voir le commentaire dans `analyse_snapshots`
+# pour la separation mesuree (0,125 a 0,433 contre exactement 0).
+F1_SPAN_TOL = 1e-12
+
+
+def _thr_outside_box(thr):
+    """Vrai si `thr` sortira de la boite de la phase 10, donc sera rabote.
+
+    D-87 : la boite est LUE chez la phase 10, jamais recopiee ici. La phase
+    10a produit un `x0` pour la phase 10 ; deux copies de la meme boite se
+    separent en silence, et c'est par la que `thr*` sortait de la boite sans
+    que personne ne le voie — `np.clip` ne dit rien.
+    """
+    return bool(thr < float(THETA_BOUNDS[1, 0])
+                or thr > float(THETA_BOUNDS[1, 1]))
 
 
 # -------------------------------------------------------------------
@@ -211,9 +232,53 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
         )
     f1_grid /= len(snap_cache)
 
+    # D-86 : `argmax` sur une courbe PLATE rend l'indice 0 — le bord GAUCHE
+    # de la grille, c'est-a-dire le point le PLUS domine par les couplages,
+    # l'oppose de ce que le balayage cherche. Quand aucun c de la grille ne
+    # sort le champ moyen de l'etat uniforme « ne pas raffiner », F1(c) est
+    # identiquement nul : `c_bias_star = 0.1` s'ecrivait alors dans
+    # l'artefact, indiscernable d'un optimum mesure, et la phase 10 le lisait
+    # comme `theta_init = (log10 0.1, thr*)`. Meme forme que D-56, un cran
+    # plus bas : la campagne trouvait bien ses entrees, c'est le balayage
+    # lui-meme qui ne mesurait rien.
+    #
+    # Mesure (N=96, dim=4, 8 instantanes, graine 0) : `|h_unit| max` =
+    # 1,91e-02 contre `|C| max` = 7,80 sur harris_tearing Re=400 — a c = 100,
+    # borne haute de la grille, le biais plafonne a 1,91 et ne renverse aucun
+    # site. 14 balayages plats sur 52 configurations parcourues : 0/16 a
+    # dim=2, 5/16 a dim=4 (N=96), 8/16 a dim=8, 1/4 a dim=4 (N=256).
+    #
+    # Le critere est la PLATITUDE, pas la nullite : c'est elle qui rend
+    # l'argmax arbitraire. La separation mesuree ne laisse aucune zone grise
+    # — les 38 balayages informatifs ont un ecart max-min de 0,125 a 0,433,
+    # les 14 degeneres un ecart exactement nul.
+    f1_span = float(f1_grid.max() - f1_grid.min())
+    degenerate = bool(f1_span <= F1_SPAN_TOL)
+
     bi = int(np.argmax(f1_grid))
     c_star = float(c_grid[bi])
     f1_mf  = float(f1_grid[bi])
+
+    # D-87 : D-86 traite la courbe PLATE. Restent les courbes informatives
+    # dont l'argmax tombe sur un BORD de la grille : la grille s'arrete la,
+    # donc l'optimum reel peut etre au-dela, et rien ne le disait. Mesure
+    # (`--dim 4 --N 256 --max-snaps 8 --seed 0`, Re=400) : `kelvin_helmholtz`
+    # et `mhd_rotor` rendent c* = 100,0 — le bord DROIT — avec des ecarts
+    # max-min de 0,224 et 0,433, donc informatifs et laisses passer par D-86.
+    # Mesure de ce qu'il y a au-dela : le plus petit c qui fait basculer un
+    # seul spin vaut 1,6e4 et 5,0e4, deux ordres au-dela du bord. La phase 10
+    # porte `hits_bound()` pour exactement cette pathologie ; la phase 10a
+    # n'avait pas d'equivalent.
+    at_left_edge = bool(bi == 0)
+    at_right_edge = bool(bi == f1_grid.size - 1)
+
+    # D-87 : thr* est cherche sur une grille qui melange
+    # `linspace(0.02, 0.60, 59)` — exactement la boite de la phase 10 — et les
+    # quantiles du score, qui en sortent. Mesure, meme configuration :
+    # thr* = 0,6777 (harris_tearing) et 0,6908 (kelvin_helmholtz) contre une
+    # borne haute de 0,60. La phase 10 les rabotait sur la borne, et `np.clip`
+    # ne dit rien. La valeur n'est pas touchee ici : le fait est rendu.
+    thr_outside_box = _thr_outside_box(thr_star)
 
     return dict(
         scenario=scenario, Re=Re, dim=dim, N=N,
@@ -221,6 +286,69 @@ def analyse_snapshots(dns_path, patches_path, dim, *,
         f1_mf=f1_mf, classical_f1=f1_class,
         f1_grid=f1_grid, c_grid=np.array(c_grid),
         snap_indices=np.array(snap_indices),
+        f1_span=f1_span, degenerate=degenerate,
+        at_left_edge=at_left_edge, at_right_edge=at_right_edge,
+        thr_outside_box=thr_outside_box,
+    )
+
+
+# -------------------------------------------------------------------
+# Aggregation (D-86)
+# -------------------------------------------------------------------
+
+def mean_over_informative(rows, key):
+    """Moyenne de `key` sur les seules lignes NON degenerees ; NaN si aucune.
+
+    D-86 : extrait de `main()` pour etre testable sans rejouer la campagne
+    (meme geste que D-46/D-50/D-52/D-85). Une ligne degeneree n'a pas mesure
+    de `c_bias*` — l'agreger avec celles qui en ont un tire la moyenne vers
+    le bord gauche de la grille. Mesure sur mhd_rotor (N=96, dim=4), c* par
+    Re = [74,99 ; 100 ; 100 ; 0,10] dont la derniere est degeneree : la
+    moyenne passe de 68,77 a 91,66, soit +0,125 decade la ou la phase 10
+    lit ce nombre (elle en prend le log10).
+
+    NaN plutot qu'un repli : un scenario dont tous les Re sont degeneres
+    n'a pas de `c_bias*`, et 0,1000 est un nombre fini, plausible, qui ne
+    mesure rien — exactement ce que D-86 corrige.
+    """
+    vals = [r[key] for r in rows if not r["degenerate"]]
+    return float(np.mean(vals)) if vals else float("nan")
+
+
+# -------------------------------------------------------------------
+# Drapeaux de bord (D-87)
+# -------------------------------------------------------------------
+
+def _edge_flags(row):
+    """Les drapeaux D-87 d'une ligne, en clair sur la ligne imprimee."""
+    agg = "f1_span" not in row       # une ligne agregee n'a pas de courbe
+    suffix = "-COMPOSANTE" if agg else ""
+    f = []
+    if row.get("at_left_edge"):
+        f.append(f"BORD-GAUCHE{suffix}")
+    if row.get("at_right_edge"):
+        f.append(f"BORD-DROIT{suffix}")
+    # Seul drapeau calcule sur la valeur PROPRE de la ligne, agregat compris :
+    # c'est cette valeur-la que la phase 10 rabotera sur sa borne.
+    if row.get("thr_outside_box"):
+        f.append(f"THR-HORS-BOITE({row['thr_star']:.4f} hors "
+                 f"[{THETA_BOUNDS[1, 0]:g}, {THETA_BOUNDS[1, 1]:g}])")
+    return ("   << " + " | ".join(f)) if f else ""
+
+
+def _edge_flags_agg(rows):
+    """Drapeaux D-87 d'une ligne agregee, depuis ses lignes informatives.
+
+    Les degeneres sont exclus comme ils le sont de la moyenne (D-86) : leur
+    argmax est au bord gauche par construction, le compter ici allumerait
+    `at_left_edge` sur tous les agregats et le drapeau ne dirait plus rien.
+    """
+    live = [r for r in rows if not r["degenerate"]]
+    return dict(
+        at_left_edge=bool(any(r["at_left_edge"] for r in live)),
+        at_right_edge=bool(any(r["at_right_edge"] for r in live)),
+        thr_outside_box=_thr_outside_box(
+            mean_over_informative(rows, "thr_star")),
     )
 
 
@@ -272,11 +400,40 @@ def main():
             print(f"  [{sc} Re={re}] thr*={res['thr_star']:.3f} "
                   f"c_bias*={res['c_bias_star']:.2f}  "
                   f"F1_MF={res['f1_mf']:.3f}  "
-                  f"classical={res['classical_f1']:.3f}   [{dt:.1f}s]")
+                  f"classical={res['classical_f1']:.3f}   [{dt:.1f}s]"
+                  + ("   DEGENERE : F1(c) plat, c_bias* n'est que le bord "
+                     "gauche de la grille (D-86)" if res["degenerate"] else "")
+                  + _edge_flags(res))
 
     if not per_cfg:
-        print("no input.")
-        return
+        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
+        # la campagne precedente. Une campagne qui n'avait rien mesure etait
+        # indiscernable d'une campagne reussie. Onze autres modules de
+        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        raise RuntimeError(
+            "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
+            "arguments donnes. Le script sortait ici avec le code 0 et sans "
+            "artefact, donc sans se distinguer d'une campagne reussie.")
+
+    # D-86 : un balayage degenere n'a pas mesure de c_bias*. L'agreger avec
+    # ceux qui en ont un tire la moyenne vers le bord gauche de la grille —
+    # sur mhd_rotor (N=96, dim=4), c* par Re valait [74,99 ; 100 ; 100 ; 0,10]
+    # dont le dernier est degenere : moyenne 68,77 contre 91,66 sur les trois
+    # mesures reelles. Les degeneres sortent donc de l'agregation, et une
+    # ligne dont TOUTES les entrees sont degenerees ne rend pas un nombre
+    # invente : elle rend NaN et se declare telle.
+    n_degen = sum(r["degenerate"] for r in per_cfg)
+    if n_degen == len(per_cfg):
+        # Meme regle que D-56, un cran plus bas : la campagne a bien trouve
+        # ses entrees, mais aucun balayage n'a rien mesure. Sans ce garde
+        # l'artefact s'ecrivait quand meme, avec `c_bias*` = bord gauche
+        # partout, indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            f"balayage vide : les {len(per_cfg)} configurations ont toutes "
+            "une courbe F1(c_bias) plate — aucun c_bias* n'a ete mesure. "
+            "Le champ moyen reste dans l'etat uniforme sur toute la grille "
+            "c_bias ; elargir --n-cgrid ou sa borne haute, ou reduire --dim.")
 
     # ---- per-scenario aggregation ----
     by_scene = {}
@@ -284,27 +441,49 @@ def main():
         by_scene.setdefault(r["scenario"], []).append(r)
 
     scenario_rows = []
-    print("\n  per-scenario (mean over Re):")
+    print("\n  per-scenario (mean over Re, degenerate rows excluded):")
     for sc, rows in by_scene.items():
-        thr = float(np.mean([r["thr_star"] for r in rows]))
-        c   = float(np.mean([r["c_bias_star"] for r in rows]))
-        f1m = float(np.mean([r["f1_mf"] for r in rows]))
-        f1c = float(np.mean([r["classical_f1"] for r in rows]))
-        scenario_rows.append(dict(
-            tag=f"scenario:{sc}", thr_star=thr, c_bias_star=c,
-            f1_mf=f1m, classical_f1=f1c))
-        print(f"    {sc:<18} thr*={thr:.3f}  c_bias*={c:.2f}  "
-              f"F1_MF={f1m:.3f}  classical={f1c:.3f}")
+        n_d = sum(r["degenerate"] for r in rows)
+        row = dict(
+            tag=f"scenario:{sc}",
+            thr_star=mean_over_informative(rows, "thr_star"),
+            c_bias_star=mean_over_informative(rows, "c_bias_star"),
+            f1_mf=mean_over_informative(rows, "f1_mf"),
+            classical_f1=mean_over_informative(rows, "classical_f1"),
+            degenerate=(n_d == len(rows)),
+            # D-87 : un drapeau de bord remonte des qu'UNE des lignes
+            # informatives moyennees etait au bord ; `thr_outside_box` se
+            # calcule au contraire sur la valeur PROPRE de l'agregat, parce
+            # que c'est celle-la que la phase 10 rabotera.
+            **_edge_flags_agg(rows),
+        )
+        scenario_rows.append(row)
+        print(f"    {sc:<18} thr*={row['thr_star']:.3f}  "
+              f"c_bias*={row['c_bias_star']:.2f}  "
+              f"F1_MF={row['f1_mf']:.3f}  "
+              f"classical={row['classical_f1']:.3f}"
+              + (f"   ({n_d}/{len(rows)} degeneres exclus)" if n_d else "")
+              + ("   DEGENERE : aucun balayage informatif (D-86)"
+                 if row["degenerate"] else "")
+              + _edge_flags(row))
 
     # ---- joint (mean over everything) ----
-    thr_j = float(np.mean([r["thr_star"]    for r in per_cfg]))
-    c_j   = float(np.mean([r["c_bias_star"] for r in per_cfg]))
-    f1mj  = float(np.mean([r["f1_mf"]       for r in per_cfg]))
-    f1cj  = float(np.mean([r["classical_f1"] for r in per_cfg]))
-    joint_row = dict(tag="joint", thr_star=thr_j, c_bias_star=c_j,
-                     f1_mf=f1mj, classical_f1=f1cj)
-    print(f"\n  joint  thr*={thr_j:.3f}  c_bias*={c_j:.2f}  "
-          f"F1_MF={f1mj:.3f}  classical={f1cj:.3f}")
+    joint_row = dict(
+        tag="joint",
+        thr_star=mean_over_informative(per_cfg, "thr_star"),
+        c_bias_star=mean_over_informative(per_cfg, "c_bias_star"),
+        f1_mf=mean_over_informative(per_cfg, "f1_mf"),
+        classical_f1=mean_over_informative(per_cfg, "classical_f1"),
+        degenerate=False,          # garde ci-dessus : au moins un informatif
+        **_edge_flags_agg(per_cfg),
+    )
+    print(f"\n  joint  thr*={joint_row['thr_star']:.3f}  "
+          f"c_bias*={joint_row['c_bias_star']:.2f}  "
+          f"F1_MF={joint_row['f1_mf']:.3f}  "
+          f"classical={joint_row['classical_f1']:.3f}"
+          + (f"   ({n_degen}/{len(per_cfg)} degeneres exclus)"
+             if n_degen else "")
+          + _edge_flags(joint_row))
 
     # ---- per-config (for reference) ----
     cfg_rows = []
@@ -313,6 +492,10 @@ def main():
             tag=f"cfg:{r['scenario']}_Re{r['Re']}",
             thr_star=r["thr_star"], c_bias_star=r["c_bias_star"],
             f1_mf=r["f1_mf"], classical_f1=r["classical_f1"],
+            degenerate=r["degenerate"], f1_span=r["f1_span"],
+            at_left_edge=r["at_left_edge"],
+            at_right_edge=r["at_right_edge"],
+            thr_outside_box=r["thr_outside_box"],
         ))
 
     # ---- save ----
@@ -326,6 +509,22 @@ def main():
         c_bias_star=np.array([r["c_bias_star"] for r in all_rows]),
         f1_mf=np.array([r["f1_mf"]       for r in all_rows]),
         classical_f1=np.array([r["classical_f1"] for r in all_rows]),
+        # D-86 : le drapeau voyage AVEC les nombres. Sans lui, un
+        # `c_bias_star` de bord de grille est indiscernable d'un optimum
+        # pour tout consommateur de l'artefact.
+        degenerate=np.array([bool(r["degenerate"]) for r in all_rows]),
+        f1_span=np.array([float(r.get("f1_span", np.nan)) for r in all_rows]),
+        # D-87 : meme regle que la colonne `degenerate` ci-dessus. Un
+        # `c_bias_star` pose sur le bord de la grille, et un `thr_star` que la
+        # phase 10 rabotera sur sa borne, sont indiscernables d'un optimum
+        # interieur pour tout consommateur de l'artefact. La boite est jointe :
+        # un artefact relu plus tard doit pouvoir dire contre quoi le test a
+        # ete fait.
+        at_left_edge=np.array([bool(r["at_left_edge"]) for r in all_rows]),
+        at_right_edge=np.array([bool(r["at_right_edge"]) for r in all_rows]),
+        thr_outside_box=np.array(
+            [bool(r["thr_outside_box"]) for r in all_rows]),
+        theta_bounds=np.asarray(THETA_BOUNDS, dtype=float),
         c_grid=c_grid,
     )
     print(f"\n  saved: {os.path.basename(out)}")

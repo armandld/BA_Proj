@@ -36,7 +36,7 @@ exactement zero changement dans les deux bras.
 
 Sortie : results/t18_window_counterfactual_N{N}_dim{D}.npz
 Usage :
-  python study/v4/t18_window_counterfactual.py --N 256 --dim 2 --n-snaps 2
+  python study/h3_representation/h3_window_counterfactual.py --N 256 --dim 2 --n-snaps 2
 """
 import argparse, json, os, sys, time
 

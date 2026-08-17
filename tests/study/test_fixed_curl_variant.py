@@ -178,8 +178,66 @@ def test_the_stress_flux_really_is_curl_free(snapshot):
     assert set(phi) >= {"phi_horizontal", "phi_vertical"}
 
 
+def test_the_flag_reaches_the_mapper_not_just_the_file_name(monkeypatch):
+    """D-130 : la propagation du drapeau mesuree, pas lue dans le source.
+
+    `test_the_panel_exposes_the_flag_and_suffixes_its_artefact` ci-dessous
+    cherche `fixed_curl=args.fixed_curl` dans le source du panel, sous le
+    message « le drapeau doit atteindre solver_panel, sinon il ne fait que
+    renommer le fichier de sortie ». Son objet est un COMPORTEMENT — le
+    drapeau doit traverser jusqu'au mappeur — que le texte ne fait
+    qu'indiquer. Mesure par mutation, les deux sens :
+
+    * **A'** — `solver_panel` passe `fixed_curl=False` a
+      `prepare_qaoa_inputs`, les TROIS chaines cherchees intactes : le
+      drapeau ne renomme plus que le fichier de sortie, et le fichier reste
+      **7 passed**. Faux vert, sur le defaut meme que le message annonce.
+    * **B** — reecriture EQUIVALENTE `fixed_curl=bool(args.fixed_curl)` au
+      site d'appel : **ROUGE**. Faux rouge sur un changement voulu.
+
+    L'entree qui SEPARE : espionner `prepare_qaoa_inputs`, la premiere
+    fonction de `solver_panel` a recevoir le drapeau. Un panel qui se
+    contente de suffixer son artefact ne l'y fait jamais parvenir.
+    Le sentinelle interrompt `solver_panel` juste apres, pour ne pas payer
+    la campagne QAOA que ce test n'a pas besoin de mesurer.
+    """
+    import importlib
+
+    import qaoa_inputs
+
+    panel = importlib.import_module("h0_optimiser_equivalence")
+
+    class _Stop(Exception):
+        pass
+
+    seen = {}
+
+    def spy(*a, **kw):
+        seen["fixed_curl"] = kw.get("fixed_curl", "ABSENT")
+        raise _Stop
+
+    monkeypatch.setattr(qaoa_inputs, "prepare_qaoa_inputs", spy)
+
+    z = np.zeros((8, 8))
+    for asked in (True, False):
+        seen.clear()
+        with pytest.raises(_Stop):
+            panel.solver_panel(z, z, z, z, N=8, dim=2, re=400,
+                               l2_errors=np.zeros(4), l2_threshold=0.0,
+                               fixed_curl=asked)
+        assert seen["fixed_curl"] == asked, (
+            f"solver_panel(fixed_curl={asked}) transmet "
+            f"{seen['fixed_curl']!r} au mappeur : le drapeau ne fait que "
+            "renommer le fichier de sortie")
+
+
 def test_the_panel_exposes_the_flag_and_suffixes_its_artefact():
-    """Sans suffixe distinct, les deux variantes s'ecrasent (defaut D9)."""
+    """Sans suffixe distinct, les deux variantes s'ecrasent (defaut D9).
+
+    Ce test lit le SOURCE. Il est garde tel quel — il n'est pas faux — mais
+    il ne mesure PAS la propagation du drapeau : voir D-130 et
+    `test_the_flag_reaches_the_mapper_not_just_the_file_name` ci-dessus.
+    """
     src = open(_PANEL, encoding="utf-8").read()
     assert '"--fixed-curl", action="store_true"' in src
     assert '+ ("_fixedcurl" if args.fixed_curl else "")' in src

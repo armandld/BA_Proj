@@ -283,6 +283,55 @@ def make_labels(dns_path, dims, results_dir, seed):
         print(f"    labels: {os.path.basename(out)}")
 
 
+def div_rel_max_fixed(dns_path):
+    """max|div B| / rms|B| avec l'operateur qui GARANTIT la contrainte.
+
+    D-73, meme famille que D-72. `analyse_one` (fichier GELE) calcule cette
+    grandeur au SPECTRAL, et son commentaire porte la condition qui la
+    justifiait : « should be O(eps_machine) WHEN THE FFT PROJECTION IS
+    APPLIED ». Depuis D-25 elle ne l'est plus pour B : `PROJECT_B = False`,
+    et B est solenoidal AUX DIFFERENCES FINIES par construction (induction
+    en forme rotationnelle, cf. `solver.enforce_incompressibility`).
+
+    Le portail rejetait donc des trajectoires saines. Mesure de bout en bout,
+    DNS reellement generee a HEAD (harris_tearing, Re=400, N=64, seed=0) :
+
+      div_rel_max spectral (avant)   1.6205e-02  -> FAIL contre div_tol=1e-3
+      div_rel_max assorti  (apres)   5.0573e-06  -> OK
+
+    Les artefacts DNS deja dans le depot passent dans les deux cas (mesure
+    sur 8 : 1.4170e-05 a 5.6503e-05) : ils datent d'avant D-25, et ce qu'on y
+    lit est le plancher de stockage float32, pas l'ecart d'operateur.
+
+    DEUX ECARTS AU FICHIER GELE, tous deux volontaires ici :
+
+    1. l'operateur — FD4 de V1 (`_fd_grad`, celui-la meme qui assemble
+       `rhs_B`), au lieu du spectral ;
+    2. le pas d'espace — `analyse_one` passe `dx = 1/N` alors que
+       `PeriodicGrid` pose `L = 2*pi`, donc `dx = 2*pi/N`. Un facteur 6.2832
+       sur toute divergence rapportee. Le gele n'est pas touche ; cette
+       version emploie le `dx` de la grille.
+
+    Le fichier gele reste intact : `dns_extension` est deja l'endroit ou
+    vivent les observables corrigees (`mean_sq_current_fixed`,
+    `fluctuating_ke_fixed`, `check_kh_fixed`), celle-ci les rejoint.
+    """
+    from Simulation.solver import MHDSolver
+
+    d = np.load(dns_path)
+    Bx = d["Bx"].astype(np.float64)
+    By = d["By"].astype(np.float64)
+    N = Bx.shape[1]
+    dx = 2 * np.pi / N                      # celui de PeriodicGrid, cf. (2)
+    worst = 0.0
+    for i in range(Bx.shape[0]):
+        g_Bx_x, _ = MHDSolver._fd_grad(Bx[i], dx)
+        _, g_By_y = MHDSolver._fd_grad(By[i], dx)
+        rms_B = np.sqrt((Bx[i] ** 2 + By[i] ** 2).mean()) + 1e-30
+        worst = max(worst, float(np.abs(g_Bx_x + g_By_y).max() / rms_B))
+    return worst
+
+
 def validate_one(dns_path, scenario, div_tol=1e-3):
     """Checks phase 1b sur UNE trajectoire (fonctions 1b reutilisees).
     Retourne (liste d'echecs, lignes de log)."""
@@ -294,9 +343,14 @@ def validate_one(dns_path, scenario, div_tol=1e-3):
 
     if res["diverged"]:
         fails.append(f"{name}: solver diverged")
-    if res["div_rel_max"] > div_tol:
-        fails.append(f"{name}: divB {res['div_rel_max']:.1e}")
-    log.append(f"div={res['div_rel_max']:.1e}")
+    # D-73 : la decision porte sur l'operateur assorti. La valeur spectrale
+    # du fichier gele reste journalisee a cote, pour que l'ecart entre les
+    # deux reste visible plutot que d'etre silencieusement remplace.
+    div_rel = div_rel_max_fixed(dns_path)
+    if div_rel > div_tol:
+        fails.append(f"{name}: divB {div_rel:.1e}")
+    log.append(f"div={div_rel:.1e} (spectral gele "
+               f"{res['div_rel_max']:.1e})")
 
     mono_ok, max_dE = energy_non_increasing(res["E"])
     log.append(f"E mono={'OK' if mono_ok else f'WARN({max_dE:+.1e})'}")

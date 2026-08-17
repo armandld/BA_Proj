@@ -478,10 +478,28 @@ def test_the_bounded_hamiltonian_prunes_like_the_periodic_one():
 def test_only_the_documented_halo_cells_are_read():
     """Quelles cellules du halo comptent, mesure plutot que suppose.
 
-    `theta_h_full` n'est lu qu'en colonnes 0 et -1 (lignes 1:-1) ;
-    `theta_v_full` qu'en lignes 0 et -1 (colonnes 1:-1). Les quatre coins
-    ne sont JAMAIS lus. Une confusion ligne/colonne ici ferait porter la
-    condition de bord par le mauvais cote du patch.
+    Six cellules comptent, pas quatre. Les quatre premieres portent la
+    contraction de CISAILLEMENT (ZZ -> Z), ou le lien manquant est de la
+    meme famille que le bord traverse :
+
+      `theta_h` colonnes 0 et -1 (lignes 1:-1) — liens H des bords G/D ;
+      `theta_v` lignes 0 et -1 (colonnes 1:-1) — liens V des bords H/B.
+
+    Les deux dernieres portent la contraction de PLAQUETTE, ou le lien
+    manquant est de l'AUTRE famille : le membre Droite d'une plaquette est
+    un lien V (donc `theta_v` colonne -1), le membre Bas est un lien H
+    (donc `theta_h` ligne -1).
+
+    Enonce PERIME, remesure par D-113 : ce docstring affirmait que
+    `theta_h_full` n'etait lu qu'en colonnes 0/-1 et `theta_v_full` qu'en
+    lignes 0/-1. C'etait vrai du code, et c'etait le defaut : les deux
+    familles etaient echangees dans la contraction de plaquette. Les deux
+    cellules ajoutees ici sont celles que la correction fait lire.
+
+    Les quatre coins ne sont toujours JAMAIS lus. Une confusion
+    ligne/colonne ici ferait porter la condition de bord par le mauvais
+    cote du patch ; une confusion de famille lui ferait lire le mauvais
+    qubit — c'est D-113.
     """
     dim = 2
     m = dim + 2
@@ -500,6 +518,9 @@ def test_only_the_documented_halo_cells_are_read():
             ("theta_h colonne -1", lambda: (_hot(m, (slice(1, -1), -1)), zero)),
             ("theta_v ligne 0", lambda: (zero, _hot(m, (0, slice(1, -1))))),
             ("theta_v ligne -1", lambda: (zero, _hot(m, (-1, slice(1, -1))))),
+            #  D-113 : les deux cellules de la contraction de plaquette
+            ("theta_v colonne -1", lambda: (zero, _hot(m, (slice(1, -1), -1)))),
+            ("theta_h ligne -1", lambda: (_hot(m, (-1, slice(1, -1))), zero)),
     ):
         th, tv = build()
         assert coeffs(th, tv) != base, f"{name} est ignoree"

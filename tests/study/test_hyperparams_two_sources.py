@@ -241,6 +241,81 @@ def test_the_closed_loop_covers_every_key_the_pipeline_reads():
         "l'etude")
 
 
+def test_the_frozen_defaults_and_the_threshold_come_from_one_definition():
+    """D-131 : la definition unique mesuree, pas lue dans le texte du source.
+
+    `test_the_closed_loop_covers_every_key_the_pipeline_reads` ci-dessus
+    cherche deux lignes dans le source de `closed_loop_campaign.py` :
+    `FROZEN_DEFAULTS = dict(gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0)` et
+    `best.setdefault("threshold_amr", T.CLASSICAL_BEST_THRESHOLD)`. La
+    seconde garde un COMPORTEMENT, que son propre commentaire enonce : « une
+    constante recopiee finit toujours par diverger de son original ». Mesure
+    par mutation, les deux sens :
+
+    * **A'** — le `setdefault` reecrit sur le litteral `0.14959824837662078`,
+      la ligne cherchee laissee EN CODE MORT sous `if False:` : le seuil
+      redevient une copie, et le fichier reste **12 passed**. Faux vert,
+      sur la divergence meme que le commentaire annonce empecher.
+    * **B** — `FROZEN_DEFAULTS` reecrit en litteral EQUIVALENT
+      `{"gamma_hydro": 2.0, ...}`, dict identique : **ROUGE**. Faux rouge.
+
+    L'entree qui SEPARE : `train_params_excluding` recoit `T` en ARGUMENT.
+    On lui passe donc un faux `T` dont `CLASSICAL_BEST_THRESHOLD` porte une
+    valeur sentinelle qui n'existe nulle part dans le depot. Un seuil
+    recopie rendrait 0.1495982..., pas la sentinelle.
+    """
+    from closed_loop_campaign import FROZEN_DEFAULTS, train_params_excluding
+
+    #  La valeur, pas son ecriture : robuste a une reecriture equivalente.
+    assert FROZEN_DEFAULTS == {"gamma_hydro": 2.0, "gamma_mag": 0.5,
+                               "kappa": 10.0}
+
+    SENTINEL = 0.4242424242424242
+
+    class _FakeT:
+        LAMBDA_COST_SOFT = 0.0
+        CLASSICAL_BEST_THRESHOLD = SENTINEL
+
+        def __init__(self, tune_threshold):
+            self._tune = tune_threshold
+            self.seen_frozen = None
+
+        def make_composite_objective(self, dns_traces, train_list,
+                                     frozen_params=None, lambda_cost=None):
+            self.seen_frozen = frozen_params
+
+            def obj(trial):
+                x = trial.suggest_float("beta", 0.0, 1.0)
+                if self._tune:
+                    trial.suggest_float("threshold_amr", 0.8, 0.9)
+                return x
+
+            return obj
+
+    #  (a) l'objectif ne regle PAS le seuil : il doit venir de T.
+    T_fake = _FakeT(tune_threshold=False)
+    best, _val, _n = train_params_excluding(
+        T_fake, dns_traces=None, train_list=None, n_trials=1, seed=0)
+    assert best["threshold_amr"] == SENTINEL, (
+        f"le seuil rendu est {best['threshold_amr']!r} et non la sentinelle "
+        "de T : la campagne travaille sur une constante RECOPIEE, qui "
+        "divergera de son original")
+    #  Les geles traversent aussi, et par valeur.
+    for k, v in FROZEN_DEFAULTS.items():
+        assert best[k] == v
+    assert T_fake.seen_frozen == FROZEN_DEFAULTS
+
+    #  (b) `setdefault`, pas `update` : un seuil REGLE ne doit pas etre
+    #  ecrase par celui de T -- sinon la campagne jetterait son propre
+    #  reglage sans rien dire.
+    T_tuned = _FakeT(tune_threshold=True)
+    best2, _v2, _n2 = train_params_excluding(
+        T_tuned, dns_traces=None, train_list=None, n_trials=1, seed=0)
+    assert best2["threshold_amr"] != SENTINEL, (
+        "le seuil regle par l'essai a ete ecrase par celui de T")
+    assert 0.8 <= best2["threshold_amr"] <= 0.9
+
+
 def test_the_pipeline_still_merges_the_json_underneath():
     """Le piege existe toujours : on le documente au lieu de l'oublier."""
     src = open(_PIPELINE, encoding="utf-8").read()

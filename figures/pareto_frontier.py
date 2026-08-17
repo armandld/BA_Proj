@@ -14,9 +14,20 @@ Palette : slots categoriels 1 et 2 de la palette de reference
 bande de luminosite, plancher de chroma, separation CVD dE 24.7,
 vision normale dE 33.6, contraste >= 3:1).
 
+D-92 : `main()` prend desormais le point Q-HAS moyenne sur les tirages
+repetes de T20 (repli sur le tirage unique de t15b, annonce comme tel) et
+retire de la frontiere les points issus d'une trace avortee (audit T19) --
+exactement les deux corrections que `pareto_panel.py` applique deja pour la
+planche V4, mais que ce script, execute seul, ne faisait jamais : lance sans
+elles, il reproduisait les rapports RETRACTES que `docs/RESULTS.md`
+documente ("Figure updated"). Le CSV porte aussi le denominateur MESURE par
+t15b (`matched_classical`), a cote de celui interpole sur la trace : les
+deux repondent a des questions differentes, voir `pareto_panel.py` pour le
+detail de pourquoi ils different.
+
 Sortie : results/figures/pareto_frontier_{fold}.pdf et .png (+ .csv des points)
 Usage :
-  python study/v4/make_pareto_figure.py --fold ot
+  python figures/pareto_frontier.py --fold ot
 """
 import argparse, json, os, sys
 
@@ -66,6 +77,62 @@ def interp_frontier(front, patch):
     return float(np.interp(patch, xs, ys))
 
 
+def verified_qhas_point(results_dir, fold):
+    """Point Q-HAS a partir des tirages REPETES de T20, ou None.
+
+    D-92 : deplacee ici depuis `pareto_panel.py`, qui l'appelait deja pour
+    corriger exactement le defaut que cette fonction meme decrit --
+    `main()`, plus bas dans CE fichier, ne l'appelait pas. Une seule
+    definition desormais ; `pareto_panel` l'importe d'ici.
+
+    `t15b["qhas"]` est UN tirage unique d'un bras non deterministe (D11).
+    On prend donc la moyenne des tirages ACHEVES (les avortes ne sont pas
+    des points de mesure) et on rend aussi leur dispersion.
+    """
+    p = os.path.join(results_dir, f"t20_qhas_run_variance_{fold}.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p))
+    ok = [r for r in d.get("qhas_runs", []) if r.get("completed")]
+    if len(ok) < 2:
+        return None
+    ph = np.array([r["phys_score"] for r in ok], dtype=float)
+    pa = np.array([r["patch_ratio"] for r in ok], dtype=float)
+    return {"patch": float(pa.mean()), "phys": float(ph.mean()),
+            "patch_sd": float(pa.std(ddof=1)),
+            "phys_sd": float(ph.std(ddof=1)),
+            "n": len(ok), "n_aborted": len(d.get("qhas_runs", [])) - len(ok)}
+
+
+def load_trace_audit(results_dir):
+    """Points de bissection dont la trajectoire a AVORTE, par fold.
+
+    D-92 : deplacee ici depuis `pareto_panel.py`, meme raison que
+    `verified_qhas_point` ci-dessus.
+    """
+    p = os.path.join(results_dir, "t19_budget_trace_audit.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p))
+    return {t["fold"]: [pt["threshold"] for pt in t["points"]
+                        if not pt["completed"]]
+            for t in d.get("traces", [])}
+
+
+def drop_aborted(front, aborted_thresholds, tol=1e-9):
+    """Retire de la frontiere les points marques avortes par l'audit.
+
+    D-92 : deplacee ici depuis `pareto_panel.py`, meme raison que
+    `verified_qhas_point` ci-dessus.
+    """
+    if not aborted_thresholds:
+        return front, 0
+    keep = [r for r in front
+            if not any(abs(r.get("thr", float("nan")) - t) < tol
+                       for t in aborted_thresholds)]
+    return keep, len(front) - len(keep)
+
+
 def build_figure(front, q, tuned, fold, out_dir):
     import matplotlib
     matplotlib.use("Agg")
@@ -104,9 +171,20 @@ def build_figure(front, q, tuned, fold, out_dir):
                 color=INK_SECONDARY, fontsize=9, va="center")
 
     # --- serie 2 : Q-HAS (sujet) -------------------------------------
+    # D-92 : barres d'erreur quand `q` vient de `verified_qhas_point` (bras
+    # non deterministe, D11) — sans elles la figure affirme une precision
+    # qu'un tirage unique n'a pas, exactement ce que D-92 corrige.
+    if q.get("n"):
+        ax.errorbar([q["patch"]], [q["phys"]],
+                    xerr=[q.get("patch_sd", 0.0)],
+                    yerr=[q.get("phys_sd", 0.0)],
+                    fmt="none", ecolor=C_QHAS, elinewidth=1.4,
+                    capsize=4, capthick=1.4, zorder=4.5, alpha=0.85)
     ax.plot([q["patch"]], [q["phys"]], "D", color=C_QHAS, markersize=10,
             markeredgecolor=SURFACE, markeredgewidth=2.0, zorder=5,
-            label="Q-HAS (closed loop, held-out class)")
+            label=("Q-HAS (closed loop, held-out class): mean of "
+                   f"{q['n']} runs ± sd" if q.get("n")
+                   else "Q-HAS (closed loop, held-out class): single run"))
 
     # --- etiquettes directes sur les deux points compares ------------
     ax.annotate("Q-HAS", xy=(q["patch"], q["phys"]),
@@ -168,10 +246,47 @@ def main():
     args = p.parse_args()
 
     front, q, tuned, d = load_points(RESULTS_DIR, args.fold)
+
+    # D-92 : deux corrections que `pareto_panel.py` applique deja (elle
+    # importe `interp_frontier`/`load_points` d'ici, mais portait sa propre
+    # copie de ces deux etapes) et que ce script, execute seul, ne faisait
+    # jamais. Sans elles, `main()` reproduit les rapports RETRACTES —
+    # 2,57x / 4,41x / 3,62x / 4,38x sur ot/kh/rotor/tearing — que
+    # `docs/RESULTS.md` documente deja comme retires (voir "Figure
+    # updated" : un tirage unique d'un bras non deterministe, gonfle de
+    # 1,1 a 2,2x contre la moyenne sur 5 tirages, et une frontiere qui
+    # pouvait inclure un point issu d'une trace avortee).
+    audit = load_trace_audit(RESULTS_DIR)
+    if audit is None:
+        print("  WARNING: no t19 trace audit; frontier may include points "
+              "from aborted runs")
+    else:
+        front, n_drop = drop_aborted(front, audit.get(args.fold, []))
+        if n_drop:
+            print(f"  dropped {n_drop} frontier point(s) from aborted runs "
+                  f"(t19 audit)")
+
+    qv = verified_qhas_point(RESULTS_DIR, args.fold)
+    if qv is not None:
+        print(f"  Q-HAS point = mean of {qv['n']} completed runs"
+              + (f" ({qv['n_aborted']} aborted, excluded)"
+                 if qv["n_aborted"] else ""))
+        q = qv
+    else:
+        print("  Q-HAS point = SINGLE t15b draw (no repeated runs "
+              "available) — the ratio below is one draw of a "
+              "non-deterministic arm")
+
     base, q_ref = build_figure(front, q, tuned, args.fold, args.out_dir)
 
     # table de donnees accompagnant la figure (accessibilite : la figure
-    # n'est jamais le seul acces aux nombres)
+    # n'est jamais le seul acces aux nombres). D-92 : ajoute la ligne
+    # `matched_classical` — le denominateur MESURE par t15b, different de
+    # celui qu'annote la figure (interpole sur la trace). Les deux sont
+    # justes, ils ne repondent pas a la meme question ; ecrire les deux
+    # evite qu'un lecteur ait a deviner lequel il regarde (meme principe
+    # que la colonne `ratio_vs_matched` de `pareto_panel.csv`).
+    mc = d["matched_classical"]
     csv = base + ".csv"
     with open(csv, "w") as fh:
         fh.write("series,threshold,patch_ratio,phys_score\n")
@@ -179,11 +294,17 @@ def main():
             fh.write(f"classical,{r['thr']:.6f},{r['patch']:.6f},"
                      f"{r['phys']:.6f}\n")
         fh.write(f"qhas,,{q['patch']:.6f},{q['phys']:.6f}\n")
+        fh.write(f"matched_classical,{mc['threshold']:.6f},"
+                 f"{mc['patch_ratio']:.6f},{mc['phys_score']:.6f}\n")
 
+    ratio_vs_matched = q["phys"] / mc["phys_score"]
     print(f"  frontier points: {len(front)}")
     print(f"  Q-HAS           : patch={q['patch']:.4f} phys={q['phys']:.4f}")
     print(f"  frontier at that budget (interpolated): {q_ref:.4f}")
-    print(f"  ratio Q-HAS / frontier = {q['phys'] / q_ref:.2f}x worse")
+    print(f"  ratio Q-HAS / frontier (interpolated)  = "
+          f"{q['phys'] / q_ref:.2f}x worse")
+    print(f"  ratio Q-HAS / matched_classical (t15b) = "
+          f"{ratio_vs_matched:.2f}x worse")
     print(f"  saved: {os.path.basename(base)}.pdf/.png/.csv")
 
 

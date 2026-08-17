@@ -102,6 +102,20 @@ def _block_avg(f, patch_size, dim):
     return f.reshape(dim, patch_size, dim, patch_size).mean(axis=(1, 3))
 
 
+def _block_max(f, patch_size, dim):
+    """D-84 : la reduction que la colonne V2 emprunte, appliquee au score V1.
+
+    `Sv2c` sort de `build_patch_hamiltonian`, qui fait `block_max` du score
+    fin ; `Sv1c` faisait `block_avg` du sien. Les deux scores fins sortent
+    pourtant de la MEME fonction, `AngleMapper.classical_score` — la seule
+    autre difference etant l'operateur Jz (avant non divise ici, centre
+    divise par 2dx la-bas), mesure sans effet. L'ecart entre les deux
+    colonnes n'est donc pas un ecart de physique : c'est la reduction.
+    Cette fonction donne la colonne de controle a reduction egale.
+    """
+    return f.reshape(dim, patch_size, dim, patch_size).max(axis=(1, 3))
+
+
 def jz_from_b(Bx, By):
     """Jz = dBy/dx - dBx/dy (curl B, z-component, periodic).
 
@@ -176,11 +190,12 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
         Y    : list of (n_cells,)     L2-hard label
         Sv2c : list of (n_cells,)     V2 classical multi-indicator
         Sv1c : list of (n_cells,)     V1 classical_score (4-indicator + Lohner)
+        Sv1cM: list of (n_cells,)     le meme, reduit par block_max (D-84)
         Sv1f : list of (n_cells,)     V1 classical + psi (temporal)
     Kept as per-snapshot lists so phase 11E can bootstrap at the
     snapshot level (cells within a snapshot are spatially correlated).
     """
-    Xf, Y, Sv2c, Sv1c, Sv1f = [], [], [], [], []
+    Xf, Y, Sv2c, Sv1c, Sv1cM, Sv1f = [], [], [], [], [], []
     for re, dns_path, patches_path in scen_configs:
         dns = np.load(dns_path)
         patches = np.load(patches_path)
@@ -205,6 +220,8 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
             s1c_full = v1_classical_score(vx, vy, Bx, By)
             s1c = _block_avg(s1c_full, ps, dim)
             Sv1c.append(s1c.ravel())
+            # D-84 : le meme score fin sous la reduction de la colonne V2
+            Sv1cM.append(_block_max(s1c_full, ps, dim).ravel())
 
             # V1 full input-side (classical + psi)
             if k == 0:
@@ -218,7 +235,7 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
             s1f = _block_avg(s1f_full, ps, dim)
             Sv1f.append(s1f.ravel())
 
-    return dict(Xf=Xf, Y=Y, Sv2c=Sv2c, Sv1c=Sv1c, Sv1f=Sv1f)
+    return dict(Xf=Xf, Y=Y, Sv2c=Sv2c, Sv1c=Sv1c, Sv1cM=Sv1cM, Sv1f=Sv1f)
 
 
 def snap_f1(Y_list, P_list, thr):
@@ -283,8 +300,14 @@ def main():
         if rows:
             by_sc[sc] = rows
     if len(by_sc) < 2:
-        print(f"need >=2 scenarios with data; have {list(by_sc.keys())}")
-        return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
+            f"d'entree, {len(by_sc)} trouve(s) ({sorted(by_sc)}). Le script "
+            "sortait ici avec le code 0 et sans artefact (D-75).")
 
     # gather per-snapshot (needed for snapshot-level bootstrap)
     t0 = time.time()
@@ -315,12 +338,14 @@ def main():
                 [x for s in by_sc if s != held for x in data[s][key]])
         Ytr    = cat("Y")
         Sv2c_tr = cat("Sv2c"); Sv1c_tr = cat("Sv1c"); Sv1f_tr = cat("Sv1f")
+        Sv1cM_tr = cat("Sv1cM")                      # D-84
 
         # val pool stays per-snapshot for bootstrap
         Y_v    = data[held]["Y"]
         Sv2c_v = data[held]["Sv2c"]
         Sv1c_v = data[held]["Sv1c"]
         Sv1f_v = data[held]["Sv1f"]
+        Sv1cM_v = data[held]["Sv1cM"]                # D-84
 
         # threshold-fit each score on TRAIN
         thr_v2c, _ = best_threshold_f1(Sv2c_tr, Ytr)
@@ -331,8 +356,14 @@ def main():
             Sv1f_tr, Ytr,
             grid=np.linspace(Sv1f_tr.min(), Sv1f_tr.max(), 201))
 
+        # D-84 : colonne de controle — le score V1, reduit comme celui de V2
+        thr_v1cM, _ = best_threshold_f1(
+            Sv1cM_tr, Ytr,
+            grid=np.linspace(Sv1cM_tr.min(), Sv1cM_tr.max(), 201))
+
         # point-estimate F1 on the held-out scenario
         f1_v2c = snap_f1(Y_v, Sv2c_v, thr_v2c)
+        f1_v1cM = snap_f1(Y_v, Sv1cM_v, thr_v1cM)    # D-84
         f1_v1c = snap_f1(Y_v, Sv1c_v, thr_v1c)
         f1_v1f = snap_f1(Y_v, Sv1f_v, thr_v1f)
         delta = f1_v1f - f1_v2c
@@ -344,6 +375,7 @@ def main():
         rows_out.append(dict(
             held=held, n_val_snaps=len(Y_v),
             f1_v2_class=f1_v2c, f1_v1_class=f1_v1c,
+            f1_v1_class_maxpool=f1_v1cM,             # D-84
             f1_v1_psi=f1_v1f, delta=delta,
             delta_ci=(d_lo, d_hi), p_v1psi_ge_v2c=p_H0,
             thr_v2c=thr_v2c, thr_v1c=thr_v1c, thr_v1f=thr_v1f,
@@ -375,9 +407,24 @@ def main():
         [r["f1_v1_psi"] - r["f1_v1_class"] for r in rows_out]))
     v1c_minus_v2c = float(np.mean(
         [r["f1_v1_class"] - r["f1_v2_class"] for r in rows_out]))
+    # D-84 : cette decomposition attribuait `V1_class - V2_class` a un effet
+    # de PHYSIQUE (« Lohner + 4-indicator RMS »). Les deux colonnes sortent
+    # de la MEME fonction, `AngleMapper.classical_score` : Sv2c est son score
+    # fin reduit par block_max (via build_patch_hamiltonian), Sv1c le meme
+    # score fin reduit par block_avg. A REDUCTION EGALE l'ecart s'annule.
+    # Mesure (dim=4, N=256, max-snaps=30, Re=400, memes seuils, meme grille
+    # pour les quatre colonnes) : ecart publie +0,148 ; les deux en max
+    # +0,050 ; les deux en moyenne -0,001 ; la reduction seule +0,149.
+    # La colonne de controle ci-dessous rend l'ecart a reduction egale.
+    v1cM_minus_v2c = float(np.mean(
+        [r["f1_v1_class_maxpool"] - r["f1_v2_class"] for r in rows_out]))
     print(f"  * decomposition of the +{mean_delta:.3f} mean:")
     print(f"      V1_class - V2_class  = {v1c_minus_v2c:+.3f}  "
-          f"(Lohner + 4-indicator RMS effect)")
+          f"(D-84 : PAS un effet de physique — les deux colonnes sortent de "
+          f"la meme fonction ; c'est la reduction, block_avg contre block_max)")
+    print(f"      a reduction egale    = {v1cM_minus_v2c:+.3f}  "
+          f"(V1_class reduit par block_max, comme V2_class : ce qui reste "
+          f"apres retrait de l'effet de reduction)")
     print(f"      V1+psi   - V1_class  = {v1_minus_v1c:+.3f}  "
           f"(psi temporal-channel effect)")
 
@@ -389,6 +436,9 @@ def main():
         scenarios=np.array([r["held"] for r in rows_out]),
         f1_v2_class=np.array([r["f1_v2_class"] for r in rows_out]),
         f1_v1_class=np.array([r["f1_v1_class"] for r in rows_out]),
+        # D-84 : le meme score V1 sous la reduction de la colonne V2
+        f1_v1_class_maxpool=np.array(
+            [r["f1_v1_class_maxpool"] for r in rows_out]),
         f1_v1_psi  =np.array([r["f1_v1_psi"]   for r in rows_out]),
         delta      =np.array([r["delta"]       for r in rows_out]),
         delta_ci_lo=np.array([r["delta_ci"][0] for r in rows_out]),

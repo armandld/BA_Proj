@@ -149,7 +149,14 @@ def main():
 
     cfgs = discover_configs(args.scenario, args.re, args.N, args.dim)
     if not cfgs:
-        print("no inputs."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : aucune configuration (scenario, Re) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec le "
+            "code 0 et sans artefact (D-75).")
     Xs, Xst, Ys, Ss, tags = gather_per_snapshot(cfgs, args.dim, args.max_snaps)
     print(f"  built dataset: {len(Xs)} snapshots across "
           f"{len(set(tags))} scenarios\n")

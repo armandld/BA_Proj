@@ -110,6 +110,57 @@ def test_missing_fold_returns_none(tmp_path):
     assert load(str(tmp_path), "nope") is None
 
 
+def test_leak_free_really_replaces_the_leaked_threshold():
+    """D-134 : le debranchement de la fuite D13 mesure, pas lu dans le source.
+
+    `test_no_leak_mode_is_gone_and_leak_free_is_wired` ci-dessous cherche
+    QUATRE chaines dans `h4_unseen_conditions.py`, dont
+    `hp_q["threshold_amr"] = leak_free_thr` sous le message *« leak-free
+    does not actually change the QAOA threshold »*. C'est un COMPORTEMENT.
+    Mesure par mutation : une ligne
+    `hp_q["threshold_amr"] = rec["qaoa_params"]["threshold_amr"]` ajoutee
+    JUSTE APRES, les quatre chaines intactes -- le bras QAOA repart au seuil
+    fuyant, et `test_t22c_transfer.py` + `test_t24_leak_free.py` restent
+    **35 passed**, sous un artefact nomme `leak-free`.
+
+    L'entree qui SEPARE : un `rec` dont le seuil classique DIFFERE du seuil
+    fuyant. Si les deux coincidaient, appliquer le mode et ne pas
+    l'appliquer rendraient la meme chose et le test ne mesurerait rien.
+
+    Le calcul a ete extrait de `main()` en `apply_leak_free_threshold` pour
+    etre appelable sans rejouer les heures de DNS d'un fold ; son corps est
+    inchange.
+    """
+    import importlib
+
+    huc = importlib.import_module("h4_unseen_conditions")
+
+    #  Le seuil classique du fold, choisi loin du seuil fuyant.
+    classical_thr = 0.31337
+    assert abs(classical_thr - huc.LEAKED_THRESHOLD) > 0.1, (
+        "le champ d'essai ne separe pas les deux seuils")
+
+    hp_q = {"threshold_amr": huc.LEAKED_THRESHOLD, "beta": 1.0}
+    rec = {"classical_params": {"threshold_amr": classical_thr},
+           "qaoa_params": {"threshold_amr": huc.LEAKED_THRESHOLD}}
+
+    huc.apply_leak_free_threshold(hp_q, rec)
+
+    assert hp_q["threshold_amr"] == pytest.approx(classical_thr, abs=1e-12), (
+        f"le bras QAOA tourne a {hp_q['threshold_amr']} et non au seuil "
+        "classique du fold : la fuite D13 est de retour sous un artefact "
+        "nomme leak-free")
+    assert hp_q["threshold_amr"] != huc.LEAKED_THRESHOLD
+    #  Le reste du dict n'est pas touche.
+    assert hp_q["beta"] == 1.0
+
+    #  Et le garde d'entree doit refuser un bras qui n'etait PAS au seuil
+    #  fuyant : sinon le mode s'appliquerait a un fold deja corrige.
+    with pytest.raises(AssertionError):
+        huc.apply_leak_free_threshold(
+            {"threshold_amr": 0.9}, dict(rec))
+
+
 def test_no_leak_mode_is_gone_and_leak_free_is_wired(tmp_path):
     """Un mode accepte mais non implemente est un piege : `--mode no-leak`
     ne changeait que le nom du fichier de sortie, produisant un artefact

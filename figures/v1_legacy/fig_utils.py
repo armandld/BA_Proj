@@ -105,12 +105,27 @@ _PHASE_SCENARIOS = {
 FIGURE_PHASE = os.environ.get('FIGURE_PHASE', None)
 
 # ── Figure output directory ──
-# When FIGURE_PHASE is set, save directly to figures/phase<N>/ instead of figures/
-_PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..')
+# When FIGURE_PHASE is set, save to results/figures/phase<N>/ instead of
+# results/figures/.
+#
+# D-93. Cette ancre ne montait QUE d'un niveau. Elle etait juste tant que le
+# fichier vivait dans `figures_code/` a la racine : `figures_code/..` etait la
+# racine du depot, et FIG_DIR valait `<racine>/figures`, le dossier de sortie
+# de l'epoque. La reorganisation 17d983d a descendu le fichier dans
+# `figures/v1_legacy/` et a reecrit le prelude sys.path (_REPO_ROOT, deux
+# niveaux, ligne 8) SANS toucher a celle-ci : `figures/v1_legacy/..` vaut
+# desormais `figures/`, et FIG_DIR valait `figures/figures/` — un dossier
+# cree en silence a l'import, DANS l'arborescence du code, que rien ne lit.
+# Mesure : `figures/figures` (sans FIGURE_PHASE), `figures/figures/phase1`
+# (avec) ; les 17 scripts de v1_legacy y ecrivaient leurs .png/.log, et
+# fig17 son cache. La convention du depot est `results/figures/` — CLAUDE.md
+# (« results/figures/ pour les images produites par figures/ ») et
+# `figures/result_figs.py:22`, qui l'ancre bien sur la racine.
+_PROJECT_ROOT = _REPO_ROOT
 if FIGURE_PHASE:
-    FIG_DIR = os.path.join(_PROJECT_ROOT, 'figures', f'phase{FIGURE_PHASE}')
+    FIG_DIR = os.path.join(_PROJECT_ROOT, 'results', 'figures', f'phase{FIGURE_PHASE}')
 else:
-    FIG_DIR = os.path.join(_PROJECT_ROOT, 'figures')
+    FIG_DIR = os.path.join(_PROJECT_ROOT, 'results', 'figures')
 os.makedirs(FIG_DIR, exist_ok=True)
 
 

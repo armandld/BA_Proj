@@ -82,12 +82,22 @@ def compactness(mask):
     Perimeter = number of boundary pixels (refined pixel adjacent to
     non-refined pixel). Lower ratio = more compact, coherent patches.
     Returns 0 if no refined pixels.
+
+    D-99 : le remplissage etait `mode='constant', constant_values=False`,
+    c'est-a-dire « hors du domaine, rien n'est raffine ». Le domaine de ce
+    depot est PERIODIQUE (`PeriodicGrid`) : un pixel raffine du bord haut a
+    pour voisin le bord bas. Toute structure qui traverse le bord etait donc
+    comptee comme exposee des deux cotes, et rendue moins compacte qu'elle
+    ne l'est. Mesure (N=256) : bande verticale traversante, du type d'une
+    nappe de courant, 0,0698 contre 0,0625 en periodique (**+11,7 %**) ;
+    bloc a cheval sur le bord, 0,1211 contre 0,0918 (**+31,9 %**) ; bloc
+    central, identique — c'est le champ qui NE SEPARE PAS.
     """
     area = np.sum(mask)
     if area == 0:
         return 0.0
     # Count boundary pixels: refined pixel where at least one 4-neighbor is not refined
-    padded = np.pad(mask, 1, mode='constant', constant_values=False)
+    padded = np.pad(mask, 1, mode='wrap')
     boundary = mask & (
         ~padded[:-2, 1:-1] | ~padded[2:, 1:-1] |   # top, bottom
         ~padded[1:-1, :-2] | ~padded[1:-1, 2:]      # left, right
@@ -96,15 +106,54 @@ def compactness(mask):
     return perimeter / area
 
 
+def _label_periodic(mask):
+    """Etiquetage 4-connexe sur un tore : compte les composantes du domaine
+    PERIODIQUE, pas celles d'une image bornee.
+
+    D-99 : `label(mask)` seul coupait toute region traversant un bord en deux
+    composantes. Mesure : bloc a cheval sur le bord haut/bas, **2 composantes
+    au lieu de 1** — `component_density` doublait pour cette region.
+
+    On etiquette d'abord normalement, puis on fusionne (union-find) les
+    etiquettes qui se font face de part et d'autre des deux paires de bords.
+    La fusion est faite cellule a cellule en vis-a-vis : c'est exactement la
+    4-connexite refermee sur le tore, la meme que celle de `label`.
+    """
+    labeled, n = label(mask)
+    if n <= 1:
+        return labeled, n
+    parent = list(range(n + 1))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for bord_a, bord_b in ((labeled[0, :], labeled[-1, :]),
+                           (labeled[:, 0], labeled[:, -1])):
+        for a, b in zip(bord_a, bord_b):
+            if a and b:
+                union(int(a), int(b))
+
+    racines = {find(i) for i in range(1, n + 1)}
+    return labeled, len(racines)
+
+
 def component_density(mask):
-    """Connected components per unit refined area.
+    """Connected components per unit refined area, on the periodic domain.
 
     Lower = fewer, larger contiguous regions = more coherent.
     """
     area = np.sum(mask)
     if area == 0:
         return 0, 0.0
-    labeled, n_comp = label(mask)
+    labeled, n_comp = _label_periodic(mask)
     # Normalize: components per 1000 refined pixels (avoids tiny numbers)
     density = n_comp / (area / 1000)
     return n_comp, density

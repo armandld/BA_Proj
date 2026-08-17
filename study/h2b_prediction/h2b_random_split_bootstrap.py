@@ -129,7 +129,14 @@ def main():
     Xs, Xst, Ys, Ss, tags = gather_per_snapshot(
         args.scenario, args.re, args.N, args.dim, args.max_snaps)
     if not Xs:
-        print("no inputs."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "balayage vide : aucune configuration (scenario, Re) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec le "
+            "code 0 et sans artefact (D-75).")
     print(f"  built dataset: {len(Xs)} snapshots across "
           f"{len(set(tags))} scenarios\n")
 
@@ -152,7 +159,14 @@ def main():
     Sv_list   = [Ss[i]  for i in va]
 
     if len(np.unique(Ytr)) < 2:
-        print("degenerate training set."); return
+        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
+        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
+        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
+        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        raise RuntimeError(
+            "jeu d'entrainement degenere : une seule classe presente "
+            f"({np.unique(Ytr).tolist()}), aucun classifieur ne peut etre ajuste. "
+            "Le script sortait ici avec le code 0 et sans artefact (D-75).")
 
     # classical threshold
     thr_cls, _ = best_threshold_f1(Str, Ytr)
@@ -162,20 +176,48 @@ def main():
     P_site_list = [m_site.predict_proba(x)[:, 1] for x in Xv_list]
     P_sten_list = [m_sten.predict_proba(x)[:, 1] for x in Xv_st_lst]
 
-    # pick thresholds on the full validation probabilities (same protocol
-    # as fit_eval grid search)
-    def best_thr(P_list, Y_list):
+    # D-83 : ces deux seuils etaient pris sur `np.concatenate(P_*_list)` et
+    # `np.concatenate(Yv_list)` — les probabilites et les labels de
+    # VALIDATION — sous un commentaire qui annoncait « same protocol as
+    # fit_eval grid search ». `fit_eval` prend le sien sur `(p_tr, Ytr)`, et
+    # `thr_cls` dix lignes plus haut sur `(Str, Ytr)` : le bras classique
+    # auquel les deux bras appris sont ensuite compares etait le seul sous
+    # discipline d'entrainement. Troisieme site de la famille D-81/D-82.
+    # Le biais est positif PAR CONSTRUCTION — un seuil qui maximise le F1
+    # sur la validation ne peut pas y faire moins bien que celui du train —
+    # et il entre directement dans `delta site-cls`, dans son IC bootstrap
+    # (qui reechantillonne l'ensemble meme ayant servi a fixer le seuil) et
+    # dans `p(site <= class)`.
+    # Mesure, `--dim 4 --N 256 --max-snaps 80 --n-boot 500 --seed 0` :
+    # F1_site 0,937 -> 0,931, delta site-cls +0,460 -> +0,454. Sur cinq
+    # configurations (dim 4/16/32, graines 0/1/2) le biais va de +0,0004 a
+    # +0,0057 et aucun verdict imprime ne change : c'est la discipline qui
+    # est en cause, pas la taille de cet ecart-ci.
+    grid = np.linspace(0.05, 0.95, 91)
+
+    def best_thr_on_train(model, Xtr):
         thr, _ = best_threshold_f1(
-            np.concatenate(P_list), np.concatenate(Y_list),
-            grid=np.linspace(0.05, 0.95, 91))
+            model.predict_proba(Xtr)[:, 1], Ytr, grid=grid)
         return thr
-    thr_site = best_thr(P_site_list, Yv_list)
-    thr_sten = best_thr(P_sten_list, Yv_list)
+
+    def best_thr_on_val(P_list):
+        thr, _ = best_threshold_f1(
+            np.concatenate(P_list), np.concatenate(Yv_list), grid=grid)
+        return thr
+
+    thr_site = best_thr_on_train(m_site, Xtr_s)
+    thr_sten = best_thr_on_train(m_sten, Xtr_st)
+    # les anciens seuils, gardes pour que le biais reste mesurable et que la
+    # correction ne puisse pas etre defaite en silence
+    thr_site_on_val = best_thr_on_val(P_site_list)
+    thr_sten_on_val = best_thr_on_val(P_sten_list)
 
     # point estimates
     f1_class = snap_f1(Yv_list, Sv_list,    thr_cls)
     f1_site  = snap_f1(Yv_list, P_site_list, thr_site)
     f1_sten  = snap_f1(Yv_list, P_sten_list, thr_sten)
+    f1_site_on_val = snap_f1(Yv_list, P_site_list, thr_site_on_val)
+    f1_sten_on_val = snap_f1(Yv_list, P_sten_list, thr_sten_on_val)
 
     # bootstrap CIs (shared rng, but each call draws its own indices)
     rng_b = np.random.default_rng(args.seed + 1)
@@ -195,6 +237,10 @@ def main():
     print(f"  F1_class       = {f1_class:.3f}  [{c_lo:.3f}, {c_hi:.3f}]")
     print(f"  F1_site (GBT)  = {f1_site:.3f}  [{s_lo:.3f}, {s_hi:.3f}]")
     print(f"  F1_stencil     = {f1_sten:.3f}  [{st_lo:.3f}, {st_hi:.3f}]")
+    # D-83 : les memes bras sous l'ancienne discipline, imprimes a cote des bons
+    print(f"  (D-83) au seuil pris sur la validation, biaise : "
+          f"site {f1_site_on_val:.3f} (+{f1_site_on_val - f1_site:.3f}), "
+          f"stencil {f1_sten_on_val:.3f} (+{f1_sten_on_val - f1_sten:.3f})")
     print(f"  delta site-cls = {f1_site-f1_class:+.3f}  "
           f"[{d_lo:+.3f}, {d_hi:+.3f}]   p(site <= class) = {p_H0:.3f}")
     print(f"  delta sten-sit = {f1_sten-f1_site:+.3f}  "
@@ -229,6 +275,12 @@ def main():
         n_val_snaps=len(Yv_list),
         n_val_cells=sum(len(y) for y in Yv_list),
         thr_class=thr_cls, thr_site=thr_site, thr_sten=thr_sten,
+        # D-83 : les anciens nombres, seuils pris sur les labels de
+        # validation. Gardes pour que le biais reste mesurable ; jamais
+        # comparables au bras classique, qui prend le sien sur le train.
+        f1_site_thr_on_val=f1_site_on_val,
+        f1_sten_thr_on_val=f1_sten_on_val,
+        thr_site_on_val=thr_site_on_val, thr_sten_on_val=thr_sten_on_val,
     )
     print(f"\n  saved: {os.path.basename(out)}")
     print("\nPhase 11H complete.")

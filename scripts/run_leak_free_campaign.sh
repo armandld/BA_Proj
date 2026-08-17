@@ -17,13 +17,21 @@
 # reproductible ne relance pas indefiniment en silence.
 #
 # Usage :
-#   bash study/v4/run_leak_free_campaign.sh kh ot
-#   MAX_ATTEMPTS=20 bash study/v4/run_leak_free_campaign.sh ot
+#   bash scripts/run_leak_free_campaign.sh kh ot
+#   MAX_ATTEMPTS=20 bash scripts/run_leak_free_campaign.sh ot
 set -u
 
+# D-71 : ce script vivait sous study/v4/ (deux niveaux sous la racine, et
+# study/results/ y etait le dossier des artefacts) au moment ou "../.." et
+# "$ROOT/study/results" ont ete ecrits. Le deplacement vers scripts/ (un
+# seul niveau) et l'aplatissement de study/results/ vers results/ (racine)
+# ont laisse les deux pointer hors du depot ou vers un dossier qui n'existe
+# plus — mesure : ROOT resolvait au parent du depot, RESULTS a un chemin
+# absent, donc fold_status() lisait toujours "absent" quel que soit l'etat
+# reel de la campagne.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
-RESULTS="$ROOT/study/results"
+ROOT="$(cd "$HERE/.." && pwd)"
+RESULTS="$ROOT/results"
 LOGDIR="${LEAK_FREE_LOGDIR:-$ROOT/logs/v4}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-40}"
 REPEATS="${REPEATS:-5}"
@@ -60,7 +68,7 @@ for fold in "$@"; do
             break
         fi
         echo "[campaign] $fold: attempt $attempt (status=$st)"
-        python "$HERE/t22_unseen_conditions.py" --fold "$fold" \
+        python "$ROOT/study/h4_transfer/h4_unseen_conditions.py" --fold "$fold" \
             --mode leak-free --repeats "$REPEATS" --matched-reference \
             >> "$log" 2>&1
         rc=$?

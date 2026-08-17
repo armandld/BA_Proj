@@ -69,6 +69,7 @@ COVERED = {
     "VQA/runtime.py",
     "pipeline.py",
     "hyperparams_loader.py",
+    "visual.py",
 }
 
 #  Scripts lancés en ligne de commande : on teste qu'ils s'importent et
@@ -83,8 +84,18 @@ ENTRY_POINTS = {
 
 #  Exclus, avec la raison. Toute entrée ici doit être justifiable.
 EXCLUDED = {
-    "visual.py": "tracé matplotlib, aucune valeur numérique produite",
-    "help_visual.py": "tracé matplotlib, aucune valeur numérique produite",
+    #  D-68 : `help_visual.py` reste exclu, mais la raison a changé. L'ancienne
+    #  — « aucune valeur numérique produite » — était vraie et insuffisante :
+    #  aucune de ces fonctions ne rend de valeur, et pourtant `plot_amr_state`
+    #  annonçait ses axes à l'envers pendant toute la vie du dépôt. Une figure
+    #  porte une convention, et une convention peut être fausse.
+    #  `visual.py` est passé dans COVERED : tests/pipeline/test_amr_figure_axes.py
+    #  vise `plot_amr_state`, la seule de ses fonctions qui s'exécute.
+    "help_visual.py": (
+        "tracé matplotlib ; aucune de ses 5 fonctions n'a d'appelant — "
+        "`visualize_vqa_step` est importée par refinement.py sans être "
+        "appelée. Voir COUVERTURE.md §1a quater"
+    ),
 }
 
 
