@@ -10,6 +10,12 @@ Ce que ces tests séparent :
 - ce qui était JUSTE et doit le rester — le champ et les cadres sont
   cohérents entre eux, le cadre tombe bien sur la structure qu'il désigne.
 
+**D-68 est clos par transposition** (décision de USER). `plot_amr_state`
+était le seul des trois traceurs du dépôt à mettre Y en horizontal ; il met
+désormais X, comme `plot_recursive_state` et `help_visual.plot_field`. Le
+test qui gardait la frontière de décision a été REMESURÉ, pas supprimé : il
+dit maintenant l'inverse, avec la mesure avant/après.
+
 Le champ d'essai SÉPARE : une structure en (X=10, Y=40) est asymétrique
 sous transposition. Sur un champ symétrique (une gaussienne centrée, un
 Taylor-Green), les deux orientations rendent la même image et ces tests
@@ -152,19 +158,45 @@ def test_le_cadre_encadre_la_structure_qu_il_designe(axes_rendus):
         "d'être cohérents")
 
 
-def test_la_geometrie_du_champ_n_a_pas_ete_transposee(axes_rendus):
-    """Le champ est affiché tel quel : l'axe 0 du tableau reste en vertical.
+def test_le_champ_est_transpose_pour_mettre_X_en_horizontal(axes_rendus):
+    """SEUIL REMESURÉ — la décision a été prise, ce test dit l'inverse.
 
-    Transposer changerait la géométrie de PNG déjà publiés. Si la décision
-    est prise un jour, ce test tombe — et c'est le but : elle ne doit pas
-    se prendre en silence.
+    Ce test exigeait auparavant que le champ ne soit **pas** transposé : il
+    gardait la frontière de décision, pour qu'elle ne se franchisse pas en
+    silence. Elle a été franchie explicitement par USER, donc le seuil se
+    **remesure**, il ne se supprime pas.
+
+    Ce qui a motivé la décision : `plot_amr_state` était le seul des trois
+    traceurs du dépôt à mettre Y en horizontal. `plot_recursive_state`
+    (même fichier) trace `state['Jz'].T` et `help_visual.plot_field` trace
+    `grid.X.T` en étiquetant « X » l'axe horizontal. L'objection « cela
+    change des PNG publiés » ne tient plus : toutes les figures sont
+    regénérées après la campagne.
+
+    Mesure, structure placée en X=10, Y=40 au sens de `grid.py` :
+
+        avant  — lue « X=40, Y=10 » sur la figure
+        après  — lue « X=10, Y=40 »
+
+    L'autre moitié du module reste vraie et est vérifiée juste au-dessus :
+    champ et cadres restent cohérents entre eux. Transposer l'un sans
+    l'autre ferait tomber ce test-là.
     """
     (image,) = axes_rendus.get_images()
     rendu = np.asarray(image.get_array())
-    attendu = _champ_qui_separe()
-    assert np.array_equal(rendu, attendu), (
-        "le champ passé à imshow n'est plus le tableau brut : géométrie des "
-        "PNG publiés modifiée, décision qui revient à USER (DEFAUTS.md D-68)")
+    brut = _champ_qui_separe()
+
+    assert np.array_equal(rendu, brut.T), (
+        "le champ passé à imshow n'est pas la transposée du tableau brut : "
+        "D-68 a été résolu par transposition, voir DEFAUTS.md")
+    assert not np.array_equal(rendu, brut), (
+        "rendu identique au brut : le champ d'essai ne sépare plus les deux "
+        "orientations, ce test ne vérifierait rien")
+
+    # La structure doit se lire à sa vraie place : X en horizontal.
+    v, h = np.unravel_index(np.argmax(rendu), rendu.shape)
+    assert (h, v) == (X_BLOB, Y_BLOB), (
+        f"structure lue en X={h}, Y={v} ; attendu X={X_BLOB}, Y={Y_BLOB}")
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -33,7 +33,19 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     max_val_vy = np.max(np.abs(vy))
     max_val = max(max_val_Jz, max_val_Bx, max_val_By, max_val_vx, max_val_vy)
     """
-    im = ax.imshow(Jz, origin='lower', cmap='RdBu', interpolation='nearest')
+    # D-68, resolution : on TRANSPOSE pour mettre X en horizontal.
+    #
+    # `imshow` place l'axe 0 du tableau en vertical. `Jz` etant indexe
+    # [X, Y], l'image non transposee portait Y en horizontal — l'inverse
+    # des deux AUTRES traceurs du depot (`plot_recursive_state` ligne ~171
+    # trace `state['Jz'].T`, `help_visual.plot_field` trace `grid.X.T` et
+    # etiquette « X » en horizontal). Cette fonction etait la seule des
+    # trois a lire dans l'autre sens.
+    #
+    # L'objection « cela change la geometrie de PNG deja publies » ne tient
+    # plus : toutes les figures sont regenerees apres la campagne, donc la
+    # coherence est gratuite maintenant et couteuse plus tard.
+    im = ax.imshow(Jz.T, origin='lower', cmap='RdBu', interpolation='nearest')
 
     # Barre de couleur
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
@@ -45,17 +57,23 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     
     for p in active_patches_sorted:
         # Récupération des coord (Format Dictionnaire)
+        # Noms honnetes : `bounds` porte (i_start, i_end, j_start, j_end),
+        # i indexant l'axe 0 (= X selon grid.py) et j l'axe 1 (= Y). Les
+        # anciens noms `ys/ye` pour i et `xs/xe` pour j disaient l'inverse
+        # de ce qu'ils contenaient — c'est cette inversion de vocabulaire
+        # qui a rendu D-68 invisible pendant tout le projet.
         if 'bounds' in p:
-            ys, ye, xs, xe = p['bounds']
+            i_start, i_end, j_start, j_end = p['bounds']
             depth = p.get('depth', 0)
         else:
             # Fallback (Ancien format au cas où)
-            ys, ye = p['i_start'], p['i_start'] + p['width']
-            xs, xe = p['j_start'], p['j_start'] + p['width']
+            i_start, i_end = p['i_start'], p['i_start'] + p['width']
+            j_start, j_end = p['j_start'], p['j_start'] + p['width']
             depth = 0 # Inconnu
-            
-        width = xe - xs
-        height = ye - ys
+
+        # Image transposee : l'horizontal porte X (=i), le vertical Y (=j).
+        width = i_end - i_start
+        height = j_end - j_start
         
         # Calcul du facteur de zoom pour l'affichage (Base 3 car découpage 3x3)
         zoom_factor = target_dim**depth
@@ -65,7 +83,7 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
         line_width = max(1, 2.5 - 0.5 * depth) 
         
         # Rectangle
-        rect = patches.Rectangle((xs, ys), width, height, 
+        rect = patches.Rectangle((i_start, j_start), width, height,
                                  linewidth=line_width, edgecolor='red', 
                                  facecolor='none', linestyle='--')
         ax.add_patch(rect)
@@ -74,28 +92,21 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
         if depth > 0:
             # On place le texte un peu au-dessus du cadre
             label_text = f"x{zoom_factor}"
-            ax.text(xs, ye + 1, label_text, 
+            ax.text(i_start, j_end + 1, label_text,
                     color='red', fontsize=8 + depth, fontweight='bold',
                     bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
 
     # Titres et Labels
     total_patches = len(active_patches)
     ax.set_title(f"VQA-Driven AMR Simulation\nTime: {t_val:.3f} | Active Zones: {total_patches}")
-    # D-68 : `imshow` place l'axe 0 du tableau en VERTICAL et l'axe 1 en
-    # HORIZONTAL. Jz etant indexe [X, Y] (cf. plus haut), l'axe horizontal
-    # de cette figure porte Y et le vertical porte X — l'inverse de ce que
-    # les deux etiquettes annoncaient. Mesure : une structure placee en
-    # X=10, Y=40 au sens de grid.py se lisait « X=40, Y=10 » sur la figure.
-    #
-    # Seules les ETIQUETTES sont corrigees. Le champ et les cadres ne
-    # bougent pas d'un pixel : ils sont deja coherents entre eux — le cadre
-    # (xs, ys) tombe bien sur la structure, verifie sur un champ asymetrique
-    # sous transposition. Transposer l'image pour mettre X en horizontal,
-    # comme le font `plot_recursive_state` et `simple_hierarchical_plot`,
-    # changerait la geometrie de PNG deja publies : c'est une decision qui
-    # revient a USER, pas une correction. Voir docs/DEFAUTS.md D-68.
-    ax.set_xlabel("Grid Y  (axe 1 du tableau)")
-    ax.set_ylabel("Grid X  (axe 0 du tableau)")
+    # D-68 clos. L'image est transposee (voir `imshow` plus haut), donc ces
+    # deux etiquettes disent maintenant la verite ET s'accordent avec les
+    # deux autres traceurs du depot. Mesure : une structure placee en
+    # X=10, Y=40 au sens de grid.py se lisait « X=40, Y=10 » avant, et se
+    # lit « X=10, Y=40 » apres. Epingle par
+    # `tests/pipeline/test_amr_figure_axes.py`.
+    ax.set_xlabel("Grid X")
+    ax.set_ylabel("Grid Y")
     
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)

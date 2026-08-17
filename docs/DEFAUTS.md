@@ -43,7 +43,7 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **18** |
+| **ouverts** — décision ou campagne requise | **17** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -178,7 +178,24 @@ passera sans modification le jour où chaque valeur déployée sera traçable.
 
 ---
 
-## D-24 — le solveur est d'ordre 1,2, la correction n'est pas applicable
+## D-24 — le solveur est d'ordre 1,2 — **DÉCIDÉ : assumé**
+
+**Décision de USER : assumé, et écrit comme une limite.** La correction
+(projection du second membre) restaure l'ordre **4,00 à divergence égale**,
+mais n'est valide que sur `step_full` — la grille globale périodique. Les
+patchs AMR de `step_layered` sont **locaux et non périodiques**, et la
+projection spectrale suppose la périodicité : l'appliquer là serait faux
+d'une façon plus difficile à voir que l'erreur actuelle.
+
+Ce qui rend l'acceptation défendable : la chute d'ordre frappe **les deux
+bras à l'identique** — Q-HAS et l'AMR classique tournent sur le même
+solveur, les mêmes patchs. Elle gonfle l'erreur absolue de tous les
+nombres, mais elle ne peut pas fabriquer un écart entre les deux bras, et
+toutes les affirmations du papier sont comparatives. C'est donc une limite
+à énoncer, pas un biais à retirer. Déjà listée dans `PLAN_PREPRINT.md` §7.
+
+Reste ici, et non dans `RESULTS.md`, parce que rien n'est corrigé : c'est
+une limite acceptée, pas un défaut fermé.
 
 **Où ça bloque.** Nulle part en toute rigueur : la chute est **commune aux
 deux bras**, donc elle ne biaise pas leur comparaison. Elle comprime la plage
@@ -1175,57 +1192,6 @@ doublé, le fondamental peut cesser d'être insensible à ce doublon.
 pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py
 ```
 
-## D-68 — l'image de la figure AMR est transposée par rapport au reste du dépôt : décision
-
-**Où ça bloque.** Nulle part sur un nombre. Ce qui reste ouvert est un
-**choix de présentation** que Vigil ne tranche pas seul, parce qu'il change
-la géométrie d'images déjà publiées.
-
-**Comment on est tombé dessus.** En lisant `src/visual.py` et
-`src/help_visual.py` en entier — les deux seuls modules que
-`tests/pipeline/test_src_coverage_inventory.py` excluait de l'inventaire,
-avec pour raison « tracé matplotlib, aucune valeur numérique produite ». La
-raison est vraie au sens strict (aucune valeur ne ressort de ces fonctions)
-et c'est précisément ce qui les avait mises hors de portée : la figure, elle,
-porte une convention d'axes, et elle était fausse (D-68, corrigé).
-
-**Ce qui est établi.** Des trois fonctions du dépôt qui affichent `Jz` :
-
-| fonction | ce qu'elle passe à l'afficheur | axe horizontal | appelée par |
-|---|---|---|---|
-| `plot_amr_state` | `Jz` **tel quel** | Y (axe 1) | `pipeline.py`, 4×/pas de verrouillage |
-| `plot_recursive_state` | `Jz.T` | X (axe 0) | **personne** |
-| `simple_hierarchical_plot` | `Jz.T` | X (axe 0) | **personne** |
-
-La seule qui s'exécute est donc la seule à mettre X en vertical. Les deux
-autres — mortes — suivent la convention du reste du dépôt. Mesuré : une
-structure posée en `X=10, Y=40` au sens de `grid.py` apparaît en
-horizontal = 40, vertical = 10.
-
-Les étiquettes ont été corrigées pour nommer l'axe qu'elles portent (D-68
-dans `RESULTS.md`) : la figure ne ment plus. Le **champ et les cadres n'ont
-pas bougé d'un pixel**, et ils sont cohérents entre eux — le cadre
-d'attention tombe bien sur la structure qu'il désigne, vérifié sur un champ
-asymétrique sous transposition.
-
-**Où on en est.** La question ouverte, pour USER :
-
-- **laisser tel quel** — les PNG déjà produits restent lisibles à
-  l'identique, au prix d'une figure dont l'orientation diffère de celle du
-  reste du dépôt ;
-- **transposer** `Jz` et les cadres pour mettre X en horizontal, comme
-  partout ailleurs — au prix de PNG dont la géométrie ne correspond plus à
-  ceux déjà publiés.
-
-Vigil ne recommande rien ici : les deux côtés se défendent, et le coût est
-un coût de reproductibilité, pas de justesse.
-`tests/pipeline/test_amr_figure_axes.py::test_la_geometrie_du_champ_n_a_pas_ete_transposee`
-tombe le jour où la seconde branche est prise — pour qu'elle ne se prenne
-pas en silence.
-
-```bash
-pytest tests/pipeline/test_amr_figure_axes.py
-```
 
 ## D-69 — la table T31 n'est plus reproductible à HEAD, et son verdict le plus fort en dépend
 

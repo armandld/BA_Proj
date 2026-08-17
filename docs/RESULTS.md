@@ -6413,3 +6413,53 @@ non-régression (**quatrième**, pas troisième) et son état attendu
 C'est le piège n° 3 de `COUVERTURE`, « balayage vide », appliqué aux
 **lanceurs** plutôt qu'aux tests : un lanceur qui ne lance rien ressemble
 exactement à un lanceur qui a tout lancé.
+
+
+# D-68 — la figure AMR est transposée : décision prise, clos
+
+`plot_amr_state` est la **seule** fonction de `src/visual.py` et de
+`src/help_visual.py` qui s'exécute en production : `pipeline.py` l'appelle
+quatre fois par pas de verrouillage et sauve un PNG à chaque fois.
+
+**Deux défauts, un faux et un incohérent.**
+
+Le premier était faux : les deux étiquettes nommaient l'axe de l'autre.
+`Jz` est indexé `[X, Y]` (`grid.py` : `AXIS_X = 0`, `AXIS_Y = 1`), et
+`imshow` place l'axe 0 en **vertical** — donc l'axe horizontal portait Y
+alors qu'il annonçait « Grid X ». Une structure posée en **X=10, Y=40** se
+relisait **« X=40, Y=10 »**.
+
+Le second était une incohérence de dépôt : `plot_amr_state` était le
+**seul des trois traceurs** à mettre Y en horizontal. `plot_recursive_state`
+(même fichier, ligne ~171) trace `state['Jz'].T`, et
+`help_visual.plot_field` trace `grid.X.T` en étiquetant « X » l'axe
+horizontal.
+
+**Décision de USER : transposer**, ce qui clôt les deux d'un coup.
+L'objection qui avait fait suspendre la correction — « cela change la
+géométrie de PNG déjà publiés » — ne tient plus : toutes les figures sont
+regénérées après la campagne, donc la cohérence est gratuite maintenant et
+coûteuse plus tard.
+
+| | avant | après |
+|---|---|---|
+| structure posée en X=10, Y=40 | lue « X=40, Y=10 » | lue **« X=10, Y=40 »** |
+| axe horizontal | Y | **X**, comme les deux autres traceurs |
+
+Corrigé aussi, parce que c'est la cause de l'invisibilité du défaut : les
+variables locales s'appelaient `ys/ye` pour l'indice **i** et `xs/xe` pour
+**j** — l'inverse de ce qu'elles contenaient. Renommées `i_start/i_end`,
+`j_start/j_end`. Un défaut d'axes se cache derrière un vocabulaire d'axes
+inversé.
+
+**Ce qui n'a pas bougé** : champ et cadres restent cohérents entre eux —
+transposer l'image sans les cadres, ou l'inverse, fait tomber
+`test_le_cadre_encadre_la_structure_qu_il_designe`.
+
+**Seuil remesuré, pas supprimé.** Le test qui gardait la frontière de
+décision (`…n_a_pas_ete_transposee`) exigeait l'absence de transposition ;
+il dit désormais l'inverse et porte la mesure avant/après. C'est la règle
+« un seuil périmé se remesure » appliquée à une décision, pas à un
+changement de code subi.
+
+Vérifier : `pytest tests/pipeline/test_amr_figure_axes.py -q` → **6 passed**.
