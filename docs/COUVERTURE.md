@@ -2603,6 +2603,40 @@ réellement traversé — c'est ce qui a rendu D-143.
 lui-même — atteignable, mais aucune entrée ne le sépare aujourd'hui
 (cf. D-135, direction 2, toujours ouverte).
 
+## `src/Simulation/pre_compute_dns.py` — lu en entier, RIEN trouvé
+
+Relu parce que D-143 le met en cause : c'est lui qui produit la référence
+contre laquelle **tout** nombre publié est mesuré. Verdict : **le
+producteur est juste, ce sont ses consommateurs qui lisent de travers.**
+C'est un résultat, écrit pour ne pas le relire une troisième fois.
+
+| ce qui a été soumis aux quatre questions | verdict |
+|---|---|
+| la **double convention** de la trace (`fluxes` avant le pas, sauf la dernière entrée) | **saine** — annoncée dans la docstring ET figée par deux tests de `tests/solver/test_precompute_dns_contracts.py`. **Ne pas la « corriger »** : la dernière entrée sert le score final, qui compare après le dernier pas |
+| le clamp `dt = min(dt, T_MAX - t_current)` | **sain** — réécrit dans le solveur (`sim_dns.dt = dt`) après `adapt_dt`, qui l'avait fixé. C'est la forme « variable locale non réécrite » de `VIGIL.md`, ici déjà corrigée et commentée avec sa mesure |
+| le même motif dans `pipeline()`, branche sans trace DNS | **sain** — `dt_q`, `dt_t` (et `dt_c`) sont réduits par `min`, puis **réécrits** sur les trois solveurs |
+| l'index du départ à chaud contre celui de la trace | **sain, et c'est la preuve structurelle de D-143** — `hot_start_state['step'] = s` est posé AVANT `step_full`, donc l'état à chaud est celui de `dns_trace[s]`. À l'entrée de la boucle du pipeline, le bras au pas `s` correspond à `dns_trace[s]` ; après `step += 1` il correspond à `dns_trace[s+1]`. La convention n'est pas ambiguë |
+| le départ à chaud tombe-t-il toujours sur un index porteur de `fluxes` ? | **oui, par construction** — l'instantané exige `t >= T_START - HYBRID_DT`, le départ à chaud exige `t >= T_START`, le second implique le premier |
+| le garde de divergence du DNS | **sain** — il **lève** au lieu de rendre une trace empoisonnée |
+| `is_last_step` | **sain** — `dt` étant clampé à `T_MAX - t_current`, la condition est exacte au dernier pas |
+
+**Ce qui a été noté sans être un défaut** (une ligne dans `RESULTS.md`,
+règle d'arrêt) : la docstring renvoie à `tests/test_precompute_dns_contracts.py`,
+qui vit sous `tests/solver/` depuis `17d983d`.
+
+**Ce qui n'est PAS un défaut et pourrait le paraître** : quand `dt` dépasse
+`HYBRID_DT`, `next_snapshot_time += HYBRID_DT` reste en retard et **chaque**
+pas devient une frontière — d'où 7 instantanés consécutifs (index 18…24)
+sur le run de 25 pas utilisé par D-143. C'est du sur-échantillonnage, donc
+de la mémoire, jamais une valeur fausse. Noté pour qu'une passe future ne
+le « corrige » pas en pensant tenir quelque chose.
+
+**Axes empruntés** : Kelvin-Helmholtz, `N = 32`, `T_START = 0,9`,
+`T_MAX` de 1,0 et 1,2, `HYBRID_DT` de 0,02 — donc le régime
+`dt > HYBRID_DT`. **Axes non empruntés** : `dt < HYBRID_DT` (le régime de
+la campagne, `N = 256`), les neuf autres scénarios, et le chemin de
+divergence du DNS (qui lève).
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
