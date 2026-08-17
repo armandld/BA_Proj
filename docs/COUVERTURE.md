@@ -2777,6 +2777,34 @@ Le nombre à citer est **6**, mesuré par la commande ci-dessus.
 
 ---
 
+## Passe du 17 août (soir) — la file `.read()`, cinq fichiers de plus, deux défauts
+
+La seconde file de la fiche — les sites `.read()` **jamais relus** — a été
+reprise après la fusion de la branche vive. Cinq fichiers lus en entier,
+chaque site vérifié par mutation (casser le comportement, laisser le texte
+source intact, relancer) :
+
+| fichier (`tests/`) | sites | verdict |
+|---|---|---|
+| `study/test_phase5_ne_filtre_plus_sur_promising.py` | 4 | **D-144** — deux des quatre gardes ne peuvent pas rougir (le filtre revient sans `if`, le `print` disparaît en laissant ses jetons dans le commentaire) ; un banc **comportemental** ajouté qui exécute `run_phase5` |
+| `study/test_hyperparams_two_sources.py` | 3 | **D-145** — le balayage anti-fuite du JSON ne voyait que `hp.get('…')` par regex, pas `hp['…']` ; passé à l'AST, avec un plancher et une levée sur clé calculée |
+| `pipeline/test_src_coverage_inventory.py` | 5 | **sain** — tous les sites `ast.parse` puis interrogent l'arbre ; `test_no_module_defines_the_same_constant_twice` filtre les noms `≥4` car. **par choix** : mesuré, un détecteur AST au périmètre module ne trouve aucun défaut de plus (0 constante module courte) et le filtre `{3,}` évite les faux positifs sur `KX = KX.copy()` (locals numpy) |
+| `study/test_provenance.py` | 3 | **sain** — le seul site en `"chaîne" in src` (`git_commit_hash()`) est gardé **à côté** par `test_long_tasks_never_call_the_stamp_under_any_name`, structurel (AST) — le patron « texte + comportement » que `VIGIL.md` autorise |
+| `lint/test_scripts_point_somewhere.py` | 4 | **sain** — lisent des `.sh` et `CLAUDE.md` pour en extraire des chemins, puis vérifient **l'existence** et la **collecte** (`n > 0`) ; comportement sur le système de fichiers, pas texte du source |
+
+**État de la file `.read()` : 21 fichiers portent désormais un verdict** (16
+avant cette passe + 5). Le recomptage du 17 août donnait **85 sites,
+45 fichiers** ; les 24 fichiers restants attendent une passe future.
+
+**La forme que D-144 ajoute à la liste : filtrer sans `if`.** Le détecteur
+AST du garde cherchait `if ... promising ...: continue`. Réduire l'itérable
+en amont de la boucle filtre tout aussi bien, et aucune recherche de forme
+`if` ne le voit — il faut mesurer le **nombre d'instantanés qui ressortent**,
+pas la présence d'un mot-clé. C'est le corollaire, appliqué aux gardes
+eux-mêmes, de « choisir le champ d'essai qui SÉPARE ».
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
