@@ -338,15 +338,25 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
     Construit l'Hamiltonien MHD sur une grille torique (Périodique).
     Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
 
-    Déviation connue, non corrigée (D-59, docs/DEFAUTS.md sur BA_Proj) : à
-    dim = 2, l'anneau périodique dégénère et le lien ZZ (i,0)->(i,1) coïncide
-    avec (i,1)->(i,0 mod 2) -- la même paire de qubits reçoit deux entrées
-    ZZ au lieu d'une, doublant le couplage shear effectif. Mesuré sur les 4
-    scénarios canoniques : aucune décision de fondamental exact n'en dépend
-    (le biais Z domine déjà le couplage doublé, D-47), donc rapport seul --
-    corriger changerait la définition de l'Hamiltonien à la seule résolution
-    publiée. Ne pas "réparer" sans remesurer : voir D-59 pour le protocole.
-    Pinné par tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py.
+    D-59 — CORRIGÉ. À dim = 2 l'anneau périodique dégénère : le lien ZZ
+    (i,0)->(i,1) et (i,1)->(i,0 mod 2) relient la MÊME paire de qubits, et
+    les deux itérations ajoutaient chacune une entrée au lieu d'être
+    fusionnées. Les coefficients étant symétriques par construction
+    (`C_edges[0][i,0] == C_edges[0][i,1]` au bit près), le couplage shear
+    était appliqué DEUX FOIS : poids effectif ×2. `K_plaquettes` n'a pas ce
+    défaut — les 4 quadruplets à dim = 2 sont distincts deux à deux.
+
+    Les liens sont désormais dédupliqués par paire de qubits. À dim ≥ 3
+    aucune paire ne se répète, donc l'opérateur est INCHANGÉ bit à bit ; la
+    correction ne mord qu'à dim = 2.
+
+    Corrigé AVANT la campagne et non après, alors que l'impact mesuré est
+    nul aujourd'hui (0 décision changée sur 12) : c'est le biais Z qui
+    domine de 2 à 6,6× (D-47) et masque le doublement. La réoptimisation
+    rééquilibre précisément ces poids — si `w_z_frac` se resserre ou `σ`
+    s'élargit, le ZZ redevient actif et le facteur 2 devient réel, à
+    dim = 2 qui est la seule taille de toutes les campagnes publiées.
+    Corriger après coup obligerait à tout rejouer.
     """
     sparse_list = []
     
@@ -357,6 +367,18 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
     
     def idx_H(y, x): return (y % dim) * dim + (x % dim)
     def idx_V(y, x): return offset_v + (y % dim) * dim + (x % dim)
+
+    # D-59 : paires de qubits ZZ deja emises. La deduplication porte sur la
+    # PAIRE NON ORDONNEE — c'est elle qui identifie le lien physique.
+    _liens_zz_emis = set()
+
+    def _lien_zz_neuf(a, b):
+        """Vrai si ce lien n'a pas deja ete emis. Enregistre au passage."""
+        cle = (a, b) if a <= b else (b, a)
+        if cle in _liens_zz_emis:
+            return False
+        _liens_zz_emis.add(cle)
+        return True
 
     for i in range(dim):
         for j in range(dim):
@@ -374,11 +396,11 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
             # --- 1. SHEAR (Viscosité) : Interactions ZZ ---
             # Sign convention is in HamiltParams (ferromagnetic: C < 0)
             c_h = hamilt_params['C_edges'][0][i, j]
-            if abs(c_h) > 1e-6:
+            if abs(c_h) > 1e-6 and _lien_zz_neuf(idx_H(i, j), idx_H(i, j+1)):
                 sparse_list.append(("ZZ", [idx_H(i, j), idx_H(i, j+1)], c_h))
 
             c_v = hamilt_params['C_edges'][1][i, j]
-            if abs(c_v) > 1e-6:
+            if abs(c_v) > 1e-6 and _lien_zz_neuf(idx_V(i, j), idx_V(i+1, j)):
                 sparse_list.append(("ZZ", [idx_V(i, j), idx_V(i+1, j)], c_v))
 
             # --- 2. VORTICITY (Plaquette) : Terme ZZZZ ---

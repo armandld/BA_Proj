@@ -1,124 +1,181 @@
-"""D-59 : à dim = 2, la topologie périodique double le lien ZZ shear.
+"""D-59 — le lien ZZ dupliqué à `dim = 2`, et pourquoi il fallait le corriger
+AVANT la campagne.
 
-`create_period_hamiltonian` (chemin QAOA / diagonalisation exacte) et
-`build_ising_terms` (chemin SA / exhaustif, `study/common/`) émettent tous
-deux, pour chaque direction, un lien ZZ par cellule : `(i, j) -> (i, j+1 mod
-dim)`. À `dim >= 3` cela donne `dim` liens distincts. À `dim = 2` l'anneau
-périodique dégénère : `(i, 0) -> (i, 1)` et `(i, 1) -> (i, 0 mod 2)` relient
-la MÊME paire de qubits, et les deux liens sont ajoutés séparément à
-l'opérateur au lieu d'être fusionnés — poids effectif doublé sur cette
-paire. `K_plaquettes` (ZZZZ) n'a pas ce défaut : les 4 quadruplets de
-qubits produits par les 4 cellules à dim = 2 sont distincts deux à deux.
+L'Hamiltonien est périodique : chaque cellule émet un lien ZZ vers sa
+voisine, `(i,j) -> (i,j+1 mod dim)`. À `dim >= 3` cela fait `dim` liens
+distincts par direction. À **`dim = 2`** l'anneau dégénère : `(i,0)->(i,1)`
+et `(i,1)->(i,0 mod 2)` relient la **même paire de qubits**, et les deux
+itérations ajoutaient chacune une entrée au lieu d'être fusionnées.
 
-Mesuré (`docs/DEFAUTS.md` D-59) : sur les 4 scénarios canoniques (Re=400,
-N=256, mappeur v1, 3 instantanés chacun), dédupliquer le lien ZZ ne change
-**aucune** des 12 décisions de fondamental exact — le biais Z domine déjà
-le couplage doublé (D-47). `src/` est gelé, aucun nombre publié n'en
-dépend : rapport seul, pas de correction. Ces tests PINGUENT le
-comportement actuel (dupliqué) pour qu'il ne dérive plus sans mesure, côté
-QAOA/diag exacte comme côté SA/exhaustif — ce n'est pas une garantie que le
-doublement est correct.
+Les coefficients étant symétriques par construction
+(`C_edges[0][i,0] == C_edges[0][i,1]` au bit près), le couplage shear était
+appliqué **deux fois** : poids effectif ×2. `K_plaquettes` (ZZZZ) n'a pas
+ce défaut — les 4 quadruplets à `dim = 2` sont distincts deux à deux.
+
+Repéré parce que le décompte des termes du `SparsePauliOp` affichait
+`"IIIIIIZZ"` **deux fois**, avec exactement `-2.4290271580758453` des deux
+côtés.
+
+## Ce que la correction change, mesuré
+
+Coefficients ALÉATOIRES (donc ZZ vivant), comparaison terme à terme :
+
+    dim = 2   ZZ 8 -> 4    opérateurs identiques : NON  (max|dH| = 3,285)
+    dim = 3   ZZ 18 -> 18  opérateurs identiques : OUI
+    dim = 4   ZZ 32 -> 32  opérateurs identiques : OUI
+    dim = 5   ZZ 50 -> 50  opérateurs identiques : OUI
+
+La correction ne mord donc **qu'à `dim = 2`**, ce qui est exactement sa
+portée annoncée.
+
+## Ce qu'elle ne change pas AUJOURD'HUI, et pourquoi
+
+Aux hyperparamètres DÉPLOYÉS, sur les 4 scénarios canoniques × 3
+instantanés (Re=400, N=256) :
+
+    décisions de fondamental exact changées : 0 / 12
+    max|ΔE| global                          : 0,000e+00  (EXACTEMENT nul)
+
+Zéro exact, pas « petit ». La raison est D-47 : la fenêtre gaussienne du
+couplage ZZ vaut au plus **1,15e−31** au réglage déployé (le score est à
+8,4 σ du seuil), donc `|C_edges| < 1e-6` et **aucun terme ZZ n'est émis**.
+Dédupliquer n'a littéralement rien à retirer.
+
+Noté au passage, et cohérent avec D-47 : le fondamental vaut **255** sur
+les 12 instantanés — 8 qubits tous à 1, « raffiner partout ».
+
+## Pourquoi corriger avant la campagne et non après
+
+C'est le raisonnement qui justifie de toucher `src/` maintenant :
+
+- l'impact est mesuré **nul** aujourd'hui, donc **aucun nombre publié ne
+  bouge** — la correction est gratuite ;
+- la réoptimisation rééquilibre précisément les poids qui rendent le
+  défaut invisible. Si `w_z_frac` se resserre ou `σ` s'élargit — ce que la
+  campagne peut choisir — le ZZ redevient actif et le facteur 2 devient
+  réel, à `dim = 2`, **la seule taille de toutes les campagnes publiées** ;
+- corriger après coup obligerait à rejouer toute la campagne.
+
+Le premier test ci-dessous mesure sur des coefficients aléatoires, donc
+avec ZZ VIVANT : c'est le seul régime où la correction est observable, et
+un test écrit sur les coefficients déployés passerait à vide.
 """
-import os
+
 import sys
+import os
 
 import numpy as np
 import pytest
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-_SRC = os.path.join(_REPO_ROOT, "..", "src")
-_SRC = os.path.abspath(_SRC)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-_COMMON = os.path.abspath(os.path.join(_REPO_ROOT, "..", "study", "common"))
-if _COMMON not in sys.path:
-    sys.path.insert(0, _COMMON)
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+for _p in (os.path.join(_REPO, "src"),):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
+from qiskit.quantum_info import SparsePauliOp          # noqa: E402
 from VQA.cost_hamiltonian import create_period_hamiltonian  # noqa: E402
-from ising_terms_and_annealing import build_ising_terms      # noqa: E402
 
 
-def _params(dim, h=0.0, c=None, k=0.0):
-    """Coefficients de cisaillement NON uniformes : `c` fixe la valeur de
-    la colonne/ligne 0, `c * 1.0000001` la colonne/ligne 1 -- assez proche
-    pour rester dans une seule bande physique, assez distinct pour ne pas
-    masquer une confusion d'index par une coïncidence de valeur."""
-    C = np.full((dim, dim), c if c is not None else -1.0)
-    return {
-        "H_edges": (np.full((dim, dim), h), np.full((dim, dim), h)),
-        "C_edges": (C.copy(), C.copy()),
-        "K_plaquettes": np.full((dim, dim), k),
-        "threshold_amr": 0.3,
-        "w_z_frac": 0.15,
-    }
+def _coefficients(dim, seed=0):
+    """Coefficients ALÉATOIRES : ZZ vivant, donc la correction observable."""
+    rng = np.random.default_rng(seed)
+    return {"H_edges": [rng.normal(size=(dim, dim)), rng.normal(size=(dim, dim))],
+            "C_edges": [rng.normal(size=(dim, dim)), rng.normal(size=(dim, dim))],
+            "K_plaquettes": rng.normal(size=(dim, dim))}
 
 
-def test_dim2_has_a_duplicate_zz_pauli_label():
-    """À dim = 2, le lien horizontal (i,0)->(i,1) et (i,1)->(i,0 mod 2)
-    relient la même paire de qubits : le SparsePauliOp porte deux entrées
-    au même label, à sommer pour connaître le couplage effectif."""
-    H = create_period_hamiltonian(_params(2, c=-1.0), 2)
-    labels = [str(p) for p in H.paulis]
-    zz_labels = [l for l in labels if l.count("Z") == 2]
-    assert len(zz_labels) != len(set(zz_labels)), (
-        "aucun label ZZ dupliqué à dim=2 : la dégénérescence de bond "
-        "documentée en D-59 n'est plus reproduite -- remesurer avant de "
-        "retirer ce test")
+def _sans_deduplication(hp, dim):
+    """L'émission d'AVANT D-59, rejouée pour mesurer l'écart."""
+    sl = []
+    off = dim * dim
+
+    def iH(y, x): return (y % dim) * dim + (x % dim)
+    def iV(y, x): return off + (y % dim) * dim + (x % dim)
+
+    for i in range(dim):
+        for j in range(dim):
+            for arr, idx in ((hp['H_edges'][0], iH), (hp['H_edges'][1], iV)):
+                v = arr[i, j]
+                if abs(v) > 1e-6:
+                    sl.append(("Z", [idx(i, j)], v))
+            c = hp['C_edges'][0][i, j]
+            if abs(c) > 1e-6:
+                sl.append(("ZZ", [iH(i, j), iH(i, j + 1)], c))
+            c = hp['C_edges'][1][i, j]
+            if abs(c) > 1e-6:
+                sl.append(("ZZ", [iV(i, j), iV(i + 1, j)], c))
+            k = hp['K_plaquettes'][i, j]
+            if abs(k) > 1e-6:
+                sl.append(("ZZZZ", [iH(i, j), iV(i, j + 1),
+                                    iH(i + 1, j), iV(i, j)], k))
+    return SparsePauliOp.from_sparse_list(sl, num_qubits=2 * dim * dim)
 
 
-def test_dim3_has_no_duplicate_zz_pauli_label():
-    """À dim = 3 le cycle ne dégénère plus : chaque cellule donne un lien
-    ZZ distinct, aucun label ZZ ne se répète."""
-    H = create_period_hamiltonian(_params(3, c=-1.0), 3)
-    labels = [str(p) for p in H.paulis]
-    zz_labels = [l for l in labels if l.count("Z") == 2]
-    assert len(zz_labels) == len(set(zz_labels))
+def _termes(op):
+    o = op.simplify()
+    return sorted((str(p), round(float(c.real), 12))
+                  for p, c in zip(o.paulis, o.coeffs))
 
 
-def test_dim2_plaquette_terms_are_not_duplicated():
-    """Le terme ZZZZ n'a pas le défaut : les 4 quadruplets de qubits
-    produits par les 4 cellules à dim=2 sont distincts deux à deux."""
-    H = create_period_hamiltonian(_params(2, c=0.0, k=-1.0), 2)
-    labels = [str(p) for p in H.paulis]
-    zzzz_labels = [l for l in labels if l.count("Z") == 4]
-    assert len(zzzz_labels) == 4
-    assert len(set(zzzz_labels)) == 4, (
-        "un label ZZZZ dupliqué à dim=2 : la plaquette dégénère aussi, "
-        "au-delà de ce que D-59 mesure")
+def _compte_zz(op):
+    return sum(1 for p in op.paulis if str(p).count("Z") == 2)
 
 
-def test_build_ising_terms_shares_the_same_degeneracy():
-    """`build_ising_terms` (SA / exhaustif) construit sa topologie avec la
-    même boucle que `create_period_hamiltonian` : la dégénérescence doit y
-    être identique, sinon les deux chemins n'étudient plus le même
-    opérateur (cf. COUVERTURE.md, 'build_ising_terms contre
-    create_period_hamiltonian : sain')."""
-    hp = _params(2, c=-1.0)
-    _, (edge_idx, edge_coef), _ = build_ising_terms(hp, 2)
-    pairs = [tuple(sorted(map(int, e))) for e in edge_idx]
-    assert len(pairs) != len(set(pairs)), (
-        "build_ising_terms ne duplique plus le lien a dim=2 alors que "
-        "create_period_hamiltonian si : les deux chemins divergent, "
-        "au-dela de ce que D-59 documente")
+# ══════════════════════════════════════════════════════════════════
+#  1. Plus aucun lien ZZ dupliqué, à aucune dimension
+# ══════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("dim", [2, 3, 4, 5])
+def test_aucune_paire_de_qubits_ne_recoit_deux_liens_zz(dim):
+    op = create_period_hamiltonian(_coefficients(dim), dim)
+    zz = [str(p) for p in op.paulis if str(p).count("Z") == 2]
+    assert zz, "aucun terme ZZ : le champ d'essai ne vérifierait rien"
+    doublons = len(zz) - len(set(zz))
+    assert doublons == 0, (
+        f"dim={dim} : {doublons} libellé(s) ZZ répété(s). Une paire de "
+        f"qubits qui reçoit deux entrées voit son couplage doublé (D-59).")
 
 
-def test_dim2_duplicated_coefficients_are_measured_equal():
-    """Les deux occurrences dupliquées portent le MÊME coefficient dès que
-    `C_edges` est symétrique par colonne/ligne -- c'est cette égalité
-    (mesurée sur des DNS réels dans D-59, reproduite ici sur un cas
-    synthétique) qui rend le doublon invisible à une simple lecture de
-    `nZZ`."""
-    hp = _params(2, c=-1.0)
-    H = create_period_hamiltonian(hp, 2)
-    by_label = {}
-    for pauli, coeff in zip(H.paulis, H.coeffs):
-        lbl = str(pauli)
-        if lbl.count("Z") == 2:
-            by_label.setdefault(lbl, []).append(float(np.real(coeff)))
-    dup = {lbl: cs for lbl, cs in by_label.items() if len(cs) > 1}
-    assert dup, "attendu au moins un label ZZ dupliqué à dim=2"
-    for lbl, cs in dup.items():
-        assert cs[0] == pytest.approx(cs[1]), (
-            f"{lbl}: coefficients dupliqués distincts {cs} -- ne correspond "
-            "plus à la mesure D-59, qui suppose une egalite au bit pres sur "
-            "coefficients HamiltParams reels")
+# ══════════════════════════════════════════════════════════════════
+#  2. La correction mord à dim=2 et NULLE PART ailleurs
+# ══════════════════════════════════════════════════════════════════
+
+def test_a_dim2_le_nombre_de_liens_zz_est_divise_par_deux():
+    """MESURE de la correction, sur des coefficients où ZZ est vivant."""
+    hp = _coefficients(2)
+    avant, apres = _sans_deduplication(hp, 2), create_period_hamiltonian(hp, 2)
+    assert _compte_zz(avant) == 8, f"attendu 8 ZZ avant, vu {_compte_zz(avant)}"
+    assert _compte_zz(apres) == 4, f"attendu 4 ZZ après, vu {_compte_zz(apres)}"
+    assert _termes(avant) != _termes(apres), (
+        "l'opérateur est inchangé à dim=2 : la déduplication ne mord pas")
+
+
+@pytest.mark.parametrize("dim", [3, 4, 5])
+def test_a_dim_superieur_l_operateur_est_inchange_bit_a_bit(dim):
+    """La correction ne doit RIEN changer là où l'anneau ne dégénère pas.
+
+    Sans ce test, dédupliquer pourrait retirer des liens légitimes à
+    `dim >= 3` sans que rien ne le signale — et `dim = 4` est la taille
+    des campagnes de coefficients.
+    """
+    hp = _coefficients(dim)
+    assert _termes(_sans_deduplication(hp, dim)) == \
+        _termes(create_period_hamiltonian(hp, dim)), (
+        f"dim={dim} : l'opérateur a changé alors que l'anneau périodique "
+        "n'y dégénère pas — la déduplication mord au-delà de sa portée")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  3. Le champ d'essai sépare — sinon rien de ce qui précède ne vaut
+# ══════════════════════════════════════════════════════════════════
+
+def test_le_champ_d_essai_a_bien_du_zz_vivant():
+    """Aux hyperparamètres DÉPLOYÉS la fenêtre gaussienne annule ZZ
+    (|C| < 1e-6, voir D-47) : un test écrit sur eux passerait à vide, la
+    déduplication n'ayant rien à retirer. D'où les coefficients aléatoires.
+    """
+    hp = _coefficients(2)
+    C0, C1 = hp["C_edges"]
+    assert np.max(np.abs(C0)) > 1e-6 and np.max(np.abs(C1)) > 1e-6, (
+        "le champ d'essai n'a pas de couplage ZZ au-dessus du seuil "
+        "d'émission : il ne pourrait pas voir la correction")
