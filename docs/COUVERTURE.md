@@ -2511,6 +2511,60 @@ pour que la matrice citée soit refaisable.
 coefficients tirés au hasard, donc cette famille de mutations ne l'atteint
 pas. On ne sait toujours pas sur quelle entrée il échouerait.
 
+## Le score intermédiaire d'Optuna — le chemin le moins regardé de `pipeline()` (D-143)
+
+`src/pipeline.py` porte **trois** sites de notation, et la suite n'en
+couvrait que deux. Le score **final** et le score du **chemin de
+divergence** ont chacun leurs tests ; le score **intermédiaire** — celui
+que `trial.report()` envoie à l'élagueur d'Optuna — n'était traversé par
+aucun test avant cette passe. C'est là qu'était D-143.
+
+**Pourquoi il échappait au balayage.** Il ne s'atteint qu'avec
+`trial is not None`, `did_hybrid` vrai et `steps_hybrid_count > 1` : il
+faut donc un essai Optuna *et* au moins deux frontières hybrides dans le
+run. Les fixtures rapides du dépôt passent `trial=None` (c'est le cas de
+`petit_run` dans `test_v1_partial_pockets.py`), et la seule configuration
+qui l'emprunte réellement est la campagne. **Un module n'est pas audité
+parce que ses fonctions ont été lues** — celle-ci l'avait été.
+
+**Ce qui est vérifié maintenant** —
+`tests/pipeline/test_intermediate_score_time_alignment.py`, **7 tests**,
+~3 s, déterministe (deux exécutions identiques au dernier chiffre) :
+
+| test | ce qu'il tient |
+|---|---|
+| `the_arm_reproduces_the_dns_so_a_reported_error_can_only_be_the_reference` | **validité de la mesure d'abord** : `patch_ratio = 1,0` et `phys_score` final à 3,06e−15. Sans lui, les six autres mesureraient autre chose |
+| `the_sweep_is_not_empty` | garde anti-balayage-vide : au moins 3 rapports exploitables |
+| `the_intermediate_reference_is_the_snapshot_of_the_previous_step` | le cœur de D-143, **par identité de tableaux** : réf. consommée ≡ `trace[k−1]` à 0,000e+00, bras ≡ `trace[k]` à ≤ 8,9e−16, les deux instantanés séparés de 1,8e−03 |
+| `the_intermediate_score_reports_the_dns_own_motion_not_the_arm_error` | l'écart chiffré à l'**opérateur assorti** (`score` lui-même) : 3,1e−02 annoncé contre 1e−15 aligné |
+| `the_two_readings_of_dns_trace_disagree_inside_one_function` | question 4 : le score final, lui, est aligné — c'est le contraste qui fait le défaut |
+| `the_last_report_is_aligned_only_by_the_end_of_run_overwrite` | épingle que **un** point sur cinq tombe juste, et par accident |
+| `the_open_defect_stays_written_in_the_registry` | la déviation reste écrite là où elle vit |
+
+**Ce sont des tests de déviation**, comme ceux de D-141 : ils épinglent un
+défaut **non corrigé** et rougissent le jour où il est tranché. Vérifié en
+mutant `src/pipeline.py:718` dans les deux sens — **A** (index aligné) :
+**3 failed** ; **B** (réécriture équivalente `get(step - 1) or {}`) :
+**7 passed**, pas de faux rouge.
+
+**Axes empruntés** : `classical_only` ; `dns_trace` présent (départ à
+chaud, donc `sim_temoin = None`) ; `max_depth_override = 1` ; élagage
+branché mais jamais mordant.
+
+**Ce que ce fichier ne couvre PAS**, écrit pour ne pas le croire couvert :
+
+- le **bras quantique** — le run est `classical_only`, pour rester à ~3 s
+  et déterministe ; rien n'indique que l'alignement en dépende, mais ce
+  n'est pas mesuré ;
+- la configuration de **campagne** (`N = 256`, `HYBRID_DT = 0,10`) : les
+  nombres sont pris à `N = 32` ;
+- le **classement** entre essais. Le terme parasite est commun à tous les
+  essais d'une même trace DNS ; savoir s'il s'annule dans la comparaison
+  qu'un élagueur fait demanderait deux essais d'hyperparamètres différents
+  avec un bras non exact. **Non fait, et donc non conclu** ;
+- la branche `elif sim_temoin is not None` du même bloc : elle est **morte**
+  dès qu'une trace DNS est fournie, et aucun test ne l'emprunte.
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
