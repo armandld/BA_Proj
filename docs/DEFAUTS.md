@@ -8,7 +8,7 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **17** |
+| **ouverts** — décision ou campagne requise | **18** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1447,6 +1447,59 @@ côté du calcul concerné, et un test vérifie qu'elle y reste.
 
 ```bash
 pytest tests/study/test_fig11_uncertainty_weight.py
+```
+
+## D-135 — l'accord des deux chemins de score n'est gardé que par une chaîne, dans `src/`
+
+**Où ça bloque.** `pipeline()` calcule le score de deux façons selon la
+branche prise. D-5 avait corrigé le chemin de divergence, qui utilisait une
+L2 **non pondérée** là où `score()` pondère par la carte d'instabilité :
+deux formules partaient vers Optuna sous la même clé `combined`, écart
+mesuré **1,8 %** sur un champ à nappe de courant. Rien ne garde aujourd'hui
+cette correction sinon une recherche de texte.
+
+**Comment on est tombé dessus.** Sondage `.read()` de `COUVERTURE.md`, site
+`tests/mapping/test_objective_and_estimators_analytic.py:574`.
+`test_both_scoring_paths_now_use_the_same_formula` fait
+`assert "field_errors[var] = weighted_relative_error(" in _PIPELINE_SRC`.
+La vérification numérique qui suit dans le même test compare `score()` à
+`weighted_relative_error` — elle mesure le chemin **`score()`**, jamais le
+chemin de divergence, qui vit dans le corps de `pipeline()`.
+
+**Ce qui est établi.** Mutation A′, `src/pipeline.py:675`, reste du fichier
+intact : l'appel partagé est **laissé en place** et son résultat réécrit une
+ligne plus bas par `float(np.sqrt(np.mean((arr_q - arr_r)**2)))` — la L2 non
+pondérée de D-5, exactement.
+
+| | |
+|---|---|
+| chaîne cherchée par le test | **toujours présente** |
+| `pytest tests/mapping/test_objective_and_estimators_analytic.py` | **46 passed** |
+| ce que la mutation rétablit | le défaut D-5, sur le chemin de divergence |
+
+**Où on en est. Rapport seul, non corrigé — et c'est délibéré.**
+`src/pipeline.py` est le chemin scientifique **déployé** : c'est le fichier
+qui a produit les nombres publiés. Les corrections de cette famille (D-127,
+D-129 à D-134) sont toutes entièrement dans les tests parce que le code y
+était juste ; ici aussi le code est juste, mais le rendre *mesurable*
+demanderait d'extraire la boucle par champ de `pipeline()` en une fonction
+appelable — le geste fait ailleurs (`interpretation_message` D-46,
+`floor_ratios` D-89, `apply_leak_free_threshold` D-134), mais jamais encore
+dans `src/`. La fiche du dépôt est explicite : dans le doute entre défaut et
+choix de conception, **mesurer, documenter, ne pas corriger, demander**.
+
+Deux directions, à trancher :
+
+1. **extraire** la boucle par champ en `field_errors_for(q_fluxes,
+   ref_fluxes, variables)` dans `src/pipeline.py`, corps inchangé, et
+   l'éprouver contre `score()` sur un champ à nappe de courant — le seul
+   qui SÉPARE les deux formules, l'écart y valant 1,8 % ;
+2. **atteindre la branche par `pipeline()` lui-même**, avec une entrée qui
+   force la divergence d'un champ, sans toucher à `src/` — plus fidèle,
+   mais l'entrée reste à construire et son coût n'est pas mesuré.
+
+```bash
+pytest tests/mapping/test_objective_and_estimators_analytic.py -q -k both_scoring_paths
 ```
 
 ## Ajouter une entrée
