@@ -24,8 +24,8 @@ numérotées — 63 corrections en tout, avant l'ajout de D-89 et D-90
 ci-dessous ; ce sous-compte n'est pas revérifié ici, voir « Compte de tête
 inexact » plus bas — signalé une fois, non recorrigé à chaque ajout. Le
 titre annonçait **63** avant l'ajout de D-90 ; **62** avant l'ajout de
-D-89 ; **60** avant l'ajout de D-73 ; **59** avant l'ajout de D-72 ; **58** avant l'ajout de D-71 ; **56** avant l'ajout de D-68 et D-70 (D-69 n'entre pas ici : rapport
-seul, il vit dans `DEFAUTS.md`) ; **53** avant que la fusion de la base n'apporte
+D-89 ; **60** avant l'ajout de D-73 ; **59** avant l'ajout de D-72 ; **58** avant l'ajout de D-71 ; **56** avant l'ajout de D-68 et D-70 (D-69 était alors un rapport seul,
+dans `DEFAUTS.md` ; il entre ici depuis que sa table est refaite) ; **53** avant que la fusion de la base n'apporte
 D-10, D-66 et D-67 ; **41** pour 42 lignes numérotées avant l'ajout de D-52,
 D-54, D-55 et D-56. Le compte de tête est faux à chaque fusion — c'est
 exactement le défaut de registre que la section « Compte de tête inexact »
@@ -285,6 +285,7 @@ audité jusqu'ici (`COUVERTURE.md` §1), lit les bases Optuna gelées.
 | D-62 | `plot_pareto_with_isocost` fixait sa fenêtre verticale à **(-0,05 ; 0,40) en dur**. C'est la figure qui porte le front de Pareto et les lignes d'iso-score du rescore : un point hors cadre ne se signale pas, il disparaît, et le front semble s'arrêter là où le cadre s'arrête | mesuré sur les deux bases gelées, erreur physique moyennée sur les scénarios : `q_has_v2_phase1` **0/178** hors cadre (phys ∈ [0,0348 ; 0,2997]) — figure **inchangée** — et `classical_v2_phase1` **9/125** hors cadre (phys ∈ [0,0114 ; **2,2749**]), dont **3 des 46 points du front de Pareto**. Après : la fenêtre reste (-0,05 ; 0,40) quand tout y entre et s'élargit aux données sinon. Aucun seuil inventé — les bornes viennent des points tracés | `pytest tests/pipeline/test_pareto_window_hides_nothing.py` |
 | D-64 | `import_Neon_data_to_local.py` — le **seul** code du dépôt qui supprime une étude Optuna — supprimait l'étude de **destination** avant d'avoir lu la **source**, puis rattrapait tout échec par un message ❌ et un code de sortie **0**. Un import qui n'a rien importé était indiscernable d'un import réussi, et la destination était déjà détruite | mesuré, deux SQLite (`--in-url` remplace Neon) : destination à **5 essais**, source ne portant pas l'étude → avant, `KeyError`, **code 0**, et **l'étude locale n'existe plus** ; après, **5 essais intacts**, code 0, ligne « destination laissée intacte ». Échec réel de copie (destination inouvrable) : **code 0 → code 1**. Import réel : inchangé, 2 → **7** essais copiés. **L'empreinte est dans le dépôt** : 8 des 10 bases de `results/hyperparams/optuna_studies/` portent le schéma Optuna complet et **zéro ligne**, et `classical_v2_phase2` / `classical_v2_phase3` pèsent **274 432** et **299 008** octets là où un schéma neuf en pèse **114 688** — des pages libérées, donc des lignes écrites puis supprimées. Ce n'est pas une preuve que ce script les a vidées ; c'est la fermeture du chemin qui le fait | `pytest tests/pipeline/test_import_never_destroys_destination.py` |
 | D-68 | `plot_amr_state` — la **seule** fonction de `src/visual.py` et `src/help_visual.py` qui s'exécute en production : `pipeline.py` l'appelle 4× par pas de verrouillage et sauve un PNG à chaque fois — étiquetait `Grid X` l'axe horizontal et `Grid Y` le vertical. `imshow` place l'axe 0 du tableau en **vertical** ; `Jz` étant indexé `[X, Y]` (`grid.py` : `AXIS_X = 0`, `AXIS_Y = 1`, et `get_fluxes` forme bien `dBy/dX − dBx/dY` avec `axis=0` pour X), l'axe horizontal porte **Y**. Les deux étiquettes nommaient donc l'axe de l'autre. La cause est écrite trois lignes plus haut : un commentaire annonçait « axis=1 est d/dx (colonnes), axis=0 est d/dy (lignes) », la convention `indexing='xy'` que `grid.py` désigne explicitement comme n'étant pas celle du dépôt. La figure **paraissait juste** — les cadres d'attention tombent bien sur les structures qu'ils désignent, vérifié — seule la lecture des positions était transposée | champ d'essai qui **sépare** (une cellule brillante hors diagonale, `Jz ≠ Jzᵀ`) : structure posée en **X=10, Y=40** au sens de `grid.py`, **relue sur la figure X=40, Y=10** avant, **X=10, Y=40** après. Seules les **étiquettes** changent : le tableau passé à `imshow` et les cadres sont bit-à-bit identiques, un test l'épingle. Aucun nombre publié ne bouge ; la géométrie des PNG déjà publiés non plus | `pytest tests/pipeline/test_amr_figure_axes.py` |
+| D-69 | **Rapport seul à l'ouverture, clos par remesure.** La table T31 (« La convention d'axes des mappeurs », plus bas) publiait à `8ee5c8a` le seul verdict tranché du module — *« corriger sans réoptimiser dégrade à dim=16 »*, IC95 [−0.1328, **−0.0146**], qui exclut zéro. Rejouée par ses deux propres commandes, elle ne ressortait plus. **Deux déplacements, chacun attribué à sa cause par la mesure, les trois points rejoués dans un seul environnement** : `8ee5c8a` → `47012fa` vient du solveur (D-25, D-26/D-27) ; `47012fa` → HEAD vient de **D-70 seul** — rejoué à `dffac18`, la correction de `_hard_patches` et rien d'autre, les quatre lignes sortent identiques au dernier chiffre à celles de HEAD, aucun commit ultérieur (dont D-91) ne les déplace. Le second n'était pas mesuré et il est le plus lourd : le Δ du F1 à dim=8 **change de signe** (+0.0391 → −0.0312) et les IC95 s'élargissent d'un facteur ~3 à dim=8, la vérité terrain canonique étant plus hétérogène par scénario que l'écart-type intra-patch qu'elle remplace. **La lecture publiée est rétractée** : refaite à `95571d1`, la table ne porte **aucun** verdict tranché — l'IC95 du Spearman à dim=16 passe de [−0.1328, −0.0146] à [−0.1673, **+0.0343**]. Ce qui subsiste est que les quatre Δ sont négatifs et qu'aucun ne montre de gain. Ni l'environnement ni le bruit n'expliquent l'écart, mesuré : au hash `47012fa` cet environnement rend la colonne `47012fa` au dernier chiffre publié, et les deux commandes rejouées à l'identique rendent une sortie bit-à-bit identique (2 exécutions par dim). Aucun compteur du master table ne bouge — T31 n'y figure pas : 180 / 176 / 4 / 0 avant comme après | verdict dim=16 **dégrade → indécidable** ; Δ F1 dim=8 **+0.0391 → −0.0312** | `pytest tests/study/test_curl_convention_gap.py -k "published_table or excludes_zero"` |
 | D-70 | `_hard_patches` (`study/h1_solver/h1_curl_convention_gap.py`) — la « vérité terrain » de durété utilisée par les métriques de classement de T31 (Spearman, F1 à budget apparié) : sa docstring promettait « même définition que `study/pipeline/hard_patch_labels.py` » (l'erreur L2 de reconstruction par grossissement en bloc, sommée sur les 4 champs, normalisée par le RMS global). Le corps calculait autre chose — l'écart-type intra-patch de la **norme** du champ (`sqrt(vx²+vy²+Bx²+By²)`) — une formule qui coïncide avec la canonique sur un champ lisse mais **s'inverse** dès qu'un patch oscille à magnitude constante : l'écart-type y est nul (rien ne « varie » en norme) alors que l'information fine y est totalement détruite par le grossissement en bloc, donc l'erreur de reconstruction canonique y est maximale | champ d'essai qui **sépare** : un patch en damier `vx=±1` (les 3 autres champs nuls dans ce patch, magnitude rigoureusement constante `= 1`), sur fond de bruit lisse. Ancienne formule : `0,0000` — **minimum** du champ entier, patch jugé le plus facile. `patch_l2_errors` (canonique) : `1,0314` — **maximum** du champ, patch le plus difficile. Classement inversé, pas seulement décalé. Nouvelle formule : identique à `patch_l2_errors` à **1,1e−16** près sur un champ aléatoire quelconque (4 champs, 32×32, 4×4 patches), et retrouve le damier comme patch le plus dur. Aucun nombre publié ne bouge — les artefacts `.npz` de T31 sont déjà signalés non reproductibles pour une autre raison (D-69, `DEFAUTS.md`), donc rien de publié aujourd'hui ne dépendait de cette version | `pytest tests/study/test_hard_patches_matches_canonical.py` |
 | D-71 | La réorganisation `17d983d` a déplacé **et** renommé chaque script de `study/v4/tNN_xxx.py` vers `study/<module>/<module>_xxx.py`, sans toucher les commandes de reproduction qui les citent : 16 chemins distincts dans `docs/RESULTS.md` (21 occurrences), les docstrings d'usage de 21 scripts, et surtout **deux lanceurs `scripts/` qui invoquaient réellement ces chemins** — `run_fold.sh` et `run_leak_free_campaign.sh` auraient échoué dès le premier appel Python. Le second portait un défaut composé, invisible tant qu'on ne regarde que la chaîne `study/v4/` : `$HERE`/`$ROOT` étaient calculés pour une profondeur de deux niveaux sous la racine (`study/v4/`, vraie au moment où le script a été écrit) et n'ont pas été réajustés pour `scripts/` (un seul niveau) — `ROOT` résolvait au **parent du dépôt**, `RESULTS="$ROOT/study/results"` à un chemin qui n'a plus existé après l'aplatissement de `study/results/` vers `results/`, et l'invocation Python utilisait `$HERE/t22_unseen_conditions.py`, un fichier qui n'a jamais vécu dans `scripts/` | mesuré, chaque script isolément : `run_fold.sh`, `root` résolvait à un dossier **hors du dépôt** (existant, donc `cd` réussissait, mais sans `study/` dedans) ; `run_leak_free_campaign.sh`, `fold_status()` sur un artefact réel (`results/t22_unseen_leak-free_ot.json`, `status=completed`) rendait **`absent`** avant correction (le chemin `RESULTS` ne menait nulle part), **`completed`** après. Les 21 fichiers `study/`/`figures/` : substitution mécanique vérifiée fichier par fichier contre l'arborescence réelle, flags CLI de chaque script inchangés (spot-check exhaustif des `add_argument` contre les commandes historiques) — aucune régénération d'artefact conservée, seul le git-hash de provenance aurait bougé. Exclus délibérément : `docs/archive/*` (déclaré obsolète, jamais cité), `results/v4_master_table.md` (artefact déjà généré, se corrige à la prochaine régénération réelle), et les citations narratives d'une campagne passée (`tests/study/test_silent_failure_sweep.py`, le paragraphe « Trap sweep » de ce fichier) — elles décrivent un fait vrai au moment où il a été écrit, pas une commande à rejouer | `pytest tests/study/test_repro_commands_point_to_real_files.py` |
 | D-72 | `study/h1_solver/h1_solver_convergence.py` (T14) — le script qui **valide numériquement le solveur** — suivait `max\|div B\| / rms\|B\|` le long de chaque trajectoire avec `dns_validation.div_B`, une divergence **spectrale**, et en faisait son critère d'acceptation (`ALL CHECKS`, stocké en `all_checks_pass`, deux lignes du master table). La docstring de `div_B` dit pourquoi c'était juste au moment où elle a été écrite : « same convention as the solver's FFT projection ». Ce n'est plus la convention du solveur depuis **D-25** : `PROJECT_B = False`, B n'est plus projeté spectralement — il est solénoïdal **aux différences finies** par construction, l'induction étant en forme rotationnelle `rhs_B = (∂Ez/∂y, −∂Ez/∂x)` dont la divergence FD4 est exactement nulle puisque les décalages de `np.roll` commutent. Mesurer un champ FD-solénoïdal avec un opérateur spectral ne mesure pas la contrainte : cela mesure l'écart entre les deux opérateurs. D-25 a corrigé le solveur ; le diagnostic chargé de le surveiller est resté sur l'ancien opérateur, et personne ne l'a relu — `COUVERTURE.md` déclarait ce module « lu en entier » | sur la configuration **publiée** de T14 (`orszag_tang`, grilles 32/64/128, `t_end=0,5`, Re=400 puis 200/3200), rejouée à HEAD **sans réécrire l'artefact** : `max\|div B\|/rms\|B\|` vaut **3,9029e−02** avec l'opérateur spectral contre **2,0266e−14** avec l'opérateur assorti (FD4), et `all_checks_pass` bascule **True → False** contre le seuil de 1e−3 — alors que ce fichier publie « entre 5,6e−15 et 8,0e−14 — machine precision ». Le faux signal **croît quand la grille grossit** (mesuré : N=128 **2,3103e−04**, N=64 **4,5675e−03**, N=32 **3,9029e−02**), donc la « validation » passait ou échouait **selon la résolution**, pour une contrainte respectée à 1e−14 partout. Champ qui **sépare** le plus, retenu pour le test : `mhd_rotor`, N=32, `t_end=0,05` (5 pas, < 0,1 s) — spectral **6,0470e−01**, FD4 **2,0905e−15**, onze ordres de grandeur. Après correction, sur les 5 trajectoires de la configuration publiée : **3,7632e−15 à 2,0266e−14**, soit la bande publiée. **Aucun nombre publié ne bouge** : l'artefact `results/t14_numerical_validation.npz` n'est pas régénéré ici — il date de `1f03713`, quand la projection spectrale de B était encore active et l'opérateur donc assorti — et le master table continue de le lire tel quel | `pytest tests/study/test_t14_divb_uses_matched_operator.py` |
@@ -3187,8 +3188,9 @@ déplaçait le dernier bit (écart 8.0e-15 sur `K_plaquettes`, mhd_rotor).
 python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 8  --n-snaps 6 --seed 0
 python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 16 --n-snaps 6 --seed 0
 ```
-git 8ee5c8a — 4 scénarios × 6 instantanés = 24 lignes, IC95 rééchantillonné
-**par scénario** (le bloc est la trajectoire, pas l'instantané).
+git `95571d1` (table refaite, D-69 ; publiée d'abord à `8ee5c8a`) — 4
+scénarios × 6 instantanés = 24 lignes, IC95 rééchantillonné **par
+scénario** (le bloc est la trajectoire, pas l'instantané).
 
 La décision au seuil entraîné est inexploitable : à 0.1496 le score de patch
 sature et les deux bras dégénèrent en « tout raffiner » (9/24 lignes
@@ -3196,33 +3198,84 @@ dégénérées à dim=8). La comparaison porte donc sur le **classement**, à
 budget apparié — les deux bras raffinent le même nombre de patches et ne
 diffèrent que par lesquels.
 
+**La table en vigueur est celle refaite à `95571d1` (D-69).** Les
+artefacts `results/h1_curl_convention_gap_N128_dim{8,16}_v2.npz` du dépôt
+sont ceux-là, et `tests/study/test_curl_convention_gap.py` échoue si l'un
+des deux s'en écarte de plus de 5e−4.
+
 | dim | métrique | historique | corrigé | Δ | IC95 | verdict |
 |---|---|---|---|---|---|---|
-| 8 | Spearman vs dureté | +0.7266 | +0.7237 | −0.0029 | [−0.0222, +0.0164] | indécidable |
-| 8 | F1 budget apparié | 0.7396 | 0.7786 | +0.0391 | [−0.0156, +0.0938] | indécidable |
-| 16 | Spearman vs dureté | +0.7896 | +0.7231 | −0.0665 | [−0.1328, −0.0146] | **dégrade** |
-| 16 | F1 budget apparié | 0.8522 | 0.8223 | −0.0299 | [−0.0651, +0.0052] | indécidable |
+| 8 | Spearman vs dureté | +0.7426 | +0.7160 | −0.0266 | [−0.1096, +0.0233] | indécidable |
+| 8 | F1 budget apparié | +0.7214 | +0.6901 | −0.0312 | [−0.1146, +0.0156] | indécidable |
+| 16 | Spearman vs dureté | +0.7960 | +0.7427 | −0.0534 | [−0.1673, +0.0343] | indécidable |
+| 16 | F1 budget apparié | +0.8730 | +0.8132 | −0.0599 | [−0.1719, +0.0052] | indécidable |
 
-Écart maximal sur le score : 0.318 (dim 8), 0.397 (dim 16) ; accord des
-décisions 0.921 dans les deux cas. La convention change donc réellement les
-entrées — mais pas dans le bon sens.
+Écart maximal sur le score : 0.336 (dim 8), 0.397 (dim 16) ; accord des
+décisions 0.921 (dim 8) et 0.927 (dim 16). La convention change donc
+réellement les entrées. Sur le **sens**, la table ne tranche pas : les
+quatre Δ sont négatifs, aucun des quatre intervalles n'exclut zéro.
 
-**Table non reproductible à HEAD (D-69, `DEFAUTS.md`).** Rejouée telle
-quelle sur la branche vive, cette table ne ressort plus : à dim=16 le
-verdict `Spearman vs dureté` passe de **dégrade** (IC95 excluant zéro) à
-**indécidable** (IC95 l'incluant). Cause identifiée, pas seulement
-constatée : le solveur a changé sous les quatre scénarios canoniques entre
-le hash `8ee5c8a` ci-dessus et aujourd'hui (D-25 : projection de B par
-défaut désactivée ; D-26/D-27 : `harris_tearing` réamorcé à 100 % de son
-amplitude prévue au lieu de 27,5 %). La lecture qui suit — « corriger sans
-réoptimiser dégrade à dim=16 » — s'appuie sur un intervalle qui n'est plus
-celui que le dépôt reproduit. Voir D-69 pour la mesure avant/après complète
-et la décision requise avant de la citer telle quelle.
+**Ce que cette table remplace, et pourquoi — D-69, clos.** La table
+publiée à `8ee5c8a` portait le seul verdict tranché du module :
+
+| dim | métrique | `8ee5c8a` (publié) | `47012fa` | `dffac18` = `95571d1` (en vigueur) |
+|---|---|---|---|---|
+| 8 | Spearman | −0.0029 [−0.0222, +0.0164] | −0.0122 [−0.0276, +0.0026] | −0.0266 [−0.1096, +0.0233] |
+| 8 | F1 apparié | **+0.0391** [−0.0156, +0.0938] | +0.0182 [−0.0182, +0.0573] | **−0.0312** [−0.1146, +0.0156] |
+| 16 | Spearman | −0.0665 [**−0.1328, −0.0146**] | −0.0495 [−0.1342, +0.0362] | −0.0534 [−0.1673, +0.0343] |
+| 16 | F1 apparié | −0.0299 [−0.0651, +0.0052] | −0.0286 [−0.0664, +0.0052] | −0.0599 [−0.1719, +0.0052] |
+
+Deux déplacements distincts, chacun attribué à sa cause par la mesure,
+tous trois rejoués **dans le même environnement** pour que la comparaison
+porte sur le code et pas sur les bibliothèques :
+
+1. `8ee5c8a` → `47012fa` : le **solveur** a changé sous les quatre
+   scénarios canoniques (D-25, projection de B par défaut désactivée ;
+   D-26/D-27, `harris_tearing` réamorcé à 100 % de son amplitude prévue
+   au lieu de 27,5 %). C'est ce que D-69 avait établi.
+2. `47012fa` → `95571d1` : **D-70 seul.** Rejoué au commit `dffac18`
+   — la correction de `_hard_patches`, rien d'autre — les quatre lignes
+   sortent identiques au dernier chiffre à celles de `95571d1`. Aucun des
+   commits suivants (dont D-91) ne déplace cette table.
+
+Le second déplacement est le plus lourd et il n'était pas mesuré : la
+vérité terrain de dureté que Spearman et le F1 comparent au score n'était
+pas celle que sa docstring annonçait (D-70). Le Δ du F1 à dim=8 **change
+de signe** avec elle (+0.0391 publié → −0.0312), et les intervalles
+s'élargissent d'un facteur ~3 à dim=8 : la définition canonique est plus
+hétérogène d'un scénario à l'autre que l'écart-type intra-patch qu'elle
+remplace, et le bootstrap par scénario le voit.
+
+**L'environnement n'est pas en cause, mesuré.** Rejouées au hash
+`47012fa` dans l'environnement de cette passe, les quatre lignes rendent
+`−0.0122 [−0.0276, +0.0026]`, `+0.0182 [−0.0182, +0.0573]`,
+`−0.0495 [−0.1342, +0.0362]`, `−0.0286 [−0.0664, +0.0052]` — la colonne
+`47012fa` ci-dessus au dernier chiffre publié. La réserve de dérive
+d'environnement que D-69 formulait ne porte donc pas sur ces nombres.
+
+**Mesure déterministe.** Les deux commandes rejouées à l'identique rendent
+une sortie bit-à-bit identique (deux exécutions par dim). L'écart au
+publié n'est pas de la variance d'exécution.
+
+**Aucun compteur du master table ne bouge** : T31 n'y figure pas.
+`python study/common/aggregate_master_table.py` rend **180 / 176 OK /
+4 DIFF / 0 MISSING** avant comme après.
 
 ## Ce qu'il faut en conclure
 
-**Corriger la convention d'axes n'améliore pas la tâche, et à dim=16 la
-dégrade avec un intervalle qui exclut zéro.** L'explication tient en une
+⚠️ **Rétractation — « à dim=16 la correction dégrade » ne tient plus.**
+Cette section a longtemps conclu : *« corriger la convention d'axes
+n'améliore pas la tâche, et à dim=16 la dégrade avec un intervalle qui
+exclut zéro »*. La seconde moitié est retirée. Refaite à `95571d1`
+(D-69), la table ne porte **aucun** verdict tranché : l'IC95 du Spearman
+à dim=16 passe de [−0.1328, **−0.0146**] à [−0.1673, **+0.0343**]. Le
+nombre qui portait la phrase n'existe plus.
+
+**Ce qui reste vrai : corriger la convention d'axes n'améliore pas la
+tâche.** Les quatre Δ sont négatifs aux deux dimensions — direction
+constante, jamais significative. C'est une indication, pas un verdict, et
+la formulation publiable est *« aucun gain mesurable, et rien qui exclue
+une dégradation »*. L'explication tient en une
 phrase : les hyperparamètres (`beta_curl`, `kappa`, `gamma_*`,
 `threshold_amr`) ont été réglés par Optuna **sur l'opérateur historique**.
 Appliquer le bon opérateur avec des coefficients calibrés pour un autre
@@ -3239,7 +3292,10 @@ n'est pas une réponse.
 
 Trois lectures, révisées après avoir compté le coût réel :
 
-1. *Corriger et publier tel quel* — exclu : la mesure dit que c'est pire.
+1. *Corriger et publier tel quel* — écarté, mais plus faiblement qu'écrit
+   ici d'abord (« la mesure dit que c'est pire ») : depuis D-69 la mesure
+   ne dit plus que c'est pire, elle dit qu'elle ne sait pas. Ce qui écarte
+   cette lecture est qu'aucune des quatre comparaisons ne montre de gain.
 2. *Documenter et ne rien réoptimiser* — recommandation initiale, fondée
    sur « une semaine de calcul Optuna ». J'ai d'abord cru la réfuter avec
    les ~47 h de **mur** mesurées dans les bases. C'était un mauvais cadrage :

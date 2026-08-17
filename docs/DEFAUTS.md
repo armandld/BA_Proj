@@ -43,8 +43,11 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **13** |
+| **ouverts** — décision ou campagne requise | **12** |
 | **gelés** volontairement | 2 |
+
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md`. D-69 est sorti
+au profit de `RESULTS.md`, sa table étant refaite.)*
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
 plus longtemps que les autres.** La narration T17 (« ZZ est numériquement
@@ -87,13 +90,14 @@ mesure de falsification. Mesuré nul à `dim = 2`, donc **aucun nombre publié
 n'en dépend** — mais `beta_xpoint`, que D-22 range parmi les 8 paramètres à
 réoptimiser, est un hyperparamètre qu'aucune mesure de `study/` ne peut voir.
 
-**D-69, ajouté cette passe, touche une lecture publiée plus directement que
-D-48/D-50 : il en change le verdict, pas seulement la lecture.** La table
-T31 (« corriger la convention d'axes dégrade la tâche à dim=16 ») ne se
-reproduit plus à HEAD — rejouée, l'IC95 qui excluait zéro l'inclut
-désormais. Le solveur sous-jacent a changé (D-25, D-26/D-27) après
-l'écriture de T31, pour de bonnes raisons ailleurs ; la table, elle, ne
-l'a pas suivi. Table refaite requise avant de citer cette conclusion.
+**D-69 est sorti d'ici : la table T31 est refaite, il vit dans
+`RESULTS.md`.** Et il emporte une lecture publiée avec lui — « corriger la
+convention d'axes dégrade la tâche à dim=16 » est **rétractée** : refaite à
+`95571d1`, la table ne porte plus aucun verdict tranché (IC95 du Spearman à
+dim=16 : [−0.1328, −0.0146] → [−0.1673, **+0.0343**]). Deux causes
+mesurées, pas une : le solveur (D-25, D-26/D-27), puis **D-70 seul** pour
+tout le reste du déplacement. Ce qui subsiste est plus faible que ce qui
+était écrit : les quatre Δ sont négatifs, aucun n'est significatif.
 
 **Rien ne bloque plus la réoptimisation côté code.** D-132 (bras QAOA
 instable selon les hyperparamètres) est **élucidé** : la bisection nomme
@@ -865,101 +869,6 @@ doublé, le fondamental peut cesser d'être insensible à ce doublon.
 
 ```bash
 pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py
-```
-
-
-## D-69 — la table T31 n'est plus reproductible à HEAD, et son verdict le plus fort en dépend
-
-**Où ça bloque.** Sur une lecture publiée : la phrase de conclusion de T31
-(`RESULTS.md`, « La convention d'axes des mappeurs ») — *« corriger sans
-réoptimiser dégrade la tâche à dim=16, avec un intervalle qui exclut
-zéro »* — ne se reproduit plus en rejouant la commande publiée telle
-quelle. Le verdict passe de **dégrade** à **indécidable**.
-
-**Comment on est tombé dessus.** Prochaine étape du plan de passe
-(`h1_solver`, après `visual.py`/`help_visual.py`, D-68) : rejouer les deux
-commandes que T31 donne comme sa propre preuve de reproductibilité, avant
-de lire le reste du module.
-
-```bash
-python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 8  --n-snaps 6 --seed 0
-python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 16 --n-snaps 6 --seed 0
-```
-
-**Ce qui est établi.**
-
-| dim | métrique | publié (`8ee5c8a`) | rejoué à HEAD (`47012fa`) | verdict publié | verdict à HEAD |
-|---|---|---|---|---|---|
-| 8 | Spearman vs dureté | Δ −0,0029 IC95 [−0,0222, +0,0164] | Δ −0,0122 IC95 [−0,0276, +0,0026] | indécidable | indécidable |
-| 8 | F1 budget apparié | Δ +0,0391 IC95 [−0,0156, +0,0938] | Δ +0,0182 IC95 [−0,0182, +0,0573] | indécidable | indécidable |
-| 16 | Spearman vs dureté | Δ −0,0665 IC95 [**−0,1328, −0,0146**] | Δ −0,0495 IC95 [**−0,1342, +0,0362**] | **dégrade** | **indécidable** |
-| 16 | F1 budget apparié | Δ −0,0299 IC95 [−0,0651, +0,0052] | Δ −0,0286 IC95 [−0,0664, +0,0052] | indécidable | indécidable |
-
-Le seul verdict publié qui n'était pas déjà « indécidable » ne l'est plus :
-la borne haute de l'IC95 passe de −0,0146 (exclut zéro) à +0,0362 (l'inclut).
-
-**Cause identifiée, pas seulement constatée.** Le script se déclare
-lui-même entièrement déterministe (aucun tirage hors provenance). En
-substituant `src/Simulation/solver.py` et `src/Simulation/grid.py` tels
-qu'ils étaient au hash `31d5727` (l'écriture de T31) dans un rejeu à
-dim=8 : le F1 budget apparié redevient **identique au bit près** au publié
-(Δ +0,0391, IC95 [−0,0156, +0,0938]) — confirmant que le solveur, pas le
-script T31 lui-même, porte l'écart. Trois commits, tous postérieurs à
-l'écriture de T31 et tous corrigeant des défauts mesurés et acceptés (pas
-des régressions) :
-
-- **D-25** (`6ecaecf`) : projection spectrale de B désactivée par défaut
-  (`PROJECT_B = False`, était `True`) ;
-- **D-26/D-27** (`e4d6bbc`, `7e6f1d4`) : `harris_tearing` — l'un des 4
-  scénarios canoniques que T31 balaie — réamorcé à **100 %** de son
-  amplitude de perturbation prévue, contre **27,5 %** avant correction
-  (`div_FD B` : 2,801e−03 → 1,208e−16).
-
-Les trajectoires DNS que T31 échantillonne ont donc changé sous lui entre
-la publication et aujourd'hui — légitimement, ce sont des corrections
-mesurées et déjà verrouillées par leurs propres tests, pas un nouveau
-défaut de leur part.
-
-**Écart résiduel non expliqué, mesuré séparément.** Même avec le solveur de
-`31d5727` restauré, le Spearman ne matche pas au bit près (dim=8 :
-historique publié +0,7266, rejoué +0,7320 — écart ~0,005, dans le même
-IC95, aucun verdict n'en dépend). `environment.yaml` ne fixe aucune version
-(`numpy`, `scipy`, `qiskit` non épinglés) : cet écart est cohérent avec une
-dérive d'environnement (FFT/BLAS) et ne change aucune conclusion mesurée
-ici — noté pour ne pas être reconfondu avec la cause ci-dessus si quelqu'un
-le retrouve.
-
-**Second facteur, distinct et cumulatif : D-70.** Indépendamment du
-solveur, le label de « dureté » que Spearman et le F1 apparié comparent au
-score des mappeurs (`_hard_patches`) ne calculait pas la définition que sa
-docstring revendiquait — voir D-70, `RESULTS.md`, corrigé cette même passe.
-Une table refaite aujourd'hui à l'identique de la commande publiée
-utiliserait déjà la définition corrigée, donc ne serait de toute façon pas
-comparable point par point aux nombres publiés sans le dire.
-
-**Où on en est — non corrigé, décision ou campagne requise.** Il n'y a rien
-à corriger dans le *code* de T31 lui-même (D-70 mis à part, déjà traité) :
-le script fait ce qu'il annonce, le solveur sous-jacent a changé pour de
-bonnes raisons ailleurs. Ce qui manque est une **table refaite** — mêmes
-commandes, HEAD actuel, avec D-70 appliqué — avant que la phrase « dégrade
-à dim=16 » puisse être citée. Deux options, laissées à USER :
-
-- refaire uniquement les deux commandes ci-dessus (quelques minutes,
-  mêmes 4 scénarios × 6 instantanés) et republier la table et sa
-  conclusion ;
-- ou traiter ceci comme faisant partie de la campagne de réoptimisation
-  D-22 déjà identifiée par T31 lui-même, puisque le solveur qui a bougé
-  est le même dont la campagne recalibrerait les hyperparamètres.
-
-Pas de test qui « épingle » un ancien comportement ici : il n'y a pas de
-code corrigé à protéger d'une régression, seulement un narratif dont la
-fraîcheur doit être vérifiée à la demande.
-
-```bash
-python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 8  --n-snaps 6 --seed 0
-python study/h1_solver/h1_curl_convention_gap.py --N 128 --dim 16 --n-snaps 6 --seed 0
-# comparer results/h1_curl_convention_gap_N128_dim{8,16}_v2.npz['verdicts']
-# a la table publiee dans RESULTS.md (git hash 8ee5c8a)
 ```
 
 
