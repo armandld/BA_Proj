@@ -43,11 +43,15 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **12** |
+| **ouverts** — décision ou campagne requise | **13** |
 | **gelés** volontairement | 2 |
 
 *(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md`. D-69 est sorti
-au profit de `RESULTS.md`, sa table étant refaite ; D-141 est entré.)*
+au profit de `RESULTS.md`, sa table étant refaite ; D-141 est entré. Puis
+**D-59 est sorti** — corrigé sur la branche vive à `7b12857`, il vit
+désormais dans `RESULTS.md` — et **D-143 est entré**. Le compte de tête de
+`RESULTS.md` porte le même travers et le dit lui-même : recompter, ne pas
+estimer, à chaque fusion.)*
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
 plus longtemps que les autres.** La narration T17 (« ZZ est numériquement
