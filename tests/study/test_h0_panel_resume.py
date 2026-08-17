@@ -17,6 +17,7 @@ D-4  Aucun point de reprise.
      les nombres, et une reprise incompatible est refusee.
 """
 
+import ast
 import importlib.util
 import json
 import os
@@ -94,13 +95,51 @@ def test_the_uncertified_fallback_uses_the_same_keys(panel):
     produced = set(panel.decision_agreement(spins, spins, 2))
     assert {"agree_spin", "exact_match", "n_diff_patch"} <= produced
 
-    src = open(_PANEL, encoding="utf-8").read()
-    i = src.index('r.update(dict(agree_spin=float("nan")')
-    fallback = src[i:i + 300]
-    for key in ("exact_match", "n_diff_patch"):
-        assert key in fallback, (
-            f"la branche non certifiee n'ecrit pas {key} ; "
-            "--no-exact levera un KeyError apres le calcul")
+
+def test_the_fallback_binds_exactly_the_keys_the_panel_reads(panel):
+    """Le repli lie EXACTEMENT les cles que `decision_agreement` produit.
+
+    D-139 : ce test cherchait `exact_match` et `n_diff_patch` dans les 300
+    caracteres suivant l'ancre du repli. La fenetre deborde sur les
+    commentaires qui suivent l'appel : la cle retiree du dict et son nom
+    laisse dans un commentaire juste en dessous laissaient le fichier a
+    22 passed -- alors que `:799` fait `match=r["exact_match"]` en
+    indexation nue, donc `--no-exact` levait un KeyError apres avoir paye
+    tout le calcul. Fenetre de proximite (D-126/D-128) et nom survivant
+    dans un commentaire (D-124), combines.
+
+    L'AST releve les MOTS-CLES de l'appel -- jamais un nom vu dans un
+    commentaire -- et on exige l'EGALITE avec ce que l'autre chemin
+    produit reellement. Ajouter une cle d'un seul cote rougit desormais.
+    """
+    import numpy as np
+
+    spins = np.array([1, -1, 1, -1, 1, -1, 1, -1], dtype=np.int8)
+    produites = set(panel.decision_agreement(spins, spins, 2))
+
+    arbre = ast.parse(open(_PANEL, encoding="utf-8").read())
+    replis = []
+    for n in ast.walk(arbre):
+        if not isinstance(n, ast.Call):
+            continue
+        if not (isinstance(n.func, ast.Attribute) and n.func.attr == "update"):
+            continue
+        for a in n.args:
+            if (isinstance(a, ast.Call) and isinstance(a.func, ast.Name)
+                    and a.func.id == "dict"):
+                replis.append((n.lineno,
+                               {k.arg for k in a.keywords if k.arg}))
+
+    # Un balayage vide doit crier.
+    assert replis, ("aucun `*.update(dict(...))` trouve dans le panel : le "
+                    "repli non certifie a ete reecrit, ce test ne garde plus "
+                    "rien")
+    ligne, liees = max(replis, key=lambda r: len(r[1] & produites))
+    assert liees == produites, (
+        f"le repli ligne {ligne} lie {sorted(liees)} ; `decision_agreement` "
+        f"produit {sorted(produites)}. Les clés manquantes lèvent un "
+        f"KeyError sur `--no-exact` apres le calcul ; les clés en trop "
+        f"mentent sur ce que la branche certifiee ecrit")
 
 
 def test_the_dead_key_is_gone(panel):

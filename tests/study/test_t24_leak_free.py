@@ -224,15 +224,163 @@ def test_t25_verifies_the_condition_actually_moved_the_physics():
                encoding="utf-8").read()
     assert "dns_relative_shift" in src and "condition_is_weak" in src, (
         "t25 ne mesure pas le deplacement de trajectoire de ses conditions")
-    assert "not c.get(\"condition_is_weak\")" in src, (
-        "t25 compte des conditions vacues dans son decompte de direction")
+    # D-136. La 3e assertion de ce test cherchait la chaine
+    # `not c.get("condition_is_weak")` dans le source. Retiree, pas
+    # affaiblie : elle rougissait sur la reecriture EQUIVALENTE
+    # `c.get("condition_is_weak", False)` (faux rouge sur un changement
+    # voulu) et restait verte quand le filtre disparaissait du chemin
+    # principal (faux vert, 26 passed) -- la chaine existe deux fois. Les
+    # deux tests ci-dessous la remplacent, l'un par le comportement,
+    # l'autre par l'AST.
 
 
-def test_t25_never_extrapolates_its_frontier():
-    src = open(_study_file("h4_physics_robustness.py"),
-               encoding="utf-8").read()
-    assert "xs[0] <= qp <= xs[-1]" in src, (
-        "t25 pourrait extrapoler hors de la frontiere balayee")
+# D-136. Le garde ci-dessus cherche une chaine qui existe DEUX fois dans
+# `h4_physics_robustness.py` -- une par chemin de comptage -- donc une seule
+# suffit a le satisfaire. Mesure : filtre retire du chemin PRINCIPAL (celui
+# qui ecrit l'artefact publie), chaine intacte sur l'autre -> 26 passed.
+# Les deux tests qui suivent mesurent le comportement au lieu de le lire.
+
+def test_t25_recompute_excludes_the_vacuous_conditions_from_the_count(
+        tmp_path, monkeypatch):
+    """Une condition qui ne deplace pas la trajectoire sort du decompte.
+
+    L'ENTREE QUI SEPARE : un artefact portant une condition vacue
+    DECIDABLE et une condition franche, les deux avec un verdict rendu.
+    Des conditions toutes franches rendraient « exclure » et « ne pas
+    exclure » indiscernables — le decompte vaudrait 2 dans les deux cas.
+
+    `--recompute` est le seul des deux chemins de comptage executable sans
+    rejouer des heures de DNS ; l'autre (fin de `main`) est garde par la
+    structure dans le test suivant.
+    """
+    import config
+    import h4_physics_robustness as M
+
+    def _cond(tag, weak):
+        # Frontiere LOCALEMENT SAINE, pour que `frontier_verdict` rende un
+        # nombre plutot qu'un refus : decroissante, ecart 0.10 (< 0.12) et
+        # rapport 2.0 (< 5.0). Budget Q-HAS 0.40, dans [0.35, 0.45].
+        return {"tag": tag, "condition_is_weak": weak,
+                "classical_frontier": [
+                    {"patch_ratio": 0.35, "phys_score": 0.4,
+                     "completed": True},
+                    {"patch_ratio": 0.45, "phys_score": 0.2,
+                     "completed": True}],
+                "qhas_runs": [
+                    {"patch_ratio": 0.40, "phys_score": 0.5,
+                     "completed": True}]}
+
+    op = tmp_path / "t25_physics_robustness_ot.json"
+    op.write_text(json.dumps({"fold": "ot", "conditions": [
+        _cond("vacuous", True), _cond("franche", False)]}))
+    monkeypatch.setattr(config, "RESULTS_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["h4_physics_robustness",
+                                      "--fold", "ot", "--recompute"])
+    with pytest.raises(SystemExit) as exc:
+        M.main()
+    assert exc.value.code == 0
+
+    d = json.loads(op.read_text())
+    # Les DEUX conditions sont decidables : le verdict est rendu pour
+    # chacune. Seule l'exclusion des vacues peut donc separer 1 de 2.
+    assert [c["qhas_worse"] for c in d["conditions"]] == [True, True], (
+        "champ d'essai invalide : les deux conditions doivent etre "
+        "decidables pour que le decompte mesure l'exclusion")
+    assert d["n_decidable"] == 1, (
+        "t25 compte une condition vacue dans sa direction : le decompte "
+        "'k/n conditions decidables' est gonfle par des conditions qui ne "
+        "peuvent ni confirmer ni infirmer")
+    assert d["n_qhas_worse"] == 1
+
+
+def test_t25_both_direction_counts_exclude_the_vacuous_conditions():
+    """Les DEUX chemins de comptage portent le filtre, pas seulement un.
+
+    L'AST delimite par la STRUCTURE — la liaison du nom `dec` a une
+    comprehension — jamais par une distance ni par un comptage
+    d'occurrences de texte. Une reecriture equivalente
+    (`c.get("condition_is_weak", False)`) le laisse vert, a raison ; le
+    retrait du filtre sur l'un OU l'autre chemin le fait rougir.
+    """
+    tree = ast.parse(open(_study_file("h4_physics_robustness.py"),
+                          encoding="utf-8").read())
+    sites = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.ListComp):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "dec"
+                   for t in node.targets):
+            continue
+        keys = {c.args[0].value
+                for gen in node.value.generators for cond in gen.ifs
+                for c in ast.walk(cond)
+                if isinstance(c, ast.Call)
+                and isinstance(c.func, ast.Attribute) and c.func.attr == "get"
+                and c.args and isinstance(c.args[0], ast.Constant)}
+        sites.append((node.lineno, keys))
+
+    # Un balayage vide doit crier : le nombre mesure est ecrit ici.
+    assert len(sites) >= 2, (
+        f"{len(sites)} decompte(s) de direction trouve(s), 2 attendus "
+        f"(--recompute et la fin de main) — balayage vide ou renomme")
+    for lineno, keys in sites:
+        assert "condition_is_weak" in keys, (
+            f"le decompte de direction ligne {lineno} compte des conditions "
+            f"vacues")
+        assert "qhas_worse" in keys, (
+            f"le decompte ligne {lineno} ne filtre plus sur un verdict rendu")
+
+
+# D-137. `test_t25_never_extrapolates_its_frontier` cherchait la garde
+# `xs[0] <= qp <= xs[-1]` dans le SOURCE. Retiree, pas affaiblie : elle
+# restait verte quand la garde etait neutralisee en code mort (faux vert,
+# 28 passed, un budget hors plage rendant alors 0.700) et rougissait sur la
+# reecriture EQUIVALENTE `min(xs) <= qp <= max(xs)` (faux rouge sur un
+# changement voulu). Le test ci-dessous la remplace par le comportement.
+
+def test_t25_refuses_a_budget_outside_the_swept_frontier():
+    """Hors de la plage balayee, `frontier_verdict` refuse — il n'extrapole pas.
+
+    D-136/D-137 : le test ci-dessus cherche la garde dans le SOURCE.
+    Neutralisee en code mort (chaine intacte), elle rend sur la frontiere
+    ci-dessous :
+
+        budget 0.20 -> 0.700        budget 0.05 -> 1.000
+
+    finis, positifs, dans l'intervalle d'un `phys_score`, sans refus ni
+    plantage. Et le biais a un sens : l'erreur classique inventee CROIT
+    quand le budget decroit, donc `ratio_vs_frontier = qe / ref` diminue
+    et le bras Q-HAS parait meilleur qu'il n'est.
+
+    L'ENTREE QUI SEPARE est le budget SOUS la plage. Au-dessus, la garde
+    retiree fait lever `StopIteration` — un plantage, qui se voit. En
+    dessous, elle rend le nombre plausible, qui ne se voit pas. Les deux
+    sont couverts ici ; seul le second est silencieux.
+
+    Les nombres mesures sont ecrits pour qu'une derive se voie.
+    """
+    from h4_physics_robustness import frontier_verdict
+    f = lambda pts: [{"patch_ratio": p, "phys_score": e, "completed": True}
+                     for p, e in pts]
+    pts = f([(0.35, 0.4), (0.45, 0.2)])
+
+    # temoin : a l'interieur, le verdict est rendu -- sans quoi le test
+    # ci-dessous passerait sur une frontiere qui refuse tout.
+    ref, why = frontier_verdict(pts, 0.40, 1.0)
+    assert ref == pytest.approx(0.3) and why is None
+
+    for qp, extrapole in ((0.20, 0.700), (0.05, 1.000)):
+        ref, why = frontier_verdict(pts, qp, 1.0)
+        assert ref is None, (
+            f"budget {qp} SOUS la plage balayee [0.35, 0.45] : "
+            f"extrapolation rendue au lieu d'un refus "
+            f"(la garde retiree rend {extrapole:.3f})")
+        assert "outside the swept range" in why
+
+    ref, why = frontier_verdict(pts, 0.50, 1.0)
+    assert ref is None and "outside the swept range" in why
 
 
 def test_t25_refuses_a_non_monotone_bracketing_interval():
