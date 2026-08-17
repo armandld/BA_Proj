@@ -48,6 +48,7 @@ import sys
 
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _SRC = os.path.join(_REPO, "src")
@@ -316,3 +317,67 @@ def test_le_defaut_est_un_NO_OP_bit_a_bit():
         assert np.array_equal(a, b), (
             f"`{cle}` differe entre le defaut et la constante de classe : "
             f"le chemin par defaut n'est PAS un no-op.")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  4. Le garde COMPORTEMENTAL — ce que l'AST ne peut pas voir
+# ══════════════════════════════════════════════════════════════════
+
+class _SentinelleMappeur(Exception):
+    """Interrompt `pipeline` des la construction du mappeur."""
+    def __init__(self, kwargs):
+        self.kwargs = kwargs
+        super().__init__("sentinelle")
+
+
+def test_la_valeur_ECHANTILLONNEE_atteint_vraiment_le_mappeur(monkeypatch):
+    """Le seul garde de ce fichier que la mutation A' ne survit pas.
+
+    Les gardes AST ci-dessus verifient que le NOM est lu et que
+    l'argument est PRESENT. Ils ne verifient pas que la VALEUR passee
+    est celle qui a ete lue. Mesure, mutation appliquee a `pipeline.py` :
+
+        PhysicalMapper(..., relative_percentile=90.0)   # valeur figee
+        -> pytest tests/pipeline/test_relative_percentile_is_trainable.py
+        -> 20 passed
+
+    Vingt tests verts pendant qu'Optuna echantillonne un parametre que la
+    pipeline remplace par une constante : D-31 exactement, sous la forme
+    meme que ce fichier existe pour empecher. C'est la famille de faux
+    vert que la branche `vigil/…` mesure en D-123 a D-131 (« garde par une
+    chaine », « mutation A' reste VERTE ») ; le remede est le meme —
+    interroger le COMPORTEMENT, pas le texte.
+
+    Ici : on remplace `PhysicalMapper` dans l'espace de noms de `pipeline`
+    par une sentinelle qui capture ses arguments et leve. La valeur
+    capturee doit etre celle passee dans `hyperparams`.
+    """
+    import pipeline as P
+
+    vu = {}
+
+    def _faux_mappeur(*a, **kw):
+        vu.update(kw)
+        raise _SentinelleMappeur(kw)
+
+    monkeypatch.setattr(P, "PhysicalMapper", _faux_mappeur)
+
+    argus = SimpleNamespace(
+        eta=0.001, Bz_guide=0.1, c_s=1.0, Re=800, Rm=800, shots=64,
+        mode="simulator", backend="state_vector", method="COBYLA",
+        opt_level=1, AdvAnomaliesEnable=True, K_opt=2, eps=1e-2, reps=1)
+
+    SENTINELLE = 63.5          # valeur qu'aucun defaut du depot ne porte
+    with pytest.raises(_SentinelleMappeur):
+        P.pipeline(N=8, VQA_N=2, T_MAX=0.002, DT=1e-3, HYBRID=1,
+                   verbose=False, argus=argus,
+                   hyperparams={"relative_percentile": SENTINELLE},
+                   scenario="harris_tearing", max_depth_override=1)
+
+    assert "relative_percentile" in vu, (
+        "PhysicalMapper construit sans relative_percentile : la valeur "
+        "echantillonnee n'atteint pas le mappeur.")
+    assert vu["relative_percentile"] == SENTINELLE, (
+        f"la pipeline a passe {vu['relative_percentile']!r} au lieu de "
+        f"{SENTINELLE!r} : la valeur echantillonnee est REMPLACEE en "
+        f"chemin. Optuna optimiserait un parametre que rien ne lit (D-31).")
