@@ -281,7 +281,144 @@ def test_the_last_report_is_aligned_only_by_the_end_of_run_overwrite(run_note):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  3. La déviation reste écrite là où elle vit
+#  3. Le chemin de divergence — deuxième site du même décalage,
+#     et la branche que D-135 n'atteignait que par une chaîne
+# ══════════════════════════════════════════════════════════════════
+#
+# Ces deux tests forcent l'avortement PAR `pipeline()` lui-même : on rend
+# `MHDSolver.is_diverged` vrai au n-ième appel. Rien de `src/` n'est
+# touché ; c'est le vrai bloc `--- Divergence guard ---` qui s'exécute,
+# avec de vrais champs.
+
+
+def _run_avorte(n, poids=None):
+    """Un run avorté au n-ième appel de `is_diverged`, par `pipeline()`.
+
+    `poids` remplace `pipeline.instability_weight_map` le temps du run —
+    c'est l'entrée qui SÉPARE une L2 pondérée d'une L2 nue.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        import train_hyperparams as TH
+        from Simulation.pre_compute_dns import precompute_dns
+        from Simulation.solver import MHDSolver
+        import pipeline as P
+
+        cfg = {**TH.SCENARIO_KH, "N": 32, "T_START": 0.9, "T_MAX": 1.2,
+               "HYBRID_DT": 0.02, "K_opt": 4, "shots": 32,
+               "max_depth_override": 1, "study_name": "dns_kh"}
+        trace, hot = precompute_dns(cfg)
+        hp = {**{k: (lo + hi) / 2 for k, (lo, hi, _) in TH.SEARCH_SPACE.items()},
+              **TH.FIXED_PARAMS}
+
+        compteur = {"k": 0}
+
+        def faux_is_diverged(self, max_value=1e8):
+            compteur["k"] += 1
+            return compteur["k"] > n
+
+        vues = []
+        vrai_map = P.instability_weight_map
+
+        def espion_map(ref):
+            vues.append({x: y.copy() for x, y in ref.items()})
+            return (poids or vrai_map)(ref)
+
+        # Le chemin de divergence n'appelle pas `score` : pour savoir OÙ se
+        # trouve le bras au moment de l'avortement, on capture le premier
+        # argument de chaque `weighted_relative_error`. La boucle parcourt
+        # `variables` dans l'ordre de FIELDS, donc les cinq derniers appels
+        # reconstruisent l'état du bras.
+        bras = []
+        vrai_wre = P.weighted_relative_error
+
+        def espion_wre(arr_q, arr_r, w, w_sum):
+            bras.append(arr_q.copy())
+            return vrai_wre(arr_q, arr_r, w, w_sum)
+
+        vrai_id = MHDSolver.is_diverged
+        MHDSolver.is_diverged = faux_is_diverged
+        P.instability_weight_map = espion_map
+        P.weighted_relative_error = espion_wre
+        try:
+            out = P.pipeline(
+                N=cfg["N"], VQA_N=2, T_MAX=cfg["T_MAX"], DT=cfg["DT"],
+                HYBRID=int(cfg["HYBRID_DT"] / cfg["DT"]), verbose=False,
+                argus=TH.create_argus(cfg), hyperparams=hp, lambda_cost=0.4,
+                trial=None, dns_trace=trace, hot_start_state=hot,
+                max_depth_override=cfg["max_depth_override"],
+                scenario=cfg["scenario"], return_details=True,
+                classical_only=True)
+        finally:
+            MHDSolver.is_diverged = vrai_id
+            P.instability_weight_map = vrai_map
+            P.weighted_relative_error = vrai_wre
+
+    etat_bras = (dict(zip(FIELDS, bras[-len(FIELDS):]))
+                 if len(bras) >= len(FIELDS) else None)
+    return {"out": out, "trace": trace, "ref": vues[-1] if vues else None,
+            "bras": etat_bras}
+
+
+def _index_dans_la_trace(trace, champs, tol=0.0):
+    """L'index de trace dont les `fluxes` valent `champs`, ou None.
+
+    `tol = 0` pour la RÉFÉRENCE : elle sort du dictionnaire, elle est
+    bit-à-bit. `tol` non nul pour le BRAS : il est intégré, donc égal à
+    l'epsilon machine près (mesuré ≤ 8,9e-16) et jamais bit-à-bit. Exiger
+    0,0 des deux côtés rendait ce test rouge sur du code sain.
+    """
+    trouves = [k for k, v in sorted(trace.items())
+               if "fluxes" in v and _ecart_max(champs, v["fluxes"]) <= tol]
+    return trouves[0] if len(trouves) == 1 else None
+
+
+@pytest.fixture(scope="module")
+def avorte():
+    return _run_avorte(1)
+
+
+def test_the_divergence_path_starts_its_lookup_one_step_early(avorte):
+    """DÉVIATION D-143, DEUXIÈME site — et il n'était pas dans l'entrée.
+
+    Le chemin de divergence écrit `last_ok = step - 1` puis remonte tant
+    qu'il ne trouve pas de `'fluxes'`. Le bras est à `t_step` : la
+    recherche devrait partir de `step`. Mesuré ici — la trace porte des
+    instantanés à TOUS les index 18…24, donc l'instantané aligné existe et
+    n'est simplement pas regardé.
+
+    Deux des trois sites de notation partent donc de `step - 1` ; seul le
+    score final préfère `step`.
+
+    L'assertion porte sur la RELATION entre deux index, pas sur la seule
+    existence d'un successeur : `index(référence) == index(bras) − 1`.
+    Vérifié en mutant `last_ok = step - 1` en `last_ok = step` — une
+    première version de ce test passait encore sous cette mutation, donc
+    ne prouvait rien.
+    """
+    trace, ref, bras = avorte["trace"], avorte["ref"], avorte["bras"]
+    assert ref is not None, "le chemin de divergence n'a pas été atteint"
+    assert bras is not None, "l'état du bras n'a pas pu être capturé"
+
+    i_ref = _index_dans_la_trace(trace, ref)
+    i_bras = _index_dans_la_trace(trace, bras, tol=1e-12)
+    assert i_ref is not None, "la référence ne coïncide avec aucun index"
+    assert i_bras is not None, (
+        "le bras ne coïncide avec aucun index : il n'est plus exact, et le "
+        "champ d'essai ne sépare plus les deux conventions")
+    assert "fluxes" in trace.get(i_bras, {}), (
+        f"l'instantané aligné trace[{i_bras}] n'existe pas : ce run ne "
+        "sépare plus « part de step-1 » de « part de step »")
+    assert _ecart_max(trace[i_ref]["fluxes"], trace[i_bras]["fluxes"]) > 1e-5, (
+        "les deux instantanés ne se distinguent plus")
+    assert i_ref == i_bras - 1, (
+        f"le bras est à trace[{i_bras}] et la référence à trace[{i_ref}] : "
+        "la recherche ne part plus d'un cran trop tôt. D-143 a peut-être "
+        "été tranché sur ce site — relire son entrée dans DEFAUTS.md")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  4. La déviation reste écrite là où elle vit
 # ══════════════════════════════════════════════════════════════════
 
 def test_the_open_defect_stays_written_in_the_registry():

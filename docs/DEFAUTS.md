@@ -1318,6 +1318,31 @@ d'élagage est dominé par une grandeur qui n'appartient pas à l'essai.**
 La configuration de campagne (`N = 256`, `HYBRID_DT = 0,10`) n'est pas
 rejouée — coût. La mesure porte sur `N = 32`.
 
+**Un DEUXIÈME site, trouvé après coup.** Le chemin de divergence
+(`pipeline.py:639`) écrit `last_ok = step - 1` puis remonte tant qu'il ne
+trouve pas de `'fluxes'`. Le bras y est à `t_step` : la recherche devrait
+partir de `step`. Mesuré sur la même configuration, en forçant
+l'avortement par `MHDSolver.is_diverged` :
+
+| avortement | référence consommée | l'instantané aligné existe-t-il ? |
+|---|---|---|
+| bras à `trace[21]` | `trace[20]` | **oui** — la trace en porte à 18…24 |
+| bras à `trace[22]` | `trace[21]` | oui |
+| bras à `trace[23]` | `trace[22]` | oui |
+
+Identification par identité de tableaux. Le `phys_score` que ce chemin
+rend au premier avortement vaut **3,27453290e−02** — le **même nombre**
+que le rapport intermédiaire du pas 21, ce qui est attendu : c'est la même
+comparaison décalée.
+
+**Deux des trois sites de notation partent donc de `step - 1`** ; seul le
+score final préfère `step`. Sur ce second site le correctif est **sans
+risque** — la boucle de remontée existe déjà et gère l'absence
+d'instantané, donc partir de `step` ne peut que trouver une référence
+meilleure ou égale. Il n'est pas appliqué malgré tout : il change un
+nombre que la campagne consomme, et la décision se prend en une fois avec
+le premier site.
+
 **Pourquoi le code lit `step - 1`, et pourquoi ce n'est pas une excuse.**
 L'instantané DNS est posé **à** la frontière hybride, et la notation a
 lieu **après** que le pas franchissant cette frontière a été intégré.
