@@ -11,6 +11,15 @@ est comparé à l'état DNS de `t_step-1`. Le score **final**, vingt lignes
 plus bas, choisit `step if step in dns_trace else step - 1` — deux lectures
 du même `dns_trace` avec deux conventions.
 
+**Deux sites, de portées très inégales — mesuré, pas supposé.** Le site du
+score **intermédiaire** est **inatteignable en production** : les trois
+appelants de `pipeline()` (`train_hyperparams.py:695`,
+`closed_loop_campaign.py:220`, `pipeline.py:271`) passent tous
+`trial=None`, l'élagage de la campagne vivant par scénario ailleurs. C'est
+un piège armé, pas un défaut vivant — et ce fichier est le seul endroit du
+dépôt qui passe un vrai `trial`. Le site du chemin de **divergence**, lui,
+est **vivant** : la campagne y passe dès qu'un essai diverge. Voir D-143.
+
 Le champ d'essai est choisi pour **SÉPARER** : `patch_ratio = 1,0`, donc le
 bras reproduit la DNS exactement. Toute erreur rapportée non nulle ne peut
 alors venir que de la référence, et de rien d'autre. Sur un bras inexact les

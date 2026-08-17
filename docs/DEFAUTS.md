@@ -1254,9 +1254,44 @@ tranché, et où il doit être relu. Mesuré : seuil porté à 0,85 → **2 fail
 
 ---
 
-## D-143 — le score intermédiaire d'Optuna compare deux états séparés d'un pas de temps
+## D-143 — deux des trois notations de `pipeline()` lisent la référence un cran trop tôt
 
 **Rapport seul. Décision requise, rien n'est corrigé.**
+
+### ⚠️ Portée corrigée après première publication — lire ceci d'abord
+
+La première rédaction de cette entrée annonçait que le décalage touchait
+« le chemin qui décide quels essais survivent à ~224 h CPU ». **C'est faux
+pour le premier site, et je le corrige avant qu'il ne serve.**
+
+Mesuré, en cherchant les appelants plutôt qu'en le supposant : **les trois
+appelants de production de `pipeline()` passent `trial=None`.**
+
+| appelant | `trial` |
+|---|---|
+| `src/train_hyperparams.py:695` — la campagne Optuna | **`None`**, sous le commentaire *« elagage gere ici, pas dedans »* |
+| `study/closed_loop/closed_loop_campaign.py:220` | **`None`** |
+| `src/pipeline.py:271` — la CLI | **`None`** |
+
+L'élagage de la campagne vit à `train_hyperparams.py:752`, **par scénario**
+(`trial.report(total / (i + 1), step=i)`), et ne passe pas par le bloc
+intra-run. Donc :
+
+| site | état |
+|---|---|
+| **1. score intermédiaire** (`:718`) | **inatteignable aujourd'hui** — aucun appelant de production ne passe de `trial`. C'est un **piège armé**, pas un défaut vivant : la signature invite à passer un essai, et quiconque le fera recevra un signal d'élagage dominé par l'évolution propre de la DNS |
+| **2. chemin de divergence** (`:639`) | **VIVANT, sur le chemin de la campagne.** `pipeline()` y passe dès qu'un essai diverge, et le score partiel qu'il rend **est** l'objectif que la campagne remonte à Optuna |
+
+C'est le site 2 qui compte, et il est arrivé second dans mon enquête. Les
+mesures ci-dessous restent valables telles quelles — elles portent sur la
+même arithmétique aux deux sites — mais la **conséquence** est celle du
+site 2 : un essai qui diverge est noté contre une référence périmée d'un
+pas, et un bras parfait y prend **3,27e−02** au lieu de zéro.
+
+Ce que cela ne change pas : aucun nombre publié n'en dépend, ni par le
+site 1 (mort) ni par le site 2 (les 180 lignes du master table viennent de
+runs qui n'ont pas divergé). Ce que cela change : la décision porte
+d'abord sur le site 2, et le site 1 peut être traité comme de l'hygiène.
 
 **Où ça bloque.** `src/pipeline.py:715` calcule, à chaque pas hybride, le
 score rapporté à Optuna pour l'élagage :
