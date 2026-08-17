@@ -6570,3 +6570,38 @@ jamais été exécutée**, et rien ici ne dit ce que psi apporte.
 Vérifier : `python study/h0_selection/h0_optimiser_equivalence.py --check
 results/h0_optimiser_equivalence_N96_dim3.npz` → lève, avec le dictionnaire
 des solveurs sous le seuil.
+
+
+# D-51 — clos : `study/` voit désormais le terme ZZZZ de point X
+
+**Ce qui bloquait.** Tout `study/` codait `advanced_anomalies_enabled =
+False` alors que la campagne d'entraînement l'active sur **6 scénarios sur
+6**. Le terme ZZZZ de point X n'entrait donc dans **aucune** mesure de
+falsification — et `beta_xpoint`, que D-22 range parmi les paramètres à
+réoptimiser, était un hyperparamètre qu'aucune mesure de `study/` ne
+pouvait voir.
+
+**Fermé par deux changements**, tous deux sur la branche vive :
+
+1. `study/common/qaoa_inputs.py:350` passe `advanced_anomalies_enabled=True`
+   — `study/` construit désormais le même hamiltonien que le déploiement.
+2. `study/common/ising_terms_and_annealing.py` fait consommer `K_xpoint` à
+   `build_ising_terms`, qui ne lisait que `H_edges`, `C_edges` et
+   `K_plaquettes`. Le terme existait dans les coefficients et n'atteignait
+   pas le circuit.
+
+**Vérification de coïncidence** : sur les 256 états d'un problème
+`dim = 2`, l'écart entre l'énergie du chemin `study/` et la diagonale de
+`create_period_hamiltonian` vaut **5,33e−15**. Les deux chemins décrivent
+le même opérateur.
+
+**Conséquence à ne pas oublier.** Ce changement fait tomber trois tests qui
+épinglaient l'absence du terme
+(`test_xpoint_term_absent_from_study.py`, `test_t13_control_is_not_vacuous.py`).
+Ce sont des **seuils périmés** : le code a légitimement changé sous eux.
+Leur mise à jour exige de **rejouer phase 4, T13 et T26** — c'est une
+campagne, pas une passe de relecture. Ils restent rouges jusque-là, et
+c'est voulu.
+
+Vérifier : `python study/common/preflight_coefficients.py` → 5/5, dont
+« coïncidence — study/ et le circuit rendent la même énergie ».
