@@ -104,3 +104,35 @@ def test_the_decision_is_a_conjunction_of_the_four_keys():
     assert len(ret.value.values) == len(t22._RESUME_KEYS), (
         f"{len(ret.value.values)} comparaisons pour "
         f"{len(t22._RESUME_KEYS)} cles de reprise")
+
+
+# ── D-124 : les deux enregistrements sont ECRITS, pas seulement nommes ──
+
+def test_the_resume_provenance_fields_are_actually_assigned():
+    """Les deux noms doivent etre AFFECTES, pas cites dans un commentaire.
+
+    C'est le faux vert mesure : supprimer les deux lignes `out[...] = ...`
+    laissait `test_resume_is_recorded_never_silent` vert, parce que les deux
+    noms survivaient dans le commentaire qui les explique trois lignes plus
+    haut. Un artefact aurait alors tu que ses tirages venaient d'un autre
+    processus — exactement l'invisibilite que ce test existe pour interdire.
+    """
+    import h4_unseen_conditions as t22
+
+    src = open(t22.__file__, encoding="utf-8").read()
+    affectes = set()
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.Assign):
+            continue
+        for cible in node.targets:
+            if (isinstance(cible, ast.Subscript)
+                    and isinstance(cible.value, ast.Name)
+                    and cible.value.id == "out"
+                    and isinstance(cible.slice, ast.Constant)):
+                affectes.add(cible.slice.value)
+
+    for champ in ("resumed_from_checkpoint", "n_runs_resumed"):
+        assert champ in affectes, (
+            f"`out[\"{champ}\"]` n'est plus affecte dans "
+            "h4_unseen_conditions.py — le nom peut subsister dans un "
+            "commentaire sans qu'aucun artefact ne le porte")
