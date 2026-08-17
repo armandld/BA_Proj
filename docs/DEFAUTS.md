@@ -898,6 +898,25 @@ Deux lectures, toutes deux directement dans l'artefact :
    QAOA passe à **0,000** sur les quatre profondeurs, `greedy` restant à
    1,000.
 
+   > ⚠ **D-122 — « les deux artefacts » n'en font qu'un.** Le second a été
+   > produit avec `--zero-psi` **sans** `--with-psi` : psi vaut alors zéro
+   > exactement avant l'ablation, qui ne retire donc rien. Mesuré : même
+   > `git_hash` (`53a8dfc`), même `seed`, `cli_args` différant du seul
+   > `zero_psi`, et les **5 solveurs déterministes bit à bit identiques sur
+   > 30/30 lignes** (`max|ΔE| = 0`) ; seuls les 4 bras QAOA diffèrent, à la
+   > dispersion connue du bras. Ce sont **deux exécutions de la même
+   > condition**, pas deux conditions.
+   >
+   > **Ce que ça change à la lecture ci-dessus, et ce que ça n'y change
+   > pas.** Le QAOA à 0,000 tient : il est mesuré deux fois, sur deux
+   > tirages indépendants — c'est une **réplication**, et elle renforce le
+   > point 2 plutôt qu'elle ne l'affaiblit. Ce qui tombe, c'est la lecture
+   > implicite du nom : rien ici ne dit ce que psi apporte ou n'apporte
+   > pas, dans un sens ou dans l'autre. **L'ablation psi de ce module n'a
+   > jamais été exécutée.** Non corrigé : la refaire demande une campagne
+   > `--with-psi --zero-psi` contre `--with-psi` seul, et le nom de
+   > l'artefact publié n'est pas réécrit ici.
+
 **Le critère du module lui-même tranche.** `check_expected_behaviour`,
 rejoué sur ces artefacts :
 

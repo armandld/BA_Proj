@@ -363,7 +363,27 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
     # information que son propre cout ignore. La mettre a zero isole ce que
     # psi apporte, sans toucher a theta ni a H.
+    #
+    # D-122 — l'ablation n'a de sens que si psi est non nul, donc que sous
+    # with_psi. `prepare_qaoa_inputs` pose psi_h = psi_v = 0 EXACTEMENT quand
+    # with_psi est faux (mesure : max|psi| = 0 exact, contre 1,47 avec) : la
+    # boucle ci-dessous reecrit alors des zeros par des zeros, bit a bit. Le
+    # balayage sortait quand meme avec le code 0 et le suffixe _zeropsi au nom
+    # de son artefact, indiscernable d'une vraie ablation -- et un artefact
+    # publie porte ce nom (results/h0_optimiser_equivalence_N96_dim3_zeropsi_
+    # scalekopt.npz, cli_args zero_psi=true, PAS de with_psi). Mesure : ses 5
+    # solveurs deterministes sont bit a bit identiques a ceux de son jumeau
+    # _scalekopt (30/30 lignes, max|dE| = 0) ; seuls les 4 bras QAOA different,
+    # a la dispersion connue du bras. Un balayage vide doit crier.
     if zero_psi:
+        if not with_psi:
+            raise SystemExit(
+                "--zero-psi sans --with-psi est une ablation VIDE : psi vaut "
+                "deja zero exactement sur le chemin de l'etude, l'ablation "
+                "reecrit des zeros par des zeros et l'artefact porte le "
+                "suffixe _zeropsi sans qu'aucun psi n'ait ete retire. "
+                "Passer --with-psi (psi rebranche, l'ablation mord), ou "
+                "retirer --zero-psi (meme campagne, nom honnete).")
         for _k in ("psi_h", "psi_v"):
             if _k in data_in:
                 data_in[_k] = np.zeros_like(np.asarray(data_in[_k], float)).tolist()
