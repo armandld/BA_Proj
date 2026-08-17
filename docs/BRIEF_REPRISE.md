@@ -2,7 +2,8 @@
 
 **But de ce fichier : permettre à une nouvelle conversation d'être immédiatement
 opérationnelle sans relire le dépôt.** Le donner en entier en premier message.
-Il remplace ~2 h d'exploration. Il est à jour au commit `176ee45`.
+Il remplace ~2 h d'exploration. **À jour au 17 août 2026**, après la
+fusion de la branche de revue, la clôture de D-58 et l'élucidation de D-132.
 
 ---
 
@@ -87,13 +88,23 @@ décision AMR qu'on veut.**
 |---|---|
 | **D-47** | à dim=2, l'état fondamental exact est le prédicteur constant « tout raffiner » sur **40/40** instantanés |
 | **D-53** | à dim=3 (seule taille certifiée ET non dégénérée), le QAOA atteint l'optimum certifié sur **0,062–0,156** des instantanés contre **1,000** exigé, et tombe **sous** la règle classique dont il part (0,500) |
-| **D-132** | corrélation de rang QAOA/vérité **négative** (−0,467) sur 3 des 12 combinaisons d'hyperparamètres |
+| **D-132** | corrélation de rang QAOA/vérité **négative** (−0,467) sur 3 des 12 combinaisons — **élucidé** : bisection sur 9 commits, coupable `6ecaecf` (D-25, projection spectrale) |
 | ρ(E_gap, F1) | **+0,870** sur 9 solveurs à dim=3 : **mieux résoudre H dégrade la décision AMR** |
 
 Le mécanisme de D-47, mesuré : la fenêtre gaussienne du couplage ZZ vaut au
 plus **1,15e−31** (le score est à 8,4 σ du seuil), donc le terme de voisinage
 est éteint ; le biais Z, positif partout, domine le ZZZZ d'un facteur 2 à 6,6.
 Le fondamental met tous les qubits à |1⟩ faute de terme porteur de structure.
+
+**D-132 change le statut de cette figure.** La bisection montre que le bras
+QAOA classait « bien » avant D-25 parce qu'il lisait des champs **abîmés par
+une projection spectrale fautive** : l'ordre des blocs tenait à un artefact
+numérique. Ce n'est donc pas « quatre mesures concordantes » mais une
+**direction systématique** — chaque correction qui retire un artefact rend le
+bras quantique moins bon. Nuance à garder : les corrélations restent
+hétérogènes (−0,467 sur 3 combinaisons, +0,95 sur d'autres), donc le bras est
+**instable selon les hyperparamètres**, pas mort. C'est ce que la campagne
+arbitre.
 
 **A priori enregistré avant la campagne** : la réoptimisation ne renversera
 pas ce verdict. Optuna déplace des coefficients ; il ne peut pas rendre
@@ -116,21 +127,36 @@ complets). 180–450 essais → 168–420 h CPU, soit ~5–13 h sur 32 cœurs.
 Appliquer ×1,7 pour l'efficacité parallèle mesurée (59 %).
 
 **Table maîtresse** : `python study/common/aggregate_master_table.py` rend
-**180 / 164 OK / 16 DIFF / 0 MISSING**. Les 16 DIFF **existent toujours**.
-D-58 explique que 12 d'entre eux viennent d'une narration T17 périmée —
-c'est le plan pour les fermer, pas leur fermeture.
+**180 / 176 OK / 4 DIFF / 0 MISSING**. D-58 est **clos** : les 12 lignes T17
+sont republiées (leurs constantes décrivaient le défaut corrigé par D-9, pas
+son résultat). Restent 4 écarts — 3 de T11b (D-48, non reproductible) et 1
+sur `t12/dim8`, dans le plancher de reproductibilité publié (0,3613).
 
-**Défauts ouverts : 18**, dans `DEFAUTS.md`. Une règle d'arrêt y est écrite en
+**Rétractation qui compte** : la lecture publiée « ZZ is numerically dead on
+three of four classes » était fausse, et avec elle l'explication causale des
+ablations nulles de T13 et de la progression quasi nulle de T11b. La fenêtre
+conserve 3–12 % de la masse ZZ en boucle ouverte, 34–59 % au réglage
+Level-3. **Ces deux résultats restent donc à expliquer.**
+
+**Défauts ouverts : 16**, dans `DEFAUTS.md`. Une règle d'arrêt y est écrite en
 tête : un défaut n'est bloquant que s'il porte une lecture publiée ou empêche
 la campagne de mesurer ce qu'elle prétend mesurer. Le reste est groupé APRÈS
 la campagne. Elle a été écrite parce que le taux de découverte avait dépassé
 le taux de résolution : sur D-39→D-131, 98 commits sur le chemin scientifique
 contre **79 sur les figures, lanceurs et gardes de test**.
 
-**Décisions prises par USER** : D-24 assumé (solveur ordre 1,2 — la
+**Décisions prises par USER** : **D-24 assumé** (solveur ordre 1,2 — la
 correction n'est valide que sur `step_full`, pas sur les patchs locaux non
 périodiques ; le défaut est partagé par les deux bras, donc c'est une limite,
-pas un biais). D-68 à résoudre par transposition.
+pas un biais). **D-68 clos par transposition** — `plot_amr_state` met
+désormais X en horizontal comme les deux autres traceurs.
+
+**Quatre tests rouges connus**, tous des **seuils périmés** au sens du dépôt
+(le code a légitimement changé sous eux), à remesurer après la campagne :
+trois viennent de `a0e0e02` qui fait consommer `K_xpoint` à
+`build_ising_terms` — ils exigent de rejouer **phase 4, T13 et T26** — et un
+est l'entrée `_FROZEN` de `run_study_v3.sh`, périmée depuis que D-116 a
+repointé ce lanceur.
 
 ## 8. Commandes de recette
 
