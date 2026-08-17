@@ -168,13 +168,50 @@ class TestPruningThreshold:
         )
 
     def test_a_coupling_above_the_cut_does_reach_the_operator(self):
-        """Control: the ZZ family is not structurally absent."""
+        """Control: the ZZ family is not structurally absent.
+
+        SEUIL REMESURE apres D-59, pas retouche pour faire passer la suite.
+
+        L'assertion etait `len(zz_terms) == DIM * DIM`, soit 4 a DIM = 2.
+        Elle comptait des ENTREES de liste, et c'est ce qui a laisse vivre
+        D-59 : a `dim = 2` l'anneau periodique degenere -- `(i,0)->(i,1)` et
+        `(i,1)->(i,0 mod 2)` sont la MEME paire -- et les deux iterations
+        ajoutaient chacune une entree. Ce controle voyait donc 4 entrees sur
+        **2 etiquettes distinctes**, et passait.
+
+        Mesure, `create_period_hamiltonian` avec `C_edges[0] = 0.5` :
+
+            dim   entrees avant D-59   entrees apres   dim*dim   etiquettes
+             2            4                  2            4          2
+             3            9                  9            9          9
+             4           16                 16           16         16
+
+        `dim * dim` etait donc juste a `dim >= 3` et faux au seul `dim = 2`,
+        la taille de toutes les campagnes publiees. La valeur remesuree y
+        est **2**, et le nombre d'etiquettes distinctes -- 2 -- n'a jamais
+        bouge : il donnait la bonne reponse avant comme apres.
+
+        D'ou les deux assertions ci-dessous. La premiere est celle qui
+        aurait trouve D-59 : elle ROUGIT sur le code d'avant `7b12857`.
+        """
         hp = _flat_params(0.0)
         hp['C_edges'][0][:] = 0.5
         op = create_period_hamiltonian(hp, DIM)
         zz_terms = [t for t in op.to_list() if t[0].count("Z") == 2]
-        assert len(zz_terms) == DIM * DIM, (
-            "with a coupling above the cut, one ZZ term per site is expected"
+
+        etiquettes = {t[0] for t in zz_terms}
+        assert len(zz_terms) == len(etiquettes), (
+            f"{len(zz_terms)} entrees ZZ pour {len(etiquettes)} liens "
+            f"distincts : un lien est compte deux fois, donc pondere x2. "
+            f"C'est D-59, corrige a 7b12857 -- voir RESULTS.md"
+        )
+
+        # A `dim = 2` l'anneau n'a qu'un lien distinct par rangee, donc DIM
+        # liens ; a partir de `dim = 3` il en a DIM par rangee, donc DIM*DIM.
+        attendu = DIM * DIM if DIM > 2 else DIM
+        assert len(zz_terms) == attendu, (
+            f"with a coupling above the cut, {attendu} distinct ZZ bonds are "
+            f"expected at dim={DIM}, found {len(zz_terms)}"
         )
 
 
