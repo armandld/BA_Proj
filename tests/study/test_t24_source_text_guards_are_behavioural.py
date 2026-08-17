@@ -136,3 +136,56 @@ def test_the_resume_provenance_fields_are_actually_assigned():
             f"`out[\"{champ}\"]` n'est plus affecte dans "
             "h4_unseen_conditions.py — le nom peut subsister dans un "
             "commentaire sans qu'aucun artefact ne le porte")
+
+
+# ── D-125 : le filtre des artefacts partiels, exerce ─────────────────
+
+def _write_artifact(d, fold, mode, status, n_runs):
+    """La forme qu'ecrit `h4_unseen_conditions`, avec assez de tirages pour
+    que le repli « underpowered » ne masque pas le filtre teste."""
+    bras = {"canonical": {"phys_score": 1.0}, "unseen": {"phys_score": 0.8},
+            "n_runs": n_runs}
+    art = {"fold": fold, "arms": {"qhas": dict(bras), "classical": dict(bras)}}
+    if status is not None:
+        art["status"] = status
+        art["partial_stage"] = "qhas/canonical"
+    (d / f"t22_unseen_{mode}_{fold}.json").write_text(json.dumps(art))
+
+
+def test_the_transfer_summary_rejects_a_partial_artifact(tmp_path):
+    """Le jumeau de `test_a_partial_record_is_rejected_by_the_summary`.
+
+    Celui-la couvrait `closed_loop_leak_free_summary.py` ; le meme filtre de
+    `h4_transfer_summary.py` n'etait garde QUE par la chaine `== "partial"`.
+    Mesure : filtre desactive dans ce seul fichier, les 38 tests des trois
+    fichiers qui l'importent restaient verts.
+
+    L'artefact porte ici `n_runs = 4` : avec moins de 2, le repli
+    « underpowered » ecarterait l'enregistrement pour une autre raison et le
+    test ne mesurerait pas ce qu'il annonce.
+    """
+    import h4_transfer_summary as t22c
+
+    d = tmp_path / "res"
+    d.mkdir()
+    _write_artifact(d, "kh", "leak-free", "partial", n_runs=4)
+
+    rec = t22c.load(str(d), "kh", mode="leak-free")
+    assert rec is not None, "artefact introuvable : le test ne mesure rien"
+    assert rec.get("partial") is True, (
+        "h4_transfer_summary lit un artefact PARTIEL comme s'il etait "
+        "complet : ses moyennes porteraient sur une execution interrompue")
+    assert rec["underpowered"] is True
+
+
+def test_a_complete_artifact_is_still_analysed(tmp_path):
+    """Contrôle positif : le filtre ne doit pas tout ecarter."""
+    import h4_transfer_summary as t22c
+
+    d = tmp_path / "res"
+    d.mkdir()
+    _write_artifact(d, "kh", "leak-free", None, n_runs=4)
+
+    rec = t22c.load(str(d), "kh", mode="leak-free")
+    assert rec is not None and rec["underpowered"] is False
+    assert not rec.get("partial")
