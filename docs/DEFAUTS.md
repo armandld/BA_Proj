@@ -1571,7 +1571,9 @@ un no-op **bit-à-bit**, épinglé par
 | commit | verdict | durée |
 |---|---|---|
 | `d978539` — naissance de la garde | **passe** | 46 min |
-| `403240b` — juste avant les corrections de coefficients | *en cours* | — |
+| `d212e54` — D-8, hamiltonien borné | **passe** | 10 min 43 |
+| *(19 commits touchant `src/`)* | *bracket en cours* | — |
+| `403240b` — juste avant les corrections de coefficients | **échoue** (−0,467) | 2 min 55 |
 | `5bdcf80` = `235dbbf~1` — après elles | **échoue** (−0,467) | 13 min |
 
 La garde a donc passé à sa naissance : ce n'est pas un test commité rouge,
@@ -1584,6 +1586,30 @@ sépare les deux hypothèses.
 La chute de durée **46 min → 13 min** à configuration égale est un indice
 corroborant : les circuits construits ne sont pas seulement notés
 différemment, ils sont différents.
+
+**Ce que la bisection a déjà écarté.** `d212e54` passe, donc D-8 (« le
+hamiltonien borné encodait des coefficients exactement nuls ») et tout ce
+qui le précède sont hors de cause — y compris **D-1**, le basculement de
+convention du rotationnel (`bb6a387`), qui était le suspect principal.
+
+Les candidats restants, par ordre de plausibilité :
+
+- **`91951df` (D-37)** — à toute profondeur > 0, le biais Z et les
+  couplages décrivaient deux grilles différentes ; le biais d'un patch
+  venait de son quart haut-gauche. À `max_depth = 4`, trois niveaux sur
+  quatre passaient par là.
+- **`7c0ae2f` (D-11 à D-14)** — l'audit de contrat des mappeurs, là où les
+  coefficients sont construits.
+- **`6ecaecf` (D-25)** — la projection spectrale, qui change le solveur,
+  donc les champs, donc tout l'aval.
+
+**Hypothèse à ne PAS confondre avec un fait.** Si le coupable est D-37, ce
+n'est pas une régression à défaire : les deux grilles étaient réellement
+désaccordées, et l'état « vert » d'avant tenait à ce que le biais était lu
+dans le mauvais quart de chaque patch — un artefact qui flattait le bras
+quantique. Cela rangerait D-132 avec D-47, D-53 et ρ(E_gap, F1) = +0,870
+plutôt que contre eux. **Non établi** : la bisection n'a pas encore nommé
+le commit, et un premier suspect a déjà été réfuté.
 
 **Collision de numérotation, et un désaccord de mesure.** Ce défaut
 portait d'abord le numéro D-118 : la branche `vigil/…` l'utilise déjà pour

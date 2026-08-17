@@ -13,3 +13,6 @@ results/.checkpoints/
 
 # Sorties de bisection : artefacts de travail, jamais du depot.
 .bisect_*.txt
+# Mesures de bisection en cours : la trace utile vit dans DEFAUTS.md D-132,
+# pas a la racine du depot.
+.culprit_*.txt
