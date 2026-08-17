@@ -6729,3 +6729,27 @@ sélectionné.
 
 Vérifier : `python src/compare_rotor_budget.py` puis
 `pytest tests/pipeline/test_compare_rotor_budget.py -q` → **14 passed**.
+
+---
+
+# Notes hors chemin critique — enregistrées, groupées, non instruites
+
+Règle d'arrêt de `DEFAUTS.md` : ce qui ne porte ni une lecture publiée ni la
+campagne se note ici en une ligne et se traite en un lot unique **après** la
+campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
+
+- **`test_the_frozen_mechanism_can_still_fire` (`c197373`) ne garde pas le
+  mécanisme qu'il annonce garder.** Il écrit son propre fichier temporaire
+  et rejoue l'assertion « à la main » : il n'appelle ni
+  `test_a_frozen_launcher_says_so_in_its_own_header`, ni `_FROZEN`, ni un
+  lanceur. Mesuré — en rendant la boucle du vrai mécanisme inerte
+  (`for fragment in []`), `pytest tests/study/test_every_launcher_invokes_real_files.py`
+  rend **18 passed, 1 skipped**, identique à la référence, et le garde
+  lui-même passe. Le fichier reste donc sans filet contre le balayage vide
+  que `_FROZEN = {}` a créé. Correctif estimé à ~5 lignes : peupler `_FROZEN`
+  via `monkeypatch` sur un lanceur temporaire, et appeler la vraie fonction.
+- **`CLAUDE.md` § Tests de recette annonce `180 / 164 / 16 / 0`.**
+  L'agrégateur rend **180 / 176 / 4 / 0** depuis que D-58 est clos. Même
+  incohérence entre `docs/BRIEF_REPRISE.md` §7 (juste) et §8 (périmé).
+- **`DEFAUTS.md` présente encore D-58 comme ouvert** dans son paragraphe
+  d'ouverture, alors qu'il est clos et sorti du fichier.
