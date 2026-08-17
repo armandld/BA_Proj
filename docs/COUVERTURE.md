@@ -2195,6 +2195,39 @@ défaut. Chaque site restant doit repasser par la vérification par mutation
 avant d'entrer dans `DEFAUTS.md`, pas seulement par la lecture qui l'a
 signalé.
 
+**Passe du 17 août (nuit) — 4 sites de plus, et 3 sont des défauts.** Tous
+dans `test_t24_leak_free.py`, le plus gros bloc de la liste (9 sites). La
+mutation employée est la seule qui tranche pour cette forme : **casser le
+comportement en laissant la chaîne cherchée en place**.
+
+| site | mutation | ancienne suite | verdict |
+|---|---|---|---|
+| `:181` `test_resume_reuses_only_matching_configurations` | un `and` de la décision de reprise devient `or` | **26 passed** | **confirmé → D-123** |
+| `:200` `test_resume_is_recorded_never_silent` | les deux écritures `out[...]` supprimées ; les deux noms survivent **dans le commentaire** qui les explique | **26 passed** | **confirmé → D-124** |
+| `:150,154` `test_partial_checkpoints_are_never_analysed` | `h4_transfer_summary.py` seul cesse de filtrer `status == "partial"` | **38 passed** (3 fichiers) | **confirmé → D-125** — le jumeau `closed_loop` est, lui, couvert fonctionnellement |
+| `:68` `test_no_claim_of_a_shared_operating_point` | — | — | **légitime** — cherche l'**absence** d'un jeton, le type que le critère ci-dessus autorise |
+
+**Ce que ce bloc apprend, et qui change le tri.** Les trois confirmés ne
+gardent pas un calcul : ils gardent une **provenance** — ne pas mélanger des
+tirages d'une autre configuration, ne pas taire qu'un tirage vient d'un autre
+processus, ne pas publier une exécution interrompue comme complète. Un faux
+vert n'y produit pas un plantage mais une moyenne d'apparence normale sur des
+données qui ne vont pas ensemble. **Les sites qui gardent une provenance sont
+donc à sonder avant ceux qui gardent un calcul** : un calcul faux finit par se
+voir, une provenance perdue, non.
+
+Deuxième leçon, sur la mutation elle-même : `:200` n'aurait **jamais** été vu
+par une mutation qui supprime le code *et* son texte. Le faux vert y tient à
+ce que le nom cherché existe **deux fois** dans le fichier, une fois en code
+et une fois en commentaire. **Vérifier si la chaîne cherchée apparaît plus
+d'une fois dans le fichier visé** est un tri à un coup de `grep -c`, et il
+aurait désigné ce site sans aucune exécution.
+
+**Calibrage cumulé** : 3 défauts sur 4 sites sondés cette passe, contre 1 sur
+3 aux deux précédentes. Ce n'est pas une dérive du taux du dépôt — c'est que
+le bloc `test_t24_leak_free.py` a été écrit d'un seul tenant, dans un style
+qui garde tout par le texte. Les grappes se sondent ensemble.
+
 **23 sites restent non vérifiés** (sur les 27 signalés par le tri, candidats
 seulement — ne pas les citer comme défauts sans les rejouer ; `:171` de la
 première entrée est sorti de cette liste, vérifié et devenu D-121) :
@@ -2208,7 +2241,10 @@ première entrée est sorti de cette liste, vérifié et devenu D-121) :
 `test_hyperparams_two_sources.py:226` (usage 232) ·
 `test_v1_legacy_instrumented_bfs_score_grid.py:100` ·
 `test_t28_t29_labels_and_ci.py:103,179` ·
-`test_t24_leak_free.py:150,154,181,200,207,224,233,269,277` ·
+`test_t24_leak_free.py:207,224,233,269,277` (`:150,154,181,200` vérifiés
+cette passe — D-123, D-124, D-125 ; `:207` reste : `assert "return got[:n]" in src`,
+la chaîne EST le comportement sur une seule ligne, aucune mutation réaliste ne
+la préserve en cassant la troncature — fragile mais honnête, non promu) ·
 `test_h0_panel_guards.py:67`.
 
 **Ce sondage n'est pas un balayage.** Avec les 3 vérifiés cette passe (6 au
