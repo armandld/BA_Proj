@@ -2242,8 +2242,23 @@ quand l'ancre bouge, faux vert quand la fenêtre attrape autre chose. Le
 remède est le même dans les deux cas : l'AST délimite par la **structure**
 (la liaison d'un nom, le corps d'une fonction), jamais par une distance.
 
-Sites de cette forme restant à sonder : tout `assert … in src[i:i + N]`, tout
-`src.splitlines()[i - N:i]`, et tout `src.index(...)` suivi d'une tranche.
+Le relevé de cette forme, fait la même nuit sur tout `tests/` : **14 sites**
+(`src.index`, `splitlines()[…]`, tranches de `src`). Deux vérifiés,
+**tous deux sains** — et ce qui les sauve mérite d'être noté, parce que c'est
+la parade à écrire ailleurs :
+
+| site | pourquoi il tient |
+|---|---|
+| `test_no_private_curl_survives.py:161` — fenêtre `src[index("    dxvy ="):index("    omega_z =")]` | la fenêtre **peut** devenir vide, mais 8 assertions **positives** (`re.search` d'un motif par nom) s'y appliquent : une fenêtre vide les fait toutes rougir. Un balayage vide y crie |
+| `test_padded_rescale_contracts.py:437` — fenêtre entre deux `def` | mêmes deux ingrédients : une assertion positive dans la fenêtre, **et** un garde comportemental exact ailleurs (`test_a_peak_in_the_halo_of_the_flux_is_kept_too`, `max == 9.0`) — un lissage ajouté par un helper hors fenêtre le ferait rougir |
+
+**Ce qui distingue les sains des défauts** n'est donc pas la fenêtre, c'est
+ce qu'on y assied : une assertion **positive** dans la fenêtre transforme
+« fenêtre décalée » en échec bruyant, là où une assertion **négative** seule
+(`X not in bloc`) passe au vert sur une fenêtre vide. D-126 et D-128 n'avaient
+que des assertions satisfaites par l'absence ou par le voisinage.
+
+12 sites de cette forme restent à sonder.
 
 **Le tri par `grep -c`, exécuté sur tout `tests/` la même nuit — et il ne rend
 rien de plus.** Il fallait le mesurer plutôt que de l'annoncer : un script
