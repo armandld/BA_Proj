@@ -1289,3 +1289,135 @@ pytest tests/study/test_preflight_pertinence_separates.py -m slow
 Le second est un test de **déviation** : il échoue le jour où le contrôle
 gagne un critère de discrimination — c'est-à-dire le jour où D-141 est
 tranché, et où il doit être relu. Mesuré : seuil porté à 0,85 → **2 failed**.
+
+---
+
+## D-143 — le score intermédiaire d'Optuna compare deux états séparés d'un pas de temps
+
+**Rapport seul. Décision requise, rien n'est corrigé.**
+
+**Où ça bloque.** `src/pipeline.py:715` calcule, à chaque pas hybride, le
+score rapporté à Optuna pour l'élagage :
+
+```python
+        t_current += dt
+        step += 1                                    # ← le compteur avance
+        step_simulated += 1
+        ...
+        if trial is not None and did_hybrid and steps_hybrid_count > 1:
+            dns_entry = dns_trace.get(step - 1, {}) if dns_presence else {}
+```
+
+À ce point, les deux bras ont été intégrés jusqu'à `t_step` et `step` a
+déjà été incrémenté ; l'instantané DNS qui leur correspond est donc
+`dns_trace[step]`. Le code lit `dns_trace[step - 1]` : l'état DNS du
+**début** du pas qu'on vient d'intégrer. La valeur rapportée à
+`trial.report(...)` puis à `should_prune()` mesure donc, pour l'essentiel,
+l'évolution propre de la DNS sur un pas de temps — une grandeur qui ne
+dépend d'aucun hyperparamètre de l'essai.
+
+**Comment on est tombé dessus.** Question 4 de `VIGIL.md` : deux chemins
+censés coïncider coïncident-ils encore ? Le score **final**, vingt lignes
+plus bas, choisit son index autrement :
+
+```python
+        last_step = step if step in dns_trace else step - 1
+```
+
+Il préfère `step` et ne retombe sur `step - 1` qu'à défaut. Deux lectures
+du même `dns_trace`, dans la même fonction, avec deux conventions
+d'alignement.
+
+**Ce qui est établi.** Champ d'essai choisi pour **séparer** : une
+configuration où le bras reproduit la DNS *exactement*
+(`patch_ratio = 1,0`, donc raffinement total), si bien que toute erreur
+rapportée non nulle ne peut venir que de la référence. Kelvin-Helmholtz,
+`N = 32`, `T_START = 0,9`, `T_MAX = 1,2`, `HYBRID_DT = 0,02`,
+`DT = 1e-3`, `max_depth_override = 1`, `classical_only`, trace DNS de 25
+pas / 7 instantanés, départ à chaud au pas 19. Deux exécutions identiques
+au dernier chiffre.
+
+| rapport | `phys_score` rapporté | `phys_score` aligné | rapport |
+|---|---|---|---|
+| step 21 | **3,274533e−02** | 6,142937e−16 | 5,33e+13 |
+| step 22 | **3,197032e−02** | 1,201023e−15 | 2,66e+13 |
+| step 23 | **3,127157e−02** | 1,885542e−15 | 1,66e+13 |
+| step 25 (dernier) | 3,055743e−15 | — | **juste** |
+
+Le score **final** du même run vaut `phys_score = 3,055743e−15` : le bras
+est exact, et les trois premiers rapports intermédiaires annoncent une
+erreur **treize ordres de grandeur** trop grande. Pour situer, l'évolution
+propre de la DNS entre deux instantanés consécutifs, mesurée avec
+l'opérateur assorti (`score` lui-même), vaut **3,457654e−02** — c'est bien
+elle que les rapports mesurent.
+
+**Le décalage vaut exactement un cran**, prouvé par identité des tableaux
+et non par ressemblance des nombres :
+
+| rapport | réf. utilisée vs `trace[k−1]` | réf. utilisée vs `trace[k]` | bras vs `trace[k]` |
+|---|---|---|---|
+| 21 | **0,000e+00** | 1,789e−03 | 4,441e−16 |
+| 22 | **0,000e+00** | 1,802e−03 | 6,661e−16 |
+| 23 | **0,000e+00** | 1,825e−03 | 8,882e−16 |
+
+La référence consommée est **bit-à-bit** `dns_trace[step-1]['fluxes']`, et
+le bras est **bit-à-bit** `dns_trace[step]['fluxes']` à l'epsilon machine.
+
+**Pourquoi le dernier rapport, lui, est juste.** `pre_compute_dns.py:126`
+réécrit `dns_trace[step-1]['fluxes']` après la boucle avec l'état de
+**fin** de run (« AJOUT CRITIQUE »). La dernière entrée de la trace ne
+suit donc pas la convention des autres, et c'est précisément ce qui
+réaligne le dernier rapport — par accident, pas par construction.
+
+**Le pas 24 est écarté de la mesure, et non tu.** C'est l'entrée réécrite :
+le bras y diffère de `trace[24]` de **6,964e−04**, donc `trace[24]` n'est
+pas une référence propre à cet instant et la colonne « aligné » n'y
+voudrait rien dire. Trois rapports propres suffisent.
+
+**Ce que ça ne dit pas.** Aucun nombre publié n'en dépend : les 180 lignes
+du master table viennent du score **final**, dont l'alignement est juste.
+Et surtout — **on n'a pas mesuré si le classement des essais survit**. Le
+terme parasite est commun à tous les essais d'une même trace DNS, donc un
+élagueur qui compare un essai à la médiane des autres au même pas peut le
+voir s'annuler en grande partie. Trancher demanderait deux essais
+d'hyperparamètres différents avec un bras **non exact** ; ce n'est pas
+fait, et rien ici ne permet de conclure que la campagne est faussée. Ce
+qui est établi est plus étroit et suffit à entrer ici : **le signal
+d'élagage est dominé par une grandeur qui n'appartient pas à l'essai.**
+
+La configuration de campagne (`N = 256`, `HYBRID_DT = 0,10`) n'est pas
+rejouée — coût. La mesure porte sur `N = 32`.
+
+**Pourquoi rien n'est corrigé.** Le correctif tient en un caractère
+(`step - 1` → `step`), et c'est ce qui le rend trompeur. Aux pas hybrides
+de la campagne, `dns_trace[step]` ne porte en général **pas** de
+`'fluxes'` — les instantanés sont posés aux frontières hybrides, et
+`step` est le pas *suivant* une frontière. La lecture du code dit qu'on
+tomberait alors dans la branche `elif sim_temoin is not None`, qui compare
+au témoin **du bon instant** : l'alignement serait réparé, mais la
+référence changerait de nature, DNS → témoin, sur la majorité des pas.
+Changer ce que l'élagueur voit, c'est changer quels essais survivent à une
+campagne de ~224 h CPU. `VIGIL.md` : *mesurer, documenter, ne pas
+corriger, demander.*
+
+**Trois options, aucune appliquée.**
+
+1. **Aligner sur `step`** et accepter le repli sur le témoin. Le plus
+   simple ; change la nature de la référence sur la majorité des pas.
+2. **Remonter au dernier instantané disponible**, comme le fait déjà le
+   chemin de divergence (`while last_ok >= 0 and 'fluxes' not in …`), et
+   **rapporter l'écart de temps** avec le score. Garde la DNS pour
+   référence, rend le décalage visible au lieu de le taire — mais ne le
+   supprime pas.
+3. **Poser un instantané DNS au pas qui suit chaque frontière hybride**,
+   dans `pre_compute_dns.py`. Supprime le décalage à la racine ; coûte un
+   `get_fluxes()` de plus par frontière et change la trace, donc à
+   remesurer de bout en bout.
+
+```bash
+pytest tests/pipeline/test_intermediate_score_time_alignment.py -q
+```
+
+C'est un test de **déviation**, comme ceux de D-141 : il épingle le
+décalage mesuré et rougit le jour où D-143 est tranché — c'est-à-dire le
+jour où il doit être relu.
