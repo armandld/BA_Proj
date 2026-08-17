@@ -950,8 +950,36 @@ Deux directions, à trancher :
    force la divergence d'un champ, sans toucher à `src/` — plus fidèle,
    mais l'entrée reste à construire et son coût n'est pas mesuré.
 
+**La direction 2 est FAITE — le trou de garde est fermé, `src/` intact.**
+L'entrée qui restait à construire : rendre `MHDSolver.is_diverged` vrai au
+n-ième appel. Le vrai bloc `--- Divergence guard ---` s'exécute alors, sur
+de vrais champs, en **~1,5 s**. Le champ qui SÉPARE une L2 pondérée d'une
+L2 nue n'est pas la nappe de courant mais la **carte de poids elle-même** :
+on la remplace par une carte uniforme et on exige que le résultat bouge.
+
+| | `phys_score` |
+|---|---|
+| carte d'instabilité réelle | **3,27453290e−02** |
+| carte uniforme | 3,31748727e−02 |
+| écart | **−1,2948 %** |
+
+Même ordre que les 1,8 % que D-5 avait mesurés. Rejoué sous la **mutation
+A′** de cette entrée — la L2 non pondérée réintroduite juste après l'appel
+partagé, la chaîne cherchée laissée en place :
+
+| | après A′ |
+|---|---|
+| `test_objective_and_estimators_analytic.py` (l'ancien garde) | **46 passed** — le faux vert de D-135, inchangé |
+| `test_intermediate_score_time_alignment.py` (le nouveau) | **1 failed** |
+
+**Ce qui reste ouvert : la direction 1 seule.** Extraire la boucle par
+champ de `pipeline()` reste une modification de `src/`, donc une décision.
+Ce qui change, c'est qu'elle n'est plus urgente : le défaut ne peut plus
+revenir en silence.
+
 ```bash
 pytest tests/mapping/test_objective_and_estimators_analytic.py -q -k both_scoring_paths
+pytest tests/pipeline/test_intermediate_score_time_alignment.py -q -k weights_by_the_instability_map
 ```
 
 ## Ajouter une entrée

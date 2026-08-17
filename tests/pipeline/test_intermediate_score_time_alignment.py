@@ -417,6 +417,40 @@ def test_the_divergence_path_starts_its_lookup_one_step_early(avorte):
         "été tranché sur ce site — relire son entrée dans DEFAUTS.md")
 
 
+def test_the_divergence_path_really_weights_by_the_instability_map():
+    """D-135, direction 2 — la branche atteinte PAR `pipeline()`.
+
+    `DEFAUTS.md` D-135 : l'accord des deux chemins de score n'était gardé
+    que par `assert "field_errors[var] = weighted_relative_error(" in src`.
+    La mutation A′ y réintroduit la L2 NON pondérée de D-5 en laissant la
+    chaîne en place, et le fichier restait à 46 passed.
+
+    Ici l'assertion est comportementale : on remplace la carte de poids par
+    une carte UNIFORME et on exige que le résultat BOUGE. Une L2 nue
+    ignorerait la carte, donc rendrait le même nombre.
+
+    Mesuré : pondéré 3,27453290e-02, uniforme 3,31748727e-02, écart
+    −1,2948 %. C'est l'ordre de grandeur de l'écart de 1,8 % que D-5 avait
+    mesuré sur un champ à nappe de courant.
+
+    Ce test ne corrige rien dans `src/` : D-135 reste ouvert sur sa
+    direction 1 (extraire la boucle par champ). Il ferme le trou de garde.
+    """
+    pondere = _run_avorte(1)["out"]
+    uniforme = _run_avorte(1, poids=lambda ref: np.ones_like(ref["Jz"]))["out"]
+
+    a = pondere["phys_score"]
+    b = uniforme["phys_score"]
+    assert a < 1.0 and b < 1.0, (
+        f"le chemin de divergence a rendu la pénalité ({a}, {b}) au lieu "
+        "d'un score partiel : il ne mesure plus les champs")
+    ecart = abs(a - b) / b
+    assert ecart > 1e-3, (
+        f"pondéré {a:.8e} et uniforme {b:.8e} ne diffèrent que de "
+        f"{ecart * 100:.4f} % (mesuré 1,2948 %) : le chemin de divergence "
+        "n'emploie plus la carte d'instabilité — c'est D-5 qui revient")
+
+
 # ══════════════════════════════════════════════════════════════════
 #  4. La déviation reste écrite là où elle vit
 # ══════════════════════════════════════════════════════════════════
