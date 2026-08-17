@@ -8,15 +8,16 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **4** |
+| **ouverts** — décision ou campagne requise | **5** |
 | **gelés** volontairement | 2 |
 
 Un seul demande la campagne elle-même (D-22) ; les trois autres sont des
 décisions, dont deux à prendre **avant** de lancer. D-27, D-37 et D-48 sont
 sortis d'ici : corrigés, mesurés, verrouillés — ils vivent dans `RESULTS.md`.
 
-**Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
-encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
+**Un point bloque de nouveau la réoptimisation côté code** : D-118
+ci-dessous — le bras QAOA a cessé de classer les blocs mieux que le hasard
+sur une partie de l'espace d'hyperparamètres. Bisection en cours.
 
 ---
 
@@ -225,3 +226,83 @@ l'état.
 
 Un défaut sans mesure est une suspicion. Un défaut sans commande de
 vérification n'a pas sa place ici.
+
+
+---
+
+## D-118 — le bras QAOA ne classe plus, sur une partie de l'espace
+
+**Où ça bloque.** Une campagne Optuna explore l'espace d'hyperparamètres.
+Si le bras quantique n'y porte aucun signal sur une partie de cet espace,
+la campagne y optimise du bruit — et elle y passera du temps de calcul
+payé. À trancher **avant** de louer des cœurs.
+
+**Comment on est tombé dessus.** Passage de recette complet après l'ajout
+du 9ᵉ paramètre : `2006 passed, 3 failed` en 1 h 32. Les trois échecs sont
+dans la suite QAOA.
+
+**Ce qui est établi.**
+
+| | |
+|---|---|
+| `test_hyperparameter_sweep` | **échoue**, reproductible (3 exécutions) |
+| `test_noise_robustness` | **échoue**, reproductible (2 exécutions) |
+| `test_the_ranking_survives_the_sampling` | **passe** à la réexécution — celui-là est bien un tirage |
+
+L'assertion qui tombe dans le balayage n'est **pas** le plafond
+`MAX_CLEAN_ADVANTAGE`, qui passe. C'est la garde de vivacité une ligne
+plus bas :
+
+```
+AssertionError: correlation de rang QAOA/verite negative (-0.467) :
+le bras ne classe plus rien, le plafond ci-dessus ne prouve alors rien
+assert -0.467 > 0.0
+  where -0.467 = min([-0.467, -0.467, 0.75, 0.95, -0.467, 0.933, ...])
+```
+
+Trois des douze combinaisons d'hyperparamètres donnent une corrélation de
+rang **négative** avec la vérité terrain ; d'autres donnent +0,95. Le
+second échec dit la même chose autrement :
+
+```
+Orszag-Tang: without noise the QAOA arm is expected to lose by more than
+0.09 captured fraction, measured gap +0.0000
+```
+
+Un écart **exactement nul** : les deux bras sélectionnent les mêmes blocs.
+C'est ce qu'on verrait si l'hamiltonien était devenu inerte dans cette
+configuration et que QAOA retombait sur le biais classique.
+
+**Ce n'est pas l'ajout de `relative_percentile`.** Le chemin par défaut est
+un no-op **bit-à-bit**, épinglé par
+`tests/pipeline/test_relative_percentile_is_trainable.py::test_le_defaut_est_un_NO_OP_bit_a_bit`.
+
+**Bisection.**
+
+| commit | verdict | durée |
+|---|---|---|
+| `d978539` — naissance de la garde | **passe** | 46 min |
+| `403240b` — juste avant les corrections de coefficients | *en cours* | — |
+| `5bdcf80` = `235dbbf~1` — après elles | **échoue** (−0,467) | 13 min |
+
+La garde a donc passé à sa naissance : ce n'est pas un test commité rouge,
+c'est une régression réelle, apparue dans un intervalle de 26 commits
+touchant `src/`. Les trois en tête de cet intervalle sont les corrections
+de coefficients (`e8a9455` porte de `K_xpoint`, `10180da` dimensionnement
+des quatre familles, `5bdcf80` critère relatif). L'exécution à `403240b`
+sépare les deux hypothèses.
+
+La chute de durée **46 min → 13 min** à configuration égale est un indice
+corroborant : les circuits construits ne sont pas seulement notés
+différemment, ils sont différents.
+
+**Ce qu'il faut noter sur ces deux tests.** Tous deux encodent d'anciens
+**résultats** comme assertions — « QAOA perd d'au moins 0,09 », « QAOA
+classe positivement ». Un changement de physique s'y manifeste donc en
+rouge, pas en résultat. Ne pas déplacer les seuils avant de savoir ce que
+la physique a fait : ce serait effacer la mesure au lieu de la lire.
+
+**Ce que ça n'invalide pas.** `preflight_coefficients.py` passe 5/5, mais
+il vérifie que les coefficients corrèlent avec le **besoin de
+raffinement** — pas que le bras quantique classe mieux que le hasard.
+Deux affirmations distinctes ; seule la seconde échoue.
