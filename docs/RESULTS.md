@@ -6763,6 +6763,19 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   lui-même passe. Le fichier reste donc sans filet contre le balayage vide
   que `_FROZEN = {}` a créé. Correctif estimé à ~5 lignes : peupler `_FROZEN`
   via `monkeypatch` sur un lanceur temporaire, et appeler la vraie fonction.
+- **`tests/study/test_phase12_threshold_comes_from_train.py` s'efface en
+  silence si `qiskit-machine-learning` manque.** Il ouvre sur
+  `pytest.importorskip("qiskit_machine_learning")` — un module-level skip —
+  alors que ce paquet est déclaré dans `environment.yaml` et que la règle
+  écrite du dépôt, dans l'en-tête de `tests/study/test_fig0_pareto_paths.py`
+  (D-94), est : *« On importe le module par une fixture qui ASSERTE, jamais
+  par `importorskip` : un module qu'on ne peut pas importer doit rendre la
+  suite ROUGE, pas verte-avec-skip. »* Mesuré : sans le paquet,
+  `pytest <ce fichier>` rend **« no tests collected »** et les trois gardes
+  de D-81 disparaissent de la suite complète sans autre trace qu'un `s`.
+  Avec le paquet : **3 passed**. C'est le seul `importorskip` au niveau
+  module de toute la suite (les autres portent sur des modules du dépôt,
+  dans des fixtures).
 - **`D-132` désigne deux défauts différents selon le document.**
   `DEFAUTS.md` → « le bras QAOA ne classe plus, sur une partie de l'espace »
   (renuméroté depuis D-118 le 17 août, le maximum de la branche de revue
