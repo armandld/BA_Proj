@@ -161,8 +161,19 @@ def rows_t17_spearman(d):
     aucune masse ZZ, donc il n'y a rien a correler — mais elle doit etre
     ecrite, pas subie.
     """
-    ref = {"init_kelvin_helmholtz": -0.3725, "init_orszag_tang": -0.0084,
-           "init_mhd_rotor": -0.4595, "init_harris_tearing": -0.5021}
+    # REMESURE (D-58). Les references precedentes -0.3725 / -0.0084 /
+    # -0.4595 / -0.5021 dataient d'AVANT `107c1cf` (D-9), qui a corrige la
+    # fenetre : elle etait mesuree sur `physical_score` alors que le chemin
+    # deploye l'applique a `classical_score`. Elles decrivaient donc le
+    # defaut, pas le resultat.
+    #
+    # Valeurs relues dans `results/t17_uncertainty_window.npz`
+    # (git_hash interne `50ca5a0`), qui porte deja la mesure corrigee.
+    # Le signe n'est plus uniforme : deux scenarios sur quatre correlent
+    # POSITIVEMENT. La lecture « la fenetre eteint ZZ la ou C est fort »
+    # ne tient plus, et c'est ce que dit la remesure.
+    ref = {"init_kelvin_helmholtz": -0.3343, "init_orszag_tang": -0.2817,
+           "init_mhd_rotor": 0.3057, "init_harris_tearing": 0.1400}
     if d is None or "spearman_c_w" not in d:
         return [make_row("t17", f"spearman C/w ({k})", None, None)
                 for k in ref]
@@ -273,15 +284,23 @@ def rows_t17(d):
     # Le jeu de parametres est NOMME dans chaque ligne : il existe deux
     # sigma « entraines » distincts (0.023 en boucle ouverte, 0.1888 pour
     # le fold Level-3) et les valeurs different de 20 ordres de grandeur.
+    # REMESURE (D-58). Les references precedentes — jusqu'a 3,855e-154 —
+    # decrivaient le defaut corrige par `107c1cf` (D-9) : la fenetre etait
+    # evaluee sur `physical_score` au lieu de `classical_score`. D'ou des
+    # valeurs « numeriquement mortes » sur 150 ordres de grandeur.
+    #
+    # Relues dans l'artefact commite (git_hash interne `50ca5a0`) : la
+    # fenetre conserve en realite 3 a 12 % de la masse ZZ en boucle
+    # ouverte, et 34 a 59 % au reglage Level-3. ZZ n'est PAS mort.
     ref = {
-        "level3_trained": {"kelvin_helmholtz": 1.142e-01,
-                           "harris_tearing": 1.990e-03,
-                           "mhd_rotor": 3.951e-04,
-                           "orszag_tang": 9.679e-05},
-        "deployed_openloop": {"kelvin_helmholtz": 1.319e-02,
-                              "harris_tearing": 3.855e-154,
-                              "mhd_rotor": 7.652e-28,
-                              "orszag_tang": 4.187e-125},
+        "level3_trained": {"kelvin_helmholtz": 0.4357,
+                           "harris_tearing": 0.3379,
+                           "mhd_rotor": 0.5940,
+                           "orszag_tang": 0.4530},
+        "deployed_openloop": {"kelvin_helmholtz": 0.1207,
+                              "harris_tearing": 0.0624,
+                              "mhd_rotor": 0.0332,
+                              "orszag_tang": 0.0496},
     }
     if d is None:
         return [make_row("t17", f"ZZ mass kept ({s}, {p})", None, None)

@@ -998,77 +998,86 @@ phase5 and therefore by T11/T13/T18; σ = **0.1888** is what Optuna found for
 the Level-3 fold `ot`, i.e. closed loop only. The deployed set is read from
 the module rather than hard-coded, so it cannot drift from what runs.
 
-Deployed **open-loop** parameters — the configuration behind T11/T13/T18
-(σ = 0.023, threshold = 0.1496). This is the harshest case:
+> ## ⚠ RÉTRACTATION (D-58) — la lecture ci-dessous était fausse
+>
+> Le texte publié ici décrivait le **défaut** que `107c1cf` (D-9) a corrigé,
+> pas son résultat. La fenêtre gaussienne était évaluée sur
+> `physical_score` alors que le chemin déployé l'applique à
+> `classical_score` (`refinement.py:506,611`, `qaoa_inputs.py:161,233`).
+> D'où des masses « numériquement mortes » sur 150 ordres de grandeur.
+>
+> L'artefact `results/t17_uncertainty_window.npz` (`git_hash` interne
+> `50ca5a0`) porte la mesure corrigée depuis. Les constantes de référence
+> de `study/common/aggregate_master_table.py` ont été réancrées dessus :
+> le master table passe de **164 OK / 16 DIFF** à **176 OK / 4 DIFF**.
+>
+> Ce qui suit est la remesure. Les affirmations rétractées sont nommées.
 
-| class | max\|C\| no window | mass kept | Spearman(\|C\|,w) |
-|---|---|---|---|
-| kelvin_helmholtz | 53.92 | 1.319e-02 | −0.372 |
-| mhd_rotor | 136.0 | 7.652e-28 | −0.400 |
-| orszag_tang | 63.59 | 4.187e-125 | −0.012 (degenerate) |
-| harris_tearing | 42.32 | 3.855e-154 | −0.502 |
+**Paramètres déployés en boucle ouverte** (σ = 0,023, seuil = 0,1496) — la
+configuration derrière T11 / T13 / T18.
 
-ZZ is **numerically dead on three of four classes** at the deployed
-open-loop setting, and retains 1.3 % on the fourth.
-
-Level-3 **closed-loop** parameters (σ = 0.1888, threshold = 0.1496) — the
-most permissive setting, and the one governing the T15 folds:
-
-| class | max\|C\| no window | max\|C\| with window | mass kept | Spearman(\|C\|,w) |
+| classe | max\|C\| sans fenêtre | max\|C\| avec | masse conservée | Spearman(\|C\|,w) |
 |---|---|---|---|---|
-| kelvin_helmholtz | 53.92 | 36.71 | 1.142e-01 | −0.372 |
-| harris_tearing | 42.32 | 0.0935 | 1.990e-03 | −0.502 |
-| mhd_rotor | 136.0 | 1.331 | 3.951e-04 | −0.460 |
-| orszag_tang | 63.59 | 0.6955 | 9.679e-05 | −0.008 (degenerate) |
+| kelvin_helmholtz | 54,51 | 35,40 | **0,1207** | −0,334 |
+| mhd_rotor | 163,3 | 116,0 | **0,0332** | **+0,306** |
+| orszag_tang | 64,84 | 51,98 | **0,0496** | −0,282 |
+| harris_tearing | 42,32 | 16,30 | **0,0624** | **+0,140** |
 
-Parameters of the failing V1 tests (σ = 0.05, threshold = 0):
+**Paramètres Level-3 en boucle fermée** (σ = 0,1888, seuil = 0,1496) — le
+réglage qui gouverne les folds T15.
 
-| class | w_max | max\|C\| with window | mass kept |
+| classe | max\|C\| sans fenêtre | max\|C\| avec | masse conservée | Spearman(\|C\|,w) |
+|---|---|---|---|---|
+| kelvin_helmholtz | 54,51 | 36,96 | **0,4357** | −0,334 |
+| mhd_rotor | 163,3 | 125,5 | **0,5940** | +0,306 |
+| orszag_tang | 64,84 | 54,26 | **0,4530** | −0,282 |
+| harris_tearing | 42,32 | 18,40 | **0,3379** | +0,140 |
+
+**Paramètres des tests V1** (σ = 0,05, seuil = 0) :
+
+| classe | w_max | max\|C\| avec fenêtre | masse conservée |
 |---|---|---|---|
-| kelvin_helmholtz | 9.964e-01 | 19.60 | 7.449e-03 |
-| harris_tearing | 2.626e-01 | 2.626e-58 | 2.537e-60 |
-| mhd_rotor | 1.010e-19 | 9.943e-18 | 9.547e-23 |
-| orszag_tang | 4.228e-50 | 1.773e-48 | 1.314e-53 |
+| kelvin_helmholtz | 0,983 | 16,83 | 0,0243 |
+| mhd_rotor | 0,999 | 40,18 | **0,4210** |
+| orszag_tang | 0,842 | 22,11 | 0,0048 |
+| harris_tearing | 1,000 | 1,502 | 0,0211 |
 
-**Reading.** Before the window the coupling is healthy on *every* class
-(40–136). After it, three of four classes retain under 0.2 % of the
-coupling mass, and the best case retains 11.4 %. The rank correlation
-between coupling magnitude and window weight is negative wherever it is
-defined, i.e. the suppression is not uniform noise — it is targeted at the
-strongest couplings. At the tests' parameters the window underflows
-outright (4e-50 on OT, 1e-19 on rotor).
+**Trois affirmations rétractées.**
 
-Note `harris_tearing` under the test parameters: `w_max` = 0.26 looks
-healthy, yet mass kept = 2.5e-60. `max(|C|·w) ≠ max|C|·max(w)` — the window
-is large only where the coupling is not. This is the anti-correlation in its
-starkest form and is why the window's effect cannot be judged from `w_max`.
+1. *« ZZ is numerically dead on three of four classes »* — **faux**. La
+   fenêtre conserve **3,3 % à 12,1 %** de la masse ZZ en boucle ouverte et
+   **33,8 % à 59,4 %** au réglage Level-3. Aucune classe n'est morte, à
+   aucun des deux réglages.
+2. *« The rank correlation … is negative wherever it is defined, i.e. the
+   suppression … is targeted at the strongest couplings »* — **faux**.
+   Deux classes sur quatre corrèlent **positivement** (rotor **+0,306**,
+   tearing **+0,140**). La fenêtre n'est donc pas systématiquement dirigée
+   contre les couplages les plus forts ; le mécanisme décrit n'existe pas.
+3. *« The deployed pipeline discards ~99 % of it before the QAOA ever sees
+   it, which is a sufficient explanation for T13's null ablations and for
+   T11b's near-zero variational progress »* — **faux, et c'est la
+   rétractation qui porte le plus loin**. Elle rejette 88 % à 97 % en
+   boucle ouverte, 41 % à 66 % au réglage Level-3. Surtout, **l'explication
+   causale tombe** : les ablations nulles de T13 et la progression
+   variationnelle quasi nulle de T11b ne s'expliquent plus par une
+   annihilation de ZZ, puisqu'il n'y a pas d'annihilation. Elles restent à
+   expliquer.
 
-**Consequence.** The Ising formulation's rationale is the multi-body
-coupling. The deployed pipeline discards ~99 % of it before the QAOA ever
-sees it, which is a sufficient explanation for T13's null ablations and for
-T11b's near-zero variational progress.
+**Ce qui subsiste.** La fenêtre coupe réellement une part de la masse ZZ —
+de moitié environ au réglage Level-3, de l'ordre de 90 % en boucle ouverte
+— et `max(|C|·w) ≠ max|C|·max(w)` reste vrai : la fenêtre n'est pas grande
+là où le couplage l'est. Mais « atténue » n'est pas « annihile », et la
+différence est exactement ce qui séparait une observation d'une explication.
 
-**Defect D6.** `bash run_tests.sh` does **not** pass on a clean checkout.
-Re-running the V1 suite in a detached worktree at `cf93ba3` (the last commit
-touching `src/` or `tests/`, well before any V3/V4 work) reproduces an
-identical set of 8 failures:
+**~~Defect D7~~ — RETIRÉ.** *« The uncertainty window annihilates the family
+it is meant to focus »* reposait entièrement sur les valeurs périmées
+ci-dessus. Il n'y a pas d'annihilation à expliquer, donc pas d'ironie à
+documenter.
 
-- 6 × `TypeError: PhysicalMapper.__init__() got an unexpected keyword
-  argument 'beta'` — the tests call a signature that no longer exists.
-- 2 × substantive assertions:
-  `test_coefficients_survive_orszag_tang` ("Orszag-Tang should produce
-  significant C_edges", actual 1.77e-48) and
-  `test_hamiltonian_carries_spatial_info_beyond_score` ("C_edges should be
-  nonzero at velocity boundary", actual 1.79e-42).
-
-The two substantive failures are the V1 author's own guard against exactly
-the failure mode T17 characterises. They have been failing, not passing.
-
-**Defect D7.** The uncertainty window annihilates the family it is meant to
-focus (numbers above). Documented irony: V1 replaced Michelson
-normalisation because it *"kills the signal when the domain is uniformly
-active"*; the uncertainty window reintroduces that failure mode at the score
-level.
+**Defect D6** — inchangé, il ne dépend pas de ces nombres. `bash
+run_tests.sh` ne passe pas sur un dépôt propre : rejoué dans un worktree
+détaché à `cf93ba3`, 8 échecs identiques (6 × `TypeError` sur une signature
+de `PhysicalMapper` qui n'existe plus, 2 assertions substantielles).
 
 Tests: `tests/study/test_t17_uncertainty_window.py` (9).
 

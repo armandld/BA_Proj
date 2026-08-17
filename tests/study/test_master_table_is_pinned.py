@@ -57,11 +57,16 @@ def test_every_existing_row_carries_a_reference():
 #: les nombres que les corrections ont deplaces (t11b, t12, t17). Ils sont
 #: nommes un par un : un ecart qui n'est pas dans cette liste est neuf, et
 #: il fait echouer le test.
-KNOWN_DIFF = 16
+# REMESURE (D-58). Valait 16. Les 12 lignes T17 — 4 `spearman C/w` et
+# 8 `ZZ mass kept` — sont republiees : leurs constantes de reference
+# decrivaient le defaut corrige par `107c1cf` (D-9), pas son resultat.
+# Restent 4 ecarts : 3 de T11b (D-48, non reproductible) et 1 sur
+# `t12/dim8`, dans le plancher de reproductibilite publie (0,3613).
+KNOWN_DIFF = 4
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "16 nombres publies ne se reproduisent plus depuis leur artefact : ce "
+    "4 nombres publies ne se reproduisent plus depuis leur artefact : ce "
     "sont ceux que les corrections D-1 a D-38 ont deplaces. Ils dependent "
     "de la reoptimisation — voir DEFAUTS.md (D-22) et EVALUATION.md. Ce "
     "xfail est STRICT : le jour ou ils sont republies, il passe en XPASS "
@@ -77,7 +82,7 @@ def test_no_row_differs_from_its_reference():
 
 def test_the_number_of_known_differences_has_not_grown():
     """Le test precedent est un xfail : il ne dit plus RIEN tant que les
-    16 ecarts sont la. Celui-ci mord — si un dix-septieme apparait, c'est
+    4 ecarts sont la. Celui-ci mord — si un cinquieme apparait, c'est
     une regression, pas une dette connue.
 
     Un test rouge en permanence cesse d'etre lu. Un xfail strict double

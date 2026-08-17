@@ -43,7 +43,7 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **17** |
+| **ouverts** — décision ou campagne requise | **16** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -1021,109 +1021,6 @@ Rien n'est appliqué : les trois touchent une lecture publiée.
 pytest tests/study/test_h0_certified_dim3_contradicts_criterion.py
 ```
 
-## D-58 — la narration T17 (« ZZ numériquement mort ») décrit le défaut que D-9 a déjà corrigé, pas son résultat
-
-**Où ça bloque.** Sur une **lecture publiée**, et depuis plus longtemps que
-les autres entrées de ce fichier. `docs/RESULTS.md` §T17 affirme : *« ZZ is
-numerically dead on three of four classes at the deployed open-loop
-setting, and retains 1.3 % on the fourth »*, avec un tableau donnant, pour
-`deployed_openloop`, `mass kept` = 1,319e−02 / 7,652e−28 / 4,187e−125 /
-3,855e−154 (kelvin_helmholtz / mhd_rotor / orszag_tang / harris_tearing).
-**Defect D7**, juste après, généralise : « the uncertainty window
-annihilates the family it is meant to focus ». Les deux sont faux depuis
-`107c1cf` (D-9).
-
-**Comment on est tombé dessus.** En auditant `study/common/`
-(`aggregate_master_table.py`, le seul fichier du module encore non lu
-fonction par fonction — voir `COUVERTURE.md`), les 16 lignes `DIFF` du
-master table ont été prises une à une plutôt que lues comme un total connu.
-3 sont expliquées par D-48 (T11b, non reproductible). 1 (`t12/dim8`) tient
-dans le plancher de reproductibilité publié (0,3613). Les **12 restantes**
-— les 4 `spearman C/w` et les 8 `ZZ mass kept` de T17 — n'avaient aucune
-entrée dans `DEFAUTS.md`.
-
-`git log -- results/t17_uncertainty_window.npz` montre trois commits ; le
-plus récent, `107c1cf` (« D-9 : le mécanisme d'inertie du ZZ était mesuré
-sur le mauvais score »), corrige `h3_uncertainty_window.py` : la fenêtre
-gaussienne était mesurée sur `physical_score` alors que le chemin déployé
-l'applique à `classical_score` (`refinement.py:506,611`,
-`qaoa_inputs.py:161,233`). Le message de ce commit conclut lui-même : *« Le
-mécanisme publié — la fenêtre annihile ZZ, donc l'ablater ne change rien —
-est donc faux »*, et se termine par *« Agrégateur : 164 OK, 16 DIFF, 0
-MISSING »* — l'auteur du commit avait donc déjà sous les yeux le compte de
-lignes DIFF que cette entrée explique, sans l'écrire nulle part.
-
-**Ce qui est établi.** L'artefact `results/t17_uncertainty_window.npz`
-actuellement commité (`git_hash` interne `50ca5a0`, un ancêtre du tip) porte
-déjà les valeurs corrigées :
-
-| classe | `deployed_openloop` publié | `deployed_openloop` commité | `level3_trained` publié | `level3_trained` commité |
-|---|---|---|---|---|
-| kelvin_helmholtz | 1,319e−02 | **0,1207** | 1,142e−01 | **0,4357** |
-| orszag_tang | 4,187e−125 | **0,0496** | 9,679e−05 | **0,4530** |
-| mhd_rotor | 7,652e−28 | **0,0332** | 3,951e−04 | **0,5940** |
-| harris_tearing | 3,855e−154 | **0,0624** | 1,990e−03 | **0,3379** |
-
-Rejoué indépendamment (`python3 study/h3_representation/h3_uncertainty_window.py
---N 64 --steps 30 --seed 0`, sur le tip courant) : mêmes ordres de grandeur
-(0,024–0,591 selon classe et jeu de paramètres), et le script imprime
-lui-même `ZZ numerically dead on: none` pour les **trois** jeux de
-paramètres, y compris `deployed_openloop`. Petit écart mesuré entre le rejeu
-et l'artefact commité (jusqu'à ~0,08 en absolu sur `spearman`,
-vraisemblablement une dérive de version d'environnement plutôt qu'une
-véritable non-reproductibilité — non tranché, sans conséquence sur la
-lecture qualitative ci-dessous, qui tient dans les deux cas).
-
-Les deux références — le tableau `docs/RESULTS.md` §T17 et le dictionnaire
-`ref` de `rows_t17` / `rows_t17_spearman` dans `aggregate_master_table.py`
-(qui recopie les mêmes nombres) — sont donc toutes les deux des lectures du
-défaut D-9 **avant** sa correction, jamais mises à jour après. `DEFAUTS.md`
-D-9 le dit déjà correctement, en une ligne : *« annihilation » → ZZ domine K
-de 1,5 à 8,2×* — mais rien n'a propagé cette ligne dans la prose de T17, ni
-dans D7, ni dans les constantes que `aggregate_master_table.py` compare.
-
-**Collision de numéro trouvée en chemin.** `docs/RESULTS.md:1111` porte un
-second paragraphe intitulé **« Defect D9 »** (sans tiret), pour un défaut
-sans rapport : `t13_term_ablation.py` écrivait son artefact sous un nom qui
-ignorait `--mapper`, écrasant le résultat v1 en rejouant v2. Cette
-occurrence n'a jamais de ligne `| D-N |` dans le tableau de tête — elle
-n'était donc pas réservée au sens de ce fichier — mais elle partage le
-libellé du vrai D-9 (`docs/RESULTS.md:73`), exactement la forme de collision
-déjà documentée pour D-18 et D-28. Non renommée ici : c'est un simple
-toilettage de texte, mais il touche `RESULTS.md`, réservé à `RESULTS.md`
-lui-même — signalé, laissé à la prochaine passe qui y touche.
-
-**Ce que ça ne dit pas.** La conclusion « causalement inerte » de T13
-elle-même **ne dépend pas** de cette narration : T18 la reconfirme
-séparément, fenêtre neutralisée (`σ → 1e9`), couplage restauré à
-O(25–155), ablation ZZ toujours à 0,0000 — et son propre addendum recoupe
-via le mappeur v2, sans fenêtre du tout. Rien de la conclusion scientifique
-ne bouge. Ce qui bouge, c'est le **mécanisme** que T17/D7 racontent pour
-l'expliquer.
-
-**Où on en est — non corrigé, ça touche une lecture publiée.** Trois
-directions, la moins chère d'abord :
-
-1. **Réécrire §T17 et D7 de `RESULTS.md`** avec les nombres déjà commités
-   (tableau ci-dessus) et mettre à jour le dictionnaire `ref` de
-   `aggregate_master_table.py` en conséquence — aucun calcul nouveau, D-9 a
-   déjà produit les deux. Coût : straightforward, mais c'est réécrire la
-   description du mécanisme central de la section H3, pas juste un nombre.
-2. **Rejouer T17 proprement avant de réécrire**, pour trancher l'écart de
-   ~0,08 observé entre l'artefact commité et le rejeu de cette passe (piste
-   « dérive d'environnement », non mesurée jusqu'au bout).
-3. **Laisser tel quel et l'annoter seulement** — ajouter une note en tête de
-   §T17 pointant vers D-9 et cette entrée, sans toucher aux nombres publiés
-   ni aux constantes de l'agrégateur.
-
-Rien n'est appliqué : les trois déplacent une lecture publiée, et
-`VIGIL.md` réserve cela à USER.
-
-```bash
-git log --oneline -- results/t17_uncertainty_window.npz
-python3 study/common/aggregate_master_table.py | grep DIFF   # 16 lignes, 12 = T17
-python3 study/h3_representation/h3_uncertainty_window.py --N 64 --steps 30 --seed 0
-```
 
 ## D-59 — à dim = 2, la topologie périodique double le lien ZZ shear (pas le ZZZZ), sans conséquence mesurée sur les décisions publiées
 
