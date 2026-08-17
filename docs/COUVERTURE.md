@@ -2422,6 +2422,37 @@ depuis D-119.
 
 ---
 
+## Les commandes publiées — le chemin était testé, l'option non (D-140)
+
+`tests/study/test_repro_commands_point_to_real_files.py` vérifiait depuis
+D-71 que tout script cité par une commande de `RESULTS.md` **existe**. Rien
+ne vérifiait que les **options** citées existent : une commande peut pointer
+sur un fichier bien réel et sortir en 2 sur `unrecognized arguments`.
+
+C'est ce qui est arrivé à la ligne « Vérifier » de **D-53**, le résultat le
+plus fort du dépôt — voir `RESULTS.md`, D-140.
+
+**Ce qui est testé maintenant.** `test_every_repro_command_uses_options_its_script_declares`
+extrait chaque commande `python <script du dépôt> --…` de `RESULTS.md`, puis
+interroge le **parseur** du script par son propre `--help`. L'assertion porte
+sur le comportement déclaré, pas sur le texte du source : renommer une option
+dans le code la fait rougir, reformater le fichier non.
+
+**Ce qui est mesuré.** 16 commandes distinctes à options, 12 scripts
+interrogés, 0 ignoré. Garde anti-balayage-vide : le test exige d'en trouver
+au moins 10 et le dit dans son message. ~20 s.
+
+**Ce que ce test ne couvre pas, écrit pour ne pas le croire couvert :**
+
+- les options **courtes** (`-q`, `-k`) et les commandes `pytest`, hors motif ;
+- les **valeurs** passées aux options — `--dim 3` est accepté ici quelle que
+  soit la valeur, seul le nom de l'option est vérifié ;
+- les commandes de `DEFAUTS.md` et de `COUVERTURE.md` : seul `RESULTS.md`
+  est balayé, parce que c'est lui qui porte le contrat « un résultat qu'on ne
+  sait pas refaire n'est pas un résultat » ;
+- un script dont `--help` ne rend pas 0 est **ignoré**, pas signalé — aucun
+  aujourd'hui, mais le jour où il y en aura un, il passera en silence.
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

@@ -28,6 +28,8 @@ historique).
 
 import os
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -128,6 +130,81 @@ def test_launcher_scripts_invoke_real_files(relpath, expected_targets):
     missing = sorted(
         p for p in invoked if not os.path.exists(os.path.join(_REPO_ROOT, p)))
     assert not missing, f"{relpath} invoque des fichiers absents : {missing}"
+
+
+# ── D-140 : le chemin existe, l'option non ────────────────────────────
+#
+# Les tests ci-dessus verifient que le FICHIER cite existe. Rien ne
+# verifiait que les OPTIONS citees existent : la commande publiee pour
+# verifier D-53 — le resultat le plus fort du depot — portait `--check`,
+# que son script ne declare pas. Elle rendait `error: unrecognized
+# arguments` et sortait en **2**, sous un test vert.
+#
+# L'assertion porte sur le COMPORTEMENT : on interroge le parseur du
+# script par son propre `--help`, on ne cherche pas la chaine dans le
+# source. ~20 s pour l'ensemble, les imports lourds etant mis en cache
+# par script.
+
+_PY_CMD_RE = re.compile(
+    r"python\s+((?:study|src|scripts|figures)/[A-Za-z0-9_./-]+\.py)([^\n`|]*)")
+_LONG_OPT_RE = re.compile(r"(?<![\w-])(--[a-zA-Z][a-zA-Z0-9-]*)")
+
+
+def _commands_with_options(text):
+    """(script, options) pour chaque commande `python <script> --opt …`.
+
+    Le texte est aplati d'abord : une commande de `RESULTS.md` peut etre
+    coupee en deux lignes a l'interieur d'un meme span de code inline.
+    """
+    flat = re.sub(r"`([^`]*)`", lambda m: "`" + m.group(1).replace("\n", " ") + "`",
+                  text)
+    out = set()
+    for m in _PY_CMD_RE.finditer(flat):
+        opts = frozenset(_LONG_OPT_RE.findall(m.group(2)))
+        if opts:
+            out.add((m.group(1), opts))
+    return sorted(out)
+
+
+@pytest.fixture(scope="module")
+def _declared_options():
+    """Options longues que chaque script declare, lues a son `--help`."""
+    cache = {}
+
+    def get(script):
+        if script not in cache:
+            r = subprocess.run(
+                [sys.executable, os.path.join(_REPO_ROOT, script), "--help"],
+                capture_output=True, text=True, timeout=300)
+            cache[script] = (set(_LONG_OPT_RE.findall(r.stdout + r.stderr))
+                             if r.returncode == 0 else None)
+        return cache[script]
+
+    return get
+
+
+def test_every_repro_command_uses_options_its_script_declares(
+        results_md, _declared_options):
+    commands = _commands_with_options(results_md)
+    # Balayage vide : sans ce garde, un motif qui cesse de correspondre
+    # rendrait ce test vert sans rien verifier. Mesure du jour : 16.
+    assert len(commands) >= 10, (
+        f"le balayage n'a trouve que {len(commands)} commande(s) a options "
+        "dans RESULTS.md : c'est le motif qui a cesse de correspondre, pas "
+        "le depot qui n'a plus de commandes")
+    faulty = []
+    for script, opts in commands:
+        if not os.path.exists(os.path.join(_REPO_ROOT, script)):
+            continue                      # couvert par le test des chemins
+        declared = _declared_options(script)
+        if declared is None:
+            continue                      # `--help` ne rend pas 0 : hors portee
+        missing = sorted(o for o in opts if o not in declared)
+        if missing:
+            faulty.append(f"{script} : {' '.join(missing)}")
+    assert not faulty, (
+        "commandes de RESULTS.md citant une option que leur script ne "
+        f"declare pas — elles sortent en 2 sans rien mesurer : {faulty}")
 
 
 @pytest.mark.parametrize("relpath", [
