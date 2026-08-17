@@ -333,11 +333,54 @@ def test_t25_both_direction_counts_exclude_the_vacuous_conditions():
             f"le decompte ligne {lineno} ne filtre plus sur un verdict rendu")
 
 
-def test_t25_never_extrapolates_its_frontier():
-    src = open(_study_file("h4_physics_robustness.py"),
-               encoding="utf-8").read()
-    assert "xs[0] <= qp <= xs[-1]" in src, (
-        "t25 pourrait extrapoler hors de la frontiere balayee")
+# D-137. `test_t25_never_extrapolates_its_frontier` cherchait la garde
+# `xs[0] <= qp <= xs[-1]` dans le SOURCE. Retiree, pas affaiblie : elle
+# restait verte quand la garde etait neutralisee en code mort (faux vert,
+# 28 passed, un budget hors plage rendant alors 0.700) et rougissait sur la
+# reecriture EQUIVALENTE `min(xs) <= qp <= max(xs)` (faux rouge sur un
+# changement voulu). Le test ci-dessous la remplace par le comportement.
+
+def test_t25_refuses_a_budget_outside_the_swept_frontier():
+    """Hors de la plage balayee, `frontier_verdict` refuse — il n'extrapole pas.
+
+    D-136/D-137 : le test ci-dessus cherche la garde dans le SOURCE.
+    Neutralisee en code mort (chaine intacte), elle rend sur la frontiere
+    ci-dessous :
+
+        budget 0.20 -> 0.700        budget 0.05 -> 1.000
+
+    finis, positifs, dans l'intervalle d'un `phys_score`, sans refus ni
+    plantage. Et le biais a un sens : l'erreur classique inventee CROIT
+    quand le budget decroit, donc `ratio_vs_frontier = qe / ref` diminue
+    et le bras Q-HAS parait meilleur qu'il n'est.
+
+    L'ENTREE QUI SEPARE est le budget SOUS la plage. Au-dessus, la garde
+    retiree fait lever `StopIteration` — un plantage, qui se voit. En
+    dessous, elle rend le nombre plausible, qui ne se voit pas. Les deux
+    sont couverts ici ; seul le second est silencieux.
+
+    Les nombres mesures sont ecrits pour qu'une derive se voie.
+    """
+    from h4_physics_robustness import frontier_verdict
+    f = lambda pts: [{"patch_ratio": p, "phys_score": e, "completed": True}
+                     for p, e in pts]
+    pts = f([(0.35, 0.4), (0.45, 0.2)])
+
+    # temoin : a l'interieur, le verdict est rendu -- sans quoi le test
+    # ci-dessous passerait sur une frontiere qui refuse tout.
+    ref, why = frontier_verdict(pts, 0.40, 1.0)
+    assert ref == pytest.approx(0.3) and why is None
+
+    for qp, extrapole in ((0.20, 0.700), (0.05, 1.000)):
+        ref, why = frontier_verdict(pts, qp, 1.0)
+        assert ref is None, (
+            f"budget {qp} SOUS la plage balayee [0.35, 0.45] : "
+            f"extrapolation rendue au lieu d'un refus "
+            f"(la garde retiree rend {extrapole:.3f})")
+        assert "outside the swept range" in why
+
+    ref, why = frontier_verdict(pts, 0.50, 1.0)
+    assert ref is None and "outside the swept range" in why
 
 
 def test_t25_refuses_a_non_monotone_bracketing_interval():
