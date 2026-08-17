@@ -458,21 +458,39 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
     ed_decisions_v = ed["decisions_v"]
     ed_gt_refine = ed["gt_refine"]
 
-    n_promising = np.sum(promising)
+    # D-47 — `promising` est un DIAGNOSTIC, plus un FILTRE.
+    #
+    # La porte valait `f1_exact >= f1_classique` (exact_diagonalisation.py).
+    # Mesure sur 40 instantanes : decision exacte tout-a-1 40/40, ligne de
+    # base classique tout-a-1 40/40, `exact != classical` 0/40, F1 egaux
+    # 40/40 et jamais superieurs. Deux predicteurs CONSTANTS identiques
+    # rendent le meme F1 par construction, donc la porte valait True 40/40
+    # avec `>=` et aurait valu False 40/40 avec le `>` de son propre
+    # commentaire : elle portait ZERO bit dans les deux sens.
+    #
+    # Cause, mesuree : a resolution VQA le score est a 8,4 sigma du seuil,
+    # donc la fenetre gaussienne du couplage ZZ vaut au plus 1,15e-31 et le
+    # biais Z, positif partout, domine le ZZZZ de 2 a 6,6x. Le fondamental
+    # met tous les qubits a |1> faute de terme portant une structure
+    # spatiale. C'est une limite STRUCTURELLE de l'hamiltonien v1 a cette
+    # resolution, pas un defaut de la phase 4.
+    #
+    # Consequence : filtrer sur cette porte, c'est selectionner sur une
+    # constante. La phase 5 traite donc TOUS les instantanes, et le compte
+    # reste imprime comme diagnostic.
+    #
+    # Ce changement ne deplace AUCUN nombre publie : avec `>=`, `promising`
+    # etait deja vrai partout, donc rien n'etait ecarte. Verifie par
+    # `tests/study/test_phase5_ne_filtre_plus_sur_promising.py`.
+    n_promising = int(np.sum(promising))
     print(f"  {scenario} Re={Re} dim={n_patches}: "
-          f"{n_promising}/{len(promising)} promising snapshots")
-
-    if n_promising == 0:
-        print("  No promising patches -- skipping QAOA.")
-        return None, None
+          f"{n_promising}/{len(promising)} snapshots 'promising' "
+          f"(diagnostic — la phase 5 les traite TOUS, D-47)")
 
     all_results = []
     warm_start = None
 
     for idx in range(len(snap_indices)):
-        if not promising[idx]:
-            continue
-
         si = snap_indices[idx]
         vx = vx_all[si].astype(np.float64)
         vy = vy_all[si].astype(np.float64)

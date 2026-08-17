@@ -6729,3 +6729,70 @@ coup obligerait à tout rejouer.
 Vérifier : `pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py -q`
 → **9 passed**, dont un test qui vérifie que le champ d'essai a bien du ZZ
 vivant — écrit sur les coefficients déployés, tout le banc passerait à vide.
+
+
+# D-47 — l'Hamiltonien v1 dégénère vers « raffiner partout » à résolution VQA
+
+**Décision de USER : option 1 — documenter comme résultat.** C'est une
+limite structurelle de v1, pas un défaut de la phase 4.
+
+## Ce qui est mesuré
+
+Phase 4 diagonalise exactement l'Hamiltonien et demande si son fondamental
+désigne les bonnes cellules. Sur les 40 instantanés disponibles (dim = 2,
+la seule dimension exécutable — dim 4/8 demandent 32/128 qubits contre le
+plafond de 20) :
+
+| | |
+|---|---|
+| décision exacte tout-à-1 | **40/40** |
+| ligne de base classique tout-à-1 | **40/40** |
+| `exact_refine != classical_refine` | **0/40** |
+| F1 exact == F1 classique | **40/40**, jamais supérieur |
+| `promising` avec `>=` | **40/40** — avec le `>` du commentaire : **0/40** |
+
+Deux prédicteurs **constants identiques** rendent le même F1 par
+construction : la porte portait **zéro bit** dans les deux sens.
+
+## Le mécanisme, en trois nombres
+
+| grandeur | valeur |
+|---|---|
+| `(score − thr)/σ` minimum | **8,4** → fenêtre ZZ ≤ **1,15e−31** |
+| `min\|H_edges\|` / `max\|K_plaquettes\|` | **2,0 à 6,6** |
+| signe du biais Z | **positif partout** |
+
+Le contenu quantique — la seule raison d'utiliser QAOA — vit dans ZZ et
+ZZZZ. La fenêtre gaussienne éteint ZZ ; le biais Z, qui n'est qu'une
+reformulation du score classique, écrase le ZZZZ. Le fondamental met tous
+les qubits à |1⟩ **faute de terme portant une structure spatiale**.
+
+**L'échappatoire évidente a été testée et réfutée.** On pouvait soupçonner
+un désaccord d'opérateur (champs moyennés par bloc, score max-poolé depuis
+la pleine résolution). Rejoué avec le score assorti : **39/40** au lieu de
+40/40, F1 à égalité 40/40. L'écart existe, ce n'est pas la cause. Ce qui
+sature est la résolution VQA elle-même.
+
+## Ce qui change dans le code
+
+`promising` devient un **diagnostic**, il n'est plus un **filtre**. La
+phase 5 (`study/common/qaoa_inputs.py`) traitait auparavant les seuls
+instantanés prometteurs ; elle les traite désormais **tous**, et imprime le
+compte en le disant.
+
+**Aucun nombre publié ne bouge** : avec `>=`, `promising` était déjà vrai
+40/40, donc rien n'était écarté. Le changement retire une sélection qui ne
+sélectionnait rien — mais qui aurait pu tout écarter au premier
+rééquilibrage de `σ` ou `w_z_frac`.
+
+## Pourquoi ne pas régler `σ` ou `w_z_frac` à la main
+
+Ce sont **deux des neuf paramètres réoptimisés**. Les fixer maintenant
+reviendrait à décider par avance ce que la campagne existe pour mesurer, et
+tout réglage manuel serait jeté si elle en choisit d'autres. D-53 confirme
+par ailleurs que `dim = 3` ne sauve pas : ce n'est pas un artefact de
+petite taille.
+
+Vérifier : `pytest tests/study/test_phase5_ne_filtre_plus_sur_promising.py -q`
+→ **5 passed**, dont un garde qui vérifie que le détecteur de filtre mord
+encore.
