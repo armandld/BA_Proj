@@ -2392,6 +2392,27 @@ d'abord les alias d'import, puis cherche l'appel.
 Le total a grandi avec la suite depuis le 15 août, donc « 58 restants » était
 un plancher, jamais le total. Le nombre à citer est celui-ci, remesuré.
 
+**Suite de la passe — trois sites de plus, et deux verdicts NÉGATIFS qui
+comptent autant.** Le sondage a rendu deux défauts supplémentaires et trois
+non-défauts, tous mesurés par mutation, pour que la prochaine passe ne les
+rejoue pas :
+
+| site | verdict |
+|---|---|
+| `test_t22c_transfer.py:120` — `--mode leak-free` | **D-134**, confirmé : la fuite **D13** réintroduite (seuil QAOA remis à `LEAKED_THRESHOLD` juste après), les QUATRE chaînes intactes → **35 passed**, sous un artefact nommé `leak-free` |
+| `test_objective_and_estimators_analytic.py:574` — l'accord des deux chemins de score | **D-135**, confirmé mais **NON CORRIGÉ** : la L2 non pondérée de D-5 réintroduite sur le chemin de divergence, l'appel partagé laissé en place et son résultat réécrit → **46 passed**. C'est `src/pipeline.py`, le chemin déployé : mesuré, documenté, pas corrigé — deux directions dans `DEFAUTS.md` |
+| `test_h0_panel_resume.py:108` — la clé morte `mask_match` a disparu | **surestimé** — évadable (`r["mask_match"] = float("nan")` → **22 passed**), mais la moitié qui porte une valeur (les trois clés que la boucle LIT) est couverte comportementalement au site `:97`, qui appelle `decision_agreement`. Réintroduire une clé morte ne fabrique pas une valeur plausible et fausse |
+| `test_hyperparams_provenance_break.py:211` — `0.14959824837662078` en dur | **surestimé** — même forme que D-120 : `CLASSICAL_BEST_THRESHOLD` porté à `0,2` en gardant le littéral ailleurs dans le fichier laisse ce fichier à **15 passed**, mais `test_the_frozen_threshold_is_the_measured_classical_best` (`test_solver_guards_and_objective.py:126`) **rougit**. Le comportement est couvert |
+| `test_h0_panel_resume.py:97`, `test_silent_failure_sweep.py:82`, `test_t28_t29_labels_and_ci.py:179` | **légitimes** — le premier appelle `decision_agreement` avant de lire le source ; les deux autres passent par `ast.parse` et par `importlib`, pas par le texte |
+
+**Le calibrage tient, et il s'affine.** Sur les **11 sites** sondés à la main
+depuis le 15 août : **7 défauts**, **3 surestimés**, **1 légitime confirmé**.
+Le tri automatisé, lui, reste à ~1 sur 3 — c'est un premier filtre, jamais un
+verdict. Et la règle qui a rendu le plus : **vérifier un « surestimé » n'est
+pas du temps perdu** — D-120 est né de là, et les deux surestimés ci-dessus
+ont chacun désigné le test qui couvre vraiment le comportement, ce qu'aucune
+lecture n'aurait donné.
+
 **Ce que cette passe n'a PAS fait**, écrit pour ne pas être supposé fait :
 aucun code de `src/`, `study/` ou `figures/` n'est modifié — les six
 corrections sont entièrement dans les tests, parce que dans les six cas le
