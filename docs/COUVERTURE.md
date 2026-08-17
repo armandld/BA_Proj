@@ -2565,6 +2565,44 @@ branché mais jamais mordant.
 - la branche `elif sim_temoin is not None` du même bloc : elle est **morte**
   dès qu'une trace DNS est fournie, et aucun test ne l'emprunte.
 
+## `src/pipeline.py` — lu en entier, 919 lignes, un défaut (D-143)
+
+Module rouvert par une trouvaille, donc relu **en entier** et non par
+échantillon : en-tête et table `PHASE`, `main()` et sa résolution CLI
+(D-66), `_init_scenario`, tout le corps de `pipeline()`, et les trois
+fonctions de queue (`instability_weight_map`, `weighted_relative_error`,
+`score`).
+
+**Ce qui est sorti** : **D-143** — le score intermédiaire d'Optuna lit
+`dns_trace[step - 1]` après `step += 1` (`DEFAUTS.md`), et une **branche
+morte** notée en une ligne dans `RESULTS.md` (le repli `patch_ratio = 1,0`
+de `:678`, que `step_simulated += 1` rend inatteignable).
+
+**Ce qui a été vérifié et trouvé SAIN** — écrit pour ne pas être relu deux
+fois :
+
+| ce qui a été soumis aux quatre questions | verdict |
+|---|---|
+| `instability_weight_map` contre sa docstring | **saine** — la docstring annonce `1 + 0,25·(…)`, le code écrit `1 + 0,5·(…)·0,5` : identique, et l'`omega_z` est bien `∂vy/∂x − ∂vx/∂y` sous la convention `grid.py` (`AXIS_X = 0`) |
+| les deux consommateurs de la pondération | **coïncident** — `score()` et le chemin de divergence appellent tous deux `instability_weight_map(référence)` puis `weighted_relative_error` ; c'est la correction D-5, et elle tient |
+| `patch_ratio` des deux chemins de notation | **coïncident** — `total_pixel_used / (pas × N²)` des deux côtés |
+| le garde D-67 sur le chemin final | **vivant** — `:751` passe `step_simulated` à `score()`, qui LÈVE sur `total_steps <= 0` ; un run vide y crie |
+| la graine de l'EMA contre ses mises à jour | **saine** — `Phi_ema` est semé par `mapper.compute_stress_flux` et `run_adaptive_*` rend un `Phi` produit par **le même** appel (`refinement.py:562` et `:648`). Opérateur assorti des deux côtés |
+| `first_step_with_flux = min(…)` | **sain** — `pre_compute_dns` pose son premier instantané à `T_START − HYBRID_DT` par construction, donc le `min` désigne bien celui-là ; et le cas froid ne prend pas cette branche (`hot_start_state is None`) |
+| `sim_classical` au départ à chaud | **sain** — recopié depuis `sim_quantum`, donc les deux bras partent du même état ; `sim_temoin` est délibérément `None` quand une trace DNS est fournie |
+| `_details` / `_divergence_details` | **sains** — les quatre sorties `return_details` passent par `_details`, donc toutes portent `sigma_source` (c'était D-36) |
+
+**Axes empruntés par la lecture ET par une exécution** : `classical_only` ;
+`dns_trace` présent (départ à chaud, `sim_temoin = None`) ;
+`max_depth_override = 1` ; `trial` non nul, donc le bloc d'élagage
+réellement traversé — c'est ce qui a rendu D-143.
+
+**Axes NON empruntés**, nommés pour ne pas être supposés : bras quantique
+(`classical_only=False`), `classic_AMR_comp=True`, mode sans trace DNS
+(`sim_temoin` vivant), départ à froid, et le **chemin de divergence**
+lui-même — atteignable, mais aucune entrée ne le sépare aujourd'hui
+(cf. D-135, direction 2, toujours ouverte).
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
