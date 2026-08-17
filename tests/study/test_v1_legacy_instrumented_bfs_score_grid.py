@@ -97,9 +97,63 @@ def _score_map(sim, bounds, pad, t_dim_requested):
 
 @pytest.mark.parametrize("fname", _FIXED_FILES)
 def test_source_no_longer_asks_for_the_halo_twice(fname):
+    """Ce test cherche une CHAINE. Il est garde tel quel — il n'est pas faux —
+    mais il ne mesure pas ce qu'il annonce : D-132 l'a montre par mutation
+    dans les deux sens. Le garde structurel est
+    `test_no_call_asks_process_score_for_more_than_the_target_dim`.
+    """
     src = open(os.path.join(_V1_LEGACY, fname), encoding="utf-8").read()
     assert "target_dim + 2 * pad" not in src, (
         f"{fname} redemande encore le halo que _process_score ajoute deja")
+
+
+@pytest.mark.parametrize("fname", _FIXED_FILES)
+def test_no_call_asks_process_score_for_more_than_the_target_dim(fname):
+    """D-132 : le retour de D-96/D-37 empeche par la STRUCTURE, pas par
+    l'orthographe.
+
+    Le test ci-dessus fait `assert "target_dim + 2 * pad" not in src`. Il
+    delimite un comportement — aucun appelant ne doit redemander le halo que
+    `_process_score` ajoute deja — par une chaine, avec ses espaces. Mesure
+    par mutation, les deux sens :
+
+    * **A'** — le defaut D-96 REINTRODUIT a l'identique, ecrit
+      `target_dim+2*pad` (deux espaces en moins, meme AST, meme bug) : la
+      chaine cherchee n'apparait pas et le fichier reste **7 passed**. Le
+      garde anti-retour se contourne par la mise en forme.
+    * **B** — un COMMENTAIRE correct au-dessus de l'appel juste, disant
+      « ne PAS redemander target_dim + 2 * pad ici » : **ROUGE**. Le garde
+      punit precisement ce que `VIGIL.md` exige — ecrire la deviation la ou
+      elle vit.
+
+    Ce test interroge l'AST : le troisieme argument de chaque appel a
+    `_process_score` doit etre le NOM `target_dim`, jamais une expression.
+    Insensible aux espaces, aux commentaires et aux retours a la ligne.
+    """
+    import ast
+
+    src = open(os.path.join(_V1_LEGACY, fname), encoding="utf-8").read()
+    calls = [n for n in ast.walk(ast.parse(src))
+             if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name)
+             and n.func.id == "_process_score"]
+    assert calls, (
+        f"{fname} n'appelle plus _process_score : ce garde ne mesure plus "
+        "rien, le balayage est vide")
+
+    for call in calls:
+        args = list(call.args)
+        kw = {k.arg: k.value for k in call.keywords}
+        t_dim = args[2] if len(args) > 2 else kw.get("t_dim")
+        assert t_dim is not None, (
+            f"{fname}:{call.lineno} appelle _process_score sans dimension "
+            "cible : impossible de verifier le halo")
+        assert isinstance(t_dim, ast.Name) and t_dim.id == "target_dim", (
+            f"{fname}:{call.lineno} passe "
+            f"`{ast.unparse(t_dim)}` a _process_score au lieu du seul "
+            "`target_dim` : _process_score ajoute deja le halo, le "
+            "redemander rend un coeur (4, 4) dont la boucle ne lit que le "
+            "quart haut-gauche (D-37, D-96)")
 
 
 # ══════════════════════════════════════════════════════════════════
