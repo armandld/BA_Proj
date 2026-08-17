@@ -159,111 +159,179 @@ AGG = re.compile(r"np\.(mean|std|median|sum)\s*\(")
 #: nombre publie. `np.sum` compte, les trois autres moyennent.
 _REDUCTEURS = ("mean", "std", "median", "sum")
 
+# D-128 (suite). Le garde ci-dessus (premiere passe de D-128) ne voyait un
+# site que si le mot "runs"/"_runs" apparaissait LITTERALEMENT dans les
+# tokens de l'appel `np.<reducteur>(...)` lui-meme -- Name, Attribute ou
+# chaine. Mesure sur ce depot : **2 sites sur 65 scripts**, tous deux dans
+# `closed_loop_leak_free_summary.py`. Mais le motif dominant du depot est le
+# passage par un PARAMETRE DE FONCTION : `summarise(q_ok)` filtre
+# `q_ok` chez l'APPELANT, puis calcule `np.mean(v)` DANS `summarise`, sur un
+# nom `v` qui ne contient ni "runs" ni "_runs" -- invisible au premier
+# garde. Rejoue avec une trace de provenance (variable -> conteneur
+# `*_runs`, a travers UNE indirection d'appel de fonction locale) : **20
+# sites sur 5 scripts** (`aggregate_master_table.py`: 2,
+# `closed_loop_leak_free_summary.py`: 2, `closed_loop_run_variance.py`: 5
+# via `summarise()`, `h4_physics_robustness.py`: 5,
+# `h4_unseen_conditions.py`: 6). Les 2 sites d'origine sont un
+# sous-ensemble exact des 20 -- confirme, pas contredit.
+#
+# Garde aussi contre l'inversion : `if not r["completed"]` GARDE les
+# tirages avortes, l'oppose de l'intention, et ne doit pas compter comme un
+# filtre valide (deja rencontre comme classe de defaut sous le nom
+# "convention d'axes inversee").
 
-def _aggregations_sur_tirages(tree):
-    """Appels `np.<reducteur>(...)` dont l'argument mentionne une liste de
-    tirages, avec la ligne ou ils commencent.
+_RUNS_SRC = re.compile(r"_runs\b")
 
-    D-128 — la version precedente cherchait `np.mean(` et `_runs` sur la
-    MEME ligne du source. Aucune des deux agregations reelles du depot n'est
-    ecrite ainsi : elles tiennent sur deux lignes, la liste etant nommee un
-    peu plus haut. Mesure : **0 ligne selectionnee sur 65 scripts**, pour
-    **2 agregations reelles** — un balayage vide, dans le fichier qui existe
-    pour detecter les balayages vides. L'AST voit la structure, pas la mise
-    en forme : un retour a la ligne ne le desarme pas.
-    """
-    trouves = []
-    for n in ast.walk(tree):
-        if not (isinstance(n, ast.Call)
-                and isinstance(n.func, ast.Attribute)
-                and n.func.attr in _REDUCTEURS
-                and isinstance(n.func.value, ast.Name)
-                and n.func.value.id == "np"):
+
+def _a_filtre_completed_non_nie(gen_ifs):
+    for f in gen_ifs:
+        if isinstance(f, ast.UnaryOp) and isinstance(f.op, ast.Not):
             continue
-        noms = set()
-        for c in ast.walk(n):
-            if isinstance(c, ast.Name):
-                noms.add(c.id)
-            elif isinstance(c, ast.Attribute):
-                noms.add(c.attr)
-            elif isinstance(c, ast.Constant) and isinstance(c.value, str):
-                noms.add(c.value)
-        if any(x == "runs" or x.endswith("_runs") for x in noms):
-            trouves.append((n, n.lineno))
-    return trouves
-
-
-def _mentionne_completed(node):
-    for c in ast.walk(node):
-        if isinstance(c, ast.Constant) and c.value == "completed":
-            return True
-        if isinstance(c, (ast.Name, ast.Attribute)):
-            nom = getattr(c, "id", None) or getattr(c, "attr", "")
-            if nom in ("completed", "n_ok", "runs_ok"):
-                return True
-    return False
-
-
-def _liste_agregee_est_filtree(appel, tree):
-    """Le filtre `completed` est-il DANS l'appel, ou dans la liaison du nom
-    que l'appel agrege ?
-
-    D-128 — la version precedente cherchait la chaine `completed` dans les
-    12 lignes precedentes. Ce voisinage contient `\"n_completed\": len(runs)`,
-    un champ de COMPTE-RENDU qui n'a rien d'un filtre : retirer le vrai
-    filtre laissait le garde vert. On remonte donc du nom agrege a sa
-    liaison, et on exige le filtre la.
-    """
-    if _mentionne_completed(appel):
-        return True
-    # noms iteres par les comprehensions de l'appel, ou passes directement
-    sources = set()
-    for c in ast.walk(appel):
-        if isinstance(c, ast.comprehension) and isinstance(c.iter, ast.Name):
-            sources.add(c.iter.id)
-        elif isinstance(c, ast.Name):
-            sources.add(c.id)
-    for n in ast.walk(tree):
-        if not isinstance(n, ast.Assign):
-            continue
-        cibles = {t.id for t in n.targets if isinstance(t, ast.Name)}
-        if cibles & sources and _mentionne_completed(n.value):
+        if "completed" in ast.unparse(f):
             return True
     return False
+
+
+def _statut_source_iteree(iter_node, statuts_locaux):
+    """'raw' (vient d'un `*_runs` non filtre) / 'filtered' / None (rien a
+    voir avec des tirages), pour la source iteree par une comprehension."""
+    if isinstance(iter_node, ast.Name) and iter_node.id in statuts_locaux:
+        return statuts_locaux[iter_node.id]
+    if isinstance(iter_node, ast.BinOp):
+        cotes = [_statut_source_iteree(iter_node.left, statuts_locaux),
+                 _statut_source_iteree(iter_node.right, statuts_locaux)]
+        cotes = [s for s in cotes if s]
+        if not cotes:
+            return None
+        return "raw" if "raw" in cotes else "filtered"
+    if _RUNS_SRC.search(ast.unparse(iter_node)):
+        return "raw"
+    return None
+
+
+def _statuts_locaux(fonction, graine_params=None):
+    """Statuts locaux (nom -> 'raw'/'filtered') d'une fonction du module,
+    pour du code lineaire -- vrai de tous les scripts de `study/`."""
+    statuts = dict(graine_params or {})
+    for n in ast.walk(fonction):
+        if not (isinstance(n, ast.Assign) and len(n.targets) == 1
+                and isinstance(n.targets[0], ast.Name)):
+            continue
+        nom = n.targets[0].id
+        rhs = n.value
+        comp = rhs
+        if isinstance(comp, ast.Call):
+            # np.array([... for x in NOM], dtype=float) : la comprehension
+            # est un ARGUMENT de l'appel, pas le rhs lui-meme.
+            comp = next(
+                (a for a in comp.args
+                 if isinstance(a, (ast.ListComp, ast.GeneratorExp,
+                                   ast.SetComp))), None)
+        derive = None
+        if isinstance(comp, (ast.ListComp, ast.GeneratorExp, ast.SetComp)):
+            gen = comp.generators[0]
+            base = _statut_source_iteree(gen.iter, statuts)
+            if base is not None:
+                derive = ("filtered" if _a_filtre_completed_non_nie(gen.ifs)
+                          else base)
+        elif isinstance(rhs, ast.Name) and rhs.id in statuts:
+            derive = statuts[rhs.id]
+        elif (isinstance(rhs, ast.List) and not rhs.elts
+              and _RUNS_SRC.search(nom)):
+            derive = "raw"  # accumulateur : `q_runs = []` puis `.append`
+        elif _RUNS_SRC.search(ast.unparse(rhs)):
+            derive = "raw"  # ex. `t["qhas_runs"]`, `q.get(f"{c}_runs", [])`
+        if derive is not None:
+            statuts[nom] = derive
+    return statuts
+
+
+def _agregations_avec_statut(tree):
+    """(call_node, lineno, statut ou None) pour chaque
+    `np.<reducteur>(...)` du module, en tracant sa provenance a travers UNE
+    indirection d'appel de fonction locale (le cas `summarise(q_ok)`)."""
+    fonctions = {n.name: n for n in tree.body
+                 if isinstance(n, ast.FunctionDef)}
+    statuts = {n: _statuts_locaux(f) for n, f in fonctions.items()}
+
+    graine = {n: {} for n in fonctions}
+    for nom_appelant, appelant in fonctions.items():
+        for n in ast.walk(appelant):
+            if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    and n.func.id in fonctions and n.args):
+                continue
+            params_callee = [a.arg for a in fonctions[n.func.id].args.args]
+            if not params_callee:
+                continue
+            arg0 = n.args[0]
+            st = (statuts[nom_appelant].get(arg0.id)
+                  if isinstance(arg0, ast.Name) else None)
+            if st is None:
+                continue
+            prev = graine[n.func.id].get(params_callee[0])
+            graine[n.func.id][params_callee[0]] = (
+                st if prev in (None, st) else "mixed")
+
+    for nom, f in fonctions.items():
+        g = {k: v for k, v in graine[nom].items() if v != "mixed"}
+        if g:
+            statuts[nom] = _statuts_locaux(f, graine_params=g)
+
+    resultats = []
+    for nom, f in fonctions.items():
+        st = statuts[nom]
+        for n in ast.walk(f):
+            if not (isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)
+                    and n.func.attr in _REDUCTEURS
+                    and isinstance(n.func.value, ast.Name)
+                    and n.func.value.id == "np"
+                    and n.args):
+                continue
+            noms = {c.id for c in ast.walk(n.args[0])
+                    if isinstance(c, ast.Name)}
+            statuts_vus = {st[x] for x in noms if x in st}
+            if not statuts_vus:
+                continue  # rien a voir avec des tirages
+            resultats.append(
+                (n, n.lineno,
+                 "raw" if "raw" in statuts_vus else "filtered"))
+    return resultats
 
 
 @pytest.mark.parametrize("script", TASK_SCRIPTS)
 def test_aggregations_over_runs_filter_completed(script):
-    """Une moyenne prise sur une liste `*_runs` doit filtrer `completed`.
+    """Une moyenne prise sur une liste de tirages doit exclure les tirages
+    avortes de sa provenance.
 
     C'est le defaut qui a fait publier a T16 une moyenne de 0.3328 pour
     `rotor` la ou les tirages valides donnaient 0.1473."""
-    tree = _tree(script)
     lignes = _source(script).splitlines()
-    for appel, i in _aggregations_sur_tirages(tree):
-        assert _liste_agregee_est_filtree(appel, tree), (
-            f"{script}:{i} agrege des executions sans filtrer les avortees:\n"
+    for appel, i, statut in _agregations_avec_statut(_tree(script)):
+        assert statut != "raw", (
+            f"{script}:{i} agrege des tirages sans filtrer les avortees:\n"
             f"    {lignes[i - 1].strip()}")
 
 
 def test_the_aggregation_sweep_is_not_empty():
     """Un balayage qui ne selectionne rien doit crier.
 
-    D-128 : le garde ci-dessus passait sur les 65 scripts en n'examinant
-    AUCUN site. Ce test compte ce qui est reellement examine, pour qu'une
-    reecriture qui le redesarme se voie — c'est la regle « verifier le
-    nombre de cas SELECTIONNES, pas seulement le code de retour ».
-
-    Le nombre est ecrit ici pour qu'une derive se voie : **2** agregations
-    sur tirages a la date de D-128, toutes deux dans
-    `closed_loop_leak_free_summary.py` (lignes 126 et 127). Il peut monter
-    legitimement ; il ne doit pas tomber a zero.
+    D-128 (suite) : la premiere passe de D-128 corrigeait le balayage vide
+    d'origine mais n'en voyait encore que 2 sites sur 20 reels -- toujours
+    aveugle a `summarise(q_ok)` et a ses semblables, ou l'agregation vit
+    dans une fonction DIFFERENTE de celle qui filtre. Mesure a cette passe :
+    **20** agregations tracees et confirmees filtrees, sur 5 scripts. Le
+    nombre peut monter legitimement ; il ne doit pas retomber a 2 (le
+    plancher de la premiere passe) ni a 0.
     """
-    total = sum(len(_aggregations_sur_tirages(_tree(s))) for s in TASK_SCRIPTS)
-    assert total >= 2, (
+    total = sum(1 for s in TASK_SCRIPTS
+                for _, _, st in _agregations_avec_statut(_tree(s))
+                if st == "filtered")
+    assert total >= 20, (
         f"le balayage des agregations sur tirages n'examine plus que "
-        f"{total} site(s) sur {len(TASK_SCRIPTS)} scripts — il passerait "
-        "au vert sans rien verifier, ce qui est le defaut D-128")
+        f"{total} site(s) confirmes filtres sur {len(TASK_SCRIPTS)} "
+        "scripts (mesure a l'ecriture : 20) — il est redevenu aveugle a "
+        "une partie du motif reel du depot")
 
 
 # ---------------------------------------------------------------- (c)
