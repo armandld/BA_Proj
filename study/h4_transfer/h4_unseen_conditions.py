@@ -173,6 +173,34 @@ def build_traces(T, key, cfg, scenario, unseen):
     return tr
 
 
+#: Les champs qu'un point de sauvegarde doit partager avec la relance pour
+#: que ses tirages soient comparables. `fold` et `mode` sont lus a la racine
+#: de l'artefact, les deux autres dans son `cli_args`.
+_RESUME_KEYS = ("fold", "mode", "repeats", "matched_reference")
+
+
+def checkpoint_is_reusable(prev, args):
+    """Le point de sauvegarde `prev` a-t-il ete ecrit sous la MEME config ?
+
+    Reprendre sous une AUTRE configuration melangerait des tirages
+    incomparables dans une seule moyenne publiee — la forme exacte de defaut
+    que ce module traque. On refuse plutot que de deviner.
+
+    D-123 — cette decision etait en ligne dans `main()`, et son seul garde
+    etait `test_resume_reuses_only_matching_configurations`, qui cherchait
+    les quatre chaines dans le TEXTE du fichier. Mesure : remplacer un seul
+    `and` par un `or` casse la decision (`fold` et `mode` egaux suffisent
+    alors a accepter un point ecrit sous un autre `--repeats`) en laissant
+    les quatre chaines en place — `pytest tests/study/test_t24_leak_free.py`
+    rendait **26 passed**. Extraite ici pour qu'un test puisse l'appeler.
+    """
+    cli = prev.get("cli_args", {}) or {}
+    return (prev.get("fold") == args.fold
+            and prev.get("mode") == args.mode
+            and cli.get("repeats") == args.repeats
+            and cli.get("matched_reference") == args.matched_reference)
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 T22: leak-free tuning and unseen initial conditions")
@@ -368,12 +396,7 @@ def main():
         except ValueError:
             prev = None
         if prev is not None and prev.get("status") == "partial":
-            same = (prev.get("fold") == args.fold
-                    and prev.get("mode") == args.mode
-                    and prev.get("cli_args", {}).get("repeats")
-                    == args.repeats
-                    and prev.get("cli_args", {}).get("matched_reference")
-                    == args.matched_reference)
+            same = checkpoint_is_reusable(prev, args)
             if same:
                 _resume = prev.get("arms", {})
                 print(f"  RESUMING from checkpoint "
