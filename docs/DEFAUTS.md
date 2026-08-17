@@ -15,7 +15,7 @@ Un seul demande la campagne elle-même (D-22) ; les trois autres sont des
 décisions, dont deux à prendre **avant** de lancer. D-27, D-37 et D-48 sont
 sortis d'ici : corrigés, mesurés, verrouillés — ils vivent dans `RESULTS.md`.
 
-**Un point bloque de nouveau la réoptimisation côté code** : D-118
+**Un point bloque de nouveau la réoptimisation côté code** : D-132
 ci-dessous — le bras QAOA a cessé de classer les blocs mieux que le hasard
 sur une partie de l'espace d'hyperparamètres. Bisection en cours.
 
@@ -230,7 +230,7 @@ vérification n'a pas sa place ici.
 
 ---
 
-## D-118 — le bras QAOA ne classe plus, sur une partie de l'espace
+## D-132 — le bras QAOA ne classe plus, sur une partie de l'espace
 
 **Où ça bloque.** Une campagne Optuna explore l'espace d'hyperparamètres.
 Si le bras quantique n'y porte aucun signal sur une partie de cet espace,
@@ -295,6 +295,33 @@ sépare les deux hypothèses.
 La chute de durée **46 min → 13 min** à configuration égale est un indice
 corroborant : les circuits construits ne sont pas seulement notés
 différemment, ils sont différents.
+
+**Collision de numérotation, et un désaccord de mesure.** Ce défaut
+portait d'abord le numéro D-118 : la branche `vigil/…` l'utilise déjà pour
+l'axe « backend ». Renuméroté **D-132** (son maximum est D-131).
+
+Surtout : la branche `vigil/…` a vu ces deux échecs (son D-112, ligne de
+base `c74d564` puis `cb33697`) et les a classés **« famille QAOA
+stochastique »**. La mesure ne le soutient pas. Sur cette branche :
+
+| exécution | `test_hyperparameter_sweep` |
+|---|---|
+| recette complète, HEAD | échoue, −0,467 |
+| isolé, HEAD | échoue, −0,467 |
+| isolé, `5bdcf80` | échoue, −0,467 |
+| isolé, `403240b` | échoue, −0,467 |
+| isolé, `d978539` | **passe** |
+
+Quatre échecs consécutifs à la **valeur identique** sur quatre commits
+différents, et un vert franc sur un cinquième : ce n'est pas un tirage.
+`test_noise_robustness` échoue 2 fois sur 2, à `+0.0000` exactement.
+
+D-112 n'a réexécuté en isolé que `test_qaoa_improves_discrimination`
+(3× vert) et `test_the_ranking_…` (1 échec / 2 verts), puis a rangé les
+deux autres dans la même famille sans les isoler. C'est la généralisation
+depuis un seul tirage — la faute que ce fil traque, commise ici sur le
+diagnostic plutôt que sur la mesure. *(Je l'ai commise d'abord, sur ces
+mêmes trois tests, avant de la corriger en réexécutant.)*
 
 **Ce qu'il faut noter sur ces deux tests.** Tous deux encodent d'anciens
 **résultats** comme assertions — « QAOA perd d'au moins 0,09 », « QAOA
