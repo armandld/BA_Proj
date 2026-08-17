@@ -2422,7 +2422,24 @@ depuis D-119.
 
 ---
 
-## Les commandes publiées — le chemin était testé, l'option non (D-140)
+## Les commandes publiées — deux trous, mesurés et fermés (D-140, D-142)
+
+**D-142 d'abord, parce qu'il est plus large.** Le balayage de D-71 couvre
+`study|scripts|figures`. Les commandes les plus nombreuses de `RESULTS.md`
+sont des `pytest tests/…`, et **rien** ne les regardait : 29 chemins cités
+comme commande, **10 absents**, deux blocs de recette entiers morts
+(`exit 4`). `test_every_pytest_command_in_results_md_points_to_a_real_file`
+les couvre désormais. Il suit le **contexte de commande** — une commande
+`pytest` s'étale sur plusieurs lignes — et exclut les lignes de **table**
+par leur forme, sans liste d'exceptions à tenir à la main. Vérifié en
+rejouant le garde sur le `RESULTS.md` d'avant : **10 chemins listés, 1
+failed** ; après : **1 passed**.
+
+**Une note qui vaut avertissement** : ce garde s'exécute en 0,04 s, celui
+de D-140 en ~20 s. Ce n'est pas le même travail — l'un lit le système de
+fichiers, l'autre interroge douze parseurs. Ne pas les fusionner.
+
+## Les options des commandes publiées — le chemin était testé, l'option non (D-140)
 
 `tests/study/test_repro_commands_point_to_real_files.py` vérifiait depuis
 D-71 que tout script cité par une commande de `RESULTS.md` **existe**. Rien

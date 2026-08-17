@@ -132,6 +132,69 @@ def test_launcher_scripts_invoke_real_files(relpath, expected_targets):
     assert not missing, f"{relpath} invoque des fichiers absents : {missing}"
 
 
+# ── D-142 : la moitie `tests/` n'etait pas balayee du tout ────────────
+#
+# `_PATH` ci-dessus couvre `study|scripts|figures`. Les commandes de
+# reproduction les plus nombreuses de `RESULTS.md` sont des `pytest
+# tests/...` : elles n'etaient regardees par rien. Dix chemins y etaient
+# restes a leur emplacement d'avant `17d983d` — meme cause que D-71, sur
+# la moitie que son garde ne voyait pas. Deux blocs de recette entiers
+# sortaient en **4**, `file or directory not found`.
+#
+# Deux differences avec le balayage de D-71, imposees par la forme reelle
+# de ces commandes :
+#   - une commande `pytest` s'etale sur plusieurs lignes, par `\` dans un
+#     bloc cloture ou par simple retour a la ligne dans un span de code
+#     inline : il faut suivre le CONTEXTE, pas juger ligne a ligne ;
+#   - les lignes de TABLE (`| ... |`) citent des chemins historiques
+#     (inventaire de la suite QAOA d'avant la reorganisation) et ne sont
+#     pas des commandes : elles sont exclues par leur forme, pas par une
+#     liste d'exceptions a tenir a la main.
+
+_TEST_PATH_RE = re.compile(r"(tests/[A-Za-z0-9_./-]+\.py)")
+_CMD_START_RE = re.compile(r"(?:^|`)(?:python -m |nohup )?pytest\b|^(?:python|bash)\s")
+
+
+def _test_paths_in_commands(text):
+    """Chemins `tests/...py` cites dans une COMMANDE, continuations comprises."""
+    found, in_fence, suite = set(), False, False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("```"):
+            in_fence, suite = not in_fence, False
+            continue
+        if line.startswith("|"):              # table : inventaire, pas commande
+            continue
+        debut = bool(_CMD_START_RE.search(line))
+        if in_fence:
+            if debut:
+                suite = True
+            elif not (line.startswith("tests/") or line.startswith("-")):
+                suite = False
+        else:
+            if not (debut or suite):
+                continue
+            # un span de code inline non ferme continue a la ligne suivante
+            suite = (line.count("`") % 2 == 1) or (suite and "`" not in line)
+        if debut or suite:
+            found.update(_TEST_PATH_RE.findall(line))
+    return found
+
+
+def test_every_pytest_command_in_results_md_points_to_a_real_file(results_md):
+    referenced = _test_paths_in_commands(results_md)
+    # Anti-balayage-vide : mesure du jour, 29 chemins distincts.
+    assert len(referenced) >= 20, (
+        f"le balayage n'a trouve que {len(referenced)} chemin(s) `tests/` "
+        "dans les commandes de RESULTS.md : c'est le motif qui a cesse de "
+        "correspondre, pas le depot qui n'a plus de commandes pytest")
+    missing = sorted(p for p in referenced
+                     if not os.path.exists(os.path.join(_REPO_ROOT, p)))
+    assert not missing, (
+        "commandes `pytest` de RESULTS.md pointant sur des fichiers absents "
+        f"— elles sortent en 4 sans rien mesurer : {missing}")
+
+
 # ── D-140 : le chemin existe, l'option non ────────────────────────────
 #
 # Les tests ci-dessus verifient que le FICHIER cite existe. Rien ne
