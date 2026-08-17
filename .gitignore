@@ -9,3 +9,6 @@ env/
 # Le .npz final est le livrable ; ces fichiers ne servent qu a
 # redemarrer une campagne interrompue.
 results/.checkpoints/
+
+# Sorties de bisection : artefacts de travail, jamais du depot.
+.bisect_*.txt
