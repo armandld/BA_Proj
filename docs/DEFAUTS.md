@@ -95,9 +95,12 @@ désormais. Le solveur sous-jacent a changé (D-25, D-26/D-27) après
 l'écriture de T31, pour de bonnes raisons ailleurs ; la table, elle, ne
 l'a pas suivi. Table refaite requise avant de citer cette conclusion.
 
-**Un point bloque de nouveau la réoptimisation côté code** : D-132
-ci-dessous — le bras QAOA a cessé de classer les blocs mieux que le hasard
-sur une partie de l'espace d'hyperparamètres. Bisection en cours.
+**Rien ne bloque plus la réoptimisation côté code.** D-132 (bras QAOA
+instable selon les hyperparamètres) est **élucidé** : la bisection nomme
+`6ecaecf` — D-25, la projection spectrale — dont la correction a retiré
+l'artefact sur lequel reposait le classement. Ce n'est pas une régression
+à défaire, et l'instabilité résiduelle est précisément ce que la campagne
+arbitre.
 
 ---
 
@@ -1566,77 +1569,67 @@ configuration et que QAOA retombait sur le biais classique.
 un no-op **bit-à-bit**, épinglé par
 `tests/pipeline/test_relative_percentile_is_trainable.py::test_le_defaut_est_un_NO_OP_bit_a_bit`.
 
-**Bisection.**
+**Bisection — CLOS. Le coupable est `6ecaecf` (D-25).**
+
+`e4d6bbc` est son **parent direct** et passe ; `6ecaecf` échoue. Un seul
+commit les sépare : c'est établi, pas inféré.
 
 | commit | verdict | durée |
 |---|---|---|
-| `d978539` — naissance de la garde | **passe** | 46 min |
-| `d212e54` — D-8, hamiltonien borné | **passe** | 10 min 43 |
-| *(19 commits touchant `src/`)* | *bracket en cours* | — |
-| `403240b` — juste avant les corrections de coefficients | **échoue** (−0,467) | 2 min 55 |
-| `5bdcf80` = `235dbbf~1` — après elles | **échoue** (−0,467) | 13 min |
+| `d978539` — naissance de la garde | passe | 46 min |
+| `d212e54` — D-8, hamiltonien borné | passe | 10 min 43 |
+| `6de5fbf` — D-24, `PROJECT_RHS` à False | passe | 9 min 15 |
+| `e4d6bbc` — projection indépendante de la taille | passe | 9 min 06 |
+| **`6ecaecf` — D-25, projection spectrale** | **ÉCHOUE** (−0,467) | **2 min 20** |
+| `854ba24` — pénalité de divergence partagée | échoue | 10 min 32 |
+| `91951df` — D-37 / D-38 | *(après un rouge : non concluant)* | — |
+| `403240b` — avant les corrections de coefficients | échoue | 2 min 55 |
+| `5bdcf80` — après elles | échoue | 13 min |
 
-La garde a donc passé à sa naissance : ce n'est pas un test commité rouge,
-c'est une régression réelle, apparue dans un intervalle de 26 commits
-touchant `src/`. Les trois en tête de cet intervalle sont les corrections
-de coefficients (`e8a9455` porte de `K_xpoint`, `10180da` dimensionnement
-des quatre familles, `5bdcf80` critère relatif). L'exécution à `403240b`
-sépare les deux hypothèses.
+Diff de `6ecaecf` : **39 lignes dans `src/Simulation/solver.py`**, rien
+d'autre.
 
-La chute de durée **46 min → 13 min** à configuration égale est un indice
-corroborant : les circuits construits ne sont pas seulement notés
-différemment, ils sont différents.
+**Trois hypothèses successives réfutées par cette bisection**, toutes
+plausibles et toutes fausses : **D-1** (bascule de convention du
+rotationnel, `bb6a387`), **D-8** (coefficients exactement nuls,
+`d212e54`), **D-37** (biais Z et couplages sur deux grilles, `91951df` —
+écarté parce qu'il vient *après* `854ba24`, déjà rouge).
 
-**Ce que la bisection a déjà écarté.** `d212e54` passe, donc D-8 (« le
-hamiltonien borné encodait des coefficients exactement nuls ») et tout ce
-qui le précède sont hors de cause — y compris **D-1**, le basculement de
-convention du rotationnel (`bb6a387`), qui était le suspect principal.
+**Ce que D-25 a corrigé** : *« la projection spectrale abîmait un champ
+déjà solénoïdal »*. Le commit ajoute un contrôle **négatif** — vérifier
+que le second membre de `v` ne préserve pas la divergence — précisément
+pour qu'on ne puisse pas croire qu'aucune projection n'est nécessaire.
 
-Les candidats restants, par ordre de plausibilité :
+**Ce n'est donc pas une régression à défaire.** D-25 est une correction
+juste, mesurée, avec son contrôle négatif. Avant elle, le bras QAOA
+classait « bien » parce qu'il lisait des champs **abîmés par une
+projection fautive** : l'ordre des blocs qu'il produisait tenait à un
+artefact numérique, pas à la physique.
 
-- **`91951df` (D-37)** — à toute profondeur > 0, le biais Z et les
-  couplages décrivaient deux grilles différentes ; le biais d'un patch
-  venait de son quart haut-gauche. À `max_depth = 4`, trois niveaux sur
-  quatre passaient par là.
-- **`7c0ae2f` (D-11 à D-14)** — l'audit de contrat des mappeurs, là où les
-  coefficients sont construits.
-- **`6ecaecf` (D-25)** — la projection spectrale, qui change le solveur,
-  donc les champs, donc tout l'aval.
+**Ce que cela ajoute à la figure d'ensemble.** C'est le quatrième point,
+et il en change le statut :
 
-**Hypothèse à ne PAS confondre avec un fait.** Si le coupable est D-37, ce
-n'est pas une régression à défaire : les deux grilles étaient réellement
-désaccordées, et l'état « vert » d'avant tenait à ce que le biais était lu
-dans le mauvais quart de chaque patch — un artefact qui flattait le bras
-quantique. Cela rangerait D-132 avec D-47, D-53 et ρ(E_gap, F1) = +0,870
-plutôt que contre eux. **Non établi** : la bisection n'a pas encore nommé
-le commit, et un premier suspect a déjà été réfuté.
-
-**Collision de numérotation, et un désaccord de mesure.** Ce défaut
-portait d'abord le numéro D-118 : la branche `vigil/…` l'utilise déjà pour
-l'axe « backend ». Renuméroté **D-132** (son maximum est D-131).
-
-Surtout : la branche `vigil/…` a vu ces deux échecs (son D-112, ligne de
-base `c74d564` puis `cb33697`) et les a classés **« famille QAOA
-stochastique »**. La mesure ne le soutient pas. Sur cette branche :
-
-| exécution | `test_hyperparameter_sweep` |
+| | |
 |---|---|
-| recette complète, HEAD | échoue, −0,467 |
-| isolé, HEAD | échoue, −0,467 |
-| isolé, `5bdcf80` | échoue, −0,467 |
-| isolé, `403240b` | échoue, −0,467 |
-| isolé, `d978539` | **passe** |
+| D-47 | le fondamental exact = « tout raffiner », 40/40 |
+| D-53 | optimum atteint 0,062–0,156 contre 1,000 exigé, **sous** le classique |
+| ρ(E_gap, F1) | +0,870 — mieux résoudre H dégrade la décision |
+| **D-132 / D-25** | le classement du bras reposait sur une projection fautive |
 
-Quatre échecs consécutifs à la **valeur identique** sur quatre commits
-différents, et un vert franc sur un cinquième : ce n'est pas un tirage.
-`test_noise_robustness` échoue 2 fois sur 2, à `+0.0000` exactement.
+Chaque correction qui retire un artefact rend le bras quantique **moins**
+bon. Ce n'est plus « quatre mesures concordantes » mais une **direction
+systématique**, ce qui est un argument plus fort.
 
-D-112 n'a réexécuté en isolé que `test_qaoa_improves_discrimination`
-(3× vert) et `test_the_ranking_…` (1 échec / 2 verts), puis a rangé les
-deux autres dans la même famille sans les isoler. C'est la généralisation
-depuis un seul tirage — la faute que ce fil traque, commise ici sur le
-diagnostic plutôt que sur la mesure. *(Je l'ai commise d'abord, sur ces
-mêmes trois tests, avant de la corriger en réexécutant.)*
+**La nuance à ne pas perdre** : les corrélations restent hétérogènes —
+−0,467 sur 3 combinaisons, +0,95 sur d'autres. Le bras n'est pas mort
+partout, il est devenu **instable selon les hyperparamètres**. C'est
+exactement ce que la réoptimisation arbitre : **D-132 ne bloque donc plus
+la campagne**, il en change la lecture attendue.
+
+**Conséquence sur les deux tests rouges.** Ils épinglent l'état d'avant
+D-25 : ce sont des **seuils périmés**, le code a légitimement changé sous
+eux. Ils se remesurent après la campagne, avec les autres. Ils ne se
+retouchent pas et ne se suppriment pas.
 
 **Ce qu'il faut noter sur ces deux tests.** Tous deux encodent d'anciens
 **résultats** comme assertions — « QAOA perd d'au moins 0,09 », « QAOA
