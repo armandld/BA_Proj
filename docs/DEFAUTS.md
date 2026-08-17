@@ -6,9 +6,44 @@ d'avancer, comment on est tombé dessus, et où on en est pour le lever.
 Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 `RESULTS.md` avec sa mesure et sa commande de vérification.
 
+## Règle d'arrêt — ce qui entre dans ce fichier
+
+Écrite parce que le taux de découverte a dépassé le taux de résolution.
+Comptés sur les défauts D-39 à D-131 des deux branches :
+
+| zone | commits |
+|---|---|
+| `src/` + `study/` — le chemin scientifique | 98 |
+| figures et lanceurs | 42 |
+| gardes de test (faux verts, mutations) | 37 |
+
+**Près de la moitié de l'effort récent ne touche ni un nombre du papier ni
+la campagne.** Le travail est juste — les faux verts de D-123 à D-131 sont
+de vrais défauts — mais sa valeur marginale s'est effondrée, et c'est ce
+qui donne l'impression d'avancer de plus en plus lentement : on découvre
+plus vite qu'on ne ferme, sur des objets de moins en moins décisifs.
+
+Un défaut est **bloquant**, et n'entre ici, que s'il satisfait l'un des
+deux critères :
+
+1. **il porte une lecture publiée** — un nombre ou une phrase que le
+   manuscrit contiendra ; ou
+2. **il empêche la réoptimisation** de mesurer ce qu'elle prétend mesurer.
+
+Tout le reste — rendu des figures, hygiène des tests, lanteurs hors
+chemin — est **enregistré et groupé**, traité en un lot unique APRÈS la
+campagne. Un défaut hors chemin critique se note en une ligne dans
+`RESULTS.md` et ne s'ouvre pas ici.
+
+Ce n'est pas un abandon de rigueur : c'est le même principe que
+« mesurer avant d'affirmer », appliqué à l'allocation du temps. Un audit
+qui ne finit jamais ne protège aucune conclusion, parce qu'il n'y a pas de
+conclusion.
+
+
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **18** |
+| **ouverts** — décision ou campagne requise | **19** |
 | **gelés** volontairement | 2 |
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
@@ -60,8 +95,9 @@ désormais. Le solveur sous-jacent a changé (D-25, D-26/D-27) après
 l'écriture de T31, pour de bonnes raisons ailleurs ; la table, elle, ne
 l'a pas suivi. Table refaite requise avant de citer cette conclusion.
 
-**Rien ne bloque plus la réoptimisation côté code.** Ce qui la conditionne
-encore est une décision, pas un défaut : voir les deux entrées ci-dessous.
+**Un point bloque de nouveau la réoptimisation côté code** : D-132
+ci-dessous — le bras QAOA a cessé de classer les blocs mieux que le hasard
+sur une partie de l'espace d'hyperparamètres. Bisection en cours.
 
 ---
 
@@ -1513,3 +1549,110 @@ l'état.
 
 Un défaut sans mesure est une suspicion. Un défaut sans commande de
 vérification n'a pas sa place ici.
+
+
+---
+
+## D-132 — le bras QAOA ne classe plus, sur une partie de l'espace
+
+**Où ça bloque.** Une campagne Optuna explore l'espace d'hyperparamètres.
+Si le bras quantique n'y porte aucun signal sur une partie de cet espace,
+la campagne y optimise du bruit — et elle y passera du temps de calcul
+payé. À trancher **avant** de louer des cœurs.
+
+**Comment on est tombé dessus.** Passage de recette complet après l'ajout
+du 9ᵉ paramètre : `2006 passed, 3 failed` en 1 h 32. Les trois échecs sont
+dans la suite QAOA.
+
+**Ce qui est établi.**
+
+| | |
+|---|---|
+| `test_hyperparameter_sweep` | **échoue**, reproductible (3 exécutions) |
+| `test_noise_robustness` | **échoue**, reproductible (2 exécutions) |
+| `test_the_ranking_survives_the_sampling` | **passe** à la réexécution — celui-là est bien un tirage |
+
+L'assertion qui tombe dans le balayage n'est **pas** le plafond
+`MAX_CLEAN_ADVANTAGE`, qui passe. C'est la garde de vivacité une ligne
+plus bas :
+
+```
+AssertionError: correlation de rang QAOA/verite negative (-0.467) :
+le bras ne classe plus rien, le plafond ci-dessus ne prouve alors rien
+assert -0.467 > 0.0
+  where -0.467 = min([-0.467, -0.467, 0.75, 0.95, -0.467, 0.933, ...])
+```
+
+Trois des douze combinaisons d'hyperparamètres donnent une corrélation de
+rang **négative** avec la vérité terrain ; d'autres donnent +0,95. Le
+second échec dit la même chose autrement :
+
+```
+Orszag-Tang: without noise the QAOA arm is expected to lose by more than
+0.09 captured fraction, measured gap +0.0000
+```
+
+Un écart **exactement nul** : les deux bras sélectionnent les mêmes blocs.
+C'est ce qu'on verrait si l'hamiltonien était devenu inerte dans cette
+configuration et que QAOA retombait sur le biais classique.
+
+**Ce n'est pas l'ajout de `relative_percentile`.** Le chemin par défaut est
+un no-op **bit-à-bit**, épinglé par
+`tests/pipeline/test_relative_percentile_is_trainable.py::test_le_defaut_est_un_NO_OP_bit_a_bit`.
+
+**Bisection.**
+
+| commit | verdict | durée |
+|---|---|---|
+| `d978539` — naissance de la garde | **passe** | 46 min |
+| `403240b` — juste avant les corrections de coefficients | *en cours* | — |
+| `5bdcf80` = `235dbbf~1` — après elles | **échoue** (−0,467) | 13 min |
+
+La garde a donc passé à sa naissance : ce n'est pas un test commité rouge,
+c'est une régression réelle, apparue dans un intervalle de 26 commits
+touchant `src/`. Les trois en tête de cet intervalle sont les corrections
+de coefficients (`e8a9455` porte de `K_xpoint`, `10180da` dimensionnement
+des quatre familles, `5bdcf80` critère relatif). L'exécution à `403240b`
+sépare les deux hypothèses.
+
+La chute de durée **46 min → 13 min** à configuration égale est un indice
+corroborant : les circuits construits ne sont pas seulement notés
+différemment, ils sont différents.
+
+**Collision de numérotation, et un désaccord de mesure.** Ce défaut
+portait d'abord le numéro D-118 : la branche `vigil/…` l'utilise déjà pour
+l'axe « backend ». Renuméroté **D-132** (son maximum est D-131).
+
+Surtout : la branche `vigil/…` a vu ces deux échecs (son D-112, ligne de
+base `c74d564` puis `cb33697`) et les a classés **« famille QAOA
+stochastique »**. La mesure ne le soutient pas. Sur cette branche :
+
+| exécution | `test_hyperparameter_sweep` |
+|---|---|
+| recette complète, HEAD | échoue, −0,467 |
+| isolé, HEAD | échoue, −0,467 |
+| isolé, `5bdcf80` | échoue, −0,467 |
+| isolé, `403240b` | échoue, −0,467 |
+| isolé, `d978539` | **passe** |
+
+Quatre échecs consécutifs à la **valeur identique** sur quatre commits
+différents, et un vert franc sur un cinquième : ce n'est pas un tirage.
+`test_noise_robustness` échoue 2 fois sur 2, à `+0.0000` exactement.
+
+D-112 n'a réexécuté en isolé que `test_qaoa_improves_discrimination`
+(3× vert) et `test_the_ranking_…` (1 échec / 2 verts), puis a rangé les
+deux autres dans la même famille sans les isoler. C'est la généralisation
+depuis un seul tirage — la faute que ce fil traque, commise ici sur le
+diagnostic plutôt que sur la mesure. *(Je l'ai commise d'abord, sur ces
+mêmes trois tests, avant de la corriger en réexécutant.)*
+
+**Ce qu'il faut noter sur ces deux tests.** Tous deux encodent d'anciens
+**résultats** comme assertions — « QAOA perd d'au moins 0,09 », « QAOA
+classe positivement ». Un changement de physique s'y manifeste donc en
+rouge, pas en résultat. Ne pas déplacer les seuils avant de savoir ce que
+la physique a fait : ce serait effacer la mesure au lieu de la lire.
+
+**Ce que ça n'invalide pas.** `preflight_coefficients.py` passe 5/5, mais
+il vérifie que les coefficients corrèlent avec le **besoin de
+raffinement** — pas que le bras quantique classe mieux que le hasard.
+Deux affirmations distinctes ; seule la seconde échoue.

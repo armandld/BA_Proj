@@ -48,6 +48,7 @@ import sys
 
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _SRC = os.path.join(_REPO, "src")
@@ -265,3 +266,118 @@ def test_au_dessus_du_critere_absolu_le_percentile_ne_sert_a_rien():
     for p in (50.0, 75.0, 90.0, 99.0):
         assert PhysicalMapper(relative_percentile=p)._effective_crit(
             signal, crit_absolu) == crit_absolu
+
+
+def test_le_defaut_est_un_NO_OP_bit_a_bit():
+    """Le chemin par defaut doit etre INCHANGE, pas « equivalent ».
+
+    `_effective_crit` est passee de `@classmethod` a methode d'instance :
+    tout appelant qui ne passe rien doit obtenir exactement ce qu'il
+    obtenait avant. Trois tests de la suite QAOA ont echoue lors du
+    passage de recette suivant cette modification ; ils passent tous a la
+    reexecution, et le bras QAOA n'est seme NULLE PART dans `src/VQA/`
+    (`tests/quantum/test_qaoa_arm_is_sampled.py` l'epingle). Ce test
+    ferme l'autre explication -- que la valeur par defaut ait bouge --
+    par une comparaison bit-a-bit plutot que par un raisonnement.
+    """
+    from Simulation.grid import PeriodicGrid
+    from Simulation.solver import MHDSolver
+    from Simulation.PhysToAngle import AngleMapper
+
+    N, RE, RM = 64, 800, 800
+    HP = dict(gamma_hydro=2.1272, gamma_mag=2.3611, kappa=14.3321,
+              sigma=0.05, beta_curl=0.8199, beta_xpoint=0.4256,
+              w_z_frac=0.1013)
+    grid = PeriodicGrid(N)
+    sim = MHDSolver(grid, dt=1e-3, Re=RE, Rm=RM)
+    x = np.arange(N) * grid.dx
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    k = 2.0 * np.pi / grid.L
+    sim.vx = -np.cos(k * X) * np.sin(k * Y)
+    sim.vy = np.sin(k * X) * np.cos(k * Y)
+    sim.Bx = np.ones_like(X)
+    sim.By = np.zeros_like(X)
+    etat = sim.get_fluxes()
+    score = AngleMapper.classical_score(etat)
+
+    def coeffs(**extra):
+        m = PhysicalMapper(cs=1.0, nu=grid.L / RE, eta_mhd=grid.L / RM,
+                           dx=grid.dx, **HP, **extra)
+        return m.compute_coefficients(sim, score, etat, threshold_amr=0.5,
+                                      advanced_anomalies_enabled=True)
+
+    defaut = coeffs()                                          # rien de passe
+    explicite = coeffs(relative_percentile=                    # l'ancienne
+                       PhysicalMapper.RELATIVE_PERCENTILE)     # constante
+
+    assert set(defaut) == set(explicite)
+    for cle in defaut:
+        a, b = np.asarray(defaut[cle]), np.asarray(explicite[cle])
+        assert a.shape == b.shape, cle
+        assert np.array_equal(a, b), (
+            f"`{cle}` differe entre le defaut et la constante de classe : "
+            f"le chemin par defaut n'est PAS un no-op.")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  4. Le garde COMPORTEMENTAL — ce que l'AST ne peut pas voir
+# ══════════════════════════════════════════════════════════════════
+
+class _SentinelleMappeur(Exception):
+    """Interrompt `pipeline` des la construction du mappeur."""
+    def __init__(self, kwargs):
+        self.kwargs = kwargs
+        super().__init__("sentinelle")
+
+
+def test_la_valeur_ECHANTILLONNEE_atteint_vraiment_le_mappeur(monkeypatch):
+    """Le seul garde de ce fichier que la mutation A' ne survit pas.
+
+    Les gardes AST ci-dessus verifient que le NOM est lu et que
+    l'argument est PRESENT. Ils ne verifient pas que la VALEUR passee
+    est celle qui a ete lue. Mesure, mutation appliquee a `pipeline.py` :
+
+        PhysicalMapper(..., relative_percentile=90.0)   # valeur figee
+        -> pytest tests/pipeline/test_relative_percentile_is_trainable.py
+        -> 20 passed
+
+    Vingt tests verts pendant qu'Optuna echantillonne un parametre que la
+    pipeline remplace par une constante : D-31 exactement, sous la forme
+    meme que ce fichier existe pour empecher. C'est la famille de faux
+    vert que la branche `vigil/…` mesure en D-123 a D-131 (« garde par une
+    chaine », « mutation A' reste VERTE ») ; le remede est le meme —
+    interroger le COMPORTEMENT, pas le texte.
+
+    Ici : on remplace `PhysicalMapper` dans l'espace de noms de `pipeline`
+    par une sentinelle qui capture ses arguments et leve. La valeur
+    capturee doit etre celle passee dans `hyperparams`.
+    """
+    import pipeline as P
+
+    vu = {}
+
+    def _faux_mappeur(*a, **kw):
+        vu.update(kw)
+        raise _SentinelleMappeur(kw)
+
+    monkeypatch.setattr(P, "PhysicalMapper", _faux_mappeur)
+
+    argus = SimpleNamespace(
+        eta=0.001, Bz_guide=0.1, c_s=1.0, Re=800, Rm=800, shots=64,
+        mode="simulator", backend="state_vector", method="COBYLA",
+        opt_level=1, AdvAnomaliesEnable=True, K_opt=2, eps=1e-2, reps=1)
+
+    SENTINELLE = 63.5          # valeur qu'aucun defaut du depot ne porte
+    with pytest.raises(_SentinelleMappeur):
+        P.pipeline(N=8, VQA_N=2, T_MAX=0.002, DT=1e-3, HYBRID=1,
+                   verbose=False, argus=argus,
+                   hyperparams={"relative_percentile": SENTINELLE},
+                   scenario="harris_tearing", max_depth_override=1)
+
+    assert "relative_percentile" in vu, (
+        "PhysicalMapper construit sans relative_percentile : la valeur "
+        "echantillonnee n'atteint pas le mappeur.")
+    assert vu["relative_percentile"] == SENTINELLE, (
+        f"la pipeline a passe {vu['relative_percentile']!r} au lieu de "
+        f"{SENTINELLE!r} : la valeur echantillonnee est REMPLACEE en "
+        f"chemin. Optuna optimiserait un parametre que rien ne lit (D-31).")
