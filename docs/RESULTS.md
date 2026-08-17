@@ -6801,6 +6801,33 @@ coup obligerait à tout rejouer.
 Vérifier : `pytest tests/quantum/test_period_hamiltonian_dim2_bond_duplication.py -q`
 → **9 passed**, dont un test qui vérifie que le champ d'essai a bien du ZZ
 vivant — écrit sur les coefficients déployés, tout le banc passerait à vide.
+
+**Un second garde, remesuré et non retouché.** `D-59` a laissé rouge
+`tests/pipeline/test_v1_guards.py::TestPruningThreshold::test_a_coupling_above_the_cut_does_reach_the_operator`,
+et la branche vive a été poussée dans cet état (vérifié : le test échoue à
+`7b12857` seul, avant toute fusion). Ce n'est ni un défaut du code ni un
+test faux — c'est un **seuil périmé** au sens de `VIGIL.md`, remesuré :
+
+| dim | entrées ZZ avant D-59 | après | `dim*dim` | étiquettes distinctes |
+|---|---|---|---|---|
+| **2** | **4** | **2** | 4 | **2** |
+| 3 | 9 | 9 | 9 | 9 |
+| 4 | 16 | 16 | 16 | 16 |
+
+L'assertion `len(zz_terms) == DIM * DIM` était juste à `dim >= 3` et fausse
+au seul `dim = 2` — la taille de toutes les campagnes publiées. Valeur
+remesurée : **2**.
+
+**Et le point qui compte pour la méthode** : le nombre d'**étiquettes
+distinctes** valait 2 avant comme après. Ce contrôle comptait des *entrées
+de liste*, pas des liens — c'est exactement ce qui a laissé vivre D-59, et
+un contrôle qui aurait compté les étiquettes l'aurait trouvé. Cette
+assertion est désormais la première du test. Corollaire de `VIGIL.md` :
+un test écrit à partir du code partage son modèle mental, donc son erreur.
+
+Vérifier : `pytest tests/pipeline/test_v1_guards.py -q` → **13 passed** ;
+le même garde rejoué sur le code d'avant `7b12857` → **1 failed**
+(`assert 4 == 2`, les deux étiquettes doublées affichées).
 ---
 
 # Notes hors chemin critique — enregistrées, groupées, non instruites
