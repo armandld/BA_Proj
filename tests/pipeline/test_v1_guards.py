@@ -168,14 +168,43 @@ class TestPruningThreshold:
         )
 
     def test_a_coupling_above_the_cut_does_reach_the_operator(self):
-        """Control: the ZZ family is not structurally absent."""
+        """Control: the ZZ family is not structurally absent.
+
+        SEUIL REMESURE (D-59). L'attente etait `DIM * DIM`, decrite comme
+        « one ZZ term per SITE ». Elle encodait la duplication : l'objet
+        physique est un terme par LIEN, et a dim = 2 l'anneau periodique
+        degenere -- `(i,0)->(i,1)` et `(i,1)->(i,0 mod 2)` sont le MEME
+        lien. Il y a donc 2 liens horizontaux distincts, pas 4.
+
+        `DIM * DIM` etait juste a dim >= 3 et faux a dim = 2, la seule
+        taille de toutes les campagnes publiees. Mesure apres la
+        deduplication :
+
+            dim = 2   ZZ emis =  2   liens distincts =  2   (dim*dim = 4)
+            dim = 3   ZZ emis =  9   liens distincts =  9
+            dim = 4   ZZ emis = 16   liens distincts = 16
+
+        L'attente est desormais ENUMEREE independamment plutot qu'ecrite
+        en dur : elle reste juste a toute dimension, et elle tomberait si
+        la deduplication retirait un lien legitime.
+        """
         hp = _flat_params(0.0)
         hp['C_edges'][0][:] = 0.5
         op = create_period_hamiltonian(hp, DIM)
         zz_terms = [t for t in op.to_list() if t[0].count("Z") == 2]
-        assert len(zz_terms) == DIM * DIM, (
-            "with a coupling above the cut, one ZZ term per site is expected"
+
+        # Liens horizontaux distincts, enumeres a la main : paire NON
+        # ORDONNEE des deux qubits que le lien relie.
+        attendus = {frozenset(((i % DIM) * DIM + (j % DIM),
+                               (i % DIM) * DIM + ((j + 1) % DIM)))
+                    for i in range(DIM) for j in range(DIM)}
+
+        assert len(zz_terms) == len(attendus), (
+            f"{len(zz_terms)} termes ZZ pour {len(attendus)} liens "
+            f"horizontaux distincts. Un ecart en PLUS est une duplication "
+            f"(D-59) ; un ecart en MOINS est un lien legitime supprime."
         )
+        assert zz_terms, "aucun terme ZZ : le controle ne verifierait rien"
 
 
 # ═══════════════════════════════════════════════════════════════════════
