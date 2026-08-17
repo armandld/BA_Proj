@@ -6799,3 +6799,48 @@ petite taille.
 Vérifier : `pytest tests/study/test_phase5_ne_filtre_plus_sur_promising.py -q`
 → **5 passed**, dont un garde qui vérifie que le détecteur de filtre mord
 encore.
+
+
+# D-136 — le mode de stockage prévu pour la location plantait au lancement
+
+**Trouvé par la répétition de campagne**, avant toute location.
+
+`train_hyperparams._get_storage` propose trois modes : SQLite local,
+`OPTUNA_STORAGE` (RDB / Postgres) et **`OPTUNA_JOURNAL`**. Le troisième est
+celui prévu pour un système de fichiers **partagé** (NFS) — donc celui
+qu'on choisirait pour paralléliser sur plusieurs machines louées.
+
+Il levait `AttributeError` dès la première lecture de la base :
+
+```
+AttributeError: module 'optuna.storages' has no attribute 'JournalFileBackend'
+```
+
+`JournalFileBackend` et `JournalFileOpenLock` ont quitté `optuna.storages`
+pour `optuna.storages.journal` en **Optuna 4.0**. À la racine,
+`JournalFileBackend` n'existe plus du tout (vérifié sur la version installée,
+**4.9.0**).
+
+**Ce que ça aurait coûté** : le mode se serait effondré au premier appel, sur
+des cœurs facturés, après l'allocation des machines et le précalcul des DNS.
+
+Corrigé par un import depuis `optuna.storages.journal`, avec repli sur
+l'ancien chemin pour rester compatible avec Optuna < 4.
+
+**Vérification, sur les deux backends** :
+
+| | reprise | parallèle | intégrité |
+|---|---|---|---|
+| `sqlite` | 3 → 6 | 6 → 12, 2 workers | 12 COMPLETE, 0 RUNNING |
+| `journal` | 3 → 6 | 6 → 12, 2 workers | 12 COMPLETE, 0 RUNNING |
+
+`bash scripts/repetition_campagne.sh [sqlite|journal]` → **REPETITION
+REUSSIE** sur les deux.
+
+**Pourquoi la répétition a trouvé ce que la suite de tests n'a pas trouvé** :
+aucun test n'exerçait `OPTUNA_JOURNAL`. Le banc de fumée
+(`test_train_hyperparams_smoke.py`) force `DISTRIBUTED = True` et
+`OPTUNA_STORAGE`, donc il traverse le chemin RDB et **jamais** le chemin
+journal. Un mode annoncé qu'aucun test ne traverse est une promesse non
+tenue — même famille que D-48 (`mode="hardware"` accepté et exécuté sur
+simulateur).

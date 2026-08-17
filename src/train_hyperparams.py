@@ -394,9 +394,25 @@ def _get_storage(phase_config):
         )
     if JOURNAL_DIR is not None:
         journal_path = os.path.join(JOURNAL_DIR, f"{phase_config['study_name']}.log")
-        lock = optuna.storages.JournalFileOpenLock(journal_path)
+        # D-136 : `JournalFileBackend` et `JournalFileOpenLock` ont quitte
+        # `optuna.storages` pour `optuna.storages.journal` en Optuna 4.0.
+        # A la racine, `JournalFileBackend` n'existe PLUS (verifie sur 4.9) :
+        # ce mode levait `AttributeError` des la premiere lecture de la base.
+        #
+        # C'est le mode prevu pour un systeme de fichiers PARTAGE (NFS), donc
+        # celui qu'on choisirait pour paralleliser sur plusieurs machines
+        # louees. Il aurait echoue au lancement, sur des coeurs factures.
+        #
+        # Repli sur l'ancien chemin pour rester compatible avec Optuna < 4.
+        try:
+            from optuna.storages.journal import (JournalFileBackend,
+                                                 JournalFileOpenLock)
+        except ImportError:                       # Optuna < 4.0
+            JournalFileBackend = optuna.storages.JournalFileBackend
+            JournalFileOpenLock = optuna.storages.JournalFileOpenLock
+        lock = JournalFileOpenLock(journal_path)
         return optuna.storages.JournalStorage(
-            optuna.storages.JournalFileBackend(journal_path, lock_obj=lock)
+            JournalFileBackend(journal_path, lock_obj=lock)
         )
     db_path = os.path.join(ensure_dirs(), f"{phase_config['study_name']}.db")
     return f"sqlite:///{db_path}"
