@@ -2260,6 +2260,20 @@ que des assertions satisfaites par l'absence ou par le voisinage.
 
 12 sites de cette forme restent à sonder.
 
+**Un balayage latent, mesuré et NON promu en défaut.**
+`test_hyperparams_two_sources.py::_live_pipeline_keys` retrouve par regex les
+clés que `pipeline.py` lit (`hp.get('…')`), et `missing = clés − fournies`
+doit être vide. Si la regex ne trouvait plus rien, `missing` serait vide lui
+aussi : le test passerait sans rien couvrir — la forme de D-128, mais
+**latente**. Mesuré aujourd'hui : la regex voit **10** clés, l'AST en voit
+**10**, aucun accès `hp["…"]` ni `hp.get(variable)` n'existe dans
+`pipeline.py`. **Le balayage est donc fidèle à cette date, et aucune mutation
+réaliste ne le vide** — ce n'est pas un défaut, c'est une garde à ajouter
+(`assert _live_pipeline_keys()`, avec le nombre 10 écrit dedans) le jour où
+ce fichier sera rouvert. Il ne l'est pas ici : une seconde session Vigil y
+travaille en parallèle (D-131), et deux mains dans le même fichier coûtent
+plus qu'elles ne rapportent.
+
 **Un 5ᵉ site du sondage `.read()` vérifié la même nuit, et il est sain** :
 `test_provenance.py:108` (`test_long_tasks_no_longer_stamp_at_save_time`,
 `assert "git_commit_hash()" not in src`). Assertion **négative** sur le texte,
