@@ -2347,6 +2347,60 @@ prochaine passe dirait le total exact plutôt que de le supposer inchangé.
 
 ---
 
+## Passe du 17 août — six faux verts, et le critère « absence d'un jeton » rouvert
+
+Six sites du sondage `.read()` vérifiés par mutation **dans les deux sens**,
+disjoints de ceux de la passe concurrente de la même nuit. Détail chiffré et
+commandes dans `RESULTS.md`, D-127 / D-129 / D-130 / D-131 / D-132 / D-133.
+
+| site | ce qui était gardé par le texte | **A′** — comportement cassé, texte intact | **B** |
+|---|---|---|---|
+| `test_h0_panel_resume.py:199` | la durabilité du point de sauvegarde H0 | `flush`+`fsync` sous une condition fausse → **21 passed** | réécriture équivalente → ROUGE |
+| `test_t28_t29_labels_and_ci.py:103` | le suffixe `_globalthr` (défaut **D9**) | suffixe retiré du chemin écrit → **72 passed** | chemin bit à bit identique → ROUGE |
+| `test_fixed_curl_variant.py:183` | `--fixed-curl` atteint le mappeur | drapeau réduit à un renommage → **7 passed** | `bool(...)` → ROUGE |
+| `test_hyperparams_two_sources.py:226` | une seule définition du seuil classique | seuil recopié, ligne cherchée en code mort → **12 passed** | littéral équivalent → ROUGE |
+| `test_v1_legacy_...bfs_score_grid.py:100` | le non-retour de **D-96/D-37** | défaut réintroduit **sans les espaces** → **7 passed** | commentaire documentant la déviation → ROUGE |
+| `test_provenance.py:108` | le non-retour de **D15** | D15 réintroduit via un **alias d'import** → **7 passed** | — |
+
+**Le résultat de méthode de cette passe : « absence d'un jeton » n'est pas
+une forme légitime en soi.** Ce document classait cette forme légitime au vu
+de deux sondages (« aucune formulation de code ne le contourne »). D-132 et
+D-133 la prennent en défaut, chacun par une écriture qu'un développeur
+normal produirait : **retirer deux espaces**, et **aliaser un import**. Le
+critère qui tient n'est pas *présence contre absence*, c'est :
+
+> une recherche de texte est juste quand l'objet du test **est** ce texte, et
+> qu'aucune écriture équivalente du même comportement ne lui échappe. La
+> seconde moitié se **mesure**, elle ne se raisonne pas — les deux fois où on
+> l'a raisonnée ici, on s'est trompé.
+
+Le remède est le même que celui que la passe concurrente formule pour la
+fenêtre de proximité : **l'AST délimite par la structure**. D-132 exige que
+le 3ᵉ argument de `_process_score` soit le *nom* `target_dim` ; D-133 résout
+d'abord les alias d'import, puis cherche l'appel.
+
+**Trois sites re-jugés à ce critère, et un qui tient.**
+
+| site | verdict antérieur | à ce critère |
+|---|---|---|
+| `test_amr_figure_axes.py` — `assert "D-68" in src` | légitime | **tient** — l'objet EST le texte : une mention de déviation qui doit rester, ce que `VIGIL.md` exige |
+| `test_qaoa_arm_is_sampled.py` — aucun `seed_*` dans `src/VQA/` | légitime | **tient, et pour la bonne raison** : le comportement est mesuré **dans le même fichier** par `test_the_arm_is_not_reproducible`, qui rougirait si une graine était posée. Le balayage de jetons ne fait que **nommer la cause** ; il n'est pas le garde. C'est exactement la configuration qui rend la forme acceptable |
+| `test_v1_legacy_...:100`, `test_provenance.py:108` | légitimes par la même règle | **faux** — D-132, D-133 |
+
+**Le recomptage que ce document réclamait.** `grep -rn "\.read()" tests/
+--include=*.py`, hors `tests/tools/` : **85 sites, 45 fichiers** — pas 64/41.
+Le total a grandi avec la suite depuis le 15 août, donc « 58 restants » était
+un plancher, jamais le total. Le nombre à citer est celui-ci, remesuré.
+
+**Ce que cette passe n'a PAS fait**, écrit pour ne pas être supposé fait :
+aucun code de `src/`, `study/` ou `figures/` n'est modifié — les six
+corrections sont entièrement dans les tests, parce que dans les six cas le
+code est juste et c'est sa couverture qui manquait. Aucun nombre publié ne
+bouge. Les axes de la fiche ne sont pas re-traversés : ils l'étaient déjà
+depuis D-119.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
