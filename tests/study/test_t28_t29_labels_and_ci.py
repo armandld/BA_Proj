@@ -108,6 +108,72 @@ def test_the_variant_never_overwrites_the_original():
     )
 
 
+def test_the_variant_is_written_beside_the_original_not_over_it(tmp_path,
+                                                                monkeypatch):
+    """D-129 : le non-ecrasement mesure, pas lu dans le texte du source.
+
+    `test_the_variant_never_overwrites_the_original` ci-dessus cherche
+    `SUFFIX = "_globalthr"` et `replace(".npz", f"{SUFFIX}.npz")` dans le
+    source. Son objet est un COMPORTEMENT — l'artefact par scenario doit
+    survivre a la relabellisation — que le texte ne fait qu'indiquer.
+    Mesure par mutation, les deux sens :
+
+    * **A'** — une ligne `out = out.replace(SUFFIX, "")` ajoutee APRES le
+      calcul du chemin : les deux chaines cherchees restent, la variante
+      ecrase l'original, et les deux fichiers de test concernes restent
+      **72 passed**. Faux vert, et c'est exactement le defaut D9 que ce
+      garde existe pour empecher.
+    * **B** — reecriture EQUIVALENTE
+      `os.path.basename(path)[:-len(".npz")] + SUFFIX + ".npz"`, chemin bit
+      a bit identique : **ROUGE**. Faux rouge sur un changement voulu.
+
+    L'entree qui SEPARE : appeler `relabel()` pour de vrai sur des artefacts
+    NON degeneres (le seul chemin deja teste leve avant d'ecrire), puis
+    comparer les octets des originaux avant et apres. Un chemin de sortie
+    sans suffixe les remplacerait.
+    """
+    import hashlib
+    import importlib
+
+    lgt = importlib.import_module("labels_global_threshold")
+    monkeypatch.setattr(lgt, "RESULTS_DIR", str(tmp_path))
+
+    #  Des distributions L2 DIFFERENTES par scenario : sans cela les
+    #  prevalences coincident, `relabel` leve, et rien n'est ecrit.
+    rng = np.random.default_rng(0)
+    originals = {}
+    for k, sc in enumerate(SCENARIOS):
+        l2 = np.abs(rng.standard_normal(64)) * (1.0 + k)
+        src = os.path.join(tmp_path, f"patches_{sc}_Re1_N4_dim4.npz")
+        np.savez_compressed(
+            src, l2_errors=l2, classical_scores=rng.random(64),
+            is_hard=l2 >= np.percentile(l2, 75), l2_threshold=
+            float(np.percentile(l2, 75)),
+            scenario=sc, Re=1, N=4, n_patches=64, t=0.0,
+        )
+        originals[src] = hashlib.sha256(open(src, "rb").read()).hexdigest()
+
+    written, thr, prev = lgt.relabel(dim=4, N=4, Re=1, outdir=str(tmp_path))
+
+    assert written, "relabel n'a ecrit aucun artefact"
+    for out in written:
+        assert os.path.basename(out).endswith(f"{lgt.SUFFIX}.npz"), (
+            f"{os.path.basename(out)} ne porte pas le suffixe : la variante "
+            "ecrase l'artefact par scenario et les deux deviennent "
+            "indiscernables")
+        assert out not in originals, "la variante a ete ecrite SUR un original"
+
+    #  La preuve directe : les originaux sont intacts, octet pour octet.
+    for src, digest in originals.items():
+        assert os.path.exists(src), f"{src} a disparu"
+        assert hashlib.sha256(open(src, "rb").read()).hexdigest() == digest, (
+            f"{os.path.basename(src)} a ete reecrit par la relabellisation")
+
+    #  Et le filtre de `collect` doit ecarter ce qu'on vient d'ecrire,
+    #  sinon une seconde execution relabelliserait ses propres sorties.
+    assert set(lgt.collect(4, 4, 1)) == set(originals)
+
+
 def test_the_relabeller_refuses_a_degenerate_threshold(tmp_path, monkeypatch):
     """Un seuil nul labelliserait 100 % des patches comme durs.
 
