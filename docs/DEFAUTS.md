@@ -43,11 +43,11 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **12** |
+| **ouverts** — décision ou campagne requise | **13** |
 | **gelés** volontairement | 2 |
 
 *(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md`. D-69 est sorti
-au profit de `RESULTS.md`, sa table étant refaite.)*
+au profit de `RESULTS.md`, sa table étant refaite ; D-141 est entré.)*
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
 plus longtemps que les autres.** La narration T17 (« ZZ est numériquement
@@ -1158,3 +1158,102 @@ la physique a fait : ce serait effacer la mesure au lieu de la lire.
 il vérifie que les coefficients corrèlent avec le **besoin de
 raffinement** — pas que le bras quantique classe mieux que le hasard.
 Deux affirmations distinctes ; seule la seconde échoue.
+
+---
+
+## D-141 — la porte de la campagne est franchie plus haut par la baseline que par le coefficient
+
+**Rapport seul. Décision requise, rien n'est corrigé.**
+
+**Où ça bloque.** `study/common/preflight_coefficients.py` est la porte de
+la réoptimisation : il imprime « *les coefficients font leur travail.
+Campagne possible.* » avant ~224 h CPU. Son 4ᵉ contrôle, `pertinence`,
+annonce *« le coefficient corrèle avec l'erreur RÉELLE DNS-vs-grossier,
+rho = 0,798 »* et accepte dès `rho > 0,6`. Ce seuil ne sépare pas : des
+grandeurs qui ne portent **aucun** coefficient et **aucun**
+hyperparamètre le franchissent sur le même état DNS — dont le **score
+classique**, la baseline même que le bras quantique doit battre, et il le
+franchit **plus haut** que le coefficient.
+
+**Comment on est tombé dessus.** Question 3 de `VIGIL.md` appliquée à un
+contrôle plutôt qu'à une fonction : *consomme-t-il ce que son nom
+annonce ?* Puis la règle du champ d'essai qui **sépare** — sur quelle
+entrée les deux hypothèses (« le coefficient porte l'information » /
+« quelque chose se concentre dans la nappe ») donnent-elles des réponses
+différentes ?
+
+**Ce qui est établi.** Même état, mêmes 8×8 blocs, même erreur de
+référence (DNS `N=128` contre run grossier `N=32`, 200 pas,
+`harris_tearing`), même opérateur — la réplique est vérifiée identique au
+contrôle à **1e−12** avant toute comparaison :
+
+| grandeur | porte un coefficient ? | rho | franchit 0,6 ? |
+|---|---|---|---|
+| **score classique** — la baseline | **non** | **+0,8137** | **oui** |
+| `K_plaquettes` — ce que le contrôle regarde | oui | +0,7977 | oui |
+| \|Jz\| — courant | non | +0,7429 | oui |
+| \|v\| — module de la vitesse | non | +0,7247 | oui |
+| \|∇\|B\|\| — gradient brut | non | +0,6764 | oui |
+| `K_xpoint` — un coefficient à part entière | oui | +0,4345 | **non** |
+| `H_edges[0]` | oui | −0,6288 | non |
+| bruit blanc — contrôle négatif | non | −0,0401 | non |
+
+Mesure déterministe : deux exécutions identiques au dernier chiffre.
+
+**Trois lectures, et seule la troisième est en cause.**
+
+1. Le contrôle **n'est pas vide** : le bruit blanc le rate. Il mesure
+   quelque chose de réel.
+2. La **fonction honore sa docstring** : elle promet que le coefficient
+   corrèle avec l'erreur, et il corrèle. Ce n'est pas un défaut de code.
+3. C'est le **verdict** qui sur-conclut. « Les coefficients font leur
+   travail » ne se déduit pas d'un seuil que la baseline franchit mieux,
+   et que trois champs nus franchissent aussi. Le contrôle ne distingue
+   pas *« le coefficient porte l'information »* de *« quelque chose se
+   concentre dans la nappe »*.
+
+Deux précisions qui limitent la portée, écrites pour ne pas la surestimer :
+`K_plaquettes` est **calculé à partir** du score classique
+(`compute_coefficients(sim, score, …)`), donc sa corrélation en hérite en
+partie — ce n'est pas un hasard, c'est une dépendance. Et le contrôle ne
+regarde qu'**un** des quatre canaux : `K_xpoint` et `H_edges` ne
+franchiraient pas le seuil.
+
+**Ce que ça ne dit pas.** Rien ici ne dit que la campagne est inutile, ni
+qu'un nombre publié est faux. Aucun nombre publié ne dépend de ce module :
+c'est un contrôle avant vol, pas une mesure. D-132 notait déjà que le
+preflight « ne vérifie pas que le bras quantique classe mieux que le
+hasard » ; D-141 est un cran en deçà — il ne vérifie pas non plus que le
+coefficient fasse mieux que la baseline sur ce que le contrôle mesure.
+
+**Pourquoi rien n'est corrigé.** Le correctif naturel — exiger
+`rho(coefficient) > rho(score classique)` — **changerait le verdict de la
+porte**, aujourd'hui `OK`, en `ÉCHEC` : +0,7977 contre +0,8137. Faire
+passer au rouge la porte d'une campagne de 224 h CPU est une décision, pas
+une correction mécanique. `VIGIL.md` : *mesurer, documenter, ne pas
+corriger, demander.*
+
+**Trois options, aucune appliquée.**
+
+1. **Requalifier le libellé, ne rien changer au code.** Le contrôle dit
+   alors ce qu'il mesure : « le coefficient se concentre là où le run
+   grossier se trompe » — vrai, vérifié, et sans prétention de
+   discrimination. Coût : le verdict « les coefficients font leur travail »
+   doit être réécrit.
+2. **Ajouter un critère relatif** (`rho(coef) > rho(score classique)`, ou
+   un écart minimal). Le plus informatif, et la porte passe au rouge
+   aujourd'hui — c'est précisément ce qui en fait une décision.
+3. **Changer de grandeur de référence.** L'erreur est ici une différence
+   de moyennes par bloc ; la structure sous-bloc, celle que le
+   raffinement récupère, n'y entre pas. Une erreur au sens de
+   `patch_l2_errors` mesurerait autre chose. Nouvelle mesure de bout en
+   bout ; ni les nombres de 1 ni ceux de 2 ne s'y transportent.
+
+```bash
+python study/common/preflight_coefficients.py          # 5/5, rho = 0.798
+pytest tests/study/test_preflight_pertinence_separates.py   # 5 passed, ~10 s
+```
+
+Le second est un test de **déviation** : il échoue le jour où le contrôle
+gagne un critère de discrimination — c'est-à-dire le jour où D-141 est
+tranché, et où il doit être relu. Mesuré : seuil porté à 0,85 → **2 failed**.

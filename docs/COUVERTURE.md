@@ -2453,6 +2453,38 @@ au moins 10 et le dit dans son message. ~20 s.
 - un script dont `--help` ne rend pas 0 est **ignoré**, pas signalé — aucun
   aujourd'hui, mais le jour où il y en aura un, il passera en silence.
 
+## `preflight_coefficients.py` — la porte de la campagne, ses cinq contrôles sondés (D-141)
+
+Module lu en entier. C'est la porte de la réoptimisation : il décide si
+~224 h CPU partent. Rien ne le testait.
+
+**Ce qui est vérifié maintenant** — `tests/study/test_preflight_pertinence_separates.py`,
+5 tests, ~10 s, déterministe (deux exécutions identiques au dernier
+chiffre) :
+
+| test | ce qu'il tient |
+|---|---|
+| `the_replica_is_the_control_itself` | **opérateur assorti** : la réplique du calcul rend le rho du contrôle à **1e−12**. Sans lui, tout le reste du fichier mesurerait autre chose |
+| `the_control_rejects_pure_noise` | contrôle positif : le seuil n'est pas vide, le bruit blanc rate à −0,0401 |
+| `bare_physical_fields_clear_the_same_threshold` | le cœur de D-141 : \|Jz\|, \|v\| et \|∇\|B\|\| passent sans porter aucun coefficient |
+| `the_classical_baseline_clears_it_better…` | le point qui décide : score classique **+0,8137** contre `K_plaquettes` **+0,7977** |
+| `only_one_of_the_four_channels_is_looked_at` | `K_xpoint` (+0,4345) ne franchirait pas le seuil — « les coefficients » désigne un seul canal |
+
+Les assertions portent sur des **ordres**, pas sur les valeurs : le dépôt
+n'épingle aucune version de `numpy`/`scipy`. Les valeurs sont écrites dans
+la docstring pour qu'une dérive se voie à la lecture.
+
+**Ce sont des tests de déviation**, comme ceux de D-53 : ils échouent le
+jour où le contrôle gagne un critère de discrimination, donc le jour où
+D-141 est tranché. Vérifié en mutant le seuil du contrôle de 0,6 à 0,85 :
+**2 failed** — ils suivent bien le critère et ne sont pas décoratifs.
+
+**Ce que ce fichier ne couvre PAS**, écrit pour ne pas le croire couvert :
+les contrôles `specificite`, `equilibre`, `vivant` et `coincidence` sont
+**exécutés** par le preflight mais **aucun test ne les sonde** — on ne sait
+pas, pour eux, sur quelle entrée ils échoueraient. Seul `pertinence` a été
+pris pour cible, parce que c'est celui dont le libellé porte le verdict.
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
