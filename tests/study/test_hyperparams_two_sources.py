@@ -35,6 +35,7 @@ passerait un dict PARTIEL heriterait silencieusement des valeurs du JSON,
 qui ne sont pas celles de l'etude.
 """
 
+import ast
 import collections
 import glob
 import json
@@ -205,12 +206,64 @@ _CAMPAIGN = os.path.join(_REPO_ROOT, "study", "closed_loop",
                          "closed_loop_campaign.py")
 
 
+#  Nombre de cles `hp` lues par le code VIVANT de `pipeline.py`, MESURE le
+#  17 aout 2026 : beta, beta_curl, beta_xpoint, gamma_hydro, gamma_mag,
+#  kappa, relative_percentile, sigma, threshold_amr, w_z_frac.
+#  Ecrit ici pour qu'une derive se voie : un balayage qui rendrait moins que
+#  ca ne prouverait plus rien, et c'est le piege que D-145 a mesure.
+_CLES_HP_MESUREES = 10
+
+
 def _live_pipeline_keys():
-    """Cles hp lues par pipeline.py, hors blocs neutralises en chaine."""
-    import re
-    src = open(_PIPELINE, encoding="utf-8").read()
-    src = re.sub(r'""".*?"""', "", src, flags=re.S)      # retire les blocs morts
-    return set(re.findall(r"hp\.get\(\s*['\"]([a-z_]+)['\"]", src))
+    """Cles `hp` lues par le code VIVANT de `pipeline.py` — par l'AST.
+
+    D-145. La version precedente cherchait `hp.get('…')` par un REGEX, apres
+    avoir retire les blocs `\"\"\"…\"\"\"` du texte. Elle ne voyait donc pas
+    `hp['cle']`, l'autre facon d'ecrire la meme lecture. Mesure : un
+    `hp['nouvelle_ponderation']` ajoute a `pipeline.py` — une cle qu'aucune
+    source de la campagne ne fournit, donc heritee du JSON, la fuite exacte
+    que le test ci-dessous interdit — laissait le fichier a **13 passed**.
+
+    L'AST voit les deux formes, et il n'a pas besoin qu'on lui retire le bloc
+    mort : un litteral de chaine reste une CONSTANTE, son contenu n'est pas
+    du code. C'est deja la technique de `_cles_hp_get_vivantes`
+    (`tests/pipeline/test_relative_percentile_is_trainable.py`), qui balaie
+    le meme fichier dans l'autre sens.
+
+    Une cle DYNAMIQUE (`hp.get(nom)`, `hp[nom]`) ne peut pas etre enumeree
+    statiquement : on ne la passe pas sous silence, on leve — sinon le
+    balayage redeviendrait aveugle sans que personne ne le voie.
+    """
+    arbre = ast.parse(open(_PIPELINE, encoding="utf-8").read())
+    cles, dynamiques = set(), []
+    for n in ast.walk(arbre):
+        #  hp['cle']
+        if (isinstance(n, ast.Subscript)
+                and isinstance(n.value, ast.Name) and n.value.id == "hp"):
+            if isinstance(n.slice, ast.Constant) and isinstance(n.slice.value, str):
+                cles.add(n.slice.value)
+            else:
+                dynamiques.append(f"hp[…] ligne {n.lineno}")
+        #  hp.get('cle', …)
+        if (isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute) and n.func.attr == "get"
+                and isinstance(n.func.value, ast.Name) and n.func.value.id == "hp"):
+            if n.args and isinstance(n.args[0], ast.Constant) \
+                    and isinstance(n.args[0].value, str):
+                cles.add(n.args[0].value)
+            else:
+                dynamiques.append(f"hp.get(…) ligne {n.lineno}")
+
+    assert not dynamiques, (
+        f"{dynamiques} : `pipeline.py` lit `hp` avec une cle calculee. "
+        f"Aucun balayage statique ne peut la couvrir, donc la garantie "
+        f"« la campagne fournit toutes les cles lues » n'est plus verifiable "
+        f"telle quelle — la porter autrement plutot que la laisser passer.")
+    assert len(cles) >= _CLES_HP_MESUREES, (
+        f"{len(cles)} cles trouvees pour {_CLES_HP_MESUREES} mesurees le "
+        f"17 aout : le balayage a perdu des lectures, il ne prouve plus "
+        f"l'absence de fuite. Un balayage vide doit crier (D-145).")
+    return cles
 
 
 def test_the_closed_loop_covers_every_key_the_pipeline_reads():
