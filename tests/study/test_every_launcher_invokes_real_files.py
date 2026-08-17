@@ -32,9 +32,26 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file
 
 #: Lanceurs volontairement morts, avec la raison ecrite DANS le fichier.
 #: L'exemption n'est pas un nom sur une liste : le test relit la raison.
-_FROZEN = {
-    "scripts/run_study_v3.sh": ("NE FONCTIONNE PLUS", "D-49"),
-}
+#: SEUIL REMESURE — la table est VIDE depuis que D-116 a repointe
+#: `scripts/run_study_v3.sh`.
+#:
+#: Elle portait ce seul lanceur, tenu pour mort par D-49 (« les 9
+#: generateurs v3 n'existent plus sous aucun chemin »). Cette premisse est
+#: FAUSSE, mesuree : les generateurs existent, RENOMMES, dans
+#: `study/h2b_prediction/` et `study/h3_representation/`
+#: (t1_feature_selection -> h2b_feature_selection, t9_prop2_check ->
+#: h3_locality_proposition, …) — la meme table de renommage que D-76 avait
+#: deja etablie pour `run_study_v2*.sh`.
+#:
+#: Le lanceur est donc repointe et n'est plus gele : ses 13 chemins
+#: existent, et `tests/lint/test_scripts_point_somewhere.py` verifie en
+#: plus que sa passe pytest collecte des tests. Il repasse par
+#: `test_every_launcher_invokes_real_files`, qui l'exemptait.
+#:
+#: La table reste en place, vide : c'est le point d'accroche du jour ou un
+#: lanceur sera gele pour une raison decidee. `test_the_frozen_mechanism_
+#: can_still_fire` garantit qu'elle n'est pas devenue inerte.
+_FROZEN = {}
 
 #: Les lanceurs passent leur cible a une fonction (`run_phase 2 study/...py`),
 #: pas directement a `python` : chercher le mot-cle `python` sur la ligne ne
@@ -102,6 +119,27 @@ def test_no_launcher_lists_the_flattened_results_directory(relpath):
         hits = [ln.strip() for ln in fh
                 if "study/results/" in ln and not ln.strip().startswith("#")]
     assert not hits, f"{relpath} pointe encore sur study/results/ : {hits}"
+
+
+def test_the_frozen_mechanism_can_still_fire(tmp_path, monkeypatch):
+    """Garde-fou du garde-fou : `_FROZEN` est VIDE, donc le test
+    parametre au-dessus ne collecte AUCUN cas — un balayage vide, qui
+    passe au vert sans rien verifier.
+
+    On verifie donc que le mecanisme mordrait encore : un lanceur declare
+    gele mais dont l'en-tete ne porte pas sa raison doit faire echouer
+    l'assertion. Sans ce test, le jour ou une entree revient dans
+    `_FROZEN`, rien ne garantirait qu'elle est verifiee.
+    """
+    faux = tmp_path / "faux_lanceur.sh"
+    faux.write_text("#!/bin/bash\n# un en-tete sans la moindre raison\n",
+                    encoding="utf-8")
+    tete = "".join(open(faux, encoding="utf-8").readlines()[:40])
+    # C'est exactement l'assertion du test parametre, rejouee a la main.
+    assert "NE FONCTIONNE PLUS" not in tete, (
+        "le champ d'essai ne separe pas : il porte deja la mention")
+    with pytest.raises(AssertionError):
+        assert "NE FONCTIONNE PLUS" in tete, "mecanisme inerte"
 
 
 def test_the_sweep_itself_is_not_empty():
