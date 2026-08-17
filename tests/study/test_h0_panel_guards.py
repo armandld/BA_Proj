@@ -48,28 +48,52 @@ _PANEL = os.path.join(_REPO_ROOT, "study", "h0_selection",
 
 # ── D-1 : un balayage vide doit crier ─────────────────────────────────
 
-def test_an_empty_sweep_exits_nonzero():
-    """N=32 n'a pas d'artefacts d'entree : le panel doit echouer, pas finir."""
-    r = subprocess.run(
+@pytest.fixture(scope="module")
+def empty_sweep():
+    """Le panel lance sur une taille sans artefacts d'entree.
+
+    Partage par les deux tests ci-dessous : le sous-processus est la SEULE
+    facon de voir le message tel qu'il est reellement emis.
+    """
+    return subprocess.run(
         [sys.executable, _PANEL, "--N", "32", "--dim", "2", "--n-snaps", "1",
          "--qaoa-reps", "1", "--scenario", "orszag_tang"],
         capture_output=True, text=True, cwd=_REPO_ROOT, timeout=900)
-    assert r.returncode != 0, (
+
+
+def test_an_empty_sweep_exits_nonzero(empty_sweep):
+    """N=32 n'a pas d'artefacts d'entree : le panel doit echouer, pas finir."""
+    assert empty_sweep.returncode != 0, (
         "le panel a rendu la main avec le code 0 sans avoir mesure quoi que "
         "ce soit ; une campagne vide doit etre discernable d'une campagne "
         "reussie")
-    assert "balayage vide" in (r.stderr + r.stdout)
+    assert "balayage vide" in (empty_sweep.stderr + empty_sweep.stdout)
 
 
-def test_the_empty_sweep_message_names_what_is_missing():
+def test_the_empty_sweep_message_names_what_is_missing(empty_sweep):
     """Un message d'erreur qui ne dit pas quoi chercher fait perdre l'heure
-    suivante."""
-    src = open(_PANEL, encoding="utf-8").read()
-    i = src.index("balayage vide")
-    msg = src[i:i + 600]
-    for token in ("args.scenario", "args.N", "args.dim", "dns_", "patches_"):
-        assert token in msg, (
-            f"le message d'erreur du balayage vide ne mentionne pas {token}")
+    suivante.
+
+    D-126 — ce test lisait le SOURCE : il prenait la PREMIERE occurrence de
+    « balayage vide » dans le fichier et exigeait `args.scenario`, `args.N`,
+    `args.dim` dans les 600 caracteres suivants. Deux defauts en un.
+
+    D'abord l'ancre n'est pas unique : le jour ou un commentaire a mentionne
+    la regle « un balayage vide doit crier » PLUS HAUT dans le fichier (D-122),
+    la fenetre est tombee sur le commentaire et le test a rougi sans qu'aucun
+    defaut n'existe — 5e faux rouge de cette forme dans ce depot.
+
+    Ensuite il ne mesurait pas ce qu'il annonce : `args.scenario` dans le
+    source est le nom du CODE, pas ce que l'utilisateur lit. Un message qui
+    n'interpolerait rien le contiendrait aussi. On verifie donc les VALEURS
+    dans la sortie reelle : c'est ce qui fait perdre, ou gagner, l'heure
+    suivante.
+    """
+    sortie = empty_sweep.stderr + empty_sweep.stdout
+    for token in ("orszag_tang", "N=32", "dim=2", "dns_", "patches_"):
+        assert token in sortie, (
+            f"le message du balayage vide ne nomme pas {token} — il ne dit "
+            f"pas quoi chercher.\nSortie :\n{sortie[-1500:]}")
 
 
 def test_the_panel_never_returns_silently_on_no_records():
