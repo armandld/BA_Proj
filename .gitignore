@@ -21,3 +21,16 @@ results/.checkpoints/
 # commande, pas un resultat a versionner (son chemin par defaut est
 # `../data/` relatif a src/).
 data/
+
+# Campagne de reoptimisation : sorties de TRAVAIL, pas des resultats.
+#
+# La base Optuna est binaire et reecrite en continu pendant la campagne :
+# la committer figerait un instantane incoherent (essais RUNNING inclus).
+# Ce qui doit etre versionne est le PRODUIT de la campagne — le JSON
+# deploye et son analyse — pas son fichier de travail.
+#
+# La base de la vraie campagne vit sur le disque persistant des coeurs
+# loues ; celle d'ici est une demonstration, effacee au recyclage du
+# conteneur.
+results/hyperparams/reoptimisation/
+results/hyperparams/reoptimisation_launch.log

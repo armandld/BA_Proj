@@ -172,12 +172,13 @@ class TestPruningThreshold:
 
         SEUIL REMESURE apres D-59, pas retouche pour faire passer la suite.
 
-        L'assertion etait `len(zz_terms) == DIM * DIM`, soit 4 a DIM = 2.
-        Elle comptait des ENTREES de liste, et c'est ce qui a laisse vivre
-        D-59 : a `dim = 2` l'anneau periodique degenere -- `(i,0)->(i,1)` et
-        `(i,1)->(i,0 mod 2)` sont la MEME paire -- et les deux iterations
-        ajoutaient chacune une entree. Ce controle voyait donc 4 entrees sur
-        **2 etiquettes distinctes**, et passait.
+        L'attente etait `len(zz_terms) == DIM * DIM`, decrite comme « one ZZ
+        term per SITE ». Elle encodait la duplication : l'objet physique est
+        un terme par LIEN, et a `dim = 2` l'anneau periodique degenere --
+        `(i,0)->(i,1)` et `(i,1)->(i,0 mod 2)` sont le MEME lien -- alors
+        que les deux iterations ajoutaient chacune une entree de liste. Ce
+        controle voyait donc 4 ENTREES sur **2 etiquettes distinctes**, et
+        passait : c'est ce qui a laisse vivre D-59.
 
         Mesure, `create_period_hamiltonian` avec `C_edges[0] = 0.5` :
 
@@ -191,8 +192,14 @@ class TestPruningThreshold:
         est **2**, et le nombre d'etiquettes distinctes -- 2 -- n'a jamais
         bouge : il donnait la bonne reponse avant comme apres.
 
-        D'ou les deux assertions ci-dessous. La premiere est celle qui
-        aurait trouve D-59 : elle ROUGIT sur le code d'avant `7b12857`.
+        D'ou les deux assertions ci-dessous, gardees toutes les deux a la
+        fusion des deux corrections :
+
+        1. entrees == etiquettes distinctes -- le controle qui aurait trouve
+           D-59, et qui ROUGIT sur le code d'avant `7b12857` ;
+        2. entrees == liens ENUMERES independamment, plutot qu'un nombre
+           ecrit en dur : juste a toute dimension, et rouge aussi si la
+           deduplication retirait un lien legitime.
         """
         hp = _flat_params(0.0)
         hp['C_edges'][0][:] = 0.5
@@ -206,13 +213,18 @@ class TestPruningThreshold:
             f"C'est D-59, corrige a 7b12857 -- voir RESULTS.md"
         )
 
-        # A `dim = 2` l'anneau n'a qu'un lien distinct par rangee, donc DIM
-        # liens ; a partir de `dim = 3` il en a DIM par rangee, donc DIM*DIM.
-        attendu = DIM * DIM if DIM > 2 else DIM
-        assert len(zz_terms) == attendu, (
-            f"with a coupling above the cut, {attendu} distinct ZZ bonds are "
-            f"expected at dim={DIM}, found {len(zz_terms)}"
+        # Liens horizontaux distincts, enumeres a la main : paire NON
+        # ORDONNEE des deux qubits que le lien relie.
+        attendus = {frozenset(((i % DIM) * DIM + (j % DIM),
+                               (i % DIM) * DIM + ((j + 1) % DIM)))
+                    for i in range(DIM) for j in range(DIM)}
+
+        assert len(zz_terms) == len(attendus), (
+            f"{len(zz_terms)} termes ZZ pour {len(attendus)} liens "
+            f"horizontaux distincts. Un ecart en PLUS est une duplication "
+            f"(D-59) ; un ecart en MOINS est un lien legitime supprime."
         )
+        assert zz_terms, "aucun terme ZZ : le controle ne verifierait rien"
 
 
 # ═══════════════════════════════════════════════════════════════════════

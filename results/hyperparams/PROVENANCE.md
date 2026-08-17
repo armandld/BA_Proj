@@ -28,6 +28,13 @@ classique, 5.3× sur le bras quantique). En temps processeur :
 | quantique | 178 complets | 159.8 h | 30.4 h | 5.3× |
 | **total** | **303** | **224.4 h** | **47.0 h** | — |
 
+**Lecture du « 5,3× », qui a déjà été mal comprise une fois.** C'est la
+**concurrence moyenne réellement obtenue** (159,8 h CPU / 30,4 h de mur =
+5,26), pas un rendement. Le « jusqu'à 9 » est un pic instantané. Il ne faut
+donc appliquer **aucune majoration** pour convertir des heures CPU en heures
+facturées : elles sont égales. Ce qui reste non mesuré est le passage à
+l'échelle au-delà de ~9 workers simultanés.
+
 **224 h CPU = 9.3 jours mono-cœur.** L'annonce « environ une semaine » était
 donc juste en temps processeur, et c'est le chiffre qui compte pour estimer
 une relance. Coût médian d'un essai : **35 min** (classique), **56 min**

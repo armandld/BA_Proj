@@ -51,7 +51,10 @@ _SCRIPTS = os.path.join(_REPO, "scripts")
 #: absence est normale sur un depot neuf. Tout le reste est une ENTREE,
 #: et une entree qui n'existe pas est un lanceur casse.
 _SORTIES = ("logs", "results/logs_v3", "results/figures",
-            "results/hyperparams/best_hyperparams.regenerated.json")
+            "results/hyperparams/best_hyperparams.regenerated.json",
+            # cree par `mkdir -p` dans run_reoptimisation.sh : c'est la
+            # base Optuna que la campagne PRODUIT, pas une entree.
+            "results/hyperparams/reoptimisation")
 
 
 def _shell_scripts():

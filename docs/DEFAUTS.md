@@ -43,15 +43,18 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **13** |
+| **ouverts** — décision ou campagne requise | **12** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md`. D-69 est sorti
-au profit de `RESULTS.md`, sa table étant refaite ; D-141 est entré. Puis
-**D-59 est sorti** — corrigé sur la branche vive à `7b12857`, il vit
-désormais dans `RESULTS.md` — et **D-143 est entré**. Le compte de tête de
-`RESULTS.md` porte le même travers et le dit lui-même : recompter, ne pas
-estimer, à chaque fusion.)*
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **12** après la
+fusion du 17 août au soir. D-69 est sorti au profit de `RESULTS.md`, sa
+table étant refaite ; D-141 est entré. Puis **D-59 est sorti** — corrigé sur
+la branche vive à `7b12857`, il vit désormais dans `RESULTS.md` — et
+**D-143 est entré** ; côté branche vive, **D-47 est sorti** — décision de
+USER, option 1, il vit dans `RESULTS.md` comme résultat. Les
+deux côtés de la fusion annonçaient 13 et 11 : ni l'un ni l'autre n'était le
+compte de l'arbre fusionné. Le compte de tête de `RESULTS.md` porte le même
+travers et le dit lui-même : recompter, ne pas estimer, à chaque fusion.)*
 
 **D-58, ajouté cette passe, touche lui aussi une lecture publiée — et depuis
 plus longtemps que les autres.** La narration T17 (« ZZ est numériquement
@@ -481,135 +484,6 @@ for sc in ['harris_tearing', 'kelvin_helmholtz', 'mhd_rotor', 'orszag_tang']:
 
 ---
 
-## D-47 — l'état fondamental exact vaut « raffiner partout » sur 40 snapshots / 40
-
-**Où ça bloque.** La phase 4 (`exact_diagonalisation.py`) est censée dire si
-l'Hamiltonien v1 capte le besoin de raffinement, et sa porte `promising`
-décide seule quels patchs passent en QAOA (phase 5). Mesuré : l'état
-fondamental exact est le prédicteur **constant tout-raffiner** sur la
-totalité des snapshots disponibles. Une comparaison quantique/classique en
-phase 4, et toute campagne phase 5 qui s'appuierait sur sa sélection,
-porteraient sur un fondamental qui ne distingue aucune cellule. C'est le
-mécanisme derrière D-45 (`RESULTS.md`) : D-45 rend la dégénérescence
-visible, il ne la lève pas.
-
-**Comment on est tombé dessus.** En mesurant la clause laissée « non
-mesurée » par la passe précédente (`COUVERTURE.md`, `analyze_snapshot` :
-`promising = f1_exact >= f1_classique` alors que le commentaire dit `>`).
-Il n'existe **aucun artefact `exact_diag_*` dans `results/`** : la phase 4
-a été rejouée depuis les DNS et les `patches_*` existants.
-
-**Ce qui est établi.** dim=2 — la seule dimension exécutable, `VQA_DIMS`
-valant `[2, 4, 8]` et dim=4/8 demandant 32/128 qubits contre le plafond de
-20 codé dans `exact_diag`. Re=400, N=256, 4 scénarios canoniques,
-40 snapshots (10 par scénario) :
-
-| | |
-|---|---|
-| décision exacte tout-à-1 | **40/40** (les 8 marginales valent 1,000) |
-| ligne de base classique tout-à-1 | **40/40** |
-| `exact_refine != classical_refine` | **0/40** |
-| F1 exact == F1 classique | **40/40**, jamais supérieur |
-| `promising` avec `>=` | **40/40** — avec le `>` du commentaire : **0/40** |
-
-Le mécanisme, mesuré sur les mêmes 40 snapshots :
-
-| grandeur | valeur |
-|---|---|
-| `(score − thr)/σ` minimum | **8,4** — donc la fenêtre `exp(−x²)` du ZZ vaut au plus **1,15e−31** |
-| `max\|C_edges\|` (ZZ) | **≤ 2,41e−120**, nul sur certains snapshots |
-| `max\|K_plaquettes\|` (ZZZZ) | 1,14e−3 à 65,9 |
-| `min\|H_edges\|` (biais Z) | 6,2e−3 à 332,1 |
-| rapport `min\|H\| / max\|K\|` | **2,02 à 6,64** — le biais Z domine sur **40/40** |
-| signe du biais Z | **positif partout** (`z_bias = α_z·(score − thr)`, score > thr partout) |
-
-À résolution VQA le score est loin du seuil de décision (0,344 à 0,869
-contre `thr = 0,1496`), donc la fenêtre gaussienne `exp(−((score−thr)/σ)²)`
-avec `σ = 0,023` éteint le couplage ZZ. Restent le ZZZZ et un biais Z
-valant `α_z = w_z_frac × median(|C|,|K|)` avec `w_z_frac = 10,40` : il
-domine d'un facteur 2 à 6,6 et il est positif partout, donc le fondamental
-met tous les qubits à |1⟩ sans que la structure ZZ/ZZZZ n'entre dans la
-décision.
-
-**Une hypothèse plausible, mesurée et FAUSSE.** `build_patch_hamiltonian`
-fournit au mappeur VQA des champs **moyennés par bloc** mais un score
-**max-poolé** depuis la pleine résolution — deux opérateurs différents dans
-le même appel. Hypothèse : c'est le max-pool qui sature le score et tue le
-ZZ. Rejoué avec le score **assorti** (recalculé par `AngleMapper.classical_score`
-sur les champs moyennés, donc l'opérateur qui a construit `sim_vqa`/
-`fields_vqa`) : décision constante **39/40** au lieu de 40/40, F1 à égalité
-**40/40**, écart strict **0/40**. Le score assorti vaut 0,4996 à 0,8660 —
-lui aussi très au-dessus du seuil. **L'écart d'opérateur est réel mais
-n'est pas la cause** : ne pas y retourner. Ce qui sature, c'est la
-résolution VQA elle-même, pas la façon de la réduire.
-
-**Où on en est.** Pas corrigé, et pas corrigeable ici : `σ`, `w_z_frac` et
-la normalisation du biais Z sont des paramètres physiques de
-`src/Simulation/HamiltParams.py`, l'objet d'étude. Trois issues possibles,
-à trancher :
-
-1. **Documenter comme résultat.** À résolution VQA grossière, l'Hamiltonien
-   v1 dégénère vers « raffiner partout » : c'est une limite structurelle de
-   v1, pas un défaut de la phase 4. Alors la phase 4 telle quelle ne peut
-   rien sélectionner et la phase 5 ne doit pas s'appuyer dessus.
-2. **Élargir `σ`** pour que la fenêtre ZZ survive à un score loin du seuil,
-   et remesurer si cela casse la calibration à pleine résolution.
-3. **Resserrer `w_z_frac`** pour que le biais Z ne domine plus les
-   couplages — c'est la même grandeur que la décision déjà ouverte sur sa
-   **borne haute** (section « La borne haute de `w_z_frac` » ci-dessus) :
-   la valeur déployée, 10,40, produit déjà la dégénérescence que la borne à
-   1000 était soupçonnée de produire. Les deux décisions se prennent
-   ensemble.
-
-Voisin de D-41, sans être le même : D-41 constate un Hamiltonien
-**identiquement nul** à pleine résolution sur les scénarios lisses ; ici
-l'Hamiltonien est non nul mais son fondamental est **constant**, et cela
-sur les 4 scénarios, `mhd_rotor` et `orszag_tang` compris.
-
-```bash
-python3 -c "
-import sys, numpy as np
-sys.path.insert(0, 'src'); sys.path.insert(0, 'study/pipeline')
-import exact_diagonalisation as ed
-for sc in ['orszag_tang','harris_tearing','kelvin_helmholtz','mhd_rotor']:
-    d = np.load(f'results/dns_{sc}_Re400_N256.npz')
-    p = np.load(f'results/patches_{sc}_Re400_N256_dim2.npz')
-    n = len(d['t']); N = d['vx'].shape[1]
-    for si in range(0, n, max(1, n // 10)):
-        r = ed.analyze_snapshot(d['vx'][si].astype(float), d['vy'][si].astype(float),
-            d['Bx'][si].astype(float), d['By'][si].astype(float), N, 2, 400,
-            p['l2_errors'][si], p['is_hard'][si], float(p['l2_threshold']))
-        print(sc, si, 'degenere', r['degenerate_decision'],
-              'egalite', r['f1_tie'], 'informatif', r['promising_informative'])
-"
-pytest tests/study/test_exact_diag_degenerate_gate.py
-```
-
----
-
-## Gelés volontairement — ne pas corriger
-
-`study/pipeline/dns_validation.py` est le code de phase 1b. Ses artefacts
-sont publiés ; le corriger casse leur reproductibilité. Décision antérieure,
-documentée dans le fichier lui-même.
-
-| | défaut | version correcte |
-|---|---|---|
-| **D2** | `fluctuating_KE` moyenne à travers la couche de cisaillement : sur le profil de base seul elle lit **73 %** de l'énergie totale, et n'évolue que de **0,02 %** quand on allume la perturbation | `dns_extension.fluctuating_ke_fixed` |
-| **D3** | `mean_sq_current` porte la même inversion d'axes | `dns_extension.mean_sq_current_fixed` |
-
-`analyse_one` utilise désormais les versions corrigées : **le gel porte sur
-les fonctions, pas sur l'analyse qui les appelle.**
-
-Une correction a déjà été annulée ici après qu'un test a rappelé la décision.
-Une déviation connue mais non écrite *là où elle vit* se fait recorriger par
-erreur.
-
-```bash
-pytest tests/study/test_no_private_curl_survives.py tests/study/test_t8_dns_extension.py
-```
-
----
 
 ## D-48 — le « warm start classique » du QAOA ne lit pas la décision classique
 
