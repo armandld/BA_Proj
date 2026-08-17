@@ -104,8 +104,60 @@ def test_long_tasks_capture_the_hash_before_computing(script):
 
 @pytest.mark.parametrize("script", LONG_TASKS)
 def test_long_tasks_no_longer_stamp_at_save_time(script):
-    """Plus aucun appel a `git_commit_hash()` dans les taches longues."""
+    """Plus aucun appel a `git_commit_hash()` dans les taches longues.
+
+    Ce test cherche une CHAINE. Il est garde tel quel — il n'est pas faux —
+    mais il ne mesure pas sa promesse : D-133 l'a montre par mutation. Le
+    garde structurel est `test_long_tasks_never_call_the_stamp_under_any_name`.
+    """
     src = open(_study_file(script), encoding="utf-8").read()
     assert "git_commit_hash()" not in src, (
         f"{script}: appelle encore git_commit_hash() — le tampon serait "
         f"pris a la sauvegarde (D15)")
+
+
+@pytest.mark.parametrize("script", LONG_TASKS)
+def test_long_tasks_never_call_the_stamp_under_any_name(script):
+    """D-133 : la promesse mesuree sur l'AST, sous n'importe quel nom.
+
+    Le test ci-dessus fait `assert "git_commit_hash()" not in src`. Mesure
+    par mutation : D15 REINTRODUIT dans `h4_unseen_conditions.py` — une
+    ligne `out["git_hash"] = _gch()` APRES `provenance.finish(prov)`,
+    l'import ecrit `from provenance import git_commit_hash as _gch` — rend
+    `grep -c "git_commit_hash()"` egal a **0** et laisse le fichier a
+    **7 passed**. Le tampon redeviendrait celui de la SAUVEGARDE, c'est-a-dire
+    exactement D15, et le garde ne le verrait pas.
+
+    Ce test resout d'abord les alias d'import, puis cherche l'appel dans
+    l'AST. Il couvre `git_commit_hash()`, `provenance.git_commit_hash()` et
+    tout alias.
+
+    LIMITE DECLAREE, pour qu'elle ne soit pas redecouverte : un
+    `subprocess` qui appellerait `git rev-parse HEAD` a la main
+    reintroduirait D15 sans passer par ce helper, et echapperait aux deux
+    gardes. La promesse ecrite ici porte sur le HELPER ; l'invariant plus
+    large est couvert par `test_start_then_finish_keeps_the_starting_hash`
+    et `test_a_moved_head_is_reported_not_hidden`, qui mesurent ce que
+    `provenance` rend.
+    """
+    src = open(_study_file(script), encoding="utf-8").read()
+    tree = ast.parse(src)
+
+    #  Tous les noms sous lesquels le tampon peut etre appele ici.
+    names = {"git_commit_hash"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "provenance":
+            for a in node.names:
+                if a.name == "git_commit_hash":
+                    names.add(a.asname or a.name)
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        called = (f.id if isinstance(f, ast.Name)
+                  else f.attr if isinstance(f, ast.Attribute) else None)
+        assert called not in names, (
+            f"{script}:{node.lineno} appelle le tampon sous le nom "
+            f"`{called}` — le hash serait pris a la SAUVEGARDE, pas au "
+            "depart (D15). Seul `provenance.start()` doit le prendre.")
