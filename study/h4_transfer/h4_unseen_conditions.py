@@ -201,6 +201,31 @@ def checkpoint_is_reusable(prev, args):
             and cli.get("matched_reference") == args.matched_reference)
 
 
+def apply_leak_free_threshold(hp_q, rec):
+    """Remplace le seuil QAOA fuyant par celui du bras classique du fold.
+
+    Extrait de `main()` par D-134 pour etre mesurable sans rejouer les
+    heures de DNS d'un fold : les quatre chaines que
+    `test_no_leak_mode_is_gone_and_leak_free_is_wired` cherchait dans ce
+    fichier restaient toutes presentes quand on reecrivait le seuil sur
+    `LEAKED_THRESHOLD` une ligne plus bas — 35 tests verts sous un artefact
+    nomme `leak-free`. Le corps est INCHANGE, seul son emplacement bouge.
+
+    D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les QUATRE
+    classes, classe tenue comprise. Celui du bras classique de ce fold vient
+    de `train_classical_threshold_excluding`, donc des seules classes
+    d'entrainement : le reprendre supprime la fuite.
+    """
+    leak_free_thr = float(rec["classical_params"]["threshold_amr"])
+    assert abs(hp_q["threshold_amr"] - LEAKED_THRESHOLD) < 1e-9, (
+        "the QAOA arm was not at the leaked threshold; check the fold")
+    hp_q["threshold_amr"] = leak_free_thr
+    print(f"  LEAK-FREE: QAOA threshold {LEAKED_THRESHOLD:.6f} "
+          f"-> {leak_free_thr:.6f} (tuned on training classes only)",
+          flush=True)
+    return hp_q
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V4 T22: leak-free tuning and unseen initial conditions")
@@ -241,17 +266,7 @@ def main():
 
     hp_q = dict(rec["hyperparams"])
     if args.mode == "leak-free":
-        # D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les
-        # QUATRE classes, classe tenue comprise. Celui du bras classique de
-        # ce fold vient de `train_classical_threshold_excluding`, donc des
-        # seules classes d'entrainement : le reprendre supprime la fuite.
-        leak_free_thr = float(rec["classical_params"]["threshold_amr"])
-        assert abs(hp_q["threshold_amr"] - LEAKED_THRESHOLD) < 1e-9, (
-            "the QAOA arm was not at the leaked threshold; check the fold")
-        hp_q["threshold_amr"] = leak_free_thr
-        print(f"  LEAK-FREE: QAOA threshold {LEAKED_THRESHOLD:.6f} "
-              f"-> {leak_free_thr:.6f} (tuned on training classes only)",
-              flush=True)
+        apply_leak_free_threshold(hp_q, rec)
     # Le bras classique doit partir d'un point de fonctionnement QUI TERMINE :
     # sur `rotor` le seuil regle diverge, et comparer Q-HAS a une trajectoire
     # tronquee ne mesure rien (le piege a deja fausse T15, T20 et un premier
