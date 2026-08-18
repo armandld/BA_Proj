@@ -626,8 +626,11 @@ def test_les_19_modules_couverts_survivent_au_remede():
 
 
 def test_le_corpus_des_modules_importes_nest_pas_vide():
-    """Un balayage vide doit crier — y compris celui-ci."""
-    assert len(_modules_importes_du_corpus()) >= 50, (
-        f"{len(_modules_importes_du_corpus())} stems de module importes — "
-        "le corpus etroit de D-164 s'est vide, et le test de couverture ne "
-        "prouverait plus rien")
+    """Un balayage vide doit crier — y compris celui-ci.
+
+    D-168 : le plancher a 50 ne detectait plus rien -- 130 stems mesures
+    a `51e36ab` (18 aout 2026)."""
+    assert len(_modules_importes_du_corpus()) >= 130, (
+        f"{len(_modules_importes_du_corpus())} stems de module importes ; "
+        "130 mesures a `51e36ab` (18 aout 2026) : le corpus etroit de "
+        "D-164 a retreci, et le test de couverture ne prouverait plus rien")
