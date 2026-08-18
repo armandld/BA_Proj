@@ -125,10 +125,12 @@ def results_md():
 
 def test_every_repro_command_in_results_md_points_to_a_real_file(results_md):
     referenced = _paths_referenced(results_md)
-    assert len(referenced) > 10, (
-        "le balayage n'a presque rien trouve dans RESULTS.md : le motif a "
-        "probablement cesse de correspondre, pas le depot qui n'a plus de "
-        "commandes")
+    #  D-171 : 23 chemins mesures a `6fa2b5d` (18 aout 2026) ; le plancher
+    #  a 10 ne detectait plus rien.
+    assert len(referenced) >= 23, (
+        f"{len(referenced)} chemin(s) trouves dans RESULTS.md ; 23 mesures "
+        "a `6fa2b5d` (18 aout 2026) : le balayage a retreci, ou le motif a "
+        "cesse de correspondre")
     missing = sorted(
         p for p in referenced
         if not os.path.exists(os.path.join(_REPO_ROOT, p)))
