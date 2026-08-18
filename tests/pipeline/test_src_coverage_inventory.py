@@ -221,6 +221,7 @@ def test_every_entry_point_guards_its_main(rel):
 #  identifiants collectes), donc aucun faux rouge.
 
 _IDENTIFIANTS = None
+_MODULES_IMPORTES = None
 
 
 def _identifiants_du_corpus():
@@ -261,15 +262,76 @@ def _identifiants_du_corpus():
     return vus
 
 
+def _modules_importes_du_corpus():
+    """D-164 : les stems de MODULE reellement IMPORTES par `tests/` — pas
+    n'importe quel identifiant.
+
+    `_identifiants_du_corpus` sert deux usages differents avec la meme
+    largeur, et un seul des deux le supporte. Pour les FONCTIONS
+    (`test_the_public_surface_of_the_physics_path_is_exercised`), un nom
+    passe a `getattr`/`monkeypatch.setattr` est une reference reelle — la
+    largeur est voulue, D-159 l'a mesuree. Pour les MODULES de `COVERED`,
+    le stem lui-meme (`grid`, `solver`, `execute`, `optimize`, `pipeline`…)
+    est un mot assez commun pour apparaitre comme attribut SANS AUCUN
+    RAPPORT avec le module de `src/` — `study.optimize(objective)` sur un
+    objet Optuna rend `optimize` present dans `_identifiants_du_corpus()`
+    sans qu'aucun test ne touche `VQA/optimize.py`. Mesure : 5 des 19
+    modules de `COVERED` (`grid`, `solver`, `execute`, `optimize`,
+    `pipeline`) restent presents dans `_identifiants_du_corpus()` meme
+    apres avoir retire TOUS les fichiers qui les importent reellement.
+
+    Le remede ne restreint que la provenance : seuls les stems tires d'un
+    `import x` / `from x import y` reel comptent. Les 19 modules de
+    `COVERED` s'y retrouvent tous (verifie avant d'ecrire la correction) —
+    aucun faux rouge."""
+    global _MODULES_IMPORTES
+    if _MODULES_IMPORTES is not None:
+        return _MODULES_IMPORTES
+    moi = os.path.abspath(__file__)
+    vus = set()
+    for dirpath, _dirs, names in os.walk(os.path.join(_REPO_ROOT, "tests")):
+        if "__pycache__" in dirpath:
+            continue
+        for n in names:
+            if not n.endswith(".py"):
+                continue
+            chemin = os.path.join(dirpath, n)
+            if os.path.abspath(chemin) == moi:
+                continue          # l'inventaire ne se compte pas lui-meme
+            try:
+                arbre = ast.parse(open(chemin, encoding="utf-8").read())
+            except SyntaxError:
+                continue
+            vus.update(_stems_importes(arbre))
+    _MODULES_IMPORTES = vus
+    return vus
+
+
+def _stems_importes(arbre):
+    """Les stems de MODULE d'un arbre AST deja parse — factorise pour que
+    D-164 soit testable sur une source synthetique, sans marcher `tests/`."""
+    vus = set()
+    for x in ast.walk(arbre):
+        if isinstance(x, ast.ImportFrom) and x.module:
+            vus.update(x.module.split("."))
+        elif isinstance(x, ast.Import):
+            for a in x.names:
+                vus.update(a.name.split("."))
+    return vus
+
+
 @pytest.mark.parametrize("rel", sorted(COVERED))
 def test_each_covered_module_is_named_by_the_test_suite(rel):
-    """« Couvert » doit vouloir dire qu'un test le nomme vraiment."""
+    """« Couvert » doit vouloir dire qu'un test l'IMPORTE vraiment — pas
+    qu'un attribut homonyme, sans rapport, traine ailleurs dans `tests/`
+    (D-164)."""
     stem = os.path.basename(rel)[:-3]
-    assert stem in _identifiants_du_corpus(), (
-        f"{rel} est declare couvert mais aucun test ne l'emploie — le nom "
-        "n'apparaît dans aucun identifiant, import ni chaine-identifiant de "
-        "`tests/` (ce fichier exclu). Une mention en commentaire ne compte "
-        "pas : voir D-159")
+    assert stem in _modules_importes_du_corpus(), (
+        f"{rel} est declare couvert mais aucun test ne l'IMPORTE — le nom "
+        "n'apparaît dans aucun `import`/`from … import` de `tests/` (ce "
+        "fichier exclu). Un attribut homonyme sans rapport (ex. "
+        "`study.optimize(...)` d'Optuna pour `VQA/optimize.py`) ne compte "
+        "pas : voir D-164")
 
 
 def test_the_public_surface_of_the_physics_path_is_exercised():
@@ -423,3 +485,70 @@ def test_le_corpus_dexamen_nest_pas_vide():
         f"{len(corpus)} identifiants collectes dans tests/ — mesure du "
         "18 aout : 4531. Le corpus s'est vide, et les deux tests de "
         "couverture ne prouveraient plus rien")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  D-164 — un homonyme d'ATTRIBUT ne doit pas compter pour un IMPORT
+# ═══════════════════════════════════════════════════════════════════════
+#
+#  Mesure, avant correction : `VQA/optimize.py` n'a qu'UN fichier genuin
+#  (`tests/quantum/test_vqa_chain_contracts.py`, `from VQA.optimize import
+#  optimize`). Le retirer du corpus laisse `"optimize" in
+#  _identifiants_du_corpus()` a **True** quand meme — 11 sites
+#  `study.optimize(objective, ...)` dans `tests/pipeline/
+#  test_train_hyperparams_*.py` appellent `.optimize()` sur un objet
+#  Optuna, sans lien avec `VQA/optimize.py`. `test_each_covered_module_is_
+#  named_by_the_test_suite["VQA/optimize.py"]` restait donc vert meme sans
+#  aucun test qui touche `VQA/optimize.py`.
+#
+#  Balaye les 19 modules de `COVERED` : 5 sur 19 (`grid`, `solver`,
+#  `execute`, `optimize`, `pipeline`) survivent au retrait de TOUS leurs
+#  importateurs genuins, `_identifiants_du_corpus()` interroge. Aucun ne
+#  survit sur `_modules_importes_du_corpus()` (mesure ci-dessous).
+
+def test_un_homonyme_d_attribut_ne_compte_pas_comme_import():
+    """Epingle D-164 : sur quelle entree l'ancien corpus (large,
+    `_identifiants_du_corpus`) se laissait-il tromper, la ou le nouveau
+    (`_modules_importes_du_corpus`) ne se laisse pas faire ?
+
+    `obj.optimize(...)` SANS AUCUN `import` d'un module `optimize` — la
+    forme exacte des 11 sites `study.optimize(...)` d'Optuna."""
+    leurre = ast.parse(
+        "def test_x():\n"
+        "    study = make_study()\n"
+        "    study.optimize(objective, n_trials=1)\n"
+    )
+    #  ANCIEN comportement, rejoue explicitement : un `ast.Attribute` suffit.
+    ancien = {x.attr for x in ast.walk(leurre) if isinstance(x, ast.Attribute)}
+    assert "optimize" in ancien, (
+        "le leurre doit reproduire la forme exacte qui trompait l'ancien "
+        "corpus — sinon ce test ne prouve rien sur D-164")
+
+    #  NOUVEAU comportement : aucun `import` dans le leurre, donc rien.
+    assert "optimize" not in _stems_importes(leurre), (
+        "un attribut homonyme, sans aucun `import` de ce nom, est encore "
+        "compte comme une preuve de couverture — D-164 n'est plus corrige")
+
+    #  Le VRAI import, lui, doit continuer a compter — sinon le remede est
+    #  plus destructeur que le defaut.
+    vrai = ast.parse("from VQA.optimize import optimize\n")
+    assert "optimize" in _stems_importes(vrai)
+
+
+def test_les_19_modules_couverts_survivent_au_remede():
+    """Pas de faux rouge : le remede de D-164 ne doit priver aucun des 19
+    modules de `COVERED` d'une preuve reelle. Mesure avant d'ecrire la
+    correction : les 19 s'y retrouvent."""
+    manquants = [rel for rel in COVERED
+                 if os.path.basename(rel)[:-3] not in _modules_importes_du_corpus()]
+    assert not manquants, (
+        f"modules de COVERED sans import genuin qui les nomme : {manquants} "
+        "— le remede de D-164 est trop strict")
+
+
+def test_le_corpus_des_modules_importes_nest_pas_vide():
+    """Un balayage vide doit crier — y compris celui-ci."""
+    assert len(_modules_importes_du_corpus()) >= 50, (
+        f"{len(_modules_importes_du_corpus())} stems de module importes — "
+        "le corpus etroit de D-164 s'est vide, et le test de couverture ne "
+        "prouverait plus rien")
