@@ -3235,9 +3235,81 @@ deux patrons, et la file consiste à trier lesquels sont lesquels :
 
 Le critère à appliquer à chacun n'est pas « le plancher est-il franchi »
 — ils le sont tous — mais **« de combien ce balayage peut-il fondre sans
-que personne ne le voie »**. Rien corrigé : un plancher large est parfois un
-garde-fou voulu plutôt qu'un détecteur de dérive, et la distinction se
-tranche entrée par entrée. Mesuré, documenté, non corrigé.
+que personne ne le voie »**. Un plancher large est parfois un garde-fou
+voulu plutôt qu'un détecteur de dérive, et la distinction se tranche
+entrée par entrée.
+
+**File fermée (18 août, passe complète)** : les 50 entrées ont été
+relues une à une, avec l'opérateur assorti à chacune. Statut final :
+
+- **6 défauts corrigés** (D-166 à D-171), 8 sites au total — chacun mesuré
+  avant/après, verrouillé par une mutation (ancien plancher rejoué sur une
+  valeur réduite : vert à tort ; nouveau plancher sur la même valeur :
+  rouge) et consigné dans le tableau des défauts corrigés plus haut :
+  `_test_files() > 40` (153 réel, 2 sites, D-166) ; `STUDY_FILES > 40`
+  (66 réel, 2 sites, D-167) ; `_modules_importes_du_corpus() >= 50`
+  (130 réel, D-168) ; `dans_src >= 10` (25 réel, D-169) ; le troisième
+  site indépendant de la même quantité que D-167, `fichiers > 40` dans
+  `test_psi_coverage_inventory.py` (66 réel, D-170) ; `referenced > 10`
+  dans `test_repro_commands_point_to_real_files.py` (23 réel, D-171).
+- **42 entrées relues et laissées telles quelles**, jugement entrée par
+  entrée :
+  - **déjà le bon patron** (daté, hash du commit qui a mesuré, marge
+    1,0×–1,3×) : les deux plancher de `test_launcher_paths_resolve.py`
+    (`>=79`, `>=83`), les trois de `test_suite_integrity.py` (`>=60`,
+    `>=1200`, `>=400`, `>=300`), `test_fig15_sigma_narration.py` (`>=2`),
+    `test_t24_leak_free.py` (`>=2`), `test_psi_coverage_inventory.py`
+    (`_callers() >= 7`), `test_no_credential_in_source.py`
+    (`lanceurs >= 8`, réel 10, marge 1,25×, déjà cité dans le message) ;
+  - **classe différente de la file — pas un compte de corpus** : les
+    planchers `>0`/`>1` qui bornent une propriété de correction sur une
+    construction synthétique (Hamiltonien, TTL, Pareto…), où le plafond
+    atteignable est déjà 1, 2 ou 3 et où le plancher vaut ce plafond —
+    aucune marge n'a de sens à mesurer. Douze sites de cette forme dans
+    `tests/quantum/`, `tests/pipeline/test_module_validation.py`,
+    `tests/pipeline/test_v1_guards.py`,
+    `tests/pipeline/test_v1_partial_pockets.py`,
+    `tests/solver/test_precompute_dns_contracts.py` (réel 3 = plancher),
+    `tests/study/test_check_tearing_end_pinned_peak.py` (réel 6 =
+    plancher), `tests/study/test_fig0_pareto_paths.py`,
+    `tests/study/test_preflight_pertinence_separates.py`,
+    `tests/study/test_hyperparams_two_sources.py` (réel 7, plafond
+    atteignable 7), `tests/study/test_t13_control_is_not_vacuous.py`
+    (réel 3 = plancher), `tests/study/test_t6_dynamic_gt.py`,
+    `tests/pipeline/test_recompute_lambda_scores.py` (distinction sur 3
+    lambdas au plus, confirmé vert) ; de même deux `len(raison) > N`
+    (`test_suite_integrity.py`, `test_empty_sweep_never_silent.py`) qui
+    bornent la longueur d'une chaîne d'exemption, pas une taille de
+    corpus ;
+  - **garde-fou de non-vacuité, marge 1,2×–2,0×, mesuré et laissé** :
+    `test_launcher_paths_resolve.py:228` (`>=6` lanceurs, réel 10, 1,7×),
+    `test_optimiser_axis.py` (`>=6`, réel 10, 1,7×),
+    `test_every_launcher_invokes_real_files.py` (`>=5`, réel 10, 2,0× —
+    le plus large de ce sous-groupe, à revoir à la prochaine passe si la
+    file se rouvre), `test_empty_sweep_never_silent.py:168`
+    (`_LANCABLES > 50`, réel 61, 1,2×), `test_silent_failure_sweep.py`
+    (`>=45`, réel 65, 1,4×), `test_src_coverage_inventory.py:563`
+    (`>=3000`, réel 4545, 1,5× — déjà daté « 4531 » dans le docstring),
+    `test_patches_classical_score_provenance.py` (`>=50`, réel 56, 1,1×),
+    `test_repro_commands_point_to_real_files.py:228` (`>=20`, réel 32,
+    déjà daté « 29 » dans le docstring, 1,45× à l'écriture).
+- **1 entrée signalée, non corrigée — décision humaine requise** :
+  `test_empty_sweep_never_silent.py:390` (`len(couverts) >= 50`, docstring
+  « mesure du 18 août : 55 »). Ce test est **actuellement masqué** : il
+  échoue avant d'atteindre cette assertion, sur
+  `assert not sans_selecteur` (5 modules sans sélecteur de données ni
+  exemption écrite — `qaoa_inputs.py`, `h3_depth_report.py`,
+  `h3_size_scan.py`, `h3_uncertainty_window.py`, `pipeline/sanity_check.py`
+  — préexistant, mesuré identique avant/après cette passe par
+  `git stash`, hors périmètre de la file des planchers). En contournant
+  ce blocage pour mesurer directement `couverts`, la valeur réelle
+  aujourd'hui est **49** — **sous le plancher de 50 et sous les 55
+  documentés** : ce n'est pas un plancher trop bas qui ne détecte rien,
+  c'est l'inverse, un plancher qui *devrait déjà mordre* si le test
+  l'atteignait. Ne pas corriger sans investiguer : est-ce une régression
+  réelle (des modules ont perdu leur couverture) ou le même défaut de
+  périmètre qui masque le test ? Mesuré, documenté, **non corrigé**, à
+  trancher par un humain.
 
 ---
 
