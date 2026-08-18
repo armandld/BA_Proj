@@ -216,17 +216,60 @@ _LONG_OPT_RE = re.compile(r"(?<![\w-])(--[a-zA-Z][a-zA-Z0-9-]*)")
 def _commands_with_options(text):
     """(script, options) pour chaque commande `python <script> --opt …`.
 
-    Le texte est aplati d'abord : une commande de `RESULTS.md` peut etre
-    coupee en deux lignes a l'interieur d'un meme span de code inline.
+    D-156 — pourquoi ce n'est plus un aplatissement global. L'ancienne
+    version faisait `re.sub(r"`([^`]*)`", …)` sur tout le document pour
+    recoller les spans de code inline coupes en deux lignes. Un bloc
+    ``` ``` ``` est fait de backquotes lui aussi : le motif appariait le
+    DERNIER backquote de la cloture ouvrante avec le PREMIER de la
+    cloture fermante, et aplatissait le bloc entier sur une ligne. Deux
+    consequences, mesurees sur `RESULTS.md` au 18 aout 2026 :
+
+      - `_PY_CMD_RE` consomme `[^\\n`|]*` : la PREMIERE commande du bloc
+        avalait les options de toutes les suivantes — `--force-greedy`,
+        option d'une seconde commande `h3_size_scan.py`, etait rapportee
+        sur la premiere ;
+      - `finditer` reprend apres ce qui a ete consomme : **les commandes
+        suivantes du bloc n'etaient jamais vues**. 14 commandes lues sur
+        21 reellement presentes.
+
+    Le bloc cloture se lit donc ligne par ligne, avec ses continuations
+    `\\`, et le span inline reste recolle — mais seulement lui.
     """
-    flat = re.sub(r"`([^`]*)`", lambda m: "`" + m.group(1).replace("\n", " ") + "`",
-                  text)
     out = set()
-    for m in _PY_CMD_RE.finditer(flat):
+    lignes = text.splitlines()
+    dans_bloc = False
+    i = 0
+    while i < len(lignes):
+        ligne = lignes[i].strip()
+        if ligne.startswith("```"):
+            dans_bloc = not dans_bloc
+            i += 1
+            continue
+        if dans_bloc:
+            cmd = ligne
+            while cmd.endswith("\\") and i + 1 < len(lignes):
+                i += 1
+                cmd = cmd[:-1] + " " + lignes[i].strip()
+            #  le commentaire de fin de ligne n'est pas une option
+            out |= _options_de(cmd.split("#")[0])
+        i += 1
+    #  Spans de code inline : eux se recollent, c'est leur forme. Les
+    #  clotures sont neutralisees d'abord pour que le motif ne les apparie
+    #  pas — c'est exactement le defaut D-156.
+    sans_bloc = text.replace("```", "\x00")
+    for m in re.finditer(r"`([^`]*)`", sans_bloc):
+        out |= _options_de(m.group(1).replace("\n", " "))
+    return sorted(out)
+
+
+def _options_de(fragment):
+    """{(script, options)} pour UNE commande deja isolee."""
+    out = set()
+    for m in _PY_CMD_RE.finditer(fragment):
         opts = frozenset(_LONG_OPT_RE.findall(m.group(2)))
         if opts:
             out.add((m.group(1), opts))
-    return sorted(out)
+    return out
 
 
 @pytest.fixture(scope="module")
@@ -246,19 +289,42 @@ def _declared_options():
     return get
 
 
+#: D-156 — perimetre. La verification des options ne lisait que
+#: `RESULTS.md`. Les commandes que quelqu'un va reellement retaper vivent
+#: aussi ailleurs : `MODE_EMPLOI_CAMPAGNE.md` est le mode d'emploi de la
+#: campagne de ~224 h CPU, `BRIEF_REPRISE.md` la recette de reprise,
+#: `README.md` la page d'accueil du depot. Mesure du 18 aout 2026 sur les
+#: cinq : **25 commandes a options, aucune option non declaree**. Le trou
+#: de perimetre etait donc reel et sans consequence vivante — il est ferme
+#: pendant qu'il l'est.
+_DOCS_A_COMMANDES = (
+    "docs/RESULTS.md",
+    "docs/DEFAUTS.md",
+    "docs/BRIEF_REPRISE.md",
+    "docs/MODE_EMPLOI_CAMPAGNE.md",
+    "README.md",
+)
+
+
+@pytest.mark.parametrize("relpath", _DOCS_A_COMMANDES)
 def test_every_repro_command_uses_options_its_script_declares(
-        results_md, _declared_options):
-    commands = _commands_with_options(results_md)
+        relpath, _declared_options):
+    with open(os.path.join(_REPO_ROOT, relpath), encoding="utf-8") as f:
+        commands = _commands_with_options(f.read())
     # Balayage vide : sans ce garde, un motif qui cesse de correspondre
-    # rendrait ce test vert sans rien verifier. Mesure du jour : 16.
-    assert len(commands) >= 10, (
+    # rendrait ce test vert sans rien verifier. Mesure du 18 aout, par
+    # document : RESULTS 16, DEFAUTS 2, BRIEF_REPRISE 1, MODE_EMPLOI 1,
+    # README 5.
+    plancher = {"docs/RESULTS.md": 12}.get(relpath, 1)
+    assert len(commands) >= plancher, (
         f"le balayage n'a trouve que {len(commands)} commande(s) a options "
-        "dans RESULTS.md : c'est le motif qui a cesse de correspondre, pas "
+        f"dans {relpath} : c'est le motif qui a cesse de correspondre, pas "
         "le depot qui n'a plus de commandes")
     faulty = []
     for script, opts in commands:
         if not os.path.exists(os.path.join(_REPO_ROOT, script)):
-            continue                      # couvert par le test des chemins
+            faulty.append(f"{script} : le fichier n'existe pas")
+            continue
         declared = _declared_options(script)
         if declared is None:
             continue                      # `--help` ne rend pas 0 : hors portee
@@ -266,7 +332,7 @@ def test_every_repro_command_uses_options_its_script_declares(
         if missing:
             faulty.append(f"{script} : {' '.join(missing)}")
     assert not faulty, (
-        "commandes de RESULTS.md citant une option que leur script ne "
+        f"commandes de {relpath} citant une option que leur script ne "
         f"declare pas — elles sortent en 2 sans rien mesurer : {faulty}")
 
 
@@ -289,3 +355,61 @@ def test_no_dead_v4_prefix_outside_documented_history(relpath):
     assert len(hits) <= allowed, (
         f"{relpath} porte {len(hits)} occurrence(s) de 'study/v4/' non "
         f"documentee(s) comme historique (autorise : {allowed}) : {hits}")
+
+
+def test_un_bloc_cloture_n_est_pas_un_span_de_code_inline():
+    """Epingle D-156 : sur quelle entree l'ancien parseur echouait-il ?
+
+    Celle-ci — deux commandes dans un meme bloc ``` ```. L'ancien
+    aplatissait le bloc, la premiere commande avalait les options de la
+    seconde, et la seconde n'etait jamais vue."""
+    doc = (
+        "texte avant\n"
+        "```bash\n"
+        "python study/h3_representation/h3_size_scan.py --dims 2 --mapper v2\n"
+        "python study/h4_transfer/h4_physics_robustness.py --fold rotor --recompute\n"
+        "```\n"
+        "texte apres, et un span inline coupe en deux :\n"
+        "`python study/h0_selection/h0_qaoa_displacement.py --N 64\n"
+        " --dim 2`\n"
+    )
+    vues = dict(_commands_with_options(doc))
+    assert set(vues) == {
+        "study/h3_representation/h3_size_scan.py",
+        "study/h4_transfer/h4_physics_robustness.py",
+        "study/h0_selection/h0_qaoa_displacement.py",
+    }, f"les trois commandes doivent etre vues separement : {sorted(vues)}"
+    assert vues["study/h3_representation/h3_size_scan.py"] == {"--dims", "--mapper"}, (
+        "les options de la SECONDE commande du bloc sont attribuees a la "
+        "premiere : c'est exactement D-156")
+    assert vues["study/h4_transfer/h4_physics_robustness.py"] == {"--fold", "--recompute"}
+    #  le span inline coupe en deux lignes se recolle toujours — c'est ce
+    #  que l'aplatissement d'origine servait a faire, et il faut le garder
+    assert vues["study/h0_selection/h0_qaoa_displacement.py"] == {"--N", "--dim"}
+
+    #  L'ancien comportement, reproduit ici : s'il redevenait vrai, la
+    #  premiere assertion tomberait. Ce bloc dit POURQUOI.
+    ancien = {}
+    flat = re.sub(r"`([^`]*)`",
+                  lambda m: "`" + m.group(1).replace("\n", " ") + "`", doc)
+    for m in _PY_CMD_RE.finditer(flat):
+        opts = frozenset(_LONG_OPT_RE.findall(m.group(2)))
+        if opts:
+            ancien[m.group(1)] = opts
+    assert "study/h4_transfer/h4_physics_robustness.py" not in ancien, (
+        "l'ancien parseur voyait la seconde commande du bloc : D-156 "
+        "n'aurait alors jamais existe — verifier ce test avant de le croire")
+    assert ancien["study/h3_representation/h3_size_scan.py"] > {"--dims", "--mapper"}, (
+        "l'ancien parseur fusionnait les options des deux commandes")
+
+
+def test_le_commentaire_de_fin_de_ligne_n_est_pas_une_option():
+    """`python x.py --dim 2   # --force-greedy a ete essaye` : le
+    commentaire n'est pas une option citee. Sans quoi le nouveau parseur
+    fabriquerait un faux rouge la ou l'ancien n'en avait pas."""
+    doc = ("```bash\n"
+           "python study/h3_representation/h3_size_scan.py --dims 2  "
+           "# --option-inexistante, essayee puis abandonnee\n"
+           "```\n")
+    vues = dict(_commands_with_options(doc))
+    assert vues == {"study/h3_representation/h3_size_scan.py": frozenset({"--dims"})}, vues
