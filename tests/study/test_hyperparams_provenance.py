@@ -12,6 +12,7 @@ seule et confrontent chaque nombre du document a ce qu'elles contiennent.
 import datetime
 import glob
 import os
+import re
 import sqlite3
 
 import pytest
@@ -180,16 +181,100 @@ def test_some_trials_were_left_running(survey):
         "corriger PROVENANCE.md qui la decrit comme interrompue")
 
 
-def test_the_document_states_the_measured_numbers():
-    """Le document doit porter les chiffres, pas une impression."""
+def _nombre_delimite(doc, valeur, decimales):
+    """`valeur` figure-t-elle dans `doc` comme nombre DELIMITE ?
+
+    Une recherche de sous-chaine ne garde rien : « 345 » est satisfait par
+    « 3450 », « 47 » par « 470 », « 224 » par « 2244 ». Le document peut
+    alors annoncer chaque total a un ordre de grandeur pres sans qu'aucun
+    test ne bouge — mesure en tete de l'entree D-147.
+
+    On accepte l'ecriture a `decimales` chiffres ET l'entier arrondi : le
+    document ecrit « ~47 h » dans la prose et « 47.0 h » dans la table, et
+    les deux disent la meme mesure. Ce qui n'est pas accepte, c'est un
+    chiffre COLLE avant ou apres.
+    """
+    exact = f"{valeur:.{decimales}f}"
+    formes = {exact}
+    if float(exact) == float(round(valeur)):
+        # la mesure EST entiere a cette precision : « 47.0 » et « 47 »
+        # disent la meme chose. Pour 16.6276, « 17 » n'est pas accepte.
+        formes.add(f"{round(valeur):d}")
+    # `(?![.,]\d)` interdit d'attraper la tete d'un nombre plus long :
+    # sans lui, « 9 » se trouve dans « 9.35 ».
+    return any(re.search(r"(?<![\d.,])" + re.escape(f) + r"(?![\d]|[.,]\d)", doc)
+               for f in formes)
+
+
+def test_the_document_states_the_measured_numbers(survey):
+    """Le document doit porter les chiffres MESURES, pas une impression.
+
+    Chaque nombre exige ici est calcule depuis les bases a l'instant du
+    test — il n'est pas recopie. Le document et le test ne peuvent donc pas
+    deriver l'un de l'autre en silence : c'est le point de D-22, et c'est
+    ce document qu'une lecture fautive avait deja fait sous-estimer d'un
+    facteur 1,7.
+    """
     doc = open(_DOC, encoding="utf-8").read()
-    for token in ("345", "16.6", "30.4", "47", "224", "9.3", "56 min"):
-        assert token in doc, (
-            f"PROVENANCE.md ne mentionne pas {token} ; les nombres verifies "
-            "doivent figurer dans le document qu'ils decrivent")
+
+    essais = sum(v[0] for v in survey.values())
+    mur = {k: v[1] for k, v in survey.items() if v[0] > 0}
+    cpu = {os.path.basename(p): _cpu_hours(p) for p in _dbs()
+           if _counts(p)[0] > 0}
+
+    exiges = [("essais au total", essais, 0)]
+    exiges += [(f"mur {k}", v, 1) for k, v in sorted(mur.items())]
+    exiges += [("mur total", sum(mur.values()), 1)]
+    exiges += [(f"CPU {k}", v, 1) for k, v in sorted(cpu.items())]
+    exiges += [("CPU total", sum(cpu.values()), 1)]
+    exiges += [("jours mono-coeur", sum(cpu.values()) / 24.0, 1)]
+
+    for nom, valeur, decimales in exiges:
+        assert _nombre_delimite(doc, valeur, decimales), (
+            f"PROVENANCE.md n'annonce pas la valeur mesuree pour {nom} : "
+            f"{valeur:.{decimales}f}. Corriger le document, pas ce test — "
+            f"c'est le seul dossier du depot qu'aucune commande ne "
+            f"regenere.")
+
+    # Le cout median par essai : le chiffre qui chiffre une relance.
+    import numpy as np
+    for name in sorted(cpu):
+        con = sqlite3.connect(f"file:{os.path.join(_STUDIES, name)}?mode=ro",
+                              uri=True)
+        try:
+            rows = con.execute(
+                "select datetime_start, datetime_complete from trials "
+                "where state='COMPLETE' and datetime_complete is not null"
+            ).fetchall()
+        finally:
+            con.close()
+        med_min = float(np.median([
+            (datetime.datetime.fromisoformat(b)
+             - datetime.datetime.fromisoformat(a)).total_seconds()
+            for a, b in rows])) / 60.0
+        assert _nombre_delimite(doc, med_min, 0), (
+            f"PROVENANCE.md n'annonce pas le cout median mesure de {name} : "
+            f"{med_min:.0f} min")
+
     assert "temps processeur" in doc, (
         "PROVENANCE.md doit distinguer le cout CPU du temps de mur : c'est "
         "la confusion des deux qui avait fait sous-estimer une relance")
+
+
+def test_le_garde_du_document_ne_se_satisfait_pas_dune_sous_chaine():
+    """Auto-test : sur quelle entree `_nombre_delimite` echouerait-il ?
+
+    Sans lui, rien ne distingue le nouveau garde de l'ancien — et l'ancien
+    passait sur un document faux d'un ordre de grandeur (D-147).
+    """
+    assert _nombre_delimite("total : 345 essais", 345, 0)
+    assert _nombre_delimite("**47.0 h**", 47.0304, 1)
+    assert _nombre_delimite("~47 h de mur", 47.0304, 1)      # entier arrondi
+    assert not _nombre_delimite("total : 3450 essais", 345, 0)
+    assert not _nombre_delimite("**470.0 h**", 47.0304, 1)
+    assert not _nombre_delimite("2244.0 h CPU", 224.36, 1)
+    assert not _nombre_delimite("9.35 jours", 9.348, 1)
+    assert not _nombre_delimite("cout 1345 s", 345, 0)       # colle devant
 
 
 def test_the_published_hyperparameters_come_from_phase1_only():
