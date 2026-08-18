@@ -63,8 +63,15 @@ def _internal_imports(path):
 
 
 def test_there_are_test_files_to_check():
-    """Un balayage vide sort en vert et ne prouve rien."""
-    assert len(_test_files()) > 40, f"{len(_test_files())} fichiers trouves"
+    """Un balayage vide sort en vert et ne prouve rien.
+
+    D-166 : le plancher a 40 ne detectait plus rien -- 153 fichiers mesures
+    a `bfe4c46` (18 aout 2026), le balayage pouvait fondre de 112 fichiers
+    sur 153 sans que ce test ne bouge."""
+    assert len(_test_files()) >= 153, (
+        f"{len(_test_files())} fichiers trouves ; 153 mesures a `bfe4c46` "
+        "(18 aout 2026) : le balayage a retreci, il ne prouve plus ce "
+        "qu'il prouvait")
 
 
 @pytest.mark.parametrize("path", _test_files(), ids=lambda p: os.path.relpath(p, _TESTS))
@@ -501,7 +508,10 @@ def test_le_balayage_couvre_bien_ce_qu_il_annonce():
     sites = [(nom, sous) for _p, nom, _l, sous in _tous_les_sites()]
     locaux = [(n, s) for n, s in sites if not _est_externe(n.split(".")[0])]
     dans_fonction = [n for n, s in sites if s]
-    assert len(_test_files()) > 40, f"{len(_test_files())} fichiers balayes"
+    assert len(_test_files()) >= 153, (
+        f"{len(_test_files())} fichiers balayes ; 153 mesures a `bfe4c46` "
+        "(18 aout 2026, meme quantite que test_there_are_test_files_to_check, "
+        "D-166)")
     assert len(sites) >= 1200, (
         f"{len(sites)} sites d'import balayes — mesure du 18 aout : 1347. "
         "Le parseur a perdu des formes")
