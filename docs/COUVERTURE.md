@@ -3218,6 +3218,27 @@ print(n, len(files))
 # -> 50 28
 ```
 
+**Mesure d'ouverture de la file** (18 août au soir) : sur les **44 des 50**
+planchers dont la grandeur s'évalue hors contexte de test, la marge
+plancher → valeur réelle va de **1,0×** à **3,8×**. Le dépôt porte déjà les
+deux patrons, et la file consiste à trier lesquels sont lesquels :
+
+- **le bon** — `tests/test_launcher_paths_resolve.py` : `>= 79` et `>= 83`,
+  chacun avec **le hash du commit qui l'a mesuré** écrit dans son message.
+  Une dérive s'y verrait au prochain point. (Le `>= 45` de la même quantité,
+  plus ancien et non daté, est strictement plus faible : superflu, pas faux.)
+- **celui qui ne détecte rien** — `assert len(_test_files()) > 40` dans
+  `tests/test_suite_integrity.py` (deux sites), quand la valeur réelle est
+  **153** : la suite peut perdre **113 fichiers de test sur 153** avant que
+  le plancher ne morde. Même forme pour `STUDY_FILES > 40` contre **66**
+  (deux sites), et `len(_modules_importes_du_corpus()) >= 50` contre **130**.
+
+Le critère à appliquer à chacun n'est pas « le plancher est-il franchi »
+— ils le sont tous — mais **« de combien ce balayage peut-il fondre sans
+que personne ne le voie »**. Rien corrigé : un plancher large est parfois un
+garde-fou voulu plutôt qu'un détecteur de dérive, et la distinction se
+tranche entrée par entrée. Mesuré, documenté, non corrigé.
+
 ---
 
 ---
