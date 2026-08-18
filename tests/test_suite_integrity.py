@@ -221,12 +221,66 @@ def test_aucun_test_n_est_incapable_d_echouer():
 
 
 def test_chaque_exemption_porte_sa_raison_et_existe_encore():
-    """Une liste d'exemptions qui pourrit est pire que pas de liste."""
+    """Une liste d'exemptions qui pourrit est pire que pas de liste.
+
+    D-163 : ce controle ne verifiait que l'existence du FICHIER. Or ce que
+    l'exemption designe n'est pas un fichier, c'est une FONCTION de test —
+    et ce qu'elle fait n'est pas « exister », c'est « supprimer un
+    signalement ». Un fichier peut survivre a la fonction qu'il portait ;
+    une fonction peut gagner une assertion sans que son exemption parte
+    avec. Dans les deux cas l'entree devient une permission dormante,
+    accordee d'avance a la prochaine fonction qui prendra ce nom. Meme forme
+    que D-161, ou 2 exemptions sur 4 etaient deja mortes sans que le
+    controle de peremption le voie.
+
+    Les trois criteres, du plus faible au plus fort : le fichier existe, la
+    fonction existe, et elle serait ENCORE signalee sans son exemption.
+    """
     for cle, raison in SANS_ASSERTION_LEGITIMES.items():
         assert len(raison) > 30, f"{cle} exempte sans raison lisible"
-        fichier = cle.split("::")[0]
-        assert os.path.exists(os.path.join(_REPO_ROOT, fichier)), (
+        fichier, nom = cle.split("::")
+        chemin = os.path.join(_REPO_ROOT, fichier)
+        assert os.path.exists(chemin), (
             f"{fichier} n'existe plus — retirer son exemption")
+        arbre = ast.parse(open(chemin, encoding="utf-8").read())
+        fns = [n for n in ast.walk(arbre)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+               and n.name == nom]
+        assert fns, (
+            f"{cle} : le fichier existe mais la fonction exemptee n'y est "
+            "plus. L'exemption ne protege plus rien — elle attend la "
+            "prochaine fonction qui prendra ce nom. La retirer.")
+        assert not _porte_une_verification(fns[0], _helpers_verificateurs(arbre)), (
+            f"{cle} porte desormais une verification : son exemption ne "
+            "supprime plus aucun signalement. La retirer, sinon elle "
+            "couvrira le jour ou cette verification disparaîtra.")
+
+
+def test_le_controle_de_peremption_peut_echouer():
+    """Epingle D-163 : sur quelle entree l'ancien controle echouait-il ?
+
+    Sur aucune de celles qui comptent. Il faisait `os.path.exists(fichier)`
+    — vrai pour les trois entrees, et il le resterait apres la suppression
+    ou le renommage de la fonction exemptee, comme apres l'ajout d'une
+    assertion dedans. Les trois criteres sont mesures ici sur un arbre
+    fabrique, pour que chacun puisse rendre faux.
+    """
+    src = ("def test_sans_assertion():\n"
+           "    calcule()\n\n\n"
+           "def test_avec_assertion():\n"
+           "    assert calcule()\n")
+    arbre = ast.parse(src)
+    helpers = _helpers_verificateurs(arbre)
+    par_nom = {n.name: n for n in ast.walk(arbre)
+               if isinstance(n, ast.FunctionDef)}
+
+    #  le critere qui mord : une fonction qui a GAGNE une verification
+    assert not _porte_une_verification(par_nom["test_sans_assertion"], helpers)
+    assert _porte_une_verification(par_nom["test_avec_assertion"], helpers), (
+        "le critere de peremption ne distingue plus une fonction verifiante "
+        "d'une fonction muette : D-163 est rouvert")
+    #  le critere le plus faible : une fonction ABSENTE de l'arbre
+    assert "test_disparu_d163" not in par_nom
 
 
 # ══════════════════════════════════════════════════════════════════════

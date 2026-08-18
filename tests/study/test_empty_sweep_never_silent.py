@@ -172,10 +172,48 @@ def test_le_balayage_comportemental_nest_pas_vide():
 
 
 def test_chaque_exemption_de_D148_porte_sa_raison_et_existe_encore():
+    """D-163 : une exemption doit encore SUPPRIMER quelque chose.
+
+    Ce controle ne verifiait que l'existence du fichier. Or ce que fait une
+    entree de `_EXEMPTIONS`, c'est retirer un module du balayage
+    comportemental — et elle ne retire quelque chose que si le module y
+    serait, c'est-a-dire s'il est encore dans `_LANCABLES`. Un module qui
+    perd son `argparse` ou son bloc `__main__` sort du balayage tout seul :
+    son exemption devient alors une permission dormante, prete a dispenser
+    le jour ou il y reviendra. Meme forme que D-161.
+    """
+    lancables = {os.path.relpath(p, _REPO_ROOT) for p in _LANCABLES}
     for rel, raison in _EXEMPTIONS.items():
         assert os.path.exists(os.path.join(_REPO_ROOT, rel)), (
             f"{rel} est exempte mais n'existe plus : retirer l'exemption")
         assert len(raison) > 80, f"{rel} : exemption sans raison ecrite"
+        assert rel in lancables, (
+            f"{rel} est exempte du balayage comportemental, mais il n'y "
+            "entrerait plus de toute facon (il a quitte `_LANCABLES`). "
+            "L'exemption ne supprime plus rien et dispenserait sans le dire "
+            "le jour ou le module y reviendrait : la retirer (D-163).")
+
+
+def test_le_controle_de_peremption_des_exemptions_peut_echouer():
+    """Un balayage vide doit crier — y compris ce controle-ci.
+
+    Epingle D-163 : sur quelle entree l'ancien controle echouait-il ? Sur
+    aucune — `os.path.exists` reste vrai pour un module qui a quitte
+    `_LANCABLES`. Le critere qui mord est l'appartenance au balayage, et il
+    doit pouvoir rendre faux.
+    """
+    lancables = {os.path.relpath(p, _REPO_ROOT) for p in _LANCABLES}
+    #  un fichier de `study/` qui existe mais n'est pas lancable : le
+    #  critere doit le refuser. S'il n'en existe aucun, le dire plutot que
+    #  de conclure.
+    non_lancables = [os.path.relpath(p, _REPO_ROOT) for p in STUDY_FILES
+                     if os.path.relpath(p, _REPO_ROOT) not in lancables]
+    assert non_lancables, (
+        "tous les fichiers de study/ sont lancables : ce controle ne peut "
+        "plus distinguer « exemption portante » de « exemption morte »")
+    for rel in non_lancables:
+        assert os.path.exists(os.path.join(_REPO_ROOT, rel))   # ancien critere : vert
+        assert rel not in lancables                            # nouveau : rouge
 
 
 # ══════════════════════════════════════════════════════════════════
