@@ -87,6 +87,15 @@ _DEF_CD = re.compile(r'^\s*(\w+)="\$\(cd\s+"([^"]+)"\s*&&\s*pwd\)"')
 _DEF_ALIAS = re.compile(r'^\s*(\w+)="\$\{?(\w+)\}?"\s*$')
 
 
+#  `$(dirname "${BASH_SOURCE[0]}")` et `$(dirname "$0")` — les deux facons
+#  dont un lanceur de ce depot nomme son propre dossier. Sans cette
+#  substitution, `_DEF_CD` bute sur les guillemets internes et la variable
+#  reste non resolue : `run_fold.sh` definit ainsi `root`, et ses deux
+#  invocations disparaissaient du balayage (mesure D-151 : 83 -> 81).
+_DIRNAME_DE_SOI = re.compile(
+    r'\$\(dirname\s+"(?:\$\{BASH_SOURCE\[0\]\}|\$0)"\)')
+
+
 def _launcher_vars(path):
     """Les variables de chemin que CE lanceur se donne, evaluees."""
     here = os.path.dirname(path)
@@ -94,6 +103,7 @@ def _launcher_vars(path):
     for line in open(path, encoding="utf-8", errors="replace"):
         if line.lstrip().startswith("#"):
             continue
+        line = _DIRNAME_DE_SOI.sub(here, line)
         m = _DEF_CD.match(line)
         if m:
             name, expr = m.group(1), _expand(m.group(2), variables)
@@ -135,13 +145,57 @@ def _launchers():
     return sorted(out)
 
 
+#  D-151 — un `cd` sur sa propre ligne vaut pour toutes les lignes suivantes.
+#
+#  `_INVOKE` ne reconnaît `cd X && python Y` que sur UNE ligne. Or les
+#  lanceurs de ce depot font le `cd` a part (`run_reoptimisation.sh:69`,
+#  `run_fold.sh:27`, `run_study_v2_phases.sh:27`) : le dossier courant valait
+#  alors la racine du depot pour tout ce qui suit. Deux consequences, dans les
+#  deux sens :
+#
+#    - FAUX ROUGE : `cd "$ROOT_DIR/src"` puis `python train_hyperparams.py`
+#      etait resolu en `train_hyperparams.py` a la racine, absent — le garde
+#      rougissait sur un lanceur JUSTE (mesure : `run_reoptimisation.sh:72`) ;
+#    - FAUX VERT : la meme resolution valide un HOMONYME. Un lanceur qui,
+#      depuis `scripts/`, invoquerait `run_tests.sh` — qui n'y existe pas —
+#      etait valide par le `run_tests.sh` de la racine.
+#
+#  On ne retient que le `cd` seul sur sa ligne : les `$(cd … && pwd)` des
+#  definitions de variables sont deja traites par `_launcher_vars`, et un
+#  `cd … && …` inline reste du ressort de `_INVOKE`.
+_CD_SEUL = re.compile(r'^\s*cd\s+"?([^"&|;#]+?)"?\s*(?:#.*)?$')
+
+
 def _invocations(path):
     """(chemin_relatif_au_depot, numero_de_ligne) de chaque fichier invoque."""
     variables = _launcher_vars(path)
     out = []
+    cwd_courant = ""          # "" = racine du depot ; None = inconnu
     for lineno, line in enumerate(open(path, encoding="utf-8",
                                        errors="replace"), start=1):
         if line.lstrip().startswith("#"):
+            continue
+        if line.lstrip().startswith("echo"):
+            #  Un `echo` n'invoque rien : il donne au lecteur une commande a
+            #  taper, et le lecteur la tape depuis la racine du depot. La
+            #  cible se resout donc contre la racine, quel que soit le `cd`
+            #  du lanceur (`run_reoptimisation.sh:76`).
+            for cwd, target in _INVOKE.findall(line):
+                target = _expand(target, variables)
+                if "$" in target or target.startswith("-"):
+                    continue
+                out.append((os.path.relpath(
+                    os.path.normpath(os.path.join(_ROOT, _expand(cwd, variables),
+                                                  target)), _ROOT), lineno))
+            continue
+        m = _CD_SEUL.match(line.rstrip("\n"))
+        if m:
+            cible = _expand(m.group(1).strip(), variables)
+            #  Un `cd` qu'on ne sait pas resoudre rend le dossier courant
+            #  INCONNU : mieux vaut ne rien affirmer sur les lignes qui
+            #  suivent que les resoudre contre la racine, ce qui est
+            #  precisement le defaut corrige ici.
+            cwd_courant = cible if "$" not in cible else None
             continue
         trouves = [(cwd, tgt) for cwd, tgt in _INVOKE.findall(line)]
         trouves += [("", tgt) for tgt in _WRAPPED.findall(line)
@@ -149,6 +203,10 @@ def _invocations(path):
         for cwd, target in trouves:
             cwd = _expand(cwd, variables)
             target = _expand(target, variables)
+            if not cwd:
+                if cwd_courant is None:
+                    continue      # `cd` non resolu : on n'affirme rien
+                cwd = cwd_courant
             if "$" in target or "$" in cwd or target.startswith("-"):
                 continue          # chemin encore construit a l'execution
             base = cwd if os.path.isabs(cwd) else os.path.join(
@@ -260,3 +318,84 @@ def test_each_exemption_still_names_a_real_dead_path():
         assert any(t == target for _, t, _ in _ALL), (
             f"{target} n'est plus invoque par aucun lanceur : "
             "retirer son exemption")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  D-151 — le dossier courant d'un `cd` pose sur sa propre ligne
+# ══════════════════════════════════════════════════════════════════
+
+def test_a_cd_on_its_own_line_moves_the_targets_that_follow():
+    """Epinglage de l'ancien comportement, sur le lanceur qui l'a revele.
+
+    `scripts/run_reoptimisation.sh` fait `cd "$ROOT_DIR/src"` (ligne 69) puis
+    `python train_hyperparams.py` (ligne 72). Le fichier invoque est donc
+    `src/train_hyperparams.py`, qui existe.
+
+    Sur quelle entree ce test echoue : sur le parseur d'avant D-151, qui
+    resolvait la cible contre la racine du depot et rendait
+    `train_hyperparams.py` — absent, donc un ROUGE sur un lanceur juste.
+    """
+    lanceur = os.path.join(_ROOT, "scripts", "run_reoptimisation.sh")
+    cibles = dict((ln, t) for t, ln in _invocations(lanceur))
+    assert cibles.get(72) == "src/train_hyperparams.py", (
+        f"ligne 72 resolue en {cibles.get(72)!r} au lieu de "
+        "'src/train_hyperparams.py' : le `cd` de la ligne 69 est ignore")
+    assert os.path.exists(os.path.join(_ROOT, cibles[72]))
+
+
+def test_a_homonym_at_the_repository_root_no_longer_validates_the_target(tmp_path):
+    """L'autre moitie du defaut, celle qui rendait le garde COMPLAISANT.
+
+    Resoudre contre la racine ne rate pas seulement une cible : elle en
+    valide une autre. Un lanceur qui, apres `cd`, invoque un nom qui
+    n'existe QUE a la racine etait declare sain par l'homonyme.
+
+    Champ d'essai qui SEPARE : `run_tests.sh` existe a la racine du depot et
+    nulle part ailleurs.
+    """
+    lanceur = tmp_path / "faux_lanceur.sh"
+    lanceur.write_text(
+        'root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
+        'cd "$root/sous_dossier"\n'
+        'bash run_tests.sh\n')
+    (tmp_path / "sous_dossier").mkdir()
+
+    cibles = [t for t, _ in _invocations(str(lanceur))]
+    assert cibles, "balayage vide : le test ne prouve rien"
+    assert "run_tests.sh" not in cibles, (
+        "la cible est resolue contre la racine du depot : le `run_tests.sh` "
+        "de la racine valide un fichier que le lanceur n'atteindrait jamais")
+    assert not any(os.path.exists(os.path.join(_ROOT, t)) for t in cibles), (
+        f"{cibles} : aucune de ces cibles ne devrait exister")
+
+
+def test_an_unresolved_cd_drops_the_lines_that_follow_rather_than_guessing():
+    """Decision ecrite la ou elle vit : `cd` inconnu -> on n'affirme rien.
+
+    Le silence a un cout — ces lignes sortent du balayage — donc il est
+    borne par `test_each_exemption_still_names_a_real_dead_path`, qui exige
+    un plancher d'invocations, et par le test ci-dessous qui epingle le
+    total mesure.
+    """
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:
+        fh.write('cd "$UNE_VARIABLE_QUE_RIEN_NE_DEFINIT"\n'
+                 'python study/common/provenance.py\n')
+        chemin = fh.name
+    try:
+        assert _invocations(chemin) == []
+    finally:
+        os.remove(chemin)
+
+
+def test_the_sweep_still_sees_every_invocation_it_saw_before():
+    """Un parseur plus fin peut aussi voir MOINS : ce test l'interdit.
+
+    83 invocations mesurees a `f8edebf`, avant comme apres la correction —
+    la correction en deplace une (`run_reoptimisation.sh:72`), elle n'en
+    retire aucune. La premiere ecriture de la correction, elle, en perdait
+    deux en silence (`run_fold.sh`, dont le `cd "$root"` n'etait pas
+    resoluble) : c'est ce test qui l'a dit.
+    """
+    assert len(_ALL) >= 83, (
+        f"{len(_ALL)} invocations balayees, 83 mesurees a `f8edebf`")
