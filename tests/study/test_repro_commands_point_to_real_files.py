@@ -45,14 +45,51 @@ _PATH = r"((?:study|scripts|figures)/[A-Za-z0-9_./-]+\.(?:py|sh))"
 _INLINE_CMD_RE = re.compile(r"^`" + _PATH + r"(?:\s[^`]*)?`$")
 _FENCED_CMD_RE = re.compile(r"^(?:nohup\s+)?(?:python|bash)\s+" + _PATH + r"\b")
 
-# lignes deliberement historiques : narration d'une campagne passee, pas une
-# commande a rejouer. Identifiees par leur fichier + un fragment stable.
+#  D-160 — la commande citee AU FIL DU TEXTE.
+#
+#  `_INLINE_CMD_RE` exige que la ligne soit ENTIEREMENT un span de code et
+#  que le chemin y vienne en premier. La forme la plus naturelle de citer
+#  une commande en prose — « reproduire : `python study/x.py --dim 16` » —
+#  n'y repond ni par sa position dans la ligne, ni par son prefixe `python`.
+#  Mesure du 18 aout 2026 : **10 commandes de `RESULTS.md`** ecrites ainsi,
+#  invisibles au balayage des chemins. Toutes vivantes — le trou etait reel
+#  et sans consequence, il est ferme pendant qu'il l'est.
+#
+#  Question 4 : `_commands_with_options` (D-140) les voit et verifie leurs
+#  OPTIONS ; le balayage des chemins, non. Deux balayages du meme document,
+#  l'un voit une commande que l'autre ignore.
+#
+#  Ce motif-ci ne peut pas attraper une citation narrative
+#  (« `study/phase0_sanity_check.py:95` ») : il exige le prefixe `python` /
+#  `bash`, qu'aucune citation de ce genre ne porte.
+_INLINE_INVOKE_RE = re.compile(r"`(?:nohup\s+)?(?:python|bash)\s+" + _PATH + r"[^`]*`")
+
+#  D-160 — lignes deliberement historiques : narration d'une campagne
+#  passee, pas une commande a rejouer.
+#
+#  L'ancienne version listait des couples (fichier, jeton) et n'en gardait
+#  que le COMPTE : `allowed = sum(1 for f, _frag in … if f == relpath)`. Le
+#  jeton — `"d71-entry"`, `"trap-sweep"` — n'etait **jamais confronte au
+#  fichier**, et n'y figurait d'ailleurs pas. Le test verifiait donc « pas
+#  plus de deux occurrences », pas « ces deux occurrences-la ». Mesure :
+#  remplacer une mention historique par `python study/v4/t31_….py --dim 16`
+#  laisse le compte a 2 et le fichier **vert** — c'est la forme de D-136
+#  (une chaine presente deux fois, dont une seule suffit).
+#
+#  Chaque exemption porte desormais un fragment qui doit se trouver SUR LA
+#  LIGNE qui cite `study/v4/`, et chaque fragment declare doit encore
+#  correspondre a une ligne — une exemption qui pourrit est pire que pas
+#  d'exemption.
 _HISTORICAL_EXCEPTIONS = {
-    ("docs/RESULTS.md", "trap-sweep"),  # paragraphe "Trap sweep", cite l'etat historique
-    ("docs/RESULTS.md", "d71-entry"),  # la ligne de registre D-71 elle-meme, decrit le defaut
-    ("docs/COUVERTURE.md", "d71-entry"),  # idem, section h1_solver_convergence.py
-    ("scripts/run_fold.sh", "d71-comment"),  # commentaire D-71 : explique la cause, ne l'invoque pas
-    ("scripts/run_leak_free_campaign.sh", "d71-comment"),  # idem
+    #  la ligne de registre D-71 elle-meme : elle DECRIT le deplacement
+    ("docs/RESULTS.md", "| D-71 |"),
+    #  le balayage des sites `run_arm`, narration d'un etat passe
+    ("docs/RESULTS.md", "run_arm"),
+    #  meme entree cote couverture, section h1_solver_convergence.py
+    ("docs/COUVERTURE.md", "D-71"),
+    #  commentaire D-71 : explique la cause, n'invoque rien
+    ("scripts/run_fold.sh", "# D-71"),
+    ("scripts/run_leak_free_campaign.sh", "# D-71"),
 }
 
 
@@ -65,6 +102,10 @@ def _paths_referenced(text):
         if line.startswith("```"):
             in_fence = not in_fence
             continue
+        #  D-160 : une commande citee au fil du texte, ou qu'elle soit
+        #  dans la ligne. Le prefixe `python`/`bash` la distingue d'une
+        #  citation narrative.
+        found.update(m.group(1) for m in _INLINE_INVOKE_RE.finditer(raw))
         m = _INLINE_CMD_RE.match(line)
         if m:
             found.add(m.group(1))
@@ -346,15 +387,31 @@ def test_every_repro_command_uses_options_its_script_declares(
 ])
 def test_no_dead_v4_prefix_outside_documented_history(relpath):
     """`study/v4/` n'existe plus : toute occurrence vivante est une commande
-    cassee. Les exceptions historiques sont nommees, pas devinees."""
+    cassee. Les exceptions historiques sont **identifiees**, pas comptees.
+
+    D-160 : compter les occurrences autorise n'importe laquelle. Chaque
+    ligne qui cite `study/v4/` doit porter le fragment d'une exemption
+    declaree pour ce fichier."""
     path = os.path.join(_REPO_ROOT, relpath)
     with open(path, encoding="utf-8") as f:
         lines = f.readlines()
-    allowed = sum(1 for fname, _frag in _HISTORICAL_EXCEPTIONS if fname == relpath)
+    fragments = [frag for fname, frag in _HISTORICAL_EXCEPTIONS
+                 if fname == relpath]
     hits = [ln for ln in lines if "study/v4/" in ln]
-    assert len(hits) <= allowed, (
-        f"{relpath} porte {len(hits)} occurrence(s) de 'study/v4/' non "
-        f"documentee(s) comme historique (autorise : {allowed}) : {hits}")
+    non_documentees = [ln.strip()[:120] for ln in hits
+                       if not any(frag in ln for frag in fragments)]
+    assert not non_documentees, (
+        f"{relpath} cite 'study/v4/' — qui n'existe plus — sur une ligne "
+        f"qu'aucune exemption ne designe : {non_documentees}. Si c'est de "
+        "la narration historique, l'ajouter a `_HISTORICAL_EXCEPTIONS` avec "
+        "un fragment de CETTE ligne ; sinon, c'est une commande morte")
+    #  Une exemption qui ne correspond plus a rien pourrit : elle
+    #  autoriserait demain une ligne qu'elle n'a jamais decrite.
+    orphelines = [frag for frag in fragments
+                  if not any(frag in ln for ln in hits)]
+    assert not orphelines, (
+        f"{relpath} : exemption(s) qui ne designent plus aucune ligne "
+        f"'study/v4/' — les retirer : {orphelines}")
 
 
 def test_un_bloc_cloture_n_est_pas_un_span_de_code_inline():
@@ -413,3 +470,58 @@ def test_le_commentaire_de_fin_de_ligne_n_est_pas_une_option():
            "```\n")
     vues = dict(_commands_with_options(doc))
     assert vues == {"study/h3_representation/h3_size_scan.py": frozenset({"--dims"})}, vues
+
+
+def test_une_commande_citee_en_prose_est_vue_et_une_citation_narrative_ne_l_est_pas():
+    """Epingle D-160, les deux sens.
+
+    Sur quelle entree l'ancien motif echouait-il ? Sur la forme la plus
+    naturelle de citer une commande — au milieu d'une phrase, prefixee de
+    `python`. Et il ne doit toujours PAS attraper une citation narrative,
+    sans quoi on fabrique un faux rouge."""
+    doc = ("reproduire : `python study/h3_representation/h3_size_scan.py --dims 2`\n"
+           "le defaut vit dans `study/pipeline/dns_validation.py:95`, ligne 95\n"
+           "`study/common/metrics.py --json`\n")
+    vus = _paths_referenced(doc)
+    assert "study/h3_representation/h3_size_scan.py" in vus, (
+        "une commande citee au fil du texte doit etre vue : c'est D-160")
+    assert "study/common/metrics.py" in vus, (
+        "la forme historique — span seul sur sa ligne, chemin en tete — "
+        "doit continuer d'etre vue")
+    assert "study/pipeline/dns_validation.py" not in vus, (
+        "une citation narrative avec un numero de ligne n'est pas une "
+        "commande : l'attraper fabriquerait un faux rouge")
+
+    #  L'ancien motif, rejoue : il ne voyait pas la premiere.
+    ancien = [m.group(1) for ligne in doc.splitlines()
+              for m in [_INLINE_CMD_RE.match(ligne.strip())] if m]
+    assert "study/h3_representation/h3_size_scan.py" not in ancien, (
+        "l'ancien motif voyait deja la commande en prose : D-160 n'aurait "
+        "alors jamais existe — verifier ce test avant de le croire")
+
+
+def test_l_exemption_historique_designe_une_ligne_et_non_un_compte(tmp_path):
+    """Epingle D-160 : compter les lignes autorise n'importe laquelle.
+
+    Champ qui SEPARE : deux documents portant le MEME nombre d'occurrences
+    du prefixe mort, l'un narratif, l'autre une commande a rejouer. Un
+    critere par compte les declare identiques."""
+    fragments = ["| D-71 |"]
+    narratif = ["| D-71 | la reorganisation a deplace study/v4/tNN_xxx.py\n"]
+    commande = ["reproduire : `python study/v4/t31_axis.py --dim 16`\n"]
+
+    def non_documentees(lignes):
+        hits = [ln for ln in lignes if "study/v4/" in ln]
+        return [ln for ln in hits
+                if not any(f in ln for f in fragments)]
+
+    assert non_documentees(narratif) == []
+    assert non_documentees(commande), (
+        "une commande vivante citant le prefixe mort doit etre signalee, "
+        "meme quand le NOMBRE d'occurrences n'a pas bouge — c'est la forme "
+        "de D-136, une chaine presente deux fois dont une seule suffit")
+    #  le critere par compte, rejoue : il ne separe pas
+    assert len([ln for ln in narratif if "study/v4/" in ln]) \
+        == len([ln for ln in commande if "study/v4/" in ln]), (
+        "les deux documents doivent porter le meme compte, sinon ce test "
+        "ne montre pas ce qu'il annonce")
