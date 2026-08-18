@@ -3024,7 +3024,7 @@ que se passe-t-il si une entrée est fausse) :
 
 | inventaire | verdict |
 |---|---|
-| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | **déjà fermé par D-160**, avant l'ouverture formelle de cette file — vérifié à nouveau ici : `non_documentees`/`orphelines` confrontent maintenant chaque fragment déclaré aux lignes réelles `study/v4/`, dans les deux sens. Rien à rouvrir |
+| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | **déjà fermé par D-160**, avant l'ouverture formelle de cette file — vérifié à nouveau ici : `non_documentees`/`orphelines` confrontent maintenant chaque fragment déclaré aux lignes réelles du prefixe mort, dans les deux sens. Rien à rouvrir |
 | `ACCUMULATORS` de `test_empty_sweep_never_silent.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
 | `PSI_STILL_ZERO` / `PSI_WIRED` de `test_psi_coverage_inventory.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
 | `COVERED` de `test_src_coverage_inventory.py` | **D-164** — un homonyme d'attribut suffisait, sans import réel. `EXCLUDED`/`ENTRY_POINTS` non repris ici (D-162, en cours ailleurs) |
