@@ -194,24 +194,82 @@ def test_every_entry_point_guards_its_main(rel):
 #  3. Chaque module couvert est réellement visé par un test
 # ═══════════════════════════════════════════════════════════════════════
 
-def _test_corpus():
-    text = ""
+#  D-159 — pourquoi ce n'est plus une recherche de chaine dans le texte.
+#
+#  `_test_corpus` concatenait le TEXTE de tous les fichiers de `tests/` — y
+#  compris CELUI-CI. Les deux tests ci-dessous cherchaient un nom dans ce
+#  texte ; or c'est ici que les noms sont declares : `"Simulation/grid.py"`
+#  dans `COVERED`, `"project_divergence_free"` dans `critical`. Chaque
+#  recherche trouvait donc sa propre declaration, et **les deux tests
+#  etaient incapables d'echouer**.
+#
+#  Mesure du 18 aout 2026 : un module neuf `src/Simulation/zzz_untested.py`,
+#  ajoute a `COVERED` ET a `critical` avec une fonction qu'aucun test ne
+#  nomme nulle part — **102 passed**. Le fichier dont la docstring dit
+#  « echoue quand un nouveau module apparait sans entree » acceptait une
+#  entree qui ne couvrait rien.
+#
+#  Deux corrections, et la seconde est la vraie : ce fichier sort du
+#  corpus, et le corpus n'est plus du texte mais des IDENTIFIANTS lus dans
+#  l'AST des autres tests. Un nom cite dans un commentaire ou dans une
+#  phrase de docstring ne compte plus — « l'assertion porte sur le
+#  comportement, pas sur le texte du source », retournee contre la suite.
+#  Les litteraux de chaine qui sont des identifiants valides comptent, eux :
+#  `getattr(mod, "compute_coefficients")` et `monkeypatch.setattr(m, "score", …)`
+#  sont des references reelles. Verifie apres coup : les 19 modules de
+#  `COVERED` et les 49 fonctions critiques restent tous vus (4531
+#  identifiants collectes), donc aucun faux rouge.
+
+_IDENTIFIANTS = None
+
+
+def _identifiants_du_corpus():
+    """Identifiants reellement employes par les AUTRES fichiers de `tests/`."""
+    global _IDENTIFIANTS
+    if _IDENTIFIANTS is not None:
+        return _IDENTIFIANTS
+    moi = os.path.abspath(__file__)
+    vus = set()
     for dirpath, _dirs, names in os.walk(os.path.join(_REPO_ROOT, "tests")):
         if "__pycache__" in dirpath:
             continue
         for n in names:
-            if n.endswith(".py"):
-                text += open(os.path.join(dirpath, n), encoding="utf-8").read()
-    return text
+            if not n.endswith(".py"):
+                continue
+            chemin = os.path.join(dirpath, n)
+            if os.path.abspath(chemin) == moi:
+                continue          # l'inventaire ne se compte pas lui-meme
+            try:
+                arbre = ast.parse(open(chemin, encoding="utf-8").read())
+            except SyntaxError:
+                continue
+            for x in ast.walk(arbre):
+                if isinstance(x, ast.Name):
+                    vus.add(x.id)
+                elif isinstance(x, ast.Attribute):
+                    vus.add(x.attr)
+                elif isinstance(x, ast.ImportFrom) and x.module:
+                    vus.update(x.module.split("."))
+                    vus.update(a.name for a in x.names)
+                elif isinstance(x, ast.Import):
+                    for a in x.names:
+                        vus.update(a.name.split("."))
+                elif (isinstance(x, ast.Constant) and isinstance(x.value, str)
+                      and x.value.isidentifier()):
+                    vus.add(x.value)
+    _IDENTIFIANTS = vus
+    return vus
 
 
 @pytest.mark.parametrize("rel", sorted(COVERED))
 def test_each_covered_module_is_named_by_the_test_suite(rel):
     """« Couvert » doit vouloir dire qu'un test le nomme vraiment."""
-    corpus = _test_corpus()
     stem = os.path.basename(rel)[:-3]
-    assert re.search(rf"\b{re.escape(stem)}\b", corpus), (
-        f"{rel} est declare couvert mais aucun test ne le mentionne")
+    assert stem in _identifiants_du_corpus(), (
+        f"{rel} est declare couvert mais aucun test ne l'emploie — le nom "
+        "n'apparaît dans aucun identifiant, import ni chaine-identifiant de "
+        "`tests/` (ce fichier exclu). Une mention en commentaire ne compte "
+        "pas : voir D-159")
 
 
 def test_the_public_surface_of_the_physics_path_is_exercised():
@@ -220,7 +278,7 @@ def test_the_public_surface_of_the_physics_path_is_exercised():
     On se limite au chemin qui produit des nombres publies — pas aux
     pilotes ni aux traces.
     """
-    corpus = _test_corpus()
+    vus = _identifiants_du_corpus()
     critical = {
         "Simulation/grid.py": ["project_divergence_free", "_compute_q_criterion",
                                "grad", "div", "laplacian", "smooth_field",
@@ -253,9 +311,10 @@ def test_the_public_surface_of_the_physics_path_is_exercised():
     missing = []
     for mod, names in critical.items():
         for name in names:
-            if not re.search(rf"\b{re.escape(name)}\b", corpus):
+            if name not in vus:
                 missing.append(f"{mod}::{name}")
-    assert not missing, f"jamais nommees dans les tests : {missing}"
+    assert not missing, (
+        f"jamais employees par un test (ce fichier exclu) : {missing}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -303,3 +362,64 @@ def test_no_module_defines_the_same_constant_twice(rel):
     names = re.findall(r"^\s*([A-Z][A-Z0-9_]{3,})\s*=", src, flags=re.M)
     dupes = {n for n in names if names.count(n) > 1}
     assert not dupes, f"{rel} : constantes redefinies {sorted(dupes)}"
+
+
+def test_le_corpus_ne_compte_ni_lui_meme_ni_les_commentaires(tmp_path):
+    """Epingle D-159 : sur quelle entree l'ancien critere echouait-il ?
+
+    Sur aucune — c'est le defaut. L'ancien cherchait une chaine dans le
+    TEXTE de tous les fichiers de `tests/`, ce fichier compris, ou les noms
+    sont declares. Ce test verifie les deux moities du remede : le fichier
+    s'exclut, et un nom cite en prose ne compte pas."""
+    corpus = _identifiants_du_corpus()
+
+    #  1. Ce fichier ne se compte pas. `zzz_temoin_d159` n'apparaît QUE
+    #     dans la ligne ci-dessous, dans ce fichier : il ne doit pas etre vu.
+    temoin = "zzz_temoin_d159"
+    assert temoin not in corpus, (
+        "ce fichier est de nouveau dans son propre corpus : tout nom qu'il "
+        "declare se validerait lui-meme, et les deux tests ci-dessus "
+        "redeviendraient incapables d'echouer (D-159)")
+
+    #  2. Un nom cite en commentaire ou en prose de docstring ne compte pas ;
+    #     un nom employe comme identifiant, ou passe a getattr, compte.
+    src = (
+        '"""Un module qui parle de prose_seulement sans jamais l\'employer."""\n'
+        "# et un commentaire qui cite commentaire_seulement\n"
+        "from Simulation.grid import curl_z\n"
+        "def test_x(monkeypatch):\n"
+        "    monkeypatch.setattr(mod, 'chaine_identifiant', None)\n"
+        "    return curl_z(1) + objet.attribut_employe\n"
+    )
+    arbre = ast.parse(src)
+    vus = set()
+    for x in ast.walk(arbre):
+        if isinstance(x, ast.Name):
+            vus.add(x.id)
+        elif isinstance(x, ast.Attribute):
+            vus.add(x.attr)
+        elif isinstance(x, ast.ImportFrom) and x.module:
+            vus.update(x.module.split("."))
+            vus.update(a.name for a in x.names)
+        elif (isinstance(x, ast.Constant) and isinstance(x.value, str)
+              and x.value.isidentifier()):
+            vus.add(x.value)
+    assert {"curl_z", "grid", "Simulation", "attribut_employe",
+            "chaine_identifiant"} <= vus
+    assert "commentaire_seulement" not in vus, (
+        "un nom cite en commentaire ne prouve aucune couverture")
+    assert "prose_seulement" not in vus, (
+        "un nom cite dans une phrase de docstring ne prouve aucune "
+        "couverture — la docstring n'est pas un identifiant valide, donc "
+        "elle ne doit pas entrer")
+
+
+def test_le_corpus_dexamen_nest_pas_vide():
+    """Un balayage vide doit crier — y compris celui-ci.
+
+    Mesure du 18 aout 2026 : 4531 identifiants collectes hors ce fichier."""
+    corpus = _identifiants_du_corpus()
+    assert len(corpus) >= 3000, (
+        f"{len(corpus)} identifiants collectes dans tests/ — mesure du "
+        "18 aout : 4531. Le corpus s'est vide, et les deux tests de "
+        "couverture ne prouveraient plus rien")
