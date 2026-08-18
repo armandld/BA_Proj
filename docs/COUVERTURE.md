@@ -2950,6 +2950,24 @@ sont un résultat : ils évitent de les relire.
 | `test_empty_sweep_guard_shapes.py` | **sain**, trois questions passées, tout mesuré. Périmètre : le détecteur appliqué à `src/` rend **0**, à `scripts/` **0**, à `figures/` les **3** sites déjà rapportés le 18 août au matin. Forme : **0** module de `study/` porte un bloc `__main__` sans fonction `main()` ; les **4** sorties exemptées par la règle `{args, os, sys}` sont toutes de vrais drapeaux CLI (`args.list`, `args.trace_only`, `args.dry_run`, `args.validate_only`) ; et faire cesser `raise SystemExit(0)` d'exempter ne rend **0 site nouveau** — le seul du dépôt (`h4_physics_robustness:291`) clôt la branche `--recompute` après avoir écrit son artefact |
 | `lint/test_scripts_point_somewhere.py` | **sain**, trou réel et sans conséquence vivante. Son motif ne suit que `$ROOT_DIR`/`$REPO`/`$REPO_ROOT` : **25** chemins vus sur les **29** réellement construits — `$ROOT/` (`run_leak_free_campaign.sh`), `$SCRIPT_DIR/`, `$TRAIN_RESULTS_DIR/`, `$RESULTS_DIR/` lui échappent, et les 2 `.sh` de la racine (`run_tests.sh`, `setup_env.sh`) sont hors périmètre. Les 29 résolus un à un contre la racine, commentaires exclus et interpolations écartées : **0 chemin mort** |
 
+### Et un sixième, trouvé en ouvrant la file suivante — D-160
+
+La première question posée aux inventaires (« qui le remplit, qui le
+vide ? ») a immédiatement rouvert
+`test_repro_commands_point_to_real_files.py` : son `_HISTORICAL_EXCEPTIONS`
+listait des couples (fichier, jeton) dont **seul le compte servait**. Le
+jeton n'était jamais confronté au fichier — et n'y figurait pas. En
+mesurant, un second trou est apparu dans le même fichier : la commande
+citée **au fil du texte** (« reproduire : ``…`` ») n'était vue par aucun
+garde d'existence, **16 → 23** chemins une fois le motif corrigé. Les deux
+composent : une mention narrative remplacée par une commande morte écrite
+en prose restait verte sur les trois gardes. Détail et mesures : `RESULTS.md`,
+entrée D-160.
+
+**Le garde corrigé a mordu sur sa propre ligne de registre** dès la
+première exécution — la ligne de réservation de D-160 citait un chemin
+d'exemple qui n'existe pas. C'est la meilleure preuve qu'il peut échouer.
+
 ### Ce que le rapport seul ajoute — D-158
 
 Construire, pour D-157, une invocation que chaque module **accepte** a
