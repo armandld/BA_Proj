@@ -580,6 +580,20 @@ def main():
                     all_meta[(sc, re, dim)] = meta
                 print()
 
+    if not all_meta:
+        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 4 — celle
+        # que `BRIEF_REPRISE.md` §11 demande de RELANCER pour lever les
+        # seuils perimes. Mesure : `--scenario no_such_scenario --N 64`
+        # sortait avec le code 0 apres avoir imprime « Phase 4 complete. »,
+        # sans ecrire d'artefact. Une relance qui ne mesure rien et laisse
+        # en place les artefacts perimes se lit alors comme une relance
+        # reussie — exactement ce que la famille interdit.
+        raise RuntimeError(
+            "balayage vide : aucun (scenario, Re, dim) n'a produit de "
+            "resultat — entrees manquantes, ou toutes les dimensions "
+            "au-dessus du plafond de 20 qubits. Le script sortait ici avec "
+            "le code 0 et sans artefact (D-148).")
+
     # cross-Re summary
     if all_meta:
         print("=" * 60)

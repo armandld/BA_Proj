@@ -304,6 +304,7 @@ def main():
             "avec le code 0 et sans artefact (D-75).")
 
     # filter by requested scenario/Re
+    analysed = 0
     for dns_path in dns_files:
         data = np.load(dns_path, allow_pickle=True)
         sc = str(data.get("meta_scenario", ""))
@@ -314,7 +315,21 @@ def main():
         print(f"Analyzing: {os.path.basename(dns_path)}")
         results_by_dim, meta = analyze_dns_file(dns_path, args.dim)
         save_patches(results_by_dim, meta)
+        analysed += 1
         print()
+
+    if not analysed:
+        # D-148 : la garde de D-75 ci-dessus couvre « aucun dns_*.npz du
+        # tout » ; elle ne couvre PAS « aucun dns_*.npz ne correspond a la
+        # demande », qui est le cas courant (un `--scenario` mal orthographie
+        # suffit). Mesure : `--scenario no_such_scenario --N 64` sortait avec
+        # le code 0 apres avoir imprime « Phase 2 complete. », sans ecrire
+        # d'artefact — donc en laissant en place ceux de la campagne
+        # precedente, et sans se distinguer d'une campagne reussie.
+        raise RuntimeError(
+            f"balayage vide : {len(dns_files)} fichier(s) dns_*.npz present(s), "
+            f"aucun ne correspond a scenario={args.scenario} re={args.re}. "
+            "Le script sortait ici avec le code 0 et sans artefact (D-148).")
 
     print("Phase 2 complete.")
 

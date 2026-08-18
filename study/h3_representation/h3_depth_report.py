@@ -166,6 +166,16 @@ def main():
                           f"{row['depth']:>6} {row['two_q_gates']:>5} "
                           f"{row['total_gates']:>7}")
 
+    if not rows:
+        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 8. Mesure :
+        # `--scenario no_such_scenario --N 64` imprimait l'EN-TETE de la
+        # table, aucune ligne, puis « Phase 8 complete. » et sortait avec le
+        # code 0 sans ecrire de CSV. Une table vide se lit comme un resultat.
+        raise RuntimeError(
+            "balayage vide : aucune ligne de rapport de profondeur produite "
+            "pour les arguments donnes. Le script sortait ici avec le code 0 "
+            "et sans CSV (D-148).")
+
     # write csv
     if rows:
         out = args.out_csv or os.path.join(

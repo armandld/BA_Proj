@@ -82,6 +82,90 @@ def test_the_guard_actually_bites_on_a_real_module():
     assert "balayage vide" in (r.stderr + r.stdout)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  D-148 — le meme garde, par le COMPORTEMENT
+# ══════════════════════════════════════════════════════════════════
+#
+# Le detecteur AST ci-dessus cherche UNE forme (`if not <nom>: ... return`)
+# avec une liste de noms tenue a la main. Balayage generalise a tout nom et
+# a toute forme : 30 sites de `study/` repondent, AUCUN n'est dans
+# `ACCUMULATORS` — le detecteur en voyait zero. Et six modules sortaient
+# reellement avec le code 0 sans rien ecrire, dont les phases 2, 3, 4, 5, 7
+# et 8 du pipeline, alors que l'en-tete de ce fichier annonce « ceci ferme
+# la famille ».
+#
+# La lecon est celle de D-56 elle-meme, d'un cran plus haut : D-56 avait
+# trouve trois modules par l'AST que la recherche de la chaine « no input. »
+# aurait manques, parce que leur MESSAGE differait. Ici c'est la FORME qui
+# differe — `if <accumulateur>:` autour du resume, puis on tombe en bas de
+# `main()`. Aucune recherche de forme ne ferme une famille ; seul le
+# comportement le fait.
+#
+# Ce test ne cherche donc aucune forme : il execute chaque module sur une
+# demande qui ne correspond a rien et exige un code de sortie non nul.
+# ~2 min pour 61 modules.
+
+#: Modules exemptes, avec leur raison. Une exemption sans raison ecrite se
+#: fait etendre par erreur.
+_EXEMPTIONS = {
+    "study/pipeline/dns_validation.py": (
+        "GELE — ses artefacts sont publies, et une correction y a deja ete "
+        "annulee. Mesure D-148 : il sort bien avec le code 0 sur "
+        "`--scenario no_such_scenario`, MAIS il ECRIT "
+        "`results/dns_validation_N64.npz` — sa sortie n'est donc pas "
+        "indiscernable d'une campagne reussie faute d'artefact, elle EST "
+        "une campagne qui a produit quelque chose. Non corrige, "
+        "volontairement."),
+}
+
+
+def _modules_lancables():
+    out = []
+    for p in STUDY_FILES:
+        src = open(p, encoding="utf-8").read()
+        if "__main__" in src and "argparse" in src:
+            out.append(p)
+    return out
+
+
+_LANCABLES = _modules_lancables()
+
+
+def test_le_balayage_comportemental_nest_pas_vide():
+    """Un balayage vide doit crier — y compris celui-ci."""
+    assert len(_LANCABLES) > 50, (
+        f"{len(_LANCABLES)} modules lancables collectes : le balayage de "
+        "D-148 est vide ou tronque, et les tests ci-dessous ne prouveraient "
+        "rien")
+
+
+def test_chaque_exemption_de_D148_porte_sa_raison_et_existe_encore():
+    for rel, raison in _EXEMPTIONS.items():
+        assert os.path.exists(os.path.join(_REPO_ROOT, rel)), (
+            f"{rel} est exempte mais n'existe plus : retirer l'exemption")
+        assert len(raison) > 80, f"{rel} : exemption sans raison ecrite"
+
+
+@pytest.mark.parametrize(
+    "path", _LANCABLES,
+    ids=[os.path.relpath(p, _REPO_ROOT) for p in _LANCABLES])
+def test_aucun_module_de_study_ne_sort_zero_sur_un_balayage_vide(path):
+    """`--scenario no_such_scenario` ne correspond a rien : un module qui
+    rend 0 la-dessus est indiscernable d'une campagne reussie."""
+    rel = os.path.relpath(path, _REPO_ROOT)
+    if rel in _EXEMPTIONS:
+        pytest.skip(_EXEMPTIONS[rel])
+    r = subprocess.run(
+        [sys.executable, path, "--scenario", "no_such_scenario", "--N", "64"],
+        capture_output=True, text=True, cwd=_REPO_ROOT, timeout=300)
+    assert r.returncode != 0, (
+        f"{rel} sort avec le code 0 sur un balayage qui ne correspond a "
+        f"rien, sans ecrire d'artefact : il laisse en place ceux de la "
+        f"campagne precedente et ne se distingue pas d'une campagne "
+        f"reussie. Dernieres lignes :\n"
+        + "\n".join((r.stdout + r.stderr).strip().split("\n")[-5:]))
+
+
 def test_the_detector_itself_can_fail():
     """Un balayage vide doit crier — y compris celui-ci. Si `_silent_empty_sweeps`
     ne detectait plus rien, les tests ci-dessus passeraient sans mesurer quoi

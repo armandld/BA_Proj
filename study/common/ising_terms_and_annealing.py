@@ -573,6 +573,15 @@ def main():
                 }
                 print()
 
+    if not summary:
+        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 7. Mesure :
+        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
+        # avoir imprime « Phase 7 complete. », sans artefact ni resume.
+        raise RuntimeError(
+            "balayage vide : aucun (scenario, Re, dim) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec "
+            "le code 0 et sans resume (D-148).")
+
     if summary:
         print("=" * 70)
         print("PHASE 7 SUMMARY (SA on the same Hamiltonian)")
