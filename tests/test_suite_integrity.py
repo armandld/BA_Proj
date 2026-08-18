@@ -227,3 +227,299 @@ def test_chaque_exemption_porte_sa_raison_et_existe_encore():
         fichier = cle.split("::")[0]
         assert os.path.exists(os.path.join(_REPO_ROOT, fichier)), (
             f"{fichier} n'existe plus — retirer son exemption")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-154 — le meme controle, sur les 349 imports internes qu'il ignorait
+# ══════════════════════════════════════════════════════════════════════
+#
+#  `test_every_cross_test_import_resolves` ci-dessus existe parce qu'un
+#  fichier deplace ne se voit qu'a l'EXECUTION. Il ne regardait pourtant que
+#  les imports dont le module commence par `tests.` : **3 sites sur 480**
+#  qui designent un module du depot (1347 sites d'import en tout).
+#
+#  Les 477 autres nomment `src/`, `study/` et `figures/` par leur nom de
+#  module (`Simulation`, `VQA`, `pipeline`, `train_hyperparams`, `config`,
+#  `fig_utils`...), et **381 sites sont ecrits dans le corps d'une fonction
+#  ou d'une fixture** — exactement la position qui rend l'echec invisible a
+#  `--collect-only`.
+#
+#  Mesure du 18 aout 2026, avant correction. Trois modules de `src/`
+#  renommes (`analyze_hyperparams`, `recompute_lambda_scores`,
+#  `compare_rotor_budget`), sur les 7 fichiers qui les emploient :
+#
+#      arbre sain                     62 passed
+#      arbre mute      6 failed, 11 passed, 45 SKIPPED
+#      ce fichier                    158 passed   <- vert
+#
+#  **45 tests disparaissent en silence** : les fixtures concernees passent
+#  par `pytest.importorskip("<module de src/>")`, qui transforme un fichier
+#  absent en `skip`, pas en echec. Un module deplace (meme nom de fichier,
+#  autre dossier) donne la meme chose : 3 failed, 1 passed, 19 skipped, et
+#  ce fichier toujours **158 passed**.
+#
+#  Le correctif ne touche pas ces 14 `importorskip` : leur raison d'etre est
+#  legitime (`analyze_hyperparams` importe `optuna`, absent d'un
+#  environnement minimal). Il rend seulement le GARDE capable de rougir.
+
+import importlib.machinery  # noqa: E402
+
+#: Les racines d'import de la suite. Les dix premieres sont celles que
+#: `tests/conftest.py` pose sur `sys.path` — `test_les_racines_declarees_sont_bien_celles_de_la_suite`
+#: verifie qu'elles y sont encore. `figures/` s'y ajoute : il est pose par
+#: les fichiers de test qui en ont besoin (`test_pareto_panel.py`,
+#: `test_pareto_frontier_retracted_ratio.py`), donc apres l'import de
+#: celui-ci — on ne peut pas le lire dans `sys.path`, il se declare.
+_RACINES_CONFTEST = (
+    os.path.join(_REPO_ROOT, "src"),
+    _REPO_ROOT,
+    os.path.join(_REPO_ROOT, "study", "pipeline"),
+    os.path.join(_REPO_ROOT, "study", "common"),
+    os.path.join(_REPO_ROOT, "study", "h0_selection"),
+    os.path.join(_REPO_ROOT, "study", "h1_solver"),
+    os.path.join(_REPO_ROOT, "study", "h2b_prediction"),
+    os.path.join(_REPO_ROOT, "study", "h3_representation"),
+    os.path.join(_REPO_ROOT, "study", "h4_transfer"),
+    os.path.join(_REPO_ROOT, "study", "closed_loop"),
+)
+#: Les deux racines suivantes sont posees par les fichiers de test qui en
+#: ont besoin : `figures/` (`test_pareto_panel.py:44`) et
+#: `figures/v1_legacy/` (`test_fig0_classical_truncation.py:29` et sept
+#: autres). Une racine oubliee ici ne rend rien silencieux : les modules
+#: qu'elle porte cessent de resoudre et le balayage ci-dessous ROUGIT — son
+#: message dit alors de declarer la racine plutot que de deplacer un
+#: fichier. L'oubli se voit, il ne se tait pas.
+_RACINES = _RACINES_CONFTEST + (
+    os.path.join(_REPO_ROOT, "figures"),
+    os.path.join(_REPO_ROOT, "figures", "v1_legacy"),
+)
+
+
+def _sites_d_import(path):
+    """(nom de module, ligne, sous_fonction) pour tout ce que le fichier
+    importe — `import x`, `from x import y`, et le nom litteral passe a
+    `pytest.importorskip(...)`.
+
+    `importorskip` compte : c'est par lui que 45 tests se sont tus a la
+    mesure ci-dessus. Un import relatif (`from . import x`) est rendu
+    absolu contre le paquet du fichier ; aucun n'existe aujourd'hui dans
+    `tests/`, et le test de plancher le dirait s'il en apparaissait un qui
+    ne resout pas."""
+    arbre = ast.parse(open(path, encoding="utf-8").read())
+    dans_fonction = set()
+    for fn in ast.walk(arbre):
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for x in ast.walk(fn):
+                dans_fonction.add(id(x))
+    out = []
+    for n in ast.walk(arbre):
+        sous = id(n) in dans_fonction
+        if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
+            out.append((n.module, n.lineno, sous))
+        elif isinstance(n, ast.Import):
+            for a in n.names:
+                out.append((a.name, n.lineno, sous))
+        elif (isinstance(n, ast.Call)
+              and getattr(n.func, "attr", "") == "importorskip"
+              and n.args and isinstance(n.args[0], ast.Constant)
+              and isinstance(n.args[0].value, str)):
+            out.append((n.args[0].value, n.lineno, sous))
+    return out
+
+
+def _resout(nom, racines):
+    """Le module existe-t-il sous l'une des racines ?
+
+    Ecrit a la main plutot qu'avec `find_spec` : `find_spec` IMPORTE les
+    paquets parents, et l'import de `Simulation` ou de `pipeline` coute des
+    secondes et peut lever pour une dependance absente — on mesurerait
+    alors l'environnement, pas l'emplacement des fichiers.
+
+    `study/` n'a pas d'`__init__.py` : un dossier nu est un paquet
+    d'espace de noms, et `from study.common import qaoa_inputs` passe par
+    lui. Le refuser rendrait ce test rouge sur un depot sain."""
+    courant = list(racines)
+    morceaux = nom.split(".")
+    for i, part in enumerate(morceaux):
+        dernier = i == len(morceaux) - 1
+        suivant = None
+        for r in courant:
+            dossier = os.path.join(r, part)
+            if os.path.isdir(dossier):
+                suivant = [dossier]
+                break
+            if dernier and os.path.isfile(dossier + ".py"):
+                suivant = []
+                break
+        if suivant is None:
+            return False
+        courant = suivant
+    return True
+
+
+def _est_externe(sommet):
+    """Vrai si le nom vient de la bibliotheque standard ou d'un paquet
+    installe — donc pas du depot. Les racines du depot sont RETIREES du
+    chemin de recherche, sans quoi tout module local passerait pour
+    externe."""
+    if sommet in sys.stdlib_module_names:
+        return True
+    abs_racines = {os.path.abspath(r) for r in _RACINES}
+    dehors = [p for p in sys.path
+              if p and os.path.abspath(p) not in abs_racines]
+    try:
+        return importlib.machinery.PathFinder.find_spec(sommet, dehors) is not None
+    except (ImportError, ValueError, AttributeError):
+        return False
+
+
+def _tous_les_sites():
+    for p in _test_files():
+        for nom, ligne, sous in _sites_d_import(p):
+            yield p, nom, ligne, sous
+
+
+def test_les_racines_declarees_sont_bien_celles_de_la_suite():
+    """Deux chemins censes coincider : les racines ecrites ici et celles que
+    `conftest.py` pose. Si conftest en retire une, ce test le dit — sinon le
+    balayage ci-dessous declarerait « externe » un module devenu
+    introuvable, et redeviendrait incapable de rougir."""
+    sur_le_chemin = {os.path.abspath(p) for p in sys.path}
+    manquantes = [r for r in _RACINES_CONFTEST
+                  if os.path.isdir(r) and os.path.abspath(r) not in sur_le_chemin]
+    assert not manquantes, (
+        "racines declarees ici mais absentes de sys.path a l'execution — "
+        f"conftest.py a change : {manquantes}")
+
+
+def test_tout_import_interne_de_la_suite_resout():
+    """Le controle que D-154 ouvre : un module du depot designe par un test
+    doit exister la ou la suite le cherche.
+
+    Rouge sur un fichier DEPLACE comme sur un fichier RENOMME — les deux
+    laissaient l'ancien controle a 158 passed."""
+    casses = []
+    for p, nom, ligne, sous in _tous_les_sites():
+        sommet = nom.split(".")[0]
+        if _est_externe(sommet):
+            continue
+        if not _resout(nom, _RACINES):
+            ou = "dans une fonction" if sous else "au niveau module"
+            casses.append(f"{os.path.relpath(p, _REPO_ROOT)}:{ligne} ({ou}) : {nom}")
+    assert not casses, (
+        "module(s) introuvable(s) sous les racines de la suite. Si le nom "
+        "existe encore ailleurs dans le depot, le fichier a ete deplace ; "
+        "sinon c'est une dependance absente de l'environnement — dans les "
+        "deux cas les tests concernes se taisent (skip) au lieu "
+        f"d'echouer :\n  " + "\n  ".join(casses))
+
+
+def test_la_partition_local_externe_n_est_pas_degeneree():
+    """`_est_externe` decide qui est controle et qui ne l'est pas : s'il
+    rendait `True` partout, le balayage precedent serait vert quoi qu'il
+    arrive — un balayage vide qui ne crie pas.
+
+    Mesure du 18 aout 2026 : 104 noms distincts, dont **67 locaux**."""
+    vus = {nom.split(".")[0] for _p, nom, _l, _s in _tous_les_sites()}
+    locaux = {s for s in vus if not _est_externe(s)}
+    assert len(locaux) >= 60, (
+        f"{len(locaux)} noms locaux sur {len(vus)} — mesure du 18 aout : "
+        "67 sur 104. La partition s'est degradee, le balayage ne controle "
+        "presque plus rien")
+    #  Deux temoins nommes, un de chaque cote : le jour ou l'un bascule,
+    #  c'est la partition qui est fausse, pas le depot.
+    assert not _est_externe("Simulation"), (
+        "`Simulation` est un paquet de src/, pas une dependance installee")
+    assert _est_externe("numpy") and _est_externe("os"), (
+        "une dependance installee et un module de la bibliotheque standard "
+        "doivent rester hors du controle")
+
+
+def test_le_balayage_couvre_bien_ce_qu_il_annonce():
+    """Epingle l'ancien perimetre : **3 sites sur 480**.
+
+    Si quelqu'un restreint de nouveau le balayage aux modules `tests.`, ce
+    test tombe. Un balayage vide doit crier — y compris celui-ci.
+
+    Mesure du 18 aout 2026 : 153 fichiers, 1347 sites d'import, dont 480
+    designent un module du depot et 381 sont ecrits dans le corps d'une
+    fonction."""
+    sites = [(nom, sous) for _p, nom, _l, sous in _tous_les_sites()]
+    locaux = [(n, s) for n, s in sites if not _est_externe(n.split(".")[0])]
+    dans_fonction = [n for n, s in sites if s]
+    assert len(_test_files()) > 40, f"{len(_test_files())} fichiers balayes"
+    assert len(sites) >= 1200, (
+        f"{len(sites)} sites d'import balayes — mesure du 18 aout : 1347. "
+        "Le parseur a perdu des formes")
+    assert len(locaux) >= 400, (
+        f"seulement {len(locaux)} sites internes controles — mesure du "
+        "18 aout : 480. L'ancien perimetre (3 sites, les seuls `tests.`) "
+        "est de retour")
+    assert len(dans_fonction) >= 300, (
+        f"{len(dans_fonction)} imports dans le corps d'une fonction — "
+        "mesure du 18 aout : 381. C'est la position qui echappe a "
+        "`--collect-only`, et la raison d'etre de ce fichier")
+
+
+def test_le_resolveur_voit_un_fichier_deplace(tmp_path):
+    """Sur quelle entree ce balayage echouerait-il ? Celle-ci.
+
+    Deux arbres identiques a un deplacement pres — le champ qui SEPARE.
+    Sans lui, `_resout` pourrait rendre `True` partout et tout ce qui
+    precede serait vert quoi qu'il arrive."""
+    racine = tmp_path / "r"
+    (racine / "src").mkdir(parents=True)
+    (racine / "src" / "analyze.py").write_text("X = 1\n")
+    (racine / "src" / "paquet").mkdir()
+    (racine / "src" / "paquet" / "__init__.py").write_text("")
+    (racine / "src" / "paquet" / "grille.py").write_text("Y = 2\n")
+    (racine / "espace_de_noms").mkdir()          # sans __init__.py, comme study/
+    (racine / "espace_de_noms" / "m.py").write_text("Z = 3\n")
+    racines = (str(racine / "src"), str(racine))
+
+    assert _resout("analyze", racines)
+    assert _resout("paquet.grille", racines)
+    assert _resout("espace_de_noms.m", racines), (
+        "un dossier sans __init__.py est un paquet d'espace de noms : "
+        "study/ en est un, et le refuser rendrait la suite rouge a tort")
+    assert not _resout("absent", racines)
+    assert not _resout("paquet.absent", racines)
+
+    (racine / "src" / "outils").mkdir()
+    os.rename(str(racine / "src" / "analyze.py"),
+              str(racine / "src" / "outils" / "analyze.py"))
+    assert not _resout("analyze", racines), (
+        "un fichier deplace dans un sous-dossier doit cesser de resoudre — "
+        "c'est le defaut que D-154 ferme")
+
+
+def test_importorskip_est_bien_dans_le_balayage():
+    """`pytest.importorskip("<module du depot>")` est la forme par laquelle
+    45 tests se sont tus. Elle doit etre vue par le balayage, pas seulement
+    les `import`.
+
+    Mesure du 18 aout : 15 sites, dont 14 nomment un module du depot."""
+    src = ('import pytest\n'
+           'mod = pytest.importorskip("analyze_hyperparams")\n'
+           'def f():\n'
+           '    autre = pytest.importorskip("recompute_lambda_scores")\n')
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as fh:
+        fh.write(src)
+        tmp = fh.name
+    try:
+        noms = [n for n, _l, _s in _sites_d_import(tmp)]
+    finally:
+        os.unlink(tmp)
+    assert "analyze_hyperparams" in noms and "recompute_lambda_scores" in noms, (
+        f"les noms passes a importorskip echappent au balayage : {noms}")
+
+    reels = 0
+    for p in _test_files():
+        arbre = ast.parse(open(p, encoding="utf-8").read())
+        reels += sum(1 for n in ast.walk(arbre)
+                     if isinstance(n, ast.Call)
+                     and getattr(n.func, "attr", "") == "importorskip")
+    assert reels >= 14, (
+        f"{reels} appels a importorskip balayes — mesure du 18 aout : 15. "
+        "Un balayage vide doit crier")
