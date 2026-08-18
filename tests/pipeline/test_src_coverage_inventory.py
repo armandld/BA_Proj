@@ -70,16 +70,30 @@ COVERED = {
     "pipeline.py",
     "hyperparams_loader.py",
     "visual.py",
+    #  D-162 : etait declare ENTRY_POINTS alors qu'il ne porte aucun bloc
+    #  `__main__` — c'est un module d'UNE fonction, importee par
+    #  `Simulation/refinement.py` (le chemin de decision deploye),
+    #  `compare_rotor_budget.py` et deux figures. Cinq fichiers de
+    #  `tests/quantum/` l'importent et l'appellent : sa place est ici.
+    "call_vqa_shell.py",
 }
 
 #  Scripts lancés en ligne de commande : on teste qu'ils s'importent et
 #  que leur interface d'arguments tient.
+#
+#  D-162 — cette categorie n'est PAS une trappe de sortie. Elle dispense de
+#  l'import propre et, avant cette correction, du controle « nomme par la
+#  suite » : deux vrais controles, en echange desquels elle n'exigeait
+#  rien. Mesure du 18 aout 2026 : **19 des 19 modules de `COVERED`**
+#  passaient tels quels son unique controle — n'importe lequel pouvait y
+#  etre deplace sans qu'un test ne bouge. Desormais un module declare ici
+#  doit PORTER le bloc `__main__` dont le controle porte le nom, et reste
+#  soumis au « nomme par la suite ».
 ENTRY_POINTS = {
     "train_hyperparams.py",
     "compare_rotor_budget.py",
     "analyze_hyperparams.py",
     "recompute_lambda_scores.py",
-    "call_vqa_shell.py",
 }
 
 #  Exclus, avec la raison. Toute entrée ici doit être justifiable.
@@ -165,11 +179,29 @@ def test_every_entry_point_parses(rel):
     ast.parse(src, filename=rel)
 
 
+def _porte_un_bloc_main(src):
+    """Vrai si le module porte un `if __name__ == '__main__':` au niveau
+    module. Interroge l'AST, pas le texte : une chaîne `"__main__"` dans un
+    commentaire ou un message ne compte pas."""
+    for n in ast.parse(src).body:
+        if isinstance(n, ast.If) and "__main__" in ast.unparse(n.test):
+            return True
+    return False
+
+
 @pytest.mark.parametrize("rel", sorted(ENTRY_POINTS))
 def test_every_entry_point_guards_its_main(rel):
     """Un script sans `if __name__ == '__main__'` s'execute a l'import.
 
     Importer un module d'entrainement lancerait alors une campagne entiere.
+
+    D-162 : ce test ne verifiait QUE l'absence de travail au niveau module.
+    Il ne verifiait pas la presence du bloc `__main__` dont il porte le nom
+    et que sa docstring annonce — or un module qui n'en a aucun le passe
+    trivialement. Mesure du 18 aout 2026 : `call_vqa_shell.py` etait declare
+    ENTRY_POINTS, ne porte aucun bloc `__main__`, et ce test etait vert
+    dessus. C'est la question 2 — ce que la fonction PROMET, verifie point
+    par point.
     """
     #  Configuration inoffensive tolérée a l'import : choix du backend
     #  graphique, niveau de journalisation, tampon de sortie.
@@ -188,6 +220,12 @@ def test_every_entry_point_guards_its_main(rel):
     assert not offenders, (
         f"{rel} execute du travail au niveau module — l'importer suffirait "
         f"a le declencher : {offenders}")
+    assert _porte_un_bloc_main(src), (
+        f"{rel} est declare ENTRY_POINTS mais ne porte aucun bloc "
+        "`if __name__ == '__main__':` — ce n'est pas un point d'entree. "
+        "Cette categorie dispense de l'import propre : un module de "
+        "bibliotheque range ici perd son controle sans rien gagner. Le "
+        "deplacer vers `COVERED` (D-162).")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -324,7 +362,23 @@ def _stems_importes(arbre):
 def test_each_covered_module_is_named_by_the_test_suite(rel):
     """« Couvert » doit vouloir dire qu'un test l'IMPORTE vraiment — pas
     qu'un attribut homonyme, sans rapport, traine ailleurs dans `tests/`
-    (D-164)."""
+    (D-164).
+
+    D-162 — pourquoi `ENTRY_POINTS` n'entre PAS dans ce controle, et c'est
+    une decision mesuree, pas un oubli. La categorie dispense de l'import
+    propre et de ce controle-ci : elle etait donc une trappe, et l'y
+    soumettre semblait la fermer. Mesure faite avant d'ecrire la
+    correction : sous le critere de D-164 (un import REEL, pas un
+    homonyme), **3 des 4 pilotes ne sont pas importes** par `tests/` —
+    `compare_rotor_budget`, `analyze_hyperparams`,
+    `recompute_lambda_scores`. C'est exactement ce que la docstring de
+    `test_every_entry_point_parses` annonce : « les pilotes sont lourds a
+    importer ». Les y soumettre fabriquerait **3 faux rouges** sur du code
+    sain. La trappe est fermee autrement, et sans faux positif : par
+    l'assertion de `test_every_entry_point_guards_its_main`, qui exige
+    desormais le bloc `__main__` — on ne peut plus garer un module de
+    bibliotheque ici.
+    """
     stem = os.path.basename(rel)[:-3]
     assert stem in _modules_importes_du_corpus(), (
         f"{rel} est declare couvert mais aucun test ne l'IMPORTE — le nom "
@@ -332,6 +386,31 @@ def test_each_covered_module_is_named_by_the_test_suite(rel):
         "fichier exclu). Un attribut homonyme sans rapport (ex. "
         "`study.optimize(...)` d'Optuna pour `VQA/optimize.py`) ne compte "
         "pas : voir D-164")
+
+
+def test_le_controle_du_bloc_main_peut_echouer():
+    """Epingle D-162 : sur quelle entree l'ancien controle echouait-il ?
+
+    Sur aucune. Il ne cherchait que du travail au niveau module ; un module
+    sans aucun bloc `__main__` — donc pas un point d'entree du tout — le
+    passait. Le champ qui SEPARE : un module d'une seule fonction, ce
+    qu'etait exactement `call_vqa_shell.py`.
+    """
+    ancien = "import os\n\n\ndef f():\n    return 1\n"
+    assert not _porte_un_bloc_main(ancien), (
+        "un module sans bloc `__main__` est declare comme en portant un : "
+        "le controle de D-162 ne mesure plus rien")
+    assert _porte_un_bloc_main(ancien + "\n\nif __name__ == '__main__':\n    f()\n")
+    #  Une chaîne "__main__" hors d'un `if` de niveau module ne compte pas :
+    #  sinon un simple message d'aide suffirait a satisfaire le controle.
+    assert not _porte_un_bloc_main('MSG = "lance-moi avec __main__"\n')
+
+    #  Et le module reellement en cause : il ne porte toujours pas de bloc
+    #  `__main__`, c'est pourquoi il a quitte ENTRY_POINTS.
+    src = open(os.path.join(_SRC, "call_vqa_shell.py"), encoding="utf-8").read()
+    assert not _porte_un_bloc_main(src), (
+        "call_vqa_shell.py porte desormais un bloc `__main__` : il peut "
+        "revenir dans ENTRY_POINTS, et cet epinglage doit etre remesure")
 
 
 def test_the_public_surface_of_the_physics_path_is_exercised():
