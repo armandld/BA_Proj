@@ -6362,6 +6362,50 @@ fois certifiée et non dégénérée. À `dim = 2`, la question n'a pas de sens.
 
 À enregistrer avant de lancer, pas après.
 
+## D-172 — le module lui-même citait encore la valeur rétractée
+
+**Où ça bloquait.** `study/common/rho_gap_f1.py` — le script qui calcule
+ce critère pré-enregistré — portait dans son propre docstring et dans la
+bannière imprimée par `main()` : *« MESURE DE REFERENCE, avant campagne,
+sur `h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz` :
+rho = +0.970, p = 0.0001, 8 solveurs »*. C'est précisément le nombre que
+ce même fichier retracte deux paragraphes plus haut (*« ρ vaut +0,870, pas
++0,970. Mon calcul manuel excluait `qaoa_shots_p3` »*) — la correction
+avait atteint la prose de `RESULTS.md`, jamais le module qui sert de
+critère à la campagne.
+
+**Comment on est tombé dessus.** Question 4 de `VIGIL.md` : deux endroits
+qui devraient porter le même nombre le portent-ils encore ? Ici, un
+troisième — le module lui-même — ne rejouait pas sa propre mesure.
+
+**Mesuré, avant.**
+
+```
+python study/common/rho_gap_f1.py results/h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz
+```
+
+bannière : `rho = +0.970 (p = 1e-4)` ; calcul affiché juste en dessous :
+`rho = +0.870   p = 0.0023   (9 solveurs)` — les deux nombres coexistaient
+dans la même sortie, sans qu'aucun des deux ne renvoie à l'autre.
+
+**Correction, minimale.** Le docstring et la chaîne imprimée par `main()`
+portent désormais `+0.870 / p = 0.0023 / 9 solveurs`, avec une note datée
+(D-172) expliquant pourquoi l'ancien nombre y était. Le calcul lui-même
+(`rho_gap_f1()`) n'a jamais été faux — seule la référence citée en tête
+l'était.
+
+**Mesuré, après.** Même commande : bannière et calcul rendent tous deux
+`+0.870`. Aucun nombre publié ne bouge — `RESULTS.md` portait déjà la
+valeur correcte ; c'est le module qui la rejoint.
+
+**Tests, dont un qui épingle l'ancien comportement.**
+`pytest tests/study/test_rho_gap_f1_reference.py -q` → 2 passed. Rejoué
+contre `study/common/rho_gap_f1.py` d'avant cette correction (`git stash`) :
+1 failed sur la bannière — l'autre passe déjà, parce que le calcul n'a
+jamais été le défaut, seule sa légende l'était.
+
+Vérifier : `pytest tests/study/test_rho_gap_f1_reference.py -q`
+
 
 # D-117 — le percentile du critère relatif devient entraînable
 
