@@ -1446,3 +1446,111 @@ référence, pas son contenu. Le garde de D-157
 (`tests/study/test_empty_sweep_never_silent.py`) porte les trois modules en
 exemption écrite, avec cette mesure, précisément pour qu'il ne les lance
 pas et ne détruise rien.
+
+---
+
+## D-165 — deux tests stochastiques rouges par intermittence : le décompte « cinq rouges connus » est pris sur des exécutions où ils sont passés par chance
+
+**Rapport seul. Décision requise, rien n'est corrigé** — corriger demande
+de choisir *quelle autre grandeur* asserter, et c'est une décision
+scientifique, pas une retouche de seuil.
+
+**Où ça bloque.** La suite complète à l'arrivée de cette passe rend **7
+échecs**, pas 5. Les cinq connus sont là (les deux de D-132, le trio
+`a0e0e02`). Les deux autres ne figurent **ni dans `BRIEF_REPRISE.md` §
+« Quatre tests rouges connus », ni dans aucun commentaire de PR** :
+
+| test | régime |
+|---|---|
+| `tests/mapping/test_signal_contribution.py::test_K_ZZZZ` | 20 tirages, assertion sur le **signe d'une moyenne** |
+| `tests/quantum/test_qaoa_arm_is_sampled.py::test_the_ranking_is_nonetheless_visibly_perturbed` | assertion sur `min(rho de Spearman) < 1,0` entre tirages répétés |
+
+**Ce ne sont pas des régressions de cette passe.** Les deux fichiers datent
+de `b60dc39` (réorganisation des tests) ; aucune ligne de `src/` n'a été
+touchée par cette passe, et les deux échouent sur l'arbre d'**arrivée**.
+
+### `test_K_ZZZZ` — la dispersion varie d'un facteur 15,6 entre exécutions de la même chose
+
+La docstring du test enregistre : *« sur 30 tirages, moyenne = -0,0168,
+écart-type 0,0130, t = -7,1 »*, et note que l'assertion **précédente**
+« échouait quand même 13 % du temps ». Remesuré, cinq exécutions de la
+commande identique :
+
+| exécution | moyenne | écart-type | négatifs | verdict |
+|---|---|---|---|---|
+| suite complète | **+0,02955** | **0,14325** | 85 % | **échec** |
+| isolée 1 | −0,02745 | 0,00915 | 100 % | passe |
+| isolée 2 | −0,02018 | 0,02463 | 95 % | passe |
+| isolée 3 | −0,01355 | 0,07484 | 95 % | passe |
+| isolée 4 | −0,00999 | 0,07948 | 95 % | passe |
+
+**L'écart-type va de 0,00915 à 0,14325 — un facteur 15,6** entre deux
+exécutions de la même chose, et la moyenne assertie **change de signe**.
+L'écart-type enregistré dans la docstring (0,0130) n'est reproduit que par
+l'exécution la plus favorable des cinq ; le `t = -7,1` qui l'accompagne
+n'est donc pas une propriété de la grandeur.
+
+C'est mot pour mot le piège que la fiche du dépôt consigne déjà — *« un
+contraste asserti à 2σ variait d'un facteur 3,5 entre deux exécutions ; le
+test a été déplacé sur le coefficient de plaquette, déterministe »*. Ici le
+facteur est 15,6, et la règle de `VIGIL.md` s'applique telle quelle : **si
+la grandeur n'est pas reproductible à cette précision, changer de
+grandeur — pas de seuil.**
+
+Noter que **le signe reste juste** : 85 à 100 % des tirages sont négatifs à
+chaque exécution. Le résultat physique enregistré (une plaquette forte
+*abaisse* les qubits qu'elle relie) n'est **pas** remis en cause. C'est sa
+**mesure par la moyenne de 20 tirages** qui ne tranche pas.
+
+### `test_the_ranking_is_nonetheless_visibly_perturbed` — échoue ~1 fois sur 4
+
+Il exige l'inverse du précédent : que le classement du bras QAOA **bouge**
+(`min(rho) < 1,0`). Il échoue quand toutes les paires rendent
+`rho = 1,000` — le bras a été reproductible ce tour-là. Mesuré :
+
+    pytest tests/quantum/test_qaoa_arm_is_sampled.py -q
+    # 4 exécutions isolées : 7 passed / 1 failed / 7 passed / 7 passed
+    # plus l'échec de la suite complète
+
+Soit **2 échecs sur 5 exécutions**. Sur les 9 scores comparés, les valeurs
+bougent bien (0,40049 contre 0,39659 ; 0,03925 contre 0,05164) mais l'ordre
+ne bouge pas — c'est exactement le fait consigné dans la fiche du dépôt :
+*« Les valeurs bougent, le classement tient »*, auto-corrélation de rang
+médiane **0,933**. Une médiane de 0,933 sur 9 éléments veut dire qu'une
+partie appréciable des tirages rend 1,000 : **le test contredit le fait
+mesuré du dépôt**, il ne le garde pas.
+
+### Ce que ça change pour le décompte
+
+`BRIEF_REPRISE.md` annonce « quatre tests rouges connus » ; les
+commentaires de PR des deux dernières passes ont corrigé en cinq, puis six,
+puis « c'est cinq ». **Aucun de ces décomptes n'est stable**, parce que deux
+tests intermittents entrent et sortent du total selon le tirage. Un
+décompte pris sur une exécution ne dit pas combien de tests sont rouges ; il
+dit combien l'étaient ce jour-là. Tant que ces deux tests restent en l'état,
+la ligne de résumé de la suite **ne peut pas** servir de comparaison d'une
+passe à l'autre.
+
+### Trois options, à trancher — aucune appliquée
+
+1. **Changer de grandeur**, comme cela a déjà été fait une fois ici :
+   asserter le coefficient sous-jacent, déterministe, plutôt que la moyenne
+   d'un tirage. C'est la remédiation que la fiche enregistre comme ayant
+   marché (0,0553 → 1,2545, ×22,7). Demande de choisir la grandeur.
+2. **Fixer la graine** du bras échantillonné dans ces deux tests. Rend les
+   deux reproductibles, mais `test_the_ranking_is_nonetheless_visibly_perturbed`
+   perd son objet : il existe précisément pour constater que le bras n'est
+   pas déterministe.
+3. **Déclarer la dette** : `xfail(strict=False)` avec sa raison et un
+   compteur qui mord, le temps que 1 ou 2 soit fait. Rend le décompte de la
+   suite de nouveau comparable d'une passe à l'autre, sans rien prétendre
+   résoudre.
+
+**Ce que ça ne dit pas.** Aucun nombre publié n'en dépend : ces deux tests
+sont des gardes, pas des producteurs d'artefact. Et la mesure a été faite
+dans un conteneur neuf, dont les versions de `qiskit` ne sont pas
+nécessairement celles qui ont produit l'écart-type de 0,0130 enregistré
+dans la docstring — **l'écart entre 0,0130 et les cinq mesures ci-dessus
+n'est donc pas attribué**, seulement constaté. Ce qui est attribué, et
+suffit, est le facteur 15,6 **entre les cinq mesures d'aujourd'hui**, faites
+dans le même conteneur.
