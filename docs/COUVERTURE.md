@@ -3009,6 +3009,115 @@ file se compte :
 
 ---
 
+## Passe du 18 août (nuit) — la file des INVENTAIRES, quatre entrées
+
+Session concurrente sur cette même branche : D-161 (`test_no_credential_in_source.py`),
+D-162 (`ENTRY_POINTS` / `test_every_entry_point_guards_its_main`) et D-163
+(`SANS_ASSERTION_LEGITIMES`, `_EXEMPTIONS` — la péremption d'exemption qui
+vérifie le FICHIER, pas la chose exemptée) sont **réservés et en cours**
+ailleurs sur cette branche au moment où cette passe commence. Non repris ici
+pour ne pas dupliquer — les trois questions leur ont déjà été posées par
+cette session-là.
+
+Quatre entrées restantes, aux trois questions (qui le remplit, qui le vide,
+que se passe-t-il si une entrée est fausse) :
+
+| inventaire | verdict |
+|---|---|
+| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | **déjà fermé par D-160**, avant l'ouverture formelle de cette file — vérifié à nouveau ici : `non_documentees`/`orphelines` confrontent maintenant chaque fragment déclaré aux lignes réelles `study/v4/`, dans les deux sens. Rien à rouvrir |
+| `ACCUMULATORS` de `test_empty_sweep_never_silent.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
+| `PSI_STILL_ZERO` / `PSI_WIRED` de `test_psi_coverage_inventory.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
+| `COVERED` de `test_src_coverage_inventory.py` | **D-164** — un homonyme d'attribut suffisait, sans import réel. `EXCLUDED`/`ENTRY_POINTS` non repris ici (D-162, en cours ailleurs) |
+
+### `ACCUMULATORS` — vérifié et trouvé sain
+
+Qui le remplit : neuf noms tenus à la main (`rows`, `records`, `results`,
+`configs`, `by_scene`, `per_cfg`, `out_rows`, `all_rows`, `entries`). Qui le
+vide : personne — c'est le point d'entrée d'un détecteur AST, pas une liste
+qu'on retire. Que se passe-t-il si une entrée est fausse : c'est la
+question qui compte ici, parce que D-148 a déjà mesuré que la liste ne
+recoupe **aucun** des 30 sites `if not <accumulateur>` réels de `study/`
+(tous portent un autre nom).
+
+Remesuré indépendamment cette passe, à l'octet : sur les **66** sites
+`if not <Name>` réels de `study/` aujourd'hui, **25** portent un nom de
+`ACCUMULATORS` (`rows` ×13, `configs` ×5, `records` ×4, `per_cfg`,
+`by_scene`, `results` ×1) — et **aucun des 25 n'est silencieux** (0 retour
+sans lever). Les **12** sites réellement silencieux (`if not X: ... return`
+sans `raise`) portent tous un nom hors liste (`all_results`, `seen`,
+`recs`, `certified`, `voting`, `checked`, `unseen`, `rows_summary`,
+`deltas`, `m`). Lus un à un : ce sont des fonctions auxiliaires qui
+rendent `None`/un message à l'appelant (`save_results`, `decision_rule_lines`,
+`interpretation_message`…), pas des `main()` qui sortent en silence sur un
+balayage vide — le patron que la famille D-56/D-148 cible. Aucun n'est un
+point d'entrée de script.
+
+Donc : le détecteur nommé (`ACCUMULATORS`) est aujourd'hui **vide sur du
+code sain** — pas un défaut, une conséquence directe de D-56 (les seuls
+sites qu'il pouvait voir ont été corrigés). Il reste capable de mordre
+(`test_the_detector_itself_can_fail` le prouve sur un cas synthétique), et
+le risque qu'il masque — un futur `if not <nom hors liste>: return`
+silencieux dans un vrai point d'entrée — est **déjà couvert, indépendamment
+du nom**, par le balayage comportemental de D-157
+(`test_aucun_module_de_study_ne_sort_zero_sur_un_balayage_vide`), qui
+exécute chaque module réellement plutôt que de chercher une forme. Les deux
+détecteurs ne se recoupent pas par construction (l'un lit le texte, l'autre
+exécute), donc aucune entrée fausse dans `ACCUMULATORS` ne peut aujourd'hui
+laisser passer un vrai défaut sans qu'un des deux gardes le voie. Rien
+corrigé — vérifié, pas de commit.
+
+```bash
+python3 -c "
+import ast, glob
+files = sorted(glob.glob('study/**/*.py', recursive=True))
+ACC = {'rows','records','results','configs','by_scene','per_cfg','out_rows','all_rows','entries'}
+n_named = n_named_silent = n_other = n_other_silent = 0
+for p in files:
+    tree = ast.parse(open(p, encoding='utf-8').read())
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.UnaryOp)
+                and isinstance(node.test.op, ast.Not)
+                and isinstance(node.test.operand, ast.Name)):
+            name = node.test.operand.id
+            silent = (any(isinstance(n, ast.Return) for n in ast.walk(node))
+                       and not any(isinstance(n, ast.Raise) for n in ast.walk(node)))
+            if name in ACC: n_named += 1; n_named_silent += silent
+            else: n_other += 1; n_other_silent += silent
+print(n_named, n_named_silent, n_other, n_other_silent)
+"
+# -> 25 0 41 12
+```
+
+### `PSI_STILL_ZERO` / `PSI_WIRED` — vérifié et trouvé sain
+
+Qui le remplit : deux ensembles de noms de fichiers, 6 et 1. Qui le vide :
+`test_the_inventory_lists_exactly_the_callers` — égalité d'ensemble contre
+les appelants réels de `prepare_qaoa_inputs`, alias compris (D-155).
+Qu'arrive-t-il si une entrée est fausse : `test_the_wired_scripts_really_pass_with_psi`
+et `test_the_unwired_scripts_really_run_with_psi_zero` relisent la VALEUR
+du mot-clé `with_psi`, pas sa présence (D-155) — un script classé
+`PSI_STILL_ZERO` qui rebrancherait psi ferait tomber le second, un script
+`PSI_WIRED` dont le câblage régresserait ferait tomber le premier.
+
+Vérifié spécifiquement pour le risque d'appelant caché — un script qui
+appellerait `prepare_qaoa_inputs` **indirectement**, via une fonction
+d'un autre module de `study/`, échapperait à `_callers()` (qui ne lit que
+les appels directs de chaque fichier). Le seul candidat plausible est
+`h0_optimiser_equivalence.solver_panel`, qui encapsule l'appel réel :
+balayé, **aucun** des quatre autres scripts qui importent depuis
+`h0_optimiser_equivalence` (`h3_window_counterfactual`, `h3_equivariance`,
+`h3_term_ablation`, `h3_size_scan`, `h0_qaoa_displacement`) n'importe
+`solver_panel` — ils importent `exhaustive_ground_state`, `f1_from_masks`,
+`classical_init_spins`, des fonctions sans rapport avec psi. Pas d'appelant
+caché aujourd'hui. Rien corrigé — vérifié, pas de commit.
+
+```bash
+pytest tests/study/test_psi_coverage_inventory.py -q      # 7 passed
+grep -rn "solver_panel" study/ tests/ --include="*.py"     # défini + 6 sites, aucun import ailleurs
+```
+
+---
+
 ---
 
 ## Tenir ce document à jour
