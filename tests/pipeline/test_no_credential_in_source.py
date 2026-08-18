@@ -213,12 +213,16 @@ def test_no_hardcoded_credential_url_anywhere_in_the_repository():
 
 
 def test_src_is_still_inside_the_sweep():
-    """Le perimetre d'origine ne doit pas disparaitre en s'elargissant."""
+    """Le perimetre d'origine ne doit pas disparaitre en s'elargissant.
+
+    D-169 : le plancher a 10 ne detectait plus rien -- 25 fichiers de
+    src/ mesures a `d816dee` (18 aout 2026)."""
     balayes = set(_fichiers_balayes())
     dans_src = [p for p in balayes if p.startswith(_SRC + os.sep)]
-    assert len(dans_src) >= 10, (
-        f"{len(dans_src)} fichiers de src/ balayes : le perimetre d'origine "
-        "de ce test a ete perdu en l'elargissant")
+    assert len(dans_src) >= 25, (
+        f"{len(dans_src)} fichiers de src/ balayes ; 25 mesures a "
+        "`d816dee` (18 aout 2026) : le perimetre d'origine de ce test a "
+        "ete perdu en l'elargissant")
 
 
 def test_the_sweep_reaches_the_places_a_connection_string_actually_lives():
