@@ -319,10 +319,14 @@ def test_the_detector_itself_can_fail():
     """Un balayage vide doit crier — y compris celui-ci. Si `_silent_empty_sweeps`
     ne detectait plus rien, les tests ci-dessus passeraient sans mesurer quoi
     que ce soit (le piege du balayage vide, dans le fichier cense le
-    detecter)."""
-    assert len(STUDY_FILES) > 40, (
-        f"seulement {len(STUDY_FILES)} modules de study/ collectes : le "
-        "balayage du detecteur est vide ou tronque")
+    detecter).
+
+    D-167 : le plancher a 40 ne detectait plus rien -- 66 modules mesures
+    a `1bee385` (18 aout 2026), meme quantite qu'en face dans
+    `tests/study/test_empty_sweep_guard_shapes.py`."""
+    assert len(STUDY_FILES) >= 66, (
+        f"{len(STUDY_FILES)} modules de study/ collectes ; 66 mesures a "
+        "`1bee385` (18 aout 2026) : le balayage du detecteur a retreci")
 
     import tempfile
     src = "def main():\n    rows = []\n    if not rows:\n        print('x')\n        return\n"
