@@ -3116,6 +3116,108 @@ pytest tests/study/test_psi_coverage_inventory.py -q      # 7 passed
 grep -rn "solver_panel" study/ tests/ --include="*.py"     # défini + 6 sites, aucun import ailleurs
 ```
 
+### Confirmation indépendante sur les 12 sites silencieux
+
+Les deux seuls des 12 qui ne sont **pas** couverts par le balayage
+comportemental de D-157 — `aggregate_master_table.py:589` (`seen`) et
+`:654` (`recs`) — le sont parce que ce module est exempté (D-158, il
+détruirait la table publiée). Lus : tous deux rendent
+`make_row(..., None, None)`, c'est-à-dire une ligne **`MISSING`**. Ils ne
+sont donc pas silencieux — ils crient par le compteur que `CLAUDE.md`
+désigne comme « toujours une régression ». Le verdict « sain » ci-dessus
+tient sur les 12, y compris ces deux-là.
+
+---
+
+## Passe du 18 août (nuit) — les trois inventaires restants de la file
+
+Session concurrente sur la même branche que la passe ci-dessus ; les deux se
+partagent les 7 inventaires sans se recouvrir. **Trois défauts, chacun
+verrouillé par une mutation.** Mesures chiffrées dans `RESULTS.md`.
+
+| inventaire | verdict |
+|---|---|
+| les modèles d'URL de `test_no_credential_in_source.py` | **D-161** — le contrôle de péremption ne peut pas échouer, et **2 des 4 exemptions étaient déjà mortes** |
+| `EXCLUDED` / `ENTRY_POINTS` de `test_src_coverage_inventory.py` | **D-162** — `ENTRY_POINTS` n'exige rien et dispense de tout ; un module de bibliothèque du chemin déployé y était garé |
+| `SANS_ASSERTION_LEGITIMES` de `test_suite_integrity.py`, `_EXEMPTIONS` de `test_empty_sweep_never_silent.py` | **D-163** — les deux péremptions vérifient le **fichier**, pas la chose exemptée |
+
+### La leçon de cette moitié de file
+
+Les trois posent la même question, et ce n'est aucune des trois annoncées à
+l'ouverture (qui le remplit, qui le vide, que se passe-t-il si une entrée
+est fausse). C'est une quatrième : **une exemption supprime-t-elle encore
+quelque chose ?**
+
+Un inventaire d'exemptions a deux façons de pourrir, et les contrôles
+existants n'en voyaient aucune. Il peut désigner ce qui n'existe plus — la
+forme attendue, celle que les contrôles croyaient tester. Il peut surtout
+désigner ce qui existe encore mais n'a **plus besoin d'être exempté** : la
+fonction a gagné son assertion, le module a quitté le balayage, la
+documentation ne montre plus l'URL. Cette seconde forme est la dangereuse,
+parce que l'entrée reste vraie au sens où le contrôle la mesure, et devient
+une **permission accordée d'avance** à la prochaine chose qui portera ce
+nom. Mesuré : 2 exemptions sur 4 dans ce cas (D-161), aucune dans les 3 + 7
+de D-163 — le trou y était réel et sans conséquence vivante, fermé pendant
+qu'il l'était.
+
+D'où le critère, qui remplace « l'entrée existe encore » partout :
+**mesurer l'exemption avec l'opérateur qui la consomme.** `_MODELES` est
+consommé sur une URL reconnue par `_URL_WITH_PASSWORD` — donc l'exemption
+se vérifie sur une URL, pas sur du texte. `_EXEMPTIONS` est consommé sur
+l'appartenance à `_LANCABLES` — donc l'exemption se vérifie là. Là où les
+deux opérateurs divergeaient, l'exemption dormait.
+
+**D-161 est aussi la deuxième instance pure de la quatrième question**
+ajoutée aux balayages la passe précédente — *le balayage figure-t-il dans
+ce qu'il balaie ?* Elle se transporte telle quelle aux inventaires : le
+fichier qui **déclare** les exemptions était dans le corpus fouillé pour
+vérifier qu'elles servent encore.
+
+### Une hypothèse posée, mesurée, **réfutée**
+
+Soumettre `ENTRY_POINTS` au contrôle « nommé par la suite » semblait fermer
+la trappe de D-162 d'un mot. Mesuré avant d'écrire : sous le critère de
+D-164 (un import **réel**), **3 des 4 pilotes ne sont pas importés** par
+`tests/` — c'est exactement ce que `test_every_entry_point_parses` annonce
+(« les pilotes sont lourds à importer »). L'extension aurait fabriqué
+**3 faux rouges sur du code sain**. Non appliquée, raison écrite dans le
+fichier ; la trappe est fermée autrement, par l'assertion du bloc `__main__`.
+
+### La file suivante — les PLANCHERS de balayage écrits à la main
+
+D-161 l'a désignée : un plancher écrit dans un test (`assert len(X) >= N`)
+dit « ce balayage est encore assez grand pour prouver quelque chose ». Mais
+un plancher posé loin sous la valeur réelle ne détecte plus rien — le
+balayage peut fondre des deux tiers avant qu'il ne morde. Trois questions :
+**quand ce nombre a-t-il été mesuré, quelle est la valeur aujourd'hui, et
+de combien le balayage peut-il rétrécir avant que le plancher ne morde ?**
+
+Comptée pour qu'elle se compte : **50 planchers** (`assert len(X) >= N` ou
+`> N`) dans **28 fichiers** de `tests/`.
+
+```bash
+python3 -c "
+import ast, os
+n=0; files=set()
+for d,_s,ns in os.walk('tests'):
+    if '__pycache__' in d: continue
+    for fn in sorted(ns):
+        if not fn.endswith('.py'): continue
+        p=os.path.join(d,fn)
+        try: t=ast.parse(open(p,encoding='utf-8').read())
+        except SyntaxError: continue
+        for x in ast.walk(t):
+            if not (isinstance(x,ast.Assert) and isinstance(x.test,ast.Compare)): continue
+            c=x.test
+            if not (isinstance(c.left,ast.Call) and getattr(c.left.func,'id','')=='len'): continue
+            if len(c.ops)!=1 or not isinstance(c.ops[0],(ast.GtE,ast.Gt)): continue
+            if isinstance(c.comparators[0],ast.Constant) and isinstance(c.comparators[0].value,int):
+                n+=1; files.add(p)
+print(n, len(files))
+"
+# -> 50 28
+```
+
 ---
 
 ---
