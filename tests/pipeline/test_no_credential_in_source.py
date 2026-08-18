@@ -27,9 +27,30 @@ continuations sont desormais recollees avant lecture.
 Ce qui est autorise, et pourquoi ce n'est pas un trou
 -----------------------------------------------------
 La documentation DOIT montrer la forme d'une URL de connexion. Les couples
-`utilisateur:motdepasse` de remplacement sont donc listes nommement dans
-`_MODELES`, avec leur raison — et un test exige que chacun soit encore
-present quelque part, pour qu'une exemption perimee crie au lieu de dormir.
+de remplacement sont donc listes nommement dans `_MODELES`, avec leur
+raison — et un test exige que chacun neutralise encore une URL reelle, pour
+qu'une exemption perimee crie au lieu de dormir.
+
+D-161 — pourquoi ce controle de peremption ne pouvait pas crier
+---------------------------------------------------------------
+Il faisait `couple in tout`, ou `tout` est le texte de tous les fichiers
+balayes — **y compris ce fichier-ci**, celui qui DECLARE les couples. Les
+quatre cles y figuraient litteralement : le controle trouvait toujours sa
+propre declaration. Meme forme que D-159, et la quatrieme question de
+`COUVERTURE.md` : *le balayage figure-t-il dans ce qu'il balaie ?*
+
+Second ecart, celui qui l'a rendu inoffensif en apparence : il mesurait la
+presence du couple avec `in` sur du texte brut, alors que l'exemption est
+consommee sur une URL reconnue par `_URL_WITH_PASSWORD`. Une mention en
+prose satisfaisait donc un controle dont la garantie porte sur des URL —
+l'operateur assorti, sur une grandeur textuelle.
+
+Consequence mesuree au 18 aout 2026, avant correction : **2 des 4
+exemptions ne neutralisaient plus rien**. `utilisateur:motdepasse`
+n'apparaissait qu'en prose, `user:secret` qu'en morceaux concatenes que le
+motif ne reconnaît pas. Les retirer laisse **0 fuite** : elles n'exemptaient
+rien, elles autorisaient d'avance tout secret portant ces couples. Le
+controle ecrit pour empecher exactement cela les declarait saines.
 """
 
 import os
@@ -57,11 +78,16 @@ _URL_WITH_PASSWORD = re.compile(
 #: doit rester trouvable dans le depot : une exemption perimee est un
 #: mensonge qui dort (meme regle que `_EXEMPTIONS` de
 #: `tests/test_launcher_paths_resolve.py`).
+#:
+#: D-161 : deux entrees ont ete RETIREES d'ici parce qu'elles ne
+#: neutralisaient plus rien. `utilisateur:motdepasse` n'apparaît qu'en prose
+#: (aucune URL ne le porte) et `user:secret` n'est ecrit qu'en morceaux
+#: concatenes, que `_URL_WITH_PASSWORD` ne reconnaît pas. Mesure : les
+#: retirer laisse **0 fuite**. Elles n'exemptaient donc rien — elles
+#: autorisaient d'avance tout secret qui aurait porte ces couples.
 _MODELES = {
     "user:pass": "README.md — la forme d'une URL Optuna, sans valeur reelle",
     "user:pw": "docs/MODE_EMPLOI_CAMPAGNE.md — idem, forme abregee",
-    "utilisateur:motdepasse": "ce fichier — le commentaire qui decrit le motif",
-    "user:secret": "ce fichier — l'entree de `test_the_pattern_can_fire`",
 }
 
 #: Extensions balayees : tout ce qui peut porter une valeur executee ou
@@ -114,8 +140,17 @@ def _lignes_recollees(texte):
     return out
 
 
-def _fuites(chemin):
-    """Les URL a mot de passe d'un fichier, hors modeles documentes."""
+def _urls_a_mot_de_passe(chemin):
+    """(numero de ligne, url, couple) — TOUTES les URL a mot de passe, sans
+    filtrer les modeles.
+
+    D-161 : `_fuites` et le controle de peremption des exemptions doivent
+    lire le fichier avec LE MEME operateur. L'ancien controle mesurait la
+    presence du couple avec `in` sur du texte brut, la ou l'exemption est
+    consommee sur une URL reconnue par `_URL_WITH_PASSWORD` : deux
+    operateurs pour une meme grandeur, et c'est l'ecart entre les deux qui
+    a laisse vivre deux exemptions mortes.
+    """
     try:
         texte = open(chemin, encoding="utf-8", errors="ignore").read()
     except OSError:                                       # pragma: no cover
@@ -126,11 +161,39 @@ def _fuites(chemin):
             continue          # un commentaire qui documente la fuite
         for m in _URL_WITH_PASSWORD.finditer(ligne):
             url = m.group(0)
-            couple = url.split("://", 1)[1].split("@", 1)[0]
-            if couple in _MODELES:
-                continue
-            trouve.append((lineno, url))
+            trouve.append((lineno, url, url.split("://", 1)[1].split("@", 1)[0]))
     return trouve
+
+
+def _fuites(chemin):
+    """Les URL a mot de passe d'un fichier, hors modeles documentes."""
+    return [(lineno, url) for lineno, url, couple in _urls_a_mot_de_passe(chemin)
+            if couple not in _MODELES]
+
+
+def _porteurs_reels(couple):
+    """Fichiers ou `couple` apparaît VRAIMENT dans une URL a mot de passe.
+
+    Deux differences avec l'ancien `couple in tout`, et chacune ferme la
+    moitie de D-161 :
+
+      - la mesure se fait avec `_URL_WITH_PASSWORD`, l'operateur qui
+        consomme l'exemption. Une mention du couple en prose (« les couples
+        `utilisateur:motdepasse` sont listes nommement ») n'est pas une URL
+        et ne justifie donc aucune exemption ;
+      - **ce fichier sort du corpus**. C'est lui qui DECLARE les couples :
+        les quatre cles y figuraient litteralement, donc l'ancien controle
+        trouvait toujours ce qu'il cherchait. Meme forme que D-159, ou
+        l'inventaire etait dans le corpus qu'il fouillait.
+    """
+    moi = os.path.abspath(__file__)
+    out = []
+    for path in _fichiers_balayes():
+        if os.path.abspath(path) == moi:
+            continue
+        if any(c == couple for _lineno, _url, c in _urls_a_mot_de_passe(path)):
+            out.append(os.path.relpath(path, _ROOT))
+    return out
 
 
 def test_no_hardcoded_credential_url_anywhere_in_the_repository():
@@ -208,26 +271,60 @@ def test_a_credential_split_by_a_line_continuation_is_caught(tmp_path):
     assert len(fuites) == 1 and fuites[0][0] == 1, fuites
 
 
-def test_every_documented_placeholder_still_exists(tmp_path):
-    """Une exemption perimee doit crier.
+def test_every_documented_placeholder_still_neutralises_a_real_url():
+    """Une exemption perimee doit crier — D-161.
 
-    Chaque couple de `_MODELES` doit rester trouvable : le jour ou la
-    documentation cesse de le montrer, l'exemption tombe avec elle — sinon
-    elle couvrirait un vrai secret qui porterait le meme nom d'utilisateur.
+    Une exemption n'est legitime que si elle DESACTIVE quelque chose. Une
+    entree qui ne neutralise aucune URL du depot n'est pas une exemption :
+    c'est une permission dormante, accordee d'avance a tout secret qui
+    porterait ce couple.
     """
-    textes = []
-    for path in _fichiers_balayes():
-        try:
-            textes.append(open(path, encoding="utf-8", errors="ignore").read())
-        except OSError:                                   # pragma: no cover
-            continue
-    tout = "\n".join(textes)
     for couple, raison in _MODELES.items():
         assert raison.strip(), f"{couple} exempte sans raison"
-        assert couple in tout, (
-            f"le modele {couple!r} n'est plus nulle part dans le depot : "
-            "retirer son entree de `_MODELES`, sinon elle exempte un vrai "
-            "identifiant qui porterait ce nom d'utilisateur")
+        porteurs = _porteurs_reels(couple)
+        assert porteurs, (
+            f"le modele {couple!r} ne neutralise plus aucune URL du depot : "
+            "retirer son entree de `_MODELES`, sinon elle exempte d'avance "
+            "un vrai identifiant qui porterait ce couple. (Le couple peut "
+            "encore apparaître en prose quelque part : ce n'est pas une URL, "
+            "et cela ne justifie aucune exemption.)")
+
+
+def test_l_inventaire_ne_se_porte_pas_lui_meme():
+    """Epingle D-161 : sur quelle entree l'ancien controle echouait-il ?
+
+    Sur aucune. Il faisait `couple in tout` avec `tout` = le texte de tous
+    les fichiers balayes — **y compris celui-ci**, ou les couples sont
+    declares. Les quatre cles y figurent litteralement ; le controle
+    trouvait donc toujours sa propre declaration. Mesure du 18 aout 2026 :
+    4 cles sur 4 auto-satisfaites, et **2 exemptions sur 4 ne neutralisaient
+    deja plus rien** sans que personne ne le voie.
+    """
+    src = open(__file__, encoding="utf-8").read()
+    moi = os.path.relpath(os.path.abspath(__file__), _ROOT)
+    for couple in _MODELES:
+        #  l'ancien critere : la cle est dans le source de l'inventaire
+        assert '"%s"' % couple in src, (
+            f"{couple} n'est plus declare ici — l'epinglage ne mesure plus "
+            "l'ancien comportement")
+        #  le nouveau : ce fichier n'est jamais son propre porteur
+        assert moi not in _porteurs_reels(couple), (
+            f"{moi} est redevenu porteur de {couple!r} : l'inventaire est "
+            "rentre dans le corpus qu'il fouille, D-161 est rouvert")
+
+
+def test_le_detecteur_de_porteurs_peut_rendre_vide():
+    """Un balayage vide doit crier — y compris celui-ci.
+
+    Si `_porteurs_reels` rendait toujours quelque chose, l'assertion
+    ci-dessus ne prouverait rien. Un couple qu'aucune URL ne porte doit
+    rendre la liste vide.
+    """
+    assert _porteurs_reels("temoin_d161:aucune_url_ne_le_porte") == []
+    #  et un couple reellement porte doit, lui, rendre quelque chose
+    assert _porteurs_reels("user:pass"), (
+        "le balayage des porteurs ne trouve plus le modele du README : il "
+        "est vide ou tronque, et le controle de peremption ne prouve rien")
 
 
 def test_a_real_secret_wearing_a_placeholder_username_is_still_caught():
