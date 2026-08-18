@@ -43,11 +43,16 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **13** |
+| **ouverts** — décision ou campagne requise | **14** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **13** au 18 août
-(12 après la fusion du 17 août au soir, puis **D-158 est entré** — rapport
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **14** au 18 août
+(nuit) — le paragraphe ci-dessous s'arrêtait à 13, avant que **D-165** ne
+soit entré (rapport seul, décision requise) sans que le compte de tête ne
+soit mis à jour. C'est exactement le travers que ce paragraphe se reproche
+déjà à lui-même deux lignes plus bas : recompter, ne pas estimer, à chaque
+ajout, pas seulement à chaque fusion.
+12 après la fusion du 17 août au soir, puis **D-158 est entré** — rapport
 seul, décision requise). D-69 est sorti au profit de `RESULTS.md`, sa
 table étant refaite ; D-141 est entré. Puis **D-59 est sorti** — corrigé sur
 la branche vive à `7b12857`, il vit désormais dans `RESULTS.md` — et
