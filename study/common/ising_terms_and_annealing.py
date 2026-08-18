@@ -96,15 +96,18 @@ def build_ising_terms(hamilt_params, dim):
          a tuple (edge_idx, edge_coeff) and (plaq_idx, plaq_coeff) to
          keep integer/float separation.)
 
-    Déviation connue partagée avec `create_period_hamiltonian` (D-59,
-    docs/DEFAUTS.md de BA_Proj) : à dim = 2, l'anneau périodique dégénère et
-    le lien ZZ `(i, 0)->(i, 1)` coïncide avec `(i, 1)->(i, 0 mod 2)` -- deux
-    entrées `edge_idx` pour la même paire de qubits, poids effectif doublé.
-    Les deux chemins (celui-ci, SA/exhaustif ; `create_period_hamiltonian`,
-    QAOA/diag exacte) partagent la même dégénérescence, donc restent
-    cohérents entre eux (COUVERTURE.md). Mesuré : aucune décision de
-    fondamental exact publiée n'en dépend. Rapport seul, ne pas corriger
-    sans remesurer.
+    D-59 — CORRIGÉ, ici et dans `create_period_hamiltonian` : les deux
+    chemins doivent coïncider, donc la même déduplication est appliquée des
+    deux côtés. À dim = 2 l'anneau périodique dégénère — le lien ZZ
+    `(i,0)->(i,1)` coïncide avec `(i,1)->(i,0 mod 2)` — et les deux
+    itérations ajoutaient chacune une entrée `edge_idx` pour la même paire
+    de qubits, doublant le couplage shear effectif. À dim >= 3 aucune paire
+    ne se répète : tableaux inchangés bit à bit.
+
+    Impact mesuré sur les nombres publiés : 0 décision changée sur 12,
+    max|ΔE| = 0,000e+00 — au réglage déployé la fenêtre gaussienne éteint
+    déjà ZZ (D-47), donc dédupliquer n'a rien à retirer. Voir
+    `docs/RESULTS.md`, D-59.
     """
     n_q = 2 * dim * dim
     h_bias = np.zeros(n_q, dtype=np.float64)
