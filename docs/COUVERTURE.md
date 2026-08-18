@@ -2934,6 +2934,63 @@ nommés ici pour que la file se compte :
 | `study/test_psi_coverage_inventory.py` | les deux formes d'appel `f(...)` / `module.f(...)` |
 | `study/test_empty_sweep_never_silent.py` | les 61 modules **lançables** de `study/` (comportemental, pas de forme supposée) |
 
+## Passe du 18 août (soir) — la file des BALAYAGES est VIDE
+
+Les 7 balayages nommés à la passe précédente sont passés aux trois
+questions. **Quatre défauts, un rapport seul, deux sains.** Les deux sains
+sont un résultat : ils évitent de les relire.
+
+| balayage | verdict |
+|---|---|
+| `test_suite_integrity.py` | **D-154** — périmètre : il ne vérifiait que les imports dont le module commence par `tests.`, **3 sites sur 480** qui désignent un module du dépôt (1347 sites d'import en tout), dont **381 écrits dans le corps d'une fonction** — la position même qui échappe à `--collect-only`. Conséquence mesurée : trois modules de `src/` renommés → **45 tests disparaissent en `skip`** (les fixtures passent par `pytest.importorskip`) et ce fichier reste **158 passed** |
+| `test_psi_coverage_inventory.py` | **D-155** — forme cherchée : la **présence** du mot-clé `with_psi`, pas sa valeur. Le seul script déclaré câblé mis à `with_psi=False` en dur — psi mort dans tout `study/` — laissait **4 passed**. Plus les alias (`import … as prep`), par lesquels un script sortait de l'inventaire en silence |
+| `test_repro_commands_point_to_real_files.py` | **D-156** — unité de lecture : l'aplatissement global pour recoller les spans inline appariait aussi les backquotes des **clôtures** ```. Une seconde commande ajoutée à un bloc, document juste : **faux rouge**. Et `h4_unseen_conditions.py` était lu tronqué — deux options d'une commande publiée n'étaient confrontées à rien |
+| `test_empty_sweep_never_silent.py` | **D-157** — l'invocation elle-même : `--scenario no_such_scenario --N 64` envoyé aux 60 modules, **21 mouraient dans argparse** (`exit 2`) sans exécuter une ligne. Le test n'exigeait qu'un code non nul : un refus du parseur le satisfaisait |
+| `test_src_coverage_inventory.py` | **D-159** — le corpus fouillé contenait **le fichier qui déclare les noms cherchés**. Ses deux tests de couverture étaient structurellement incapables d'échouer : un module neuf déclaré couvert et critique, qu'aucun test ne nomme, laissait **102 passed** |
+| `test_empty_sweep_guard_shapes.py` | **sain**, trois questions passées, tout mesuré. Périmètre : le détecteur appliqué à `src/` rend **0**, à `scripts/` **0**, à `figures/` les **3** sites déjà rapportés le 18 août au matin. Forme : **0** module de `study/` porte un bloc `__main__` sans fonction `main()` ; les **4** sorties exemptées par la règle `{args, os, sys}` sont toutes de vrais drapeaux CLI (`args.list`, `args.trace_only`, `args.dry_run`, `args.validate_only`) ; et faire cesser `raise SystemExit(0)` d'exempter ne rend **0 site nouveau** — le seul du dépôt (`h4_physics_robustness:291`) clôt la branche `--recompute` après avoir écrit son artefact |
+| `lint/test_scripts_point_somewhere.py` | **sain**, trou réel et sans conséquence vivante. Son motif ne suit que `$ROOT_DIR`/`$REPO`/`$REPO_ROOT` : **25** chemins vus sur les **29** réellement construits — `$ROOT/` (`run_leak_free_campaign.sh`), `$SCRIPT_DIR/`, `$TRAIN_RESULTS_DIR/`, `$RESULTS_DIR/` lui échappent, et les 2 `.sh` de la racine (`run_tests.sh`, `setup_env.sh`) sont hors périmètre. Les 29 résolus un à un contre la racine, commentaires exclus et interpolations écartées : **0 chemin mort** |
+
+### Ce que le rapport seul ajoute — D-158
+
+Construire, pour D-157, une invocation que chaque module **accepte** a
+révélé un défaut qui n'est pas dans un test :
+`study/common/aggregate_master_table.py --N 7 --dim 99` — une taille pour
+laquelle aucune campagne n'a jamais tourné — sort avec le **code 0**,
+imprime `V4 Task 16 complete.` et **réécrit les trois artefacts publiés** :
+180 → 161 lignes, OK 176 → 113, MISSING 0 → 48. `aggregate_v3.py` fait de
+même ; `aggregate_v2.py` nomme sa sortie par la configuration et n'écrase
+rien. Détail, mesures et trois options : `DEFAUTS.md`, entrée D-158.
+**Rien n'est corrigé** — cela change ce qu'écrit une commande publiée.
+
+### Une leçon de méthode, propre à cette file
+
+Deux des cinq défauts viennent de la même faute et elle n'est ni le
+périmètre ni la forme : **le balayage cherche dans un texte qu'il produit
+lui-même**. D-159 en est le cas pur — l'inventaire est dans le corpus qu'il
+fouille. D-156 en est la variante mécanique — le document est aplati par un
+motif que sa propre syntaxe de bloc déclenche. Une quatrième question, à
+poser aux balayages qui restent : *le balayage figure-t-il dans ce qu'il
+balaie ?*
+
+### La file suivante — les INVENTAIRES tenus à la main
+
+D-155 et D-159 l'ont désignée : un ensemble de noms écrit dans un test, que
+rien ne dérive du dépôt. Trois questions — qui le remplit, qui le vide, et
+que se passe-t-il si une entrée est fausse ? Ils sont nommés ici pour que la
+file se compte :
+
+| inventaire | ce qu'il suppose |
+|---|---|
+| `ACCUMULATORS` de `test_empty_sweep_never_silent.py` | 9 noms d'accumulateurs tenus à la main — D-148 a déjà mesuré que **30 sites y répondent 0** |
+| `SANS_ASSERTION_LEGITIMES` de `test_suite_integrity.py` | 3 exemptions, dont une qui s'annonce elle-même « à convertir ou à sortir de tests/ » |
+| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | 5 couples (fichier, fragment) dont le fragment n'est **jamais confronté au fichier** |
+| `EXCLUDED` / `COVERED` / `ENTRY_POINTS` de `test_src_coverage_inventory.py` | la partition de `src/`, et le sens de « couvert » une fois D-159 fermé |
+| `_EXEMPTIONS` de `test_empty_sweep_never_silent.py` | 7 modules non lancés, dont 4 entrés cette passe |
+| les 8 modèles d'URL exemptés de `test_no_credential_in_source.py` (D-152) | exemptés **par couple utilisateur:motdepasse** — que se passe-t-il si le modèle change ? |
+| `PSI_STILL_ZERO` / `PSI_WIRED` | 7 noms, plancher de dette écrit à 6 |
+
+---
+
 ---
 
 ## Tenir ce document à jour
