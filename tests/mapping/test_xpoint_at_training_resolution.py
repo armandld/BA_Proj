@@ -33,6 +33,7 @@ intrinsically localized) »* : le commentaire et le code se contredisent.
 import numpy as np
 import pytest
 
+from Simulation.grid import AXIS_X, AXIS_Y
 from Simulation.HamiltParams import PhysicalMapper as PM
 
 L = 2 * np.pi
@@ -112,8 +113,10 @@ def test_le_signal_est_orthogonal_au_courant():
     N = N_ENTRAINEMENT
     dx, Bx, By = _champ(N, 2 * L / N, "cisaillement")
 
-    Jz = (0.5 * (np.roll(By, -1, 0) - np.roll(By, 1, 0))
-          - 0.5 * (np.roll(Bx, -1, 1) - np.roll(Bx, 1, 1))) / dx
+    #  D-153 : les axes sont NOMMES. `np.roll(By, -1, 0)` ne porte meme pas
+    #  le mot `axis`, donc l'ancien balayage ne pouvait pas le voir.
+    Jz = (0.5 * (np.roll(By, -1, AXIS_X) - np.roll(By, 1, AXIS_X))
+          - 0.5 * (np.roll(Bx, -1, AXIS_Y) - np.roll(Bx, 1, AXIS_Y))) / dx
     assert np.abs(Jz).max() > 1.0, (
         f"le controle ne porte pas de courant (|Jz|max={np.abs(Jz).max():.3e}) "
         f"— il ne separerait rien")
