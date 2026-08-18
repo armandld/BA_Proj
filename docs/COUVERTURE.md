@@ -2912,6 +2912,15 @@ convention correcte, et sont passés à `AXIS_X`/`AXIS_Y` (70 passed avant
 comme après). La convention d'axes de ce dépôt tient — ce qui ne tenait pas,
 c'est le garde qui devait la faire tenir.
 
+**Trois balayages passés aux trois questions cette passe — mesurés, aucun
+défaut vivant.** Ce sont des résultats : ils évitent de les relire.
+
+| balayage | mesure |
+|---|---|
+| `run_tests.sh` — ses cibles `pytest` | hors du périmètre du garde de collecte (`lint/test_scripts_point_somewhere.py` ne suit que les cibles sous `$ROOT_DIR/` dans `scripts/*.sh`). Collectées une à une : **18, 30, 1, 7, 98, 14, 12, 2, 26, 2, 54, 44** — **aucun zéro**. Trou de périmètre réel, conséquence nulle aujourd'hui |
+| le piège `\| tail` de `BRIEF_REPRISE.md` §10 | **hypothèse réfutée par la mesure.** `scripts/generate_figures_v1.sh:253` fait bien `if python … \| tail -5; then`, mais pose `set -o pipefail` ligne 3. Les 10 lanceurs : les 2 qui pipent vers `tail` ont `pipefail` ; les 2 sans `pipefail` n'ont aucun pipe |
+| le détecteur de D-148 appliqué à `src/` et `figures/` | **3 sites** hors de son périmètre `study/`, tous dans `figures/v1_legacy/` (`fig11:79`, `fig12:213`, `fig13:101`), **0 dans `src/`**. Ils impriment leur abandon avant de rendre 0 — moins grave que les six de D-148, mais le compteur du lanceur les compte en succès. **Rapport seul, non corrigé** : décision de USER (`RESULTS.md`) |
+
 **Les balayages qui restent à passer aux trois questions** — ils sont
 nommés ici pour que la file se compte :
 
