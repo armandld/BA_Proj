@@ -2886,6 +2886,47 @@ balayages du dépôt, ceux qui supposent une ligne autonome.
 
 ---
 
+## Passe du 18 août (suite) — la file suivante : les BALAYAGES du dépôt
+
+La file `.read()` vidée, D-151 a ouvert la suivante en désignant sa propre
+forme : **un balayage qui suppose ce qu'il ne vérifie pas.** Trois questions,
+posées à chaque balayage du dépôt :
+
+1. **son périmètre** — quels dossiers, quelles extensions ? La fuite suivante
+   se posera-t-elle dedans ?
+2. **son unité de lecture** — la ligne physique est-elle une unité de sens ?
+   (`cd` d'une ligne plus haut, continuation `\`, appel sur deux lignes)
+3. **sa forme cherchée** — un nom tenu à la main, ou une structure ?
+
+Deux défauts en sont sortis cette passe.
+
+| balayage | verdict |
+|---|---|
+| `pipeline/test_no_credential_in_source.py` | **D-152** — périmètre : `src/*.py` seulement, **25 fichiers sur 409**. Le dépôt est public et son historique porte un mot de passe non tourné (D-65) ; la fuite suivante n'avait qu'à se poser dans un `.sh`, dans `study/` ou dans un `.yaml`. Plus le trou d'unité de lecture : une URL coupée par une continuation `\` — la forme normale d'un long `export` — n'était vue par personne |
+| `study/test_no_private_curl_survives.py` | **D-153** — forme cherchée : une fenêtre de ±4 lignes autour de six mots (`curl`, `jz =`, `omega_z`…). Un rotationnel nommé `rot_z` échappe ; un axe passé en **positionnel** (`np.roll(By, -1, 0)`) échappe aussi, faute de `axis=` dans la ligne ; et `tests/` n'était pas balayé. Remplacé par la **signature** du rotationnel discret — deux tableaux différents, deux axes différents, soustraits |
+
+**Ce que D-153 a mesuré du dépôt lui-même, et qui vaut d'être écrit** :
+les **12** sites de forme rotationnelle ont été relevés et lus. **Aucune
+inversion vivante.** Les deux seuls à axe nu étaient dans `tests/`, de
+convention correcte, et sont passés à `AXIS_X`/`AXIS_Y` (70 passed avant
+comme après). La convention d'axes de ce dépôt tient — ce qui ne tenait pas,
+c'est le garde qui devait la faire tenir.
+
+**Les balayages qui restent à passer aux trois questions** — ils sont
+nommés ici pour que la file se compte :
+
+| balayage | ce qu'il suppose |
+|---|---|
+| `study/test_empty_sweep_guard_shapes.py` | périmètre `study/` seul, et la garde vit dans une fonction `main` |
+| `pipeline/test_src_coverage_inventory.py` | périmètre `src/`, noms de constantes ≥ 4 caractères (**choix mesuré**, voir plus haut) |
+| `test_suite_integrity.py` | périmètre `tests/` |
+| `lint/test_scripts_point_somewhere.py` | les chemins cités par les `.sh` et `CLAUDE.md` |
+| `study/test_repro_commands_point_to_real_files.py` | le contexte de commande de `RESULTS.md` (déjà élargi par D-142) |
+| `study/test_psi_coverage_inventory.py` | les deux formes d'appel `f(...)` / `module.f(...)` |
+| `study/test_empty_sweep_never_silent.py` | les 61 modules **lançables** de `study/` (comportemental, pas de forme supposée) |
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
