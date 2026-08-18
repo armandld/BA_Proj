@@ -43,11 +43,12 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **12** |
+| **ouverts** — décision ou campagne requise | **13** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **12** après la
-fusion du 17 août au soir. D-69 est sorti au profit de `RESULTS.md`, sa
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **13** au 18 août
+(12 après la fusion du 17 août au soir, puis **D-158 est entré** — rapport
+seul, décision requise). D-69 est sorti au profit de `RESULTS.md`, sa
 table étant refaite ; D-141 est entré. Puis **D-59 est sorti** — corrigé sur
 la branche vive à `7b12857`, il vit désormais dans `RESULTS.md` — et
 **D-143 est entré** ; côté branche vive, **D-47 est sorti** — décision de
@@ -1359,3 +1360,89 @@ pytest tests/pipeline/test_intermediate_score_time_alignment.py -q
 C'est un test de **déviation**, comme ceux de D-141 : il épingle le
 décalage mesuré et rougit le jour où D-143 est tranché — c'est-à-dire le
 jour où il doit être relu.
+
+## D-158 — l'agrégateur du master table réécrit la table publiée sur une configuration qui ne correspond à rien, et sort avec le code 0
+
+**Rapport seul. Décision requise, rien n'est corrigé** — la correction
+changerait le comportement d'une commande qui écrit des artefacts publiés.
+
+**Où ça bloque.** `python study/common/aggregate_master_table.py` est le
+**quatrième test de recette** de `CLAUDE.md`, le test de non-régression du
+dépôt : il recalcule chaque nombre publié à partir de son artefact.
+`CLAUDE.md` écrit, sur ce même paragraphe : *« Un `MISSING` non nul, lui,
+est toujours une régression. »*
+
+Donné une taille pour laquelle **aucune campagne n'a jamais tourné**, il
+ne trouve rien, **écrit quand même** par-dessus les trois artefacts
+publiés, et **sort avec le code 0**.
+
+**Comment on est tombé dessus.** En construisant, pour D-157, une
+invocation que chaque module de `study/` **accepte** et à laquelle rien ne
+répond. Les trois agrégateurs n'exposent ni `--scenario` ni `--fold` : le
+seul sélecteur qu'ils déclarent est la taille, `--N` / `--dim`.
+
+**Mesuré**, même arbre, deux exécutions successives depuis un état propre :
+
+| | `aggregate_master_table.py` (canonique, sans argument) | `--N 7 --dim 99` |
+|---|---|---|
+| lignes | **180** | **161** |
+| OK | **176** | **113** |
+| DIFF | **4** | **0** |
+| MISSING | **0** | **48** |
+| code de sortie | 0 | **0** |
+| dernière ligne imprimée | `V4 Task 16 complete.` | `V4 Task 16 complete.` |
+| `results/v4_master_table.csv` | réécrit à l'identique | **136 lignes supprimées, 98 ajoutées** |
+
+Les 19 lignes qui **disparaissent** ne sont pas comptées `MISSING` : elles
+sortent de la table. Les trois compteurs que `CLAUDE.md` demande de
+surveiller bougent tous les trois, et la commande annonce sa réussite.
+
+`results/v4_master.npz` et `results/v4_master_table.md` sont réécrits de
+même. Un `git checkout` est la seule chose entre une faute de frappe sur
+`--N` et la table de référence du dépôt.
+
+**Ce qui n'est pas en cause.** `--strict` fait ce qu'il annonce : son aide
+dit *« exit non-zero on any DIFF (MISSING is tolerated) »*, et tolérer
+`MISSING` est un **choix écrit** — une ligne de niveau 3 est `MISSING`
+tant que le fold n'a pas tourné. Le désaccord porte sur le fait que
+`CLAUDE.md` dit l'inverse (« toujours une régression ») : deux documents,
+deux règles. Ce n'est pas au relecteur de trancher.
+
+**Deux autres sites, même forme, mesurés au même moment :**
+
+| module | `--N 7 --dim 99` | ce qu'il écrit |
+|---|---|---|
+| `aggregate_v3.py` | code **0** | `v3_master_table.csv`, `.md`, `v3_master_N7.npz` |
+| `aggregate_v2.py` | code **0** | `SUMMARY_N7_dim99.csv` — **le nom porte la configuration**, donc rien de publié n'est écrasé |
+
+**C'est `aggregate_v2.py` qui donne la réponse la plus simple** : dans le
+même dossier, un agrégateur nomme sa sortie par la configuration
+demandée, les deux autres écrivent toujours dans le même fichier. Deux
+chemins censés coïncider — question 4.
+
+**Un quatrième site, et je le crois sain** : `closed_loop_status.py`
+`--folds no_such_fold` sort **0** en imprimant
+`no_such_fold  [---]  no-trials-yet`. C'est un rapporteur d'**état** :
+« rien n'a tourné » est un état, pas un balayage vide silencieux. Écrit
+ici pour que la décision ne se reprenne pas à chaque passe.
+
+**Trois options, à trancher — aucune appliquée.**
+
+1. **Refuser d'écrire quand rien ne correspond.** Sortie non nulle dès que
+   `MISSING == len(rows)` sur une taille demandée explicitement. Le plus
+   proche de `CLAUDE.md`, et ça ne touche pas le chemin canonique.
+2. **Nommer la sortie par la configuration**, comme `aggregate_v2.py` déjà
+   le fait — `v4_master_table_N7_dim99.csv`. Rien de publié n'est plus
+   atteignable par accident ; en échange le chemin canonique change de nom
+   ou garde un cas particulier.
+3. **Ne rien changer au code, corriger `CLAUDE.md`** : y écrire que
+   `MISSING` est toléré et que la commande écrit toujours. Le moins cher,
+   et le moins protecteur.
+
+**Ce que ça ne dit pas.** Aucun nombre publié n'est faux aujourd'hui : le
+chemin canonique rend **180 / 176 / 4 / 0**, mesuré ici, et les artefacts
+du dépôt sont ceux-là. Ce qui est en jeu est la **destructibilité** de la
+référence, pas son contenu. Le garde de D-157
+(`tests/study/test_empty_sweep_never_silent.py`) porte les trois modules en
+exemption écrite, avec cette mesure, précisément pour qu'il ne les lance
+pas et ne détruise rien.
