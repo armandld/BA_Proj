@@ -2805,6 +2805,87 @@ eux-mêmes, de « choisir le champ d'essai qui SÉPARE ».
 
 ---
 
+## Passe du 18 août — la file `.read()` est VIDE
+
+Les 4 fichiers de la passe du 17 août (nuit) — D-146 à D-149 — n'avaient pas
+été inscrits ici : ils le sont ci-dessous avec les 23 de cette passe. **Les
+54 fichiers de `tests/` qui lisent un fichier portent désormais un verdict.**
+
+Le balayage a été refait à `1e2bc63` (`grep -rln "\.read()\|read_text()" tests/`)
+et rend **54 fichiers** — le recomptage du 17 août en donnait 45, la
+différence étant les fichiers écrits depuis et les sites `ast.parse` que le
+premier balayage excluait. Les excluer était une erreur de méthode : D-149
+et D-150 sont tous deux des sites **AST** ou l'AST était la correction, pas
+la maladie.
+
+### Les deux défauts de cette passe
+
+| fichier (`tests/`) | verdict |
+|---|---|
+| `study/test_fig15_sigma_narration.py` | **D-150** — le garde de D-102 cherchait `"σ=0.023"` et une ligne d'affectation mot pour mot : `σ = 0.023` (avec espaces) passe, et une réécriture de guillemets rougit. Remplacé par un détecteur sur les **littéraux de chaîne de l'AST**, f-strings comprises |
+| `test_launcher_paths_resolve.py` | **D-151** — le parseur résolvait ses cibles contre la racine du dépôt après un `cd` posé sur sa propre ligne : **faux rouge** sur `run_reoptimisation.sh:72` (le 6ᵉ échec signalé le 17 août), et **faux vert** sur un homonyme de la racine |
+
+### Les 4 fichiers de la passe précédente (D-146 à D-149)
+
+| fichier (`tests/`) | verdict |
+|---|---|
+| `study/test_h0_certified_dim3_contradicts_criterion.py` | **D-146** — `assert "D-53" in DEFAUTS.md` : un jeton, pas une entrée. Détecteur d'entrées qui suit la hiérarchie des titres |
+| `study/test_hyperparams_provenance.py` | **D-147** — sous-chaînes numériques (`"345"` satisfait par `3450`). Nombres recalculés depuis les bases Optuna, cherchés délimités |
+| `pipeline/test_relative_percentile_is_trainable.py` | **D-149** — `source.count("w_z_frac    = hp.get(") == 2`, à l'espacement près. Bloc mort retrouvé par l'AST, garde porté sur la canarie `beta_grad` |
+| `study/test_empty_sweep_never_silent.py` | écrit par **D-148** — garde comportemental (il exécute les 61 modules lançables de `study/`), pas un site à auditer |
+
+### Les 17 fichiers classés cette passe — et sur quelle base
+
+**Base de la classification, dite pour ne pas être surestimée** : ces
+verdicts viennent de la lecture du **mécanisme**, pas d'une mutation. Le
+critère est celui que ce document fixe depuis le premier sondage : lire le
+source est juste quand l'objet du test EST le texte, faux quand l'objet est
+un comportement que le texte ne fait qu'indiquer. Aucun des 17 n'est du
+second type — ils n'assertent pas sur du texte du tout.
+
+| forme | fichiers | pourquoi c'est sain |
+|---|---|---|
+| **extraction + exécution de la vraie fonction** (le fichier lance sa campagne à l'import, donc on compile la seule `FunctionDef` visée) | `study/test_fig3_periodic_coherence.py`, `study/test_fig5_depth0_cell_size.py`, `study/test_fig5_gt_threshold_scale.py`, `study/test_fig7_single_trial_dispersion.py`, `study/test_fig7_trial_perturbation_shared.py`, `study/test_fig9_synthetic_fields_solenoidal.py` | l'opérateur mesuré EST celui du dépôt ; le source est lu pour l'**exécuter**, pas pour l'inspecter. Un renommage de la fonction visée fait échouer explicitement (`pytest.fail`), pas silencieusement |
+| **interrogation structurelle de l'AST** | `test_suite_integrity.py`, `pipeline/test_compare_rotor_budget.py`, `pipeline/test_full_launch_config.py`, `pipeline/test_v1_partial_pockets.py`, `study/test_psi_coverage_inventory.py`, `study/test_t24_source_text_guards_are_behavioural.py`, `study/test_t29_verdict_excludes_only_the_compared_arms.py`, `study/test_xpoint_reaches_study.py`, `quantum/test_optimiser_axis.py`, `quantum/test_estimator_backend_axis.py` | la structure interrogée est la garantie elle-même (une conjonction, des `choices` d'argparse, une affectation d'artefact), insensible à la mise en forme |
+| **comportement, le texte n'étant que le support** | `study/test_empty_sweep_guard_shapes.py`, `study/test_t13_control_is_not_vacuous.py`, `study/test_closed_loop_budget_matched_missing_input_not_silent.py`, `study/test_repro_commands_point_to_real_files.py` | détecteurs AST **auto-testés** (ils vérifient qu'ils trouvent quelque chose), doublés d'assertions sur l'exécution réelle ou l'existence des fichiers |
+| **mention d'une déviation documentée** | `study/test_fig9_negative_control.py` (`"D-98"` dans la docstring de `pixel_prf`) | forme explicitement exigée par `VIGIL.md` : « un test vérifie que la mention y reste » |
+
+**`pipeline/test_v1_partial_pockets.py` : un site surestimé, pas un défaut.**
+`test_the_mode_parameter_is_now_read` exige par l'AST qu'un `self.mode` soit
+lu quelque part dans `runtime.py`. La garantie réelle — un mode non simulateur
+est refusé — est couverte à côté, et **comportementalement**, par
+`test_a_non_simulator_mode_is_refused_at_construction` (4 modes paramétrés).
+Le seul `self.mode` lu du fichier est celui de `_validate_mode` : la lecture
+ne peut pas disparaître sans que le test comportemental tombe d'abord. Rien
+à corriger — noté pour ne pas être resondé.
+
+**Trois fichiers sortent de la file : ils ne lisent pas un source.**
+`pipeline/test_extract_best_hyperparams_columns.py`,
+`pipeline/test_extract_best_hyperparams_selection.py` et
+`pipeline/test_recompute_lambda_scores.py` font `json.loads(...read_text())`
+sur l'**artefact que le script produit** — c'est une assertion sur une
+sortie, pas sur un texte de code. Le balayage `grep .read()` les attrapait
+par la forme ; ils n'ont jamais appartenu à la famille.
+
+### Ce que cette file laisse derrière elle
+
+**Deux défauts sur 27 fichiers audités cette passe et la précédente** —
+proportion cohérente avec l'étalonnage du dépôt, et avec ce que le premier
+sondage annonçait : la majorité des gardes est juste. Les deux trouvés
+partagent la même racine que les six qui précèdent : **une chaîne cherchée
+dans un source garde une mise en forme, jamais un comportement.** Sur les
+huit, sept ont été corrigés en passant à l'AST, et le huitième (D-151) en
+suivant l'état du shell plutôt que la ligne courante.
+
+**La forme que D-151 ajoute à la liste : l'état porté par les lignes
+précédentes.** Un parseur ligne à ligne lit chaque ligne dans un contexte
+qu'il ne connaît pas — ici le dossier courant. Il ne se trompe pas de forme :
+il se trompe d'**environnement**, et l'erreur va dans les deux sens (un faux
+rouge visible, un faux vert qui ne l'est pas). Chercher, dans les autres
+balayages du dépôt, ceux qui supposent une ligne autonome.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
