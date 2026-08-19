@@ -10,16 +10,27 @@ Un document qui promet un fichier absent est un faux vert d'un genre
 particulier : rien ne le teste, et on ne le decouvre qu'au moment ou ca
 coute.
 """
+import glob
 import os
 import re
 import subprocess
-import sys
 
 import pytest
 
 _RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _MANUEL = os.path.join(_RACINE, "docs", "MODE_EMPLOI_CAMPAGNE.md")
 _SOUMETTRE = os.path.join(_RACINE, "scripts", "soumettre_campagne.sh")
+
+
+def _nettoyer_jobs():
+    """Retire tout fichier de job laisse dans `scripts/`, quel que soit son nom.
+
+    Nettoyer par nom ATTENDU ne suffit pas : sous mutation, le generateur
+    ecrit sous un autre nom et le `finally` passe a cote — la suite laisse
+    alors des fichiers non suivis dans le depot. On balaie par motif.
+    """
+    for chemin in glob.glob(os.path.join(_RACINE, "scripts", "job_campagne*")):
+        os.remove(chemin)
 
 
 def _texte_manuel():
@@ -116,8 +127,7 @@ def test_le_job_genere_est_du_bash_valide(tmp_path, ordonnanceur, directive):
             "une variable est echappee en trop : elle serait litterale a "
             "l'execution")
     finally:
-        if os.path.exists(job):
-            os.remove(job)
+        _nettoyer_jobs()
 
 
 def test_le_generateur_refuse_un_ordonnanceur_inconnu():
@@ -137,5 +147,4 @@ def test_le_generateur_previent_quand_la_capacite_manque():
             "capacite insuffisante annoncee sans avertissement : "
             "on croirait la campagne dimensionnee")
     finally:
-        if os.path.exists(job):
-            os.remove(job)
+        _nettoyer_jobs()
