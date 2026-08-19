@@ -3396,6 +3396,49 @@ la plus rentable pour la prochaine passe.
 
 ---
 
+## Passe du 19 août (nuit, Vigil) — Q4 sur trois modules déjà audités, rien de neuf
+
+Conformément à la piste que la section précédente désigne : Q4 rejoué sur
+trois fichiers déjà « trouvés sains » ailleurs dans ce document, plus un qui
+n'y avait jamais eu d'entrée narrative propre.
+
+**`src/VQA/cost_hamiltonian.py` et `execute.py`** — relus en entier
+indépendamment (sans consulter d'abord la table `src/VQA/` plus haut dans ce
+document). Mêmes points vérifiés, même verdict : bornes du mixeur
+cohérentes entre les trois méthodes (`bounds_beta + bounds_gamma` respecte
+l'ordre `[β…, γ…]` de `initial_params`), halos gauche/haut/droite/bas de
+`create_bounded_hamiltonian` chacun lus sur leur propre famille de `theta`,
+garde de forme A0 stricte dans les deux sens. Confirme la table ci-dessus,
+n'ajoute rien de neuf — reconfirmation, pas nouvelle couverture.
+
+**`src/Simulation/RescaleArrays.py`** (242 lignes, 97 % de ligne, jamais
+lu comme un tout dans ce document malgré le pourcentage cité). Lu en
+entier, Q4 appliquée aux trois dispatchers de `get_adaptive_flux`
+(`_process_flux`, `_process_hamilt`, appelés localement ; `_process_score`,
+au niveau module) : les trois branchent sur le **même** `is_periodic_scan`
+et retombent sur les **mêmes** `_maxabs_pool_2d`/`_resize_padded_maxpool` —
+aucune des trois quantités qui descendent vers le VQA (score, coefficients,
+flux) n'a de chemin de réduction distinct, conforme à ce que la docstring
+annonce (« Les TROIS chemins … appliquent la meme reduction »). Autre Q4 :
+`_resize_padded_bilinear` et `_resize_padded_maxpool` partagent une
+structure identique d'extraction cœur/halo/coins et de réassemblage — seule
+la méthode de réduction du cœur et des halos diffère (`zoom(order=1)`
+contre max-abs), comme prévu. `_maxabs_pool_2d`/`_maxabs_pool_1d` bornent
+leurs blocs par `np.linspace(0, h, target+1).astype(int)`, qui couvre toute
+l'étendue (correction déjà en place, commentée dans le fichier). **Vérifié
+et trouvé sain.** Axe exercé : réduction périodique (`is_periodic_scan`
+vrai) et réduction à halo (patch borné, `is_periodic_scan` faux) toutes
+deux lues et comparées — c'est l'axe « bord du patch » de la fiche. Non
+exercé ici : le chemin `bh < 1` / `bs < 1` (repli sur `zoom` simple quand
+la cible est plus grande que l'entrée), jamais vu dans une trace de
+production.
+
+Aucun défaut trouvé sur ces trois fichiers cette passe. Les deux
+mesures qui ont rapporté quelque chose de neuf cette nuit portent sur des
+entrées déjà ouvertes de `DEFAUTS.md` (D-39, D-41), pas sur un module.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
