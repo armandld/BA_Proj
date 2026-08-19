@@ -44,13 +44,37 @@ def test_requirements_existe_et_couvre_la_pile():
         assert paquet in contenu, f"{paquet} absent de requirements.txt"
 
 
+#: Ce que le manuel cite mais que le depot ne versionne pas : des SORTIES,
+#: regenerees par une commande. Meme distinction que le `_SORTIES` de
+#: `test_scripts_point_somewhere.py` — une sortie absente est normale, une
+#: ENTREE absente est une promesse non tenue.
+_SORTIES_MANUEL = ("scripts/job_campagne_",)
+
+
 def test_tout_script_cite_par_le_manuel_existe():
     """Un lanceur cite mais absent est une promesse non tenue."""
     cites = set(re.findall(r"scripts/[A-Za-z0-9_]+\.(?:sh|py)", _texte_manuel()))
     assert cites, "aucun script cite : le balayage ne prouve rien"
     manquants = [c for c in sorted(cites)
-                 if not os.path.exists(os.path.join(_RACINE, c))]
+                 if not c.startswith(_SORTIES_MANUEL)
+                 and not os.path.exists(os.path.join(_RACINE, c))]
     assert not manquants, f"cites par MODE_EMPLOI mais absents : {manquants}"
+
+
+def test_les_sorties_exemptees_sont_bien_produites_par_un_script():
+    """Une exemption qui ne correspond a rien devient un trou permanent.
+
+    Sur quelle entree ce test echoue : si `job_campagne_` cesse d'etre
+    ecrit par `soumettre_campagne.sh`, l'exemption couvrirait alors un
+    fichier que plus personne ne produit — et le garde ci-dessus se
+    tairait sur une vraie promesse non tenue.
+    """
+    source = open(_SOUMETTRE, encoding="utf-8").read()
+    for sortie in _SORTIES_MANUEL:
+        nom = sortie.split("/")[-1]
+        assert nom in source, (
+            f"'{sortie}' est exempte mais {os.path.basename(_SOUMETTRE)} "
+            "ne l'ecrit plus : retirer l'exemption")
 
 
 def test_le_manuel_ne_cite_plus_l_ancien_nom_de_base():
