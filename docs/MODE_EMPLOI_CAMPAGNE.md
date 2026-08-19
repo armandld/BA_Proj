@@ -17,6 +17,77 @@ Si tu y as accès, saute la partie location : va directement en **§4
 
 ---
 
+## 0 bis. Où trouver les cœurs
+
+**Le besoin, pour cadrer** : 206 h CPU, **1 cœur et ~200 Mo par worker**,
+**~8 Mo de disque** au total, **aucun GPU**, **aucun réseau** (sauf base
+Postgres distante). C'est un profil « beaucoup de petits jobs indépendants »
+— le moins cher et le plus facile à trouver qui soit. Ne loue **pas** une
+grosse machine : loue beaucoup de petits cœurs, ou un cluster.
+
+### 1. Le HPC d'Imperial — gratuit, à essayer en premier
+
+Système de fichiers partagé, disques persistants, ordonnanceur PBS. 206 h CPU
+y est une soumission ordinaire. **C'est une demande de compte, pas un budget.**
+Voir §4 « cluster partagé » et `scripts/soumettre_campagne.sh pbs`.
+
+Autres voies gratuites du même type si Imperial n'aboutit pas : le cluster de
+ton département, un accès via un encadrant, ou une allocation nationale
+étudiante.
+
+### 2. Le cloud, si tu dois payer
+
+| offre | ce que ça vaut ici |
+|---|---|
+| **instances interruptibles** (spot AWS, preemptible GCE, Azure Spot) | **le bon choix** : ~3 à 5× moins cher que le tarif normal, et la campagne est faite pour ça — elle reprend seule depuis la base |
+| instances normales | inutilement cher pour un travail interruptible |
+| **Hetzner / OVH / Scaleway** (serveurs dédiés ou VPS) | souvent le meilleur prix au cœur-heure en Europe, facturation à l'heure ou au mois, pas d'interruption |
+| offres « HPC à la demande » | pratiques mais chères pour un besoin aussi simple |
+
+**Les prix bougent : vérifie-les le jour où tu loues.** L'ordre de grandeur
+à retenir est qu'un cœur-heure banal se compte en centimes, et que 206 h CPU
+est donc un budget de l'ordre de quelques dizaines d'euros sur des instances
+interruptibles, davantage sur des instances normales. Fais le calcul toi-même
+avec le prix affiché :
+
+```
+coût ≈ 206 × (prix du cœur-heure) × (1 / efficacité de parallélisme)
+```
+
+L'efficacité au-delà de ~9 workers simultanés **n'est pas mesurée** : c'est la
+seule inconnue du dimensionnement. Commence à 8 workers.
+
+### 3. Ce qu'il faut exiger de la machine, quelle qu'elle soit
+
+Trois propriétés, dans cet ordre — les deux premières ont déjà fait échouer
+des tentatives :
+
+1. **Un disque persistant et inscriptible.** La base *est* la campagne. Sur
+   un conteneur dont le disque est éphémère, tout est perdu à chaque
+   redémarrage.
+2. **Une durée de vie supérieure à un essai (~62 min).** Un environnement
+   recyclé plus souvent ne terminera jamais aucun essai. Mesuré ici :
+   sur un conteneur recyclé ~3 fois en quelques heures, **zéro essai
+   `COMPLETE`**.
+3. Assez de RAM pour `200 Mo × n_workers`, plus les DNS.
+
+**Ne prends pas d'instance interruptible sans disque persistant attaché.**
+La combinaison « interruptible + disque éphémère » est la seule qui ne
+marche pas du tout.
+
+### 4. Le dimensionnement, en une commande
+
+```bash
+bash scripts/soumettre_campagne.sh pbs   8 24 200   # 8 workers, 24 h
+bash scripts/soumettre_campagne.sh slurm 16 12 200  # 16 workers, 12 h
+```
+
+Le script écrit le fichier de job, annonce la capacité (`essais par worker ×
+workers`) et **prévient si elle est inférieure à la cible** — auquel cas il
+faut resoumettre, ce que la campagne supporte.
+
+---
+
 ## 1. Ce dont la machine a besoin
 
 Mesuré, pas supposé :
@@ -71,7 +142,7 @@ vérifier en miniature les vérifie tout court.
 
 | ton cas | mode | variable |
 |---|---|---|
-| **une machine**, N processus | SQLite sur volume attaché | `OPTUNA_STORAGE="sqlite:////chemin/persistant/q_has_v3.db"` |
+| **une machine**, N processus | SQLite sur volume attaché | `OPTUNA_STORAGE="sqlite:////chemin/persistant/q_has_v2_phase1.db"` |
 | **plusieurs machines**, FS partagé (NFS, Lustre) | Journal | `OPTUNA_JOURNAL=/chemin/partage/journal` |
 | **plusieurs machines**, sans partage | Postgres | `OPTUNA_STORAGE="postgresql://user:pw@hote/base"` |
 
@@ -131,7 +202,7 @@ essais de la même étude jusqu'à épuisement.
 Un lancement **par cœur**, tous sur la même base :
 
 ```bash
-OPTUNA_STORAGE="sqlite:////mnt/persist/q_has_v3.db" \
+OPTUNA_STORAGE="sqlite:////mnt/persist/q_has_v2_phase1.db" \
   bash scripts/run_reoptimisation.sh 200 0
 ```
 
@@ -157,7 +228,7 @@ python - <<'EOF'
 import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 st = optuna.load_study(study_name="q_has_v2_phase1",
-                       storage="sqlite:////mnt/persist/q_has_v3.db")
+                       storage="sqlite:////mnt/persist/q_has_v2_phase1.db")
 comp = [t for t in st.trials if t.state.name == "COMPLETE"]
 run  = [t for t in st.trials if t.state.name == "RUNNING"]
 print(f"{len(comp)} COMPLETE, {len(run)} RUNNING, {len(st.trials)} total")

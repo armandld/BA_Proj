@@ -54,7 +54,11 @@ _SORTIES = ("logs", "results/logs_v3", "results/figures",
             "results/hyperparams/best_hyperparams.regenerated.json",
             # cree par `mkdir -p` dans run_reoptimisation.sh : c'est la
             # base Optuna que la campagne PRODUIT, pas une entree.
-            "results/hyperparams/reoptimisation")
+            "results/hyperparams/reoptimisation",
+            # ecrit par soumettre_campagne.sh : le fichier de job, derive de
+            # l'ordonnanceur choisi. Il est dans .gitignore -- il se
+            # regenere, il ne se versionne pas.
+            "scripts/job_campagne_")
 
 
 def _shell_scripts():

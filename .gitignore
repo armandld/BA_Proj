@@ -34,3 +34,4 @@ data/
 # conteneur.
 results/hyperparams/reoptimisation/
 results/hyperparams/reoptimisation_launch.log
+scripts/job_campagne_*.sh
