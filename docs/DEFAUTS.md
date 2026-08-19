@@ -1709,3 +1709,71 @@ disproportion entre l'effort de calcul (chacun relance un solveur MHD
 complet, ~5 min isolé) et l'information que le test en tire. Rien de plus
 corrigé ici : ce sont des mesures qui étendent le rapport existant, pas un
 nouveau défaut.
+
+### Addendum du 19 août (Vigil, nuit) — un CINQUIÈME test, et un mécanisme différent des quatre autres
+
+Suite complète de cette passe (conteneur neuf, dépendances installées au
+début de la passe), ligne de résumé lue :
+
+```
+6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed, 652 warnings in 3710.08s (1:01:50)
+```
+
+Cinq échecs connus (D-132 ×2, trio `a0e0e02` ×3) plus **un nouveau, jamais
+vu dans aucun commentaire de PR** :
+
+```
+FAILED tests/quantum/test_optimiser_axis.py::test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]
+```
+
+Les quatre tests déjà dans ce fichier (D-165 et son premier addendum)
+n'ont **pas** rougi cette fois — cohérent avec « intermittent », pas
+disparu.
+
+**Ce que ce test vérifie.** `_MIN_RATIO["L-BFGS-B"] = 2.0`, mesuré
+`766d289` entre 2,5 et 5,8× `K_opt`. `K_opt = 20` → plancher **40**,
+assertion stricte `n > 40`.
+
+**Mesuré, deux méthodes indépendantes, même code (`VQA.execute.execute`,
+Hamiltonien-jouet à 2 qubits, `state_vector`, `K_opt = 20`) :**
+
+| méthode de mesure | tirages | échecs | ratio |
+|---|---|---|---|
+| appel direct du même code que le test | 50 | **3** (35, 40, 40) | **6 %** |
+| `pytest … -k "L-BFGS-B"`, répété | 20 | **1** | **5 %** |
+| combiné | 70 | 4 | **5,7 %** |
+
+Distribution des 50 tirages directs : moyenne **100,6**, écart-type
+**43,2**, minimum **35** — sous le plancher lui-même, et sous le minimum
+`2,5×` mesuré à `766d289` (qui aurait donné 50). La marge que la docstring
+dit « large » (2,5 à 5,8×) ne l'est plus dans ce conteneur : le minimum
+observé ici descend à **1,75×**, sous le plancher `2,0×` codé en dur.
+
+**Mécanisme distinct des quatre autres — à ne pas confondre.** Les quatre
+tests déjà documentés ici tiennent leur variance d'un bras QAOA échantillonné
+par **COBYLA sans graine fixée** — un point de départ qui bouge d'un appel à
+l'autre. `L-BFGS-B`, lui, part d'une rampe déterministe
+(`gamma_init` linéaire, `beta` à zéro) : rien dans `execute.py` ne tire de
+nombre aléatoire pour cette méthode. La variance mesurée ici ne peut venir
+que d'un chemin non associatif dans l'arithmétique flottante (BLAS
+multi-thread, `qiskit.primitives.StatevectorEstimator`) qui change de
+combien de bits le gradient par différences finies (`eps=fd_eps`) diffère
+d'un appel à l'autre — assez pour faire franchir à L-BFGS-B un critère
+d'arrêt (`ftol`, `gtol`) un pas plus tôt ou plus tard. Non prouvé au niveau
+du bit (hors périmètre de cette passe), mais c'est la seule source encore
+disponible une fois la graine du point de départ écartée.
+
+**Ce que ça change pour le décompte.** Le compteur de tests intermittents
+de ce fichier passe de quatre à **cinq**, et la famille n'est plus
+seulement « le bras QAOA n'est pas déterministe » : un optimiseur
+nominalement déterministe peut, lui aussi, voir son compte d'évaluations
+franchir un seuil calibré sur un autre conteneur. Les trois options déjà
+posées plus haut (changer de grandeur / fixer ce qui peut l'être / `xfail`
+avec compteur) s'appliquent : ici, l'option 2 (« fixer la graine ») ne
+règle rien — il n'y a pas de graine côté L-BFGS-B — donc seules 1 et 3
+restent ouvertes pour ce test précis. Rien de corrigé : mesure qui étend
+le rapport, pas une décision prise à sa place.
+
+```bash
+pytest tests/quantum/test_optimiser_axis.py -q -k "L-BFGS-B"   # ~3 s, ~1/20 attendu rouge
+```
