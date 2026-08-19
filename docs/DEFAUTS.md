@@ -1940,3 +1940,21 @@ des symptômes observés, pas à celle des causes : rien de plus à corriger
 que ce qui est déjà écrit ci-dessus. Toute future comparaison « suite
 verte / suite rouge » sur ce dépôt doit s'attendre à un membre différent de
 cet ensemble à chaque tirage, tant que le sampler n'est pas graine.
+
+### Note (Vigil, même nuit) — la cause retenue ci-dessus était déjà publiée, ailleurs, avant cette nuit
+
+`docs/RESULTS.md`, **D-118** (une passe antérieure, pas celle-ci) porte déjà
+la phrase, entre parenthèses et sans qu'elle ait été reliée ici avant
+maintenant : *« l'optimiseur est stochastique dans les deux cas,
+`EstimatorV2` tirant `default_shots` même sous
+`AerSimulator(method='statevector')` »*. Vérifié dans le code une troisième
+fois, indépendamment des deux mesures ci-dessus : `VQARuntime._init_aer_primitives`
+(`src/VQA/runtime.py`) construit l'`EstimatorV2` de `qiskit_ibm_runtime` et
+pose `options.default_shots = self.shots` **sans branche sur
+`backend_name`** — `state_vector` n'a pas de chemin séparé vers un
+estimateur analytique. Les trois sources (D-118, la mesure directe de cette
+nuit, la lecture du constructeur) s'accordent : ce n'est pas une nouvelle
+découverte isolée, c'est un fait déjà écrit qui n'avait pas traversé jusqu'à
+`D-165`, où le contraire avait été affirmé sans le vérifier contre
+`RESULTS.md`. Rien de plus à corriger ici — seulement le lien, pour que la
+prochaine relecture de `state_vector` ne reparte pas de zéro.
