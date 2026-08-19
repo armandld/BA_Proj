@@ -74,13 +74,26 @@ def legacy_forward_divergence(fx, fy):
 
 
 def curl_z(fx, fy, fixed_curl=True):
-    """Rotationnel discret : forme historique par defaut, forme 'ij' si demande."""
+    """Rotationnel discret : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
+    historique si `fixed_curl=False` est demande explicitement.
+
+    (D-175 : ce docstring disait l'inverse — « forme historique par defaut,
+    forme 'ij' si demande » — alors que `fixed_curl=True` est deja le defaut
+    de la signature. Mesure sur un champ aleatoire 8x8 : `curl_z(fx, fy)`
+    sans 3e argument est identique bit-a-bit a `forward_curl_z`, ecart a
+    `legacy_forward_curl_z` de 1,1006. Comportement inchange, seul le texte
+    etait faux ; deja epingle par `tests/solver/test_analytic_fields.py`.)
+    """
     return (forward_curl_z(fx, fy) if fixed_curl
             else legacy_forward_curl_z(fx, fy))
 
 
 def divergence(fx, fy, fixed_curl=True):
-    """Divergence discrete : forme historique par defaut, forme 'ij' si demande."""
+    """Divergence discrete : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
+    historique si `fixed_curl=False` est demande explicitement.
+
+    (D-175 : meme correction de docstring que `curl_z`, meme mesure.)
+    """
     return (forward_divergence(fx, fy) if fixed_curl
             else legacy_forward_divergence(fx, fy))
 
