@@ -368,15 +368,23 @@ seront que si un appelant apparaît.
 
 ---
 
-## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut ouvert (D-91)
+## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut trouvé (D-91, depuis clos)
 
-Note obsolète : le `TypeError` décrit ci-dessous a été corrigé le
-13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne soit
-écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit son
-`.npz`, et est désormais lu en entier, fonction par fonction (question 2 de
-`VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
+Note obsolète (deux fois) : le `TypeError` décrit ci-dessous a été corrigé
+le 13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne
+soit écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit
+son `.npz`, et est désormais lu en entier, fonction par fonction (question
+2 de `VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
 
-**D-91, ouvert** (`DEFAUTS.md`) : `compute_block_errors` divise par
+**Mise à jour (Vigil, 19 août) : D-91 a depuis été corrigé et est sorti de
+`DEFAUTS.md`.** Le titre de cette section et le paragraphe suivant le
+disaient encore « ouvert » ; ce n'est plus le cas — `RESULTS.md` porte la
+mesure avant/après (normalisation par bloc → normalisation globale par
+champ, le bruit de fond ne domine plus la structure d'un facteur 1,0e+07).
+Le paragraphe ci-dessous est laissé tel quel comme trace de ce qui a été
+trouvé ; seul son statut change.
+
+**D-91** (`DEFAUTS.md` → `RESULTS.md`, **clos**) : `compute_block_errors` divisait par
 `ref = sqrt(mean(dns_block**2)) + 1e-10`, plancher côté dénominateur
 seul — deux blocs au même écart absolu reçoivent un score qui dépend de
 l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
@@ -384,8 +392,10 @@ l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
 vraie structure), au profit de coins de fond quasi vide. C'est la cause de
 l'anomalie déjà notée dans `RESULTS.md` (D-10 : sélection ground truth
 0,3079, à peine mieux que l'absence d'AMR à 0,3074, contre 0,0208 pour
-classique/Q-HAS). Non corrigé : changer la métrique changerait ces deux
-nombres déjà publiés.
+classique/Q-HAS). **Depuis corrigé** (normalisation globale par champ au
+lieu de par bloc) et remesuré — voir `RESULTS.md`, D-91 : les deux nombres
+publiés cités ici sont ceux d'AVANT la correction, gardés pour la trace de
+ce qui a été trouvé, pas les valeurs courantes.
 
 Sain par ailleurs : `select_top_k` (testé, `argsort` décroissant correct),
 `build_patches_from_selection` (même convention `bi,bj` que les trois
