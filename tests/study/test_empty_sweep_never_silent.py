@@ -246,14 +246,32 @@ _OPTIONS_CACHE = {}
 
 
 def _options_declarees(path):
-    """Options longues que le module declare, lues a son `--help`."""
+    """Options longues que le module declare, lues a son `--help`.
+
+    D-173 : un `--help` en echec (code != 0) etait auparavant traite comme
+    « le module ne declare aucune option » (repli sur `None`), aussi bien
+    quand le module s'arrete avant argparse (dependance manquante,
+    `ImportError`/`ModuleNotFoundError` a l'import) que dans tout autre cas.
+    argparse rend toujours 0 sur `-h`/`--help` quand il est atteint : un
+    code non nul ne prouve donc jamais l'absence de selecteur, il prouve
+    seulement que quelque chose a plante avant. Mesure : `qiskit_ibm_runtime`
+    absent d'un conteneur neuf a fait passer 5 modules reels (dont
+    `qaoa_inputs.py`, qui declare `--scenario`) pour « sans selecteur »,
+    faisant chuter `couverts` de 54 a 49 sans qu'aucune couverture n'ait
+    change. On leve maintenant plutot que de classer en silence."""
     if path not in _OPTIONS_CACHE:
         r = subprocess.run([sys.executable, path, "--help"],
                            capture_output=True, text=True,
                            cwd=_REPO_ROOT, timeout=300)
-        _OPTIONS_CACHE[path] = (set(re.findall(r"(?<![\w-])(--[a-zA-Z][a-zA-Z0-9-]*)",
+        if r.returncode != 0:
+            raise RuntimeError(
+                f"{path} : `--help` a echoue (code {r.returncode}), donc "
+                "ne peut pas etre classe. Environnement incomplet "
+                "(dependance manquante a l'import) ou vrai defaut du "
+                f"module -- a distinguer avant de continuer.\nstderr :\n"
+                f"{r.stderr.strip()[-800:]}")
+        _OPTIONS_CACHE[path] = set(re.findall(r"(?<![\w-])(--[a-zA-Z][a-zA-Z0-9-]*)",
                                                r.stdout + r.stderr))
-                                if r.returncode == 0 else None)
     return _OPTIONS_CACHE[path]
 
 
@@ -339,6 +357,35 @@ def test_the_detector_itself_can_fail():
         os.unlink(tmp)
 
 
+def test_options_declarees_leve_plutot_que_de_classer_un_import_casse():
+    """Epingle D-173 : un `--help` en echec n'est plus classe en silence.
+
+    Ancien comportement : un module qui plante a l'import (dependance
+    manquante) rendait `_options_declarees` -> `None`, indiscernable d'un
+    module qui declare vraiment 0 option. `qiskit_ibm_runtime` absent d'un
+    conteneur a fait passer `qaoa_inputs.py` (qui declare `--scenario`) et
+    4 autres modules pour « sans selecteur », faisant chuter `couverts`
+    de 54 a 49 -- rapporte a tort comme regression possible dans
+    `COUVERTURE.md`. `_options_declarees` leve desormais sur tout
+    `--help` en echec."""
+    import tempfile
+    src = ("import ce_module_n_existe_pas_du_tout\n"
+           "import argparse\n"
+           "p = argparse.ArgumentParser()\n"
+           "p.add_argument('--scenario')\n"
+           "p.parse_args()\n")
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
+                                      dir=_REPO_ROOT) as fh:
+        fh.write(src)
+        tmp = fh.name
+    try:
+        with pytest.raises(RuntimeError, match="ne peut pas etre classe"):
+            _options_declarees(tmp)
+    finally:
+        os.unlink(tmp)
+        _OPTIONS_CACHE.pop(tmp, None)
+
+
 def test_le_selecteur_choisit_une_option_que_le_module_declare():
     """Epingle D-157 : sur quelle entree l'ancienne invocation echouait-elle ?
 
@@ -372,9 +419,22 @@ def test_le_selecteur_choisit_une_option_que_le_module_declare():
 def test_le_balayage_comportemental_couvre_ce_qu_il_annonce():
     """Combien de modules recoivent une invocation qu'ils ACCEPTENT ?
 
-    Mesure du 18 aout 2026 : 61 modules lancables, 6 exemptes avec leur
-    raison, **55 couverts**. Avant D-157, 21 des 60 lances mouraient dans
-    argparse — le test passait sans qu'ils executent une ligne."""
+    D-173 : le docstring precedent annoncait « 61 modules lancables, 6
+    exemptes, 55 couverts » -- deja imprecis (`_EXEMPTIONS` en compte 7,
+    pas 6), mais sans consequence sur ce plancher tant que `couverts`
+    restait au-dessus. Une passe de `COUVERTURE.md` (18 aout), elle,
+    contournait `sans_selecteur` pour mesurer 49, rapporte comme suspect et
+    laisse en decision humaine. Cause identifiee : `qiskit_ibm_runtime`
+    absent du conteneur qui a fait cette mesure faisait planter l'import de
+    5 modules reels (dont `qaoa_inputs.py`, qui declare bien `--scenario`)
+    avant qu'ils n'atteignent argparse -- `_options_declarees` classait ce
+    plantage en silence comme « aucune option declaree ». Ce n'est ni une
+    regression ni une ambiguite de conception : dependance installee,
+    mesure du 19 aout 2026 dans ce conteneur, **61 lancables, 7 exemptes,
+    0 sans selecteur, 54 couverts** -- `_options_declarees` leve desormais plutot
+    que de classer un `--help` en echec. Avant D-157, 21 des 60 lances
+    mouraient dans argparse — le test passait sans qu'ils executent une
+    ligne."""
     couverts, sans_selecteur = [], []
     for p in _LANCABLES:
         rel = os.path.relpath(p, _REPO_ROOT)
@@ -387,6 +447,13 @@ def test_le_balayage_comportemental_couvre_ce_qu_il_annonce():
     assert not sans_selecteur, (
         "modules sans selecteur de donnees et sans exemption ecrite : "
         f"{sans_selecteur}")
-    assert len(couverts) >= 50, (
-        f"{len(couverts)} modules couverts — mesure du 18 aout : 55. "
-        "Le balayage s'est vide sans que personne ne le dise")
+    #  D-173 : le plancher de 50 n'etait pas le probleme -- 54 >= 50 passait
+    #  deja, dependances completes. Ce qui bloquait cette assertion, c'est
+    #  celle du dessus : 5 modules reels classes a tort `sans_selecteur`
+    #  par un `_options_declarees` qui confondait un import casse avec une
+    #  absence de selecteur (corrige plus haut). Porte a 54, la valeur
+    #  reelle mesuree ici, par coherence avec le patron des planchers
+    #  voisins (le plancher pointe la valeur mesuree, pas une marge devinee).
+    assert len(couverts) >= 54, (
+        f"{len(couverts)} modules couverts — mesure du 19 aout 2026 (D-173) : "
+        "54. Le balayage s'est vide sans que personne ne le dise")

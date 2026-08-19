@@ -3293,23 +3293,26 @@ relues une à une, avec l'opérateur assorti à chacune. Statut final :
     `test_patches_classical_score_provenance.py` (`>=50`, réel 56, 1,1×),
     `test_repro_commands_point_to_real_files.py:228` (`>=20`, réel 32,
     déjà daté « 29 » dans le docstring, 1,45× à l'écriture).
-- **1 entrée signalée, non corrigée — décision humaine requise** :
-  `test_empty_sweep_never_silent.py:390` (`len(couverts) >= 50`, docstring
-  « mesure du 18 août : 55 »). Ce test est **actuellement masqué** : il
-  échoue avant d'atteindre cette assertion, sur
-  `assert not sans_selecteur` (5 modules sans sélecteur de données ni
-  exemption écrite — `qaoa_inputs.py`, `h3_depth_report.py`,
-  `h3_size_scan.py`, `h3_uncertainty_window.py`, `pipeline/sanity_check.py`
-  — préexistant, mesuré identique avant/après cette passe par
-  `git stash`, hors périmètre de la file des planchers). En contournant
-  ce blocage pour mesurer directement `couverts`, la valeur réelle
-  aujourd'hui est **49** — **sous le plancher de 50 et sous les 55
-  documentés** : ce n'est pas un plancher trop bas qui ne détecte rien,
-  c'est l'inverse, un plancher qui *devrait déjà mordre* si le test
-  l'atteignait. Ne pas corriger sans investiguer : est-ce une régression
-  réelle (des modules ont perdu leur couverture) ou le même défaut de
-  périmètre qui masque le test ? Mesuré, documenté, **non corrigé**, à
-  trancher par un humain.
+- **Entrée résolue — D-173 (19 août) : ce n'était ni une régression ni un
+  plancher trop haut, mais un conteneur incomplet.** `sans_selecteur`
+  (5 modules — `qaoa_inputs.py`, `h3_depth_report.py`, `h3_size_scan.py`,
+  `h3_uncertainty_window.py`, `pipeline/sanity_check.py`) n'était pas
+  préexistant au sens d'un vrai défaut : `qiskit_ibm_runtime` manquait du
+  conteneur qui a produit cette mesure comme de celui de la passe
+  précédente (le `git stash` comparait deux mesures également incomplètes,
+  donc les trouvait identiques sans que ni l'une ni l'autre ne soit
+  juste). Les 5 modules importent `VQA.execute`, qui importe
+  `qiskit_ibm_runtime` ; son absence faisait planter leur `--help` **avant
+  argparse**, et `_options_declarees` classait ce plantage en silence
+  comme « aucune option déclarée » — repli silencieux, la forme de défaut
+  déjà cataloguée par `VIGIL.md`. Dépendance installée, mesuré à nouveau :
+  `qaoa_inputs.py --help` déclare bien `--scenario`, et les 5 modules
+  passent. **Valeur réelle, dépendances complètes : 61 lançables, 7
+  exemptés, 0 sans sélecteur, 54 couverts** — ni 49 ni les 55 du docstring
+  périmé. `_options_declarees` lève désormais sur tout `--help` en échec
+  au lieu de classer ; plancher porté à `>= 54` ; test ajouté qui épingle
+  le nouveau comportement sur un module synthétique à import cassé. Voir
+  `RESULTS.md`.
 
 ---
 
