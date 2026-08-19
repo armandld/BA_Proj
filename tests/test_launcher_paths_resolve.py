@@ -327,20 +327,66 @@ def test_each_exemption_still_names_a_real_dead_path():
 def test_a_cd_on_its_own_line_moves_the_targets_that_follow():
     """Epinglage de l'ancien comportement, sur le lanceur qui l'a revele.
 
-    `scripts/run_reoptimisation.sh` fait `cd "$ROOT_DIR/src"` (ligne 69) puis
-    `python train_hyperparams.py` (ligne 72). Le fichier invoque est donc
+    `scripts/run_reoptimisation.sh` fait `cd "$ROOT_DIR/src"` sur sa propre
+    ligne, puis `python train_hyperparams.py`. Le fichier invoque est donc
     `src/train_hyperparams.py`, qui existe.
 
     Sur quelle entree ce test echoue : sur le parseur d'avant D-151, qui
     resolvait la cible contre la racine du depot et rendait
     `train_hyperparams.py` — absent, donc un ROUGE sur un lanceur juste.
+
+    **Seuil remesure le 18 aout 2026.** Les numeros de ligne etaient
+    epingles en dur (`cd` ligne 69, invocation ligne 72). L'ajout des
+    gardes 4 et 5 au lanceur les a deplaces a 101 et 104 — un decalage sans
+    rapport avec la propriete testee, qui rendait le test rouge sur un
+    lanceur juste. La constante est remplacee par une localisation : on
+    cherche la ligne du `cd`, et on verifie l'invocation qui la suit. La
+    propriete epinglee est inchangee ; seule sa facon de designer la ligne
+    ne depend plus de la longueur du fichier.
     """
     lanceur = os.path.join(_ROOT, "scripts", "run_reoptimisation.sh")
+    lignes = open(lanceur, encoding="utf-8").read().splitlines()
+    cd_ln = next((i + 1 for i, l in enumerate(lignes)
+                  if l.strip() == 'cd "$ROOT_DIR/src"'), None)
+    assert cd_ln is not None, (
+        "le lanceur ne fait plus de `cd` sur sa propre ligne : ce test "
+        "n'epingle plus rien, le retirer ou le reecrire")
+
     cibles = dict((ln, t) for t, ln in _invocations(lanceur))
-    assert cibles.get(72) == "src/train_hyperparams.py", (
-        f"ligne 72 resolue en {cibles.get(72)!r} au lieu de "
-        "'src/train_hyperparams.py' : le `cd` de la ligne 69 est ignore")
-    assert os.path.exists(os.path.join(_ROOT, cibles[72]))
+    apres = {ln: t for ln, t in cibles.items() if ln > cd_ln}
+    assert apres, f"aucune invocation apres le `cd` (ligne {cd_ln})"
+    ln_cible = min(apres)
+    assert apres[ln_cible] == "src/train_hyperparams.py", (
+        f"ligne {ln_cible} resolue en {apres[ln_cible]!r} au lieu de "
+        f"'src/train_hyperparams.py' : le `cd` de la ligne {cd_ln} est ignore")
+    assert os.path.exists(os.path.join(_ROOT, apres[ln_cible]))
+
+
+def test_a_cd_inside_a_command_substitution_does_not_move_what_follows():
+    """L'autre moitie de D-151, exercee depuis le 18 aout par le lanceur.
+
+    `ETUDE="$(cd "$ROOT_DIR/src" && python -c ...)"` contient un `cd`, mais
+    dans un sous-shell : il ne deplace PAS le dossier courant des lignes
+    suivantes. Un parseur qui le prendrait pour un `cd` reel resoudrait
+    toutes les cibles suivantes sous `src/` et les declarerait absentes.
+
+    Sur quelle entree ce test echoue : sur un parseur qui traite n'importe
+    quel `cd` de la ligne comme un changement de dossier persistant.
+    """
+    lanceur = os.path.join(_ROOT, "scripts", "run_reoptimisation.sh")
+    lignes = open(lanceur, encoding="utf-8").read().splitlines()
+    sub_ln = next((i + 1 for i, l in enumerate(lignes)
+                   if l.startswith("ETUDE=") and "cd " in l), None)
+    if sub_ln is None:
+        pytest.skip("le lanceur ne contient plus de `cd` en substitution")
+
+    cibles = dict((ln, t) for t, ln in _invocations(lanceur))
+    suivantes = {ln: t for ln, t in cibles.items() if ln > sub_ln}
+    assert suivantes, "aucune invocation apres la substitution : rien a prouver"
+    for ln, cible in sorted(suivantes.items()):
+        assert os.path.exists(os.path.join(_ROOT, cible)), (
+            f"ligne {ln} resolue en {cible!r}, qui n'existe pas : le `cd` "
+            f"en sous-shell de la ligne {sub_ln} a ete pris pour un `cd` reel")
 
 
 def test_a_homonym_at_the_repository_root_no_longer_validates_the_target(tmp_path):

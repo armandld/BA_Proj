@@ -17,6 +17,7 @@ Les tests construisent leurs propres bases SQLite : ils ne dependent
 d'aucun artefact du depot et ne peuvent donc pas devenir verts par
 disparition de leur entree.
 """
+import importlib.util
 import os
 import sqlite3
 import subprocess
@@ -26,10 +27,26 @@ import pytest
 
 _RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _SCRIPTS = os.path.join(_RACINE, "scripts")
-sys.path.insert(0, _SCRIPTS)
 
-import inventaire_campagne as inv          # noqa: E402
-import nettoyer_essais_fantomes as net     # noqa: E402
+
+def _charger(nom):
+    """Charge un script de `scripts/` depuis son chemin.
+
+    `scripts/` n'est pas une racine d'import de la suite — le depot y
+    reference ses fichiers par chemin (cf. `test_extract_best_hyperparams_*`),
+    et `tests/test_suite_integrity.py` signale tout `import` de module qui ne
+    resout pas sous les racines declarees. On charge donc explicitement,
+    sans toucher a `sys.path`.
+    """
+    chemin = os.path.join(_SCRIPTS, nom + ".py")
+    spec = importlib.util.spec_from_file_location(nom, chemin)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+inv = _charger("inventaire_campagne")
+net = _charger("nettoyer_essais_fantomes")
 
 
 # ------------------------------------------------------------------
