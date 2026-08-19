@@ -3317,6 +3317,83 @@ relues une à une, avec l'opérateur assorti à chacune. Statut final :
 
 ---
 
+## Passe du 19 août (suite) — `study/common/rho_gap_f1.py`, dernier fichier hors de ce document, et `src/Simulation/PhysToAngle.py` rouvert par Q4 (D-175)
+
+`rho_gap_f1.py` (136 lignes) n'était cité nulle part dans ce document —
+seul fichier de `src/`+`study/`+`figures/` dans ce cas, confirmé par
+comparaison automatique de la liste des `.py` du dépôt contre le texte de
+ce fichier. Lu en entier, les quatre questions posées :
+
+1. **Pourquoi il existe** — c'est le critère pré-enregistré de la
+   campagne : rho(E_gap, F1) positif → la forme de l'hamiltonien est en
+   cause, négatif → le réglage suffit. Retiré, aucune décision post-campagne
+   ne serait mesurable.
+2. **Ce qu'il promet** — la docstring et la bannière de `main()` citent
+   « rho = +0,870, p = 0,0023, 9 solveurs » comme référence (déjà corrigée
+   par D-172). Rejoué sur l'artefact qu'il nomme
+   (`h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`) :
+   **rho = +0,870, p = 0,0023, 9 solveurs**, bannière et calcul identiques,
+   aucun écart.
+3. **Ce qu'il consomme** — `d["solver"]`, `d["E_gap"]`, `d["f1"]` : ce sont
+   exactement les trois clés que `h0_optimiser_equivalence.py` écrit
+   (`records`, ligne ~853-860). Pas de clé homonyme sans rapport.
+4. **Deux chemins censés coïncider** — l'agrégation par solveur
+   (`np.nanmean` par nom, sur les lignes qui portent ce nom) reproduit
+   exactement l'agrégation que `h0_optimiser_equivalence.py` calcule
+   déjà pour son propre tableau récapitulatif (lignes 819-838, même
+   `np.mean` par solveur) : opérateur assorti. `--dim` y est un entier
+   unique par artefact (le nom de fichier le porte), donc `rho_gap_f1.py`
+   ne peut pas mélanger deux dimensions dans une même moyenne par solveur.
+
+**Vérifié et trouvé sain.** Axes empruntés : aucun des sept axes de la
+fiche n'est pertinent ici (module de post-traitement statique, pas de
+solveur/QAOA/AMR à l'exécution) — l'axe qui s'applique est « artefact
+`dim=3`, 9 solveurs, régime déjà utilisé par D-172 », rejoué une fois,
+sain. Non exercé : le cas `--json`, et le cas où plusieurs fichiers sont
+passés en une commande (branche `signes mélangés`).
+
+**Rouverture par Q4 : `src/Simulation/PhysToAngle.py`.** Le fichier était
+déjà couvert en ligne (100 %, tableau §1) et ses fonctions individuellement
+citées à plusieurs reprises (`_psi_from_pipeline` ligne 483,
+`classical_score` lignes 1233/1666, `compute_stress_flux` ligne 2591) mais
+jamais lu comme un tout ni déclaré « lu en entier ». Lu en entier ici,
+187 lignes. `_lohner_estimator`, `compute_stress_flux` (le partage
+normale/tangentielle de D-37) et `classical_score` (convention d'axes de
+D-1) portent déjà leur historique de correction en commentaire, avec
+justification écrite et test qui l'épingle — rien de neuf sur ces trois-là,
+vérifié à nouveau plutôt que supposé. La question 4 appliquée à
+`Simulation.grid.curl_z`/`divergence`, que `classical_score` appelle,
+a mordu — voir **D-175** ci-dessous.
+
+### D-175 — `curl_z`/`divergence` : la docstring annonçait l'inverse du défaut réellement exécuté
+
+`grid.py:76-85` documentait « forme historique par défaut, forme 'ij' si
+demandé », alors que `fixed_curl=True` — la forme 'ij'/`forward_*`,
+conforme à `AXIS_X`/`AXIS_Y` — est déjà le défaut des deux signatures.
+Mesuré : `curl_z(vx, vy)` sans troisième argument, champ 8×8 aléatoire
+(`seed=0`), identique bit à bit à `forward_curl_z`, écart à
+`legacy_forward_curl_z` de **1,1006**. Même mesure pour `divergence`.
+
+Question 4 appliquée à ce module précisément parce qu'il sert de référence
+au reste de `src/` (`HamiltParams`, `HamiltParams_v2`, `PhysToAngle` en
+héritent tous par `self.fixed_curl`) : les sept sites d'appel réels
+passent tous `fixed_curl` explicitement (grep vérifié), et
+`tests/solver/test_analytic_fields.py:445-447` épinglait déjà
+`curl_z(vx, vy) == forward_curl_z(vx, vy)` sur l'appel par défaut — c'est
+le texte qui contredisait un comportement déjà mesuré et déjà testé, pas
+le comportement qui était faux. Hors chemin critique (aucune valeur,
+aucun appelant, aucun nombre publié ne bouge) : une ligne dans
+`RESULTS.md`, pas d'entrée `DEFAUTS.md`. Docstrings corrigées ; comportement
+réverifié identique après coup (0,0e+00 d'écart) ; `pytest
+tests/solver/test_analytic_fields.py -q` : **53 passed** avant et après.
+
+**Terrain neuf de fichiers épuisé** : tout `.py` de `src/`, `study/`,
+`figures/`, `scripts/` est maintenant cité par ce document. Ce qui reste
+à faire relève soit d'une décision USER (les 14 entrées de `DEFAUTS.md`),
+soit d'une réouverture par Q4 d'un module déjà « trouvé sain » — c'est par
+cette seconde voie que D-175 est venu, et la même méthode reste la piste
+la plus rentable pour la prochaine passe.
+
 ---
 
 ## Tenir ce document à jour
