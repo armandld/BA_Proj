@@ -1910,3 +1910,33 @@ change : la cause commune aux cinq est le sampler/estimateur non graine de
 flottant non élucidé — ce qui rouvre l'option 2 (« fixer la graine ») pour
 L-BFGS-B aussi, contrairement à ce que l'addendum précédent concluait :
 grainer le sampler réglerait ce test comme les quatre autres.
+
+### Addendum du 19 août (nuit, suite) — la suite complète rejouée une deuxième fois confirme la cause par un SIXIÈME test, différent du cinquième
+
+Suite complète relancée après les deux addenda ci-dessus (aucune ligne de
+`src/`/`study/` touchée par eux, seulement `docs/DEFAUTS.md`) :
+
+```
+6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed in 3705,58s (1:01:45)
+```
+
+**Même compte, ensemble différent.** Les cinq connus sont revenus (D-132
+×2, trio `a0e0e02`), mais le sixième n'est **plus** le test L-BFGS-B de
+`test_optimiser_axis.py` — cette fois c'est
+`tests/pipeline/test_module_validation.py::TestQAOAExecution::test_strong_positive_Z_drives_to_one`,
+jamais vu rouge dans aucun commentaire de PR jusqu'ici. Il asserte
+`avg_p1 > 0.5` sur les marginales rendues par un run QAOA réel — une
+assertion à marge serrée sur une sortie du même sampler non graine, donc
+exactement la même famille de cause que celle établie plus haut, pas un
+mécanisme de plus.
+
+**C'est la confirmation la plus forte de cette passe** : le « jeu connu »
+n'est pas un ensemble fixe de cinq ou six tests, c'est UN défaut
+(sampler/estimateur non graine dans `src/VQA/`) qui touche, à chaque
+exécution, un membre différent d'un ensemble de tests à marge serrée sur
+des sorties échantillonnées — dont l'ensemble complet n'est pas
+inventorié ici. `test_strong_positive_Z_drives_to_one` s'ajoute à la liste
+des symptômes observés, pas à celle des causes : rien de plus à corriger
+que ce qui est déjà écrit ci-dessus. Toute future comparaison « suite
+verte / suite rouge » sur ce dépôt doit s'attendre à un membre différent de
+cet ensemble à chaque tirage, tant que le sampler n'est pas graine.
