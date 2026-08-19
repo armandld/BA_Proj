@@ -546,6 +546,66 @@ for sc in ['harris_tearing', 'kelvin_helmholtz', 'mhd_rotor', 'orszag_tang']:
 "
 ```
 
+**Addendum du 19 août (Vigil) — l'hypothèse de cause testée par résolution
+croisée, à Re=400 fixe.** Les DNS existantes couvrent N=64/96/256 pour les
+quatre scénarios canoniques à Re constant : de quoi observer directement
+comment `v_jump_max` (numérateur du rapport) réagit à `dx`, plutôt que de
+le supposer. Snapshot médian, même opérateur que `HamiltParams`
+(`_get_vector_jump`) :
+
+| scénario | v_jump·N (N=64) | v_jump·N (N=96) | v_jump·N (N=256) | variation N=64→256 |
+|---|---|---|---|---|
+| harris_tearing | 0,1634 | 0,1573 | 0,1168 | **−29 %** |
+| kelvin_helmholtz | 12,355 | 12,428 | 12,491 | **+1 %** (plat) |
+| mhd_rotor | 160,65 | 208,55 | 294,28 | **+83 %**, croissant |
+| orszag_tang | 57,37 | 67,26 | 62,20 | +8 %, non monotone |
+
+Si `v_jump` suit un gradient physique résolu (champ lisse), `v_jump ∝ dx`
+et `v_jump·N` doit rester **constant** quand `N` varie à `Re` fixé — c'est
+l'hypothèse (a) de cause. Si `v_jump` porte un vrai saut de grille (choc),
+il ne s'écrase pas avec `dx`, et `v_jump·N` doit **croître** avec `N`.
+
+**Ce qui est établi.** Les deux scénarios que D-41 dit lisses sont bien
+ceux dont `v_jump·N` varie le moins (≤ 29 % sur un facteur 4 en résolution,
+contre un facteur ~22 pour le rapport `v_jump/v_jump_crit` lui-même, qui
+lui s'écrase en `dx²` comme prédit) — `kelvin_helmholtz` est quasiment
+invariant (**+1 %**). `mhd_rotor`, le scénario à choc le plus net dans
+D-41 (100 % des cellules franchissent le seuil), est celui dont
+`v_jump·N` **croît** le plus (+83 %) : le saut ne s'écrase pas, il se
+précise à mesure que le maillage se resserre — signature inverse de
+celle des deux scénarios lisses. `orszag_tang`, que D-41 mesure
+intermédiaire (70 % des cellules), a un `v_jump·N` non monotone, cohérent
+avec un mélange de région lisse et de région choquée.
+
+**Ce que ça ne tranche toujours pas.** La mesure resserre l'hypothèse de
+cause — elle n'était pas mesurée en croisant les résolutions avant cette
+passe — mais elle ne dit pas laquelle des options (a)/(b) choisir : `(a)`
+reste défendable (le hamiltonien v1 est structurellement aveugle aux
+scénarios lisses à résolution DNS, par construction et non par bug), et
+`(b)` n'est ni confirmée ni écartée par cette mesure seule. Décision
+toujours à USER.
+
+```bash
+python3 -c "
+import sys, numpy as np
+sys.path.insert(0, 'src')
+def get_vector_jump(f_x, f_y, axis):
+    df_x = f_x - np.roll(f_x, -1, axis=axis)
+    df_y = f_y - np.roll(f_y, -1, axis=axis)
+    return np.sqrt(df_x**2 + df_y**2)
+Re = 400
+for sc in ['harris_tearing', 'kelvin_helmholtz', 'mhd_rotor', 'orszag_tang']:
+    print(sc)
+    for N in [64, 96, 256]:
+        d = np.load(f'results/dns_{sc}_Re{Re}_N{N}.npz')
+        vx = d['vx'].astype(float); vy = d['vy'].astype(float)
+        si = len(d['t']) // 2
+        vj = max(get_vector_jump(vx[si], vy[si], 1).max(),
+                 get_vector_jump(vx[si], vy[si], 0).max())
+        print(f'  N={N} v_jump*N={vj*N:.4f}')
+"
+```
+
 ---
 
 
