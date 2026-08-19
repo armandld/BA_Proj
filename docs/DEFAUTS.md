@@ -1710,6 +1710,107 @@ complet, ~5 min isolé) et l'information que le test en tire. Rien de plus
 corrigé ici : ce sont des mesures qui étendent le rapport existant, pas un
 nouveau défaut.
 
+### Addendum du 19 août (nuit) — ⚠️ la cause attribuée ci-dessus est fausse : `state_vector` échantillonne, l'attribution à COBYLA tombe
+
+**Une lecture publiée tombe.** Les deux paragraphes ci-dessus affirment deux
+fois : *« bâtis sur `backend="state_vector"` (expectation exacte, pas
+d'échantillonnage) … la variabilité ne vient donc pas de bruit de mesure
+quantique, mais de l'optimiseur COBYLA … dont le point de départ n'est fixé
+par aucune graine »*. **Les deux moitiés de cette phrase sont fausses**,
+mesurées séparément :
+
+1. **Le point de départ EST fixé.** `src/VQA/execute.py` (`initial_params`,
+   ligne ~95) calcule `x0` par une rampe linéaire déterministe
+   (`gamma_init = (2·k)/(reps·(reps+1))·gamma_total`, mixeur à 0) — aucun
+   `np.random` sur ce chemin, `warm_start_params=None` dans tous les appels
+   des tests concernés. Rejoué dix fois de suite avec les mêmes arguments,
+   `initial_params` est bit-à-bit identique. Ce n'est pas une hypothèse non
+   mesurée : c'est la lecture du code qui construit `x0`.
+
+2. **`state_vector` n'est PAS une expectation exacte.** `VQARuntime.__init__`
+   (`src/VQA/runtime.py:128`) pose `self._estimator.options.default_shots =
+   self.shots` **sans distinguer `backend_name`** — `state_vector` reçoit le
+   même `shots=1024` que `aer`. Mesuré : cinq appels de
+   `runtime.estimator.run([(qc, op, params)])` avec un `qc` et un `params`
+   **identiques**, backend `state_vector` :
+
+   ```
+   -0.310546875, 0.15625, 0.12890625, 0.15625, 0.00390625
+   ```
+
+   Chacune est un multiple exact de 1/1024 (`-318/1024`, `160/1024`,
+   `132/1024`, `160/1024`, `4/1024`) — la signature d'un tirage à 1024
+   coups, pas d'un calcul analytique. Le docstring de
+   `VQARuntime` le dit d'ailleurs lui-même sans qu'on l'ait lu jusqu'ici :
+   *« `state_vector`… fonctionnellement équivalent à `aer` pour les petits
+   circuits »* — équivalent veut dire même échantillonnage, pas expectation
+   exacte. Et `tests/quantum/test_qaoa_arm_is_sampled.py` (même famille,
+   même fichier) le savait déjà dans son propre docstring d'ouverture :
+   *« aucune graine n'est fixée dans `src/VQA/` — ni `seed_simulator`, ni
+   `np.random.seed`, ni graine passée au sampler »* — c'est le tirage, pas
+   l'optimiseur, que ce fichier avait déjà correctement nommé avant que mon
+   addendum précédent ne le réattribue à tort.
+
+**La vraie cause** : le sampler et l'estimateur ne sont jamais graines nulle
+part dans `src/VQA/`, sur aucun backend, `state_vector` compris. COBYLA (ou
+tout autre optimiseur) reçoit donc une fonction de coût BRUITÉE à chaque
+appel, même avec un `x0` fixe — c'est le bruit de tirage qui se propage
+dans la trajectoire d'optimisation, pas une graine d'initialisation absente.
+
+### Ce que ça ajoute : un cinquième test touché, dans un fichier différent, avec un optimiseur différent — signature qui confirme la vraie cause plutôt que la fausse
+
+`tests/quantum/test_optimiser_axis.py::test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]`
+(D-119, fichier disjoint de la famille ci-dessus) a échoué dans la suite
+complète de cette passe : `n=10` évaluations pour `K_opt=20`, plancher `40`
+(`assert 10 > 40`). Isolé, 5/5 passent. **50 tirages isolés** de
+`_count_evaluations("L-BFGS-B")`, mêmes arguments, même `x0` déterministe :
+
+```
+[35, 40, 40, 55, 55, 60, 60, 65, 65, 70, 70, 70, 75, 75, 80, 80, 85, 85, 85,
+ 90, 90, 90, 90, 95, 95, 95, 95, 95, 95, 95, 95, 105, 105, 110, 110, 110,
+ 115, 115, 115, 125, 125, 130, 135, 135, 150, 150, 165, 185, 190, 285]
+moyenne 100,6 — écart-type 43,2 — 3/50 sous le plancher de 40 (6 %)
+```
+
+C'est exactement la signature attendue **si la cause est le bruit de
+tirage plutôt qu'un `x0` non graine** : L-BFGS-B, contrairement à COBYLA,
+n'a **aucune** source de hasard propre — `x0` fixe, gradient par différences
+finies déterministe pour une fonction déterministe. Que sa trajectoire
+varie quand même d'un facteur 8 (35 à 285) sur 50 tirages identiques est
+incompatible avec « le point de départ n'est pas graine » (il l'est), et
+cohérent avec un objectif dont l'evaluateur lui-même est bruité à chaque
+appel : le critère d'arrêt par gradient de scipy, sensible au bruit,
+s'arrête tôt ou tard selon le tirage de shots rencontré à chaque évaluation.
+`n=10` (suite complète) est même en dessous du minimum observé sur les 50
+tirages isolés (35) — pas expliqué plus finement ici, effort non poursuivi.
+
+**Ce que ça change pour le décompte.** La famille D-165 compte désormais
+un **cinquième** test, dans un fichier et sur un optimiseur qu'elle ne
+couvrait pas encore : `test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]`.
+Le plancher `_MIN_RATIO["L-BFGS-B"] = 2.0` (`_K_OPT=20` → 40) calibré sur
+6 tirages à `766d289` ne couvre pas la queue basse mesurée ici sur 50 : la
+même faute de calibration que celle déjà nommée pour `test_K_ZZZZ`
+(*« un contraste asserti à 2σ variait d'un facteur 3,5 »*).
+
+**Rien n'est corrigé ici, toujours** : les trois options déjà posées plus
+haut (changer de grandeur assertée, graine fixe pour les tests qui n'ont
+pas besoin de variance comme garantie, `xfail(strict=False)` en attendant)
+s'appliquent à ce cinquième test aussi bien qu'aux quatre premiers — sauf
+qu'elles se posent maintenant sur la bonne cause : **grainer
+`seed_simulator`/le sampler dans `src/VQA/`**, pas dans les tests, réglerait
+COBYLA, L-BFGS-B et le rang de Spearman du bras échantillonné d'un seul
+geste, précisément parce que la source est commune. Décision requise :
+graine fixe par défaut change le comportement de `src/`, ce que
+`VIGIL.md`/`CLAUDE.md` réservent à USER.
+
+**Ce que ça ne touche pas.** Aucun nombre publié ne dépend de ce mécanisme :
+tous les tests de cette famille sont des gardes, aucun n'alimente
+`docs/RESULTS.md`. La suite complète de cette passe rend le jeu connu
+exact plus ce cinquième — `6 failed, 2920 passed, 74 skipped, 5 deselected,
+4 xfailed in 3710,08s (1:01:50)`, commande `python -m pytest tests/ -q -m
+"not slow"`, arbre `36dd714` (sommet de la branche vive à l'arrivée de
+cette passe).
+
 ### Addendum du 19 août (Vigil, nuit) — un CINQUIÈME test, et un mécanisme différent des quatre autres
 
 Suite complète de cette passe (conteneur neuf, dépendances installées au
