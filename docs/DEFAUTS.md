@@ -1878,3 +1878,35 @@ le rapport, pas une décision prise à sa place.
 ```bash
 pytest tests/quantum/test_optimiser_axis.py -q -k "L-BFGS-B"   # ~3 s, ~1/20 attendu rouge
 ```
+
+### Note de réconciliation — l'addendum ci-dessus a été écrit avant celui qui précède dans ce fichier (« la cause attribuée ci-dessus est fausse »), pas après
+
+Les deux addenda ci-dessus ont été poussés la même nuit, par deux passages
+du même agent sur la même branche, sans que l'un ait vu l'autre — d'où
+l'ordre physique inversé dans ce fichier (le second écrit apparaît avant le
+premier). Deux de ses affirmations sont **remplacées** par la mesure de
+l'addendum qui précède, pas confirmées :
+
+- *« COBYLA … un point de départ qui bouge d'un appel à l'autre »* — faux,
+  mesuré : `initial_params` dans `execute.py` est une rampe déterministe,
+  identique à chaque appel, `warm_start_params=None` dans tous les tests de
+  cette famille.
+- *« [pour L-BFGS-B] la variance … ne peut venir que d'un chemin non
+  associatif dans l'arithmétique flottante … non prouvé au niveau du bit »*
+  — remplacé par une cause prouvée et plus simple : `state_vector` échantillonne
+  à 1024 coups comme `aer` (`VQARuntime.__init__` pose `default_shots` sans
+  distinguer le backend), mesuré sur cinq appels identiques rendant cinq
+  multiples exacts de 1/1024. Le chemin flottant non associatif n'est pas
+  exclu en toute rigueur, mais n'est plus nécessaire pour expliquer
+  l'observation : le bruit de tirage suffit et se mesure directement, sans
+  hypothèse sur l'ordre des opérations BLAS.
+
+Ce qui reste vrai des deux addenda, sans changement : le compte à **cinq**
+tests intermittents, les nombres mesurés (70 tirages combinés, 5,7 %
+d'échec ; 50 tirages directs, moyenne 100,6, écart-type 43,2, minimum 35),
+et qu'aucune option n'est appliquée — la décision reste ouverte. Ce qui
+change : la cause commune aux cinq est le sampler/estimateur non graine de
+`src/VQA/`, pas un point de départ d'optimiseur non graine ni un artefact
+flottant non élucidé — ce qui rouvre l'option 2 (« fixer la graine ») pour
+L-BFGS-B aussi, contrairement à ce que l'addendum précédent concluait :
+grainer le sampler réglerait ce test comme les quatre autres.
