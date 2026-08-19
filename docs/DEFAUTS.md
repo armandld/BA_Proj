@@ -398,6 +398,64 @@ for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
 "
 ```
 
+**Addendum du 19 août (Vigil) — l'hypothèse (a) testée, elle ne tranche pas
+seule.** Mesure directe sur les 6 fichiers DNS `harris_tearing` : `J_z`
+recalculé avec `mean_sq_current_fixed` (opérateur assorti), puis sa
+composante fluctuante isolée par `J - J.mean(axis=AXIS_X, keepdims=True)` —
+retrait du fond stationnaire `J_z0(y)`, uniforme le long de `AXIS_X` comme
+D-39 le nomme déjà.
+
+| Re | N | creux (indice) | amplification creux→fin | pic dans la fenêtre ? |
+|---|---|---|---|---|
+| 400 | 64 | i=7 | **8,32×** | non — dernier échantillon |
+| 400 | 96 | i=7 | **11,86×** | non |
+| 400 | 256 | i=6 | **14,27×** | non |
+| 800 | 96 | i=7 | **15,53×** | non |
+| 1200 | 96 | i=7 | **16,87×** | non |
+| 1600 | 96 | i=7 | **17,62×** | non |
+
+Sur `Re400_N256`, la trace complète de la composante fluctuante : décroît
+légèrement de `t=0` à `t≈0,6` (3,83e−09 → 3,12e−09), puis croît **de façon
+monotone et sans retomber** jusqu'à `t=1,905`, fin de fenêtre (3,12e−09 →
+4,45e−08). C'est le profil qualitatif attendu d'une instabilité de
+reconnexion — croissance franche, 6/6 fichiers, facteur cohérent avec
+l'ordre de grandeur de Re — mais `check_tearing.ok` reste **`False` sur les
+6/6** : `i_peak` tombe sur le dernier échantillon dans les six cas, donc la
+clause `not_pinned_at_end` (D-42) échoue.
+
+**Ce que ça établit : (a) et (b) se composent, elles ne s'excluent pas.**
+(a) seule — changer d'observable pour la composante fluctuante — **récupère
+un vrai signal de reconnexion**, invisible aux deux câblages actuels (brut
+comme corrigé). Mais (b) reste vraie simultanément : aucune des 6 traces ne
+redescend dans `[0, t_max]`, donc même l'observable corrigée ne ferait pas
+lever `check_tearing.ok` sans toucher aussi au critère de pic ou à la
+fenêtre temporelle. Choisir (a) seule, tel qu'énoncé, ne suffit pas à faire
+passer le check — ce n'était pas mesuré avant cette passe.
+
+```bash
+python3 -c "
+import sys, glob, re, numpy as np
+sys.path.insert(0, 'study/pipeline'); sys.path.insert(0, 'src')
+import dns_validation as dv
+from Simulation.grid import AXIS_X, AXIS_Y
+def mean_sq_current_fluct(Bx, By):
+    dxBy = (np.roll(By, -1, axis=AXIS_X) - np.roll(By, 1, axis=AXIS_X)) * 0.5
+    dyBx = (np.roll(Bx, -1, axis=AXIS_Y) - np.roll(Bx, 1, axis=AXIS_Y)) * 0.5
+    J = dxBy - dyBx
+    return (J - J.mean(axis=AXIS_X, keepdims=True))**2
+for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
+    d = np.load(path)
+    Bx=d['Bx'].astype(float); By=d['By'].astype(float); t=d['t'].astype(float)
+    n = Bx.shape[0]
+    J2 = np.array([mean_sq_current_fluct(Bx[i],By[i]).mean() for i in range(n)])
+    c = dv.check_tearing({'t':t,'J2':J2})
+    m = re.search(r'Re(\d+)_N(\d+)', path)
+    i_min = int(np.argmin(J2))
+    print(m.group(0), 'ok', c['ok'], 'amp(creux->fin)',
+          round(J2[-1]/max(J2[i_min],1e-30), 3), 'i_peak==last?', c['t_peak']==t[-1])
+"
+```
+
 ---
 
 ## D-41 — le seuil critique du hamiltonien v1 n'est jamais franchi sur 2 scénarios canoniques / 4
