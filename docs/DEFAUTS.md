@@ -1559,3 +1559,35 @@ dans la docstring — **l'écart entre 0,0130 et les cinq mesures ci-dessus
 n'est donc pas attribué**, seulement constaté. Ce qui est attribué, et
 suffit, est le facteur 15,6 **entre les cinq mesures d'aujourd'hui**, faites
 dans le même conteneur.
+
+### Addendum du 19 août — la même famille mord sur DEUX tests de plus, non prévus par le décompte ci-dessus
+
+Suite complète de cette passe (`163bd38`..`5b8c99c`, conteneur neuf,
+dépendances complètes) : **7 échecs**, pas 5. Les cinq connus (D-132, trio
+`a0e0e02`) plus **deux nouveaux, ni l'un ni l'autre dans le tableau
+ci-dessus** :
+
+| test | assertion | isolé (2 exécutions) |
+|---|---|---|
+| `tests/quantum/test_qaoa_arm_is_sampled.py::test_the_ranking_survives_the_sampling` | `médiane(rho) > 0,6` sur 15 paires (référence 0,883) | **2/2 passed** |
+| `tests/quantum/test_qaoa_scaling_and_hparams.py::test_resolution_scaling` | `qa_frac <= cl_frac + 1e-9` à N=32/64/128, données propres (σ=0) | **2/2 passed** — l'échec de la suite : à N=128, `qa_frac=0,7087` contre `cl_frac=0,6790`, le bras QAOA dépasse le classique par hasard |
+
+Les deux sont bâtis sur `backend="state_vector"` (expectation exacte, pas
+d'échantillonnage) — la variabilité ne vient donc pas de bruit de mesure
+quantique, mais de l'optimiseur COBYLA lui-même, dont le point de départ
+n'est fixé par aucune graine dans ces deux fichiers : c'est la même source
+que celle déjà nommée par la fiche du dépôt (« le bras QAOA n'est pas
+déterministe… dispersion 1,79e−1 à 3,61e−1 »), pas un nouveau mécanisme.
+`test_resolution_scaling` en particulier n'avait encore jamais été vu rouge
+dans aucun commentaire de PR — sa docstring ne porte d'ailleurs aucune
+mention de variance, contrairement aux deux tests déjà dans le tableau.
+
+**Ce que ça change** : le décompte « 5 connus » sous-compte désormais
+**quatre** tests intermittents de la même famille, pas deux — les deux
+d'origine plus ces deux-ci. Aucune option nouvelle n'est nécessaire : les
+trois listées ci-dessus s'appliquent verbatim à `test_resolution_scaling`
+et `test_the_ranking_survives_the_sampling` — même défaut de graine, même
+disproportion entre l'effort de calcul (chacun relance un solveur MHD
+complet, ~5 min isolé) et l'information que le test en tire. Rien de plus
+corrigé ici : ce sont des mesures qui étendent le rapport existant, pas un
+nouveau défaut.
