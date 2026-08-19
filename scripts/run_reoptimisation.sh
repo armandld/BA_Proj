@@ -26,7 +26,16 @@ N_ESSAIS="${1:-200}"
 GRAINE="${2:-0}"
 DB_DIR="$ROOT_DIR/results/hyperparams/reoptimisation"
 mkdir -p "$DB_DIR"
-DB="$DB_DIR/q_has_v3.db"
+
+# La base porte le nom de l'ETUDE qu'elle contient, lu dans `PHASES`.
+# Une version anterieure ecrivait en dur `q_has_v3.db`, qui contenait
+# l'etude `q_has_v2_phase1` : le fichier et son contenu ne disaient pas la
+# meme chose, et la provenance ne se lisait plus (meme forme que D-22).
+# Le dossier `reoptimisation/` distingue cette campagne des bases gelees ;
+# le nom de fichier dit quelle etude, comme dans `optuna_studies/`.
+ETUDE="$(cd "$ROOT_DIR/src" && python -c \
+  "from train_hyperparams import PHASES; print(PHASES['phase1_composite']['study_name'])")"
+DB="$DB_DIR/$ETUDE.db"
 
 echo "============================================================"
 echo "  REOPTIMISATION Q-HAS"
@@ -62,6 +71,29 @@ print(f'  {n} parametres explores :', ', '.join(ss))
 print('  fixe :', d.get('fixed_params'))
 assert n == 9, f'ATTENDU 9 parametres, vu {n} — perimetre inattendu'
 "
+
+# --- garde 4 : nom de fichier == etude contenue --------------------
+# Sans elle, une campagne repart dans une base dont le nom ne designe plus
+# le contenu — la forme exacte du defaut que D-22 a coute.
+echo ""
+echo "--- accord nom de base / etude ---"
+if [ -f "$DB" ]; then
+    python "$ROOT_DIR/scripts/inventaire_campagne.py" --racine "$DB_DIR"
+else
+    echo "  base absente : elle sera creee sous le nom '$ETUDE.db'"
+fi
+
+# --- garde 5 : pas d'essai fantome au demarrage --------------------
+# Un worker tue (instance spot reprise, conteneur recycle) laisse son essai
+# `RUNNING` pour toujours, et le total sur-compte le travail reellement
+# fait. Le nettoyage refuse de tourner si un worker est encore vivant.
+echo ""
+echo "--- essais fantomes ---"
+if [ -f "$DB" ]; then
+    python "$ROOT_DIR/scripts/nettoyer_essais_fantomes.py" --base "$DB"
+else
+    echo "  base absente : rien a nettoyer"
+fi
 
 # --- la campagne --------------------------------------------------
 echo ""

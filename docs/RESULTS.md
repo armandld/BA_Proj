@@ -7108,3 +7108,93 @@ aucun test n'exerçait `OPTUNA_JOURNAL`. Le banc de fumée
 journal. Un mode annoncé qu'aucun test ne traverse est une promesse non
 tenue — même famille que D-48 (`mode="hardware"` accepté et exécuté sur
 simulateur).
+
+---
+
+# La base de campagne porte le nom de son étude, et les fantômes se comptent
+
+Trouvé en lançant réellement la réoptimisation, le 18 août 2026. Deux
+défauts distincts, tous deux dans l'**organisation du stockage** — aucun ne
+touche `src/`, donc aucun nombre publié ne bouge.
+
+## Le fait
+
+`scripts/run_reoptimisation.sh` écrivait en dur `q_has_v3.db`. La base ainsi
+créée contient l'étude `q_has_v2_phase1`, nom que `train_hyperparams.PHASES`
+donne à `phase1_composite`. **Le fichier et son contenu ne disaient pas la
+même chose.** C'est la forme exacte du défaut que D-22 a coûté : un réglage
+dont la provenance ne se lit plus.
+
+Le reste du dépôt respectait déjà l'invariant — `optuna_studies/q_has_v2_phase1.db`
+contient bien `q_has_v2_phase1`. Seul le lanceur de la campagne à venir ne
+le respectait pas, c'est-à-dire précisément la campagne censée **résoudre**
+D-22.
+
+## Ce qui a changé
+
+Le lanceur lit le nom d'étude dans `PHASES` et nomme la base d'après lui :
+`results/hyperparams/reoptimisation/q_has_v2_phase1.db`. Le dossier
+`reoptimisation/` distingue cette campagne des bases gelées ; le nom de
+fichier dit quelle étude, comme dans `optuna_studies/`.
+
+Deux gardes s'ajoutent aux trois existantes, avant le premier essai :
+
+- **garde 4** — `scripts/inventaire_campagne.py` : toute base non vide porte
+  exactement une étude, et son nom est le basename du fichier ;
+- **garde 5** — `scripts/nettoyer_essais_fantomes.py` : les essais `RUNNING`
+  qu'aucun worker ne finira sont marqués `FAIL` au démarrage.
+
+## Les essais fantômes, mesurés
+
+Un worker tué — instance spot reprise, conteneur recyclé, OOM — laisse son
+essai `RUNNING` pour toujours. Trois de mes workers ont été fauchés par un
+recyclage de conteneur et ont laissé trois fantômes.
+
+`python scripts/inventaire_campagne.py` (commit `327d726`) :
+
+| | bases | vides | COMPLETE | fantômes `RUNNING` |
+|---|---|---|---|---|
+| tout `results/hyperparams/` | 26 | 10 | **2 815** | **298** |
+| dont `optuna_studies/` (hors archives) | 10 | 8 | 303 | 45 |
+
+Les 45 de la seconde ligne sont ceux que `PROVENANCE.md` annonce (18
+classiques + 24 quantiques + 3 de la reprise). **L'inventaire confirme
+`PROVENANCE.md` ligne à ligne** : seules `classical_v2_phase1` (125 COMPLETE)
+et `q_has_v2_phase1` (178 COMPLETE) portent des données ; les huit autres
+bases de `optuna_studies/` sont vides.
+
+Les bases gelées ne sont **pas** nettoyées : leurs comptes sont publiés, les
+toucher déplacerait des nombres. La garde 5 n'agit que sur la base de
+réoptimisation.
+
+## Vérification
+
+```bash
+python scripts/inventaire_campagne.py                    # code 0, 26 bases
+python scripts/nettoyer_essais_fantomes.py --toutes --dry-run
+python -m pytest tests/pipeline/test_campagne_noms_et_fantomes.py -q
+```
+
+**15 tests, tous verts.** Ils construisent leurs propres bases SQLite : ils
+ne dépendent d'aucun artefact et ne peuvent pas devenir verts par
+disparition de leur entrée.
+
+**Les tests mordent, mesuré par mutation** :
+
+| mutation | effet |
+|---|---|
+| le lanceur recode `q_has_v3.db` en dur | 1 failed |
+| le nettoyage ne vérifie plus les workers vivants | 2 failed |
+| le nettoyage passe `FAIL` à **tous** les essais, pas aux seuls `RUNNING` | 1 failed |
+
+Une première version du test du lanceur assertait sur le **texte** du script
+et passait au vert dès qu'un commentaire mentionnait `q_has_v3.db` — la
+famille D-123→D-131. Remplacée par l'évaluation des lignes réelles qui
+calculent `DB`.
+
+## Ce que ça change pour la campagne
+
+Rien sur le fond, tout sur l'attribution : la base à venir portera un nom qui
+désigne son contenu, et son compte d'essais sera celui du travail réellement
+fait. Sans ces deux gardes, la campagne censée lever D-22 aurait reproduit
+la cause de D-22.
