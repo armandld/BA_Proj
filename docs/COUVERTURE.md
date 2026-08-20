@@ -3718,6 +3718,33 @@ absorbant ici, contrairement à `refinement.py`).
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/call_vqa_shell.py` lu en entier (101 lignes, 100 % de couverture)
+
+L'orchestrateur entre `refinement.py` et `VQA/` — normalise les
+coefficients, calcule `E_max`, transpile ou pas selon `vqa_runtime`,
+appelle `execute` puis `postprocess`. Deux points vérifiés par le calcul,
+pas par la lecture seule :
+
+- **Les deux seuils qui décident un Hamiltonien nul ne se contredisent
+  pas.** Le garde de division (`max_coeff > 1e-10`, ici) et `COEFF_MIN =
+  1e-6` (`cost_hamiltonian.py`, après normalisation) opèrent sur deux
+  échelles différentes par construction : si `max_coeff > 1e-10`, la
+  normalisation ramène le plus grand coefficient à exactement `1,0`, et
+  `COEFF_MIN` juge alors des termes individuels contre cette échelle ; si
+  `max_coeff <= 1e-10`, `hamilt_params` reste **non normalisé** (valeurs
+  déjà sous `COEFF_MIN`), donc `NullHamiltonianError` lève bien en aval.
+  Les deux guards ne se recouvrent jamais sur une zone où ils
+  décideraient différemment.
+- La normalisation (`/max_coeff`) porte sur **tous** les tableaux de
+  `hamilt_params`, `K_xpoint` compris quand il est présent — pas de clé
+  oubliée, vérifié par la structure du `for key, value in
+  hamilt_params.items()` généraliste (aucun nom de clé codé en dur).
+
+**Vérifié et trouvé sain.** Chemin mort déjà noté ailleurs dans ce
+document (`optimize()` via le `else` legacy) — pas de nouvel écart.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
