@@ -3523,6 +3523,58 @@ ce fichier : il n'encode ni ne décide, il intègre.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/refinement.py` lu en entier comme un tout
+
+**754 lignes, 82 % de couverture de ligne — jamais lu narrativement comme un
+module.** C'est le fichier qui **décide** le raffinement, sur les deux
+bras : `_run_level` (VQA) et `_run_level_classical` (baseline), toutes deux
+appelées depuis `run_adaptive_vqa`. De nombreux morceaux étaient déjà
+audités isolément (D-16, D-37, mémoire TTL, chaînage du warm start,
+graine de l'EMA — voir les entrées dispersées plus haut dans ce document)
+mais jamais le fichier entier, et jamais les deux fonctions **comparées
+ligne à ligne** — exactement la question 4 que leur propre commentaire
+appelle (« les deux bras doivent rester structurellement identiques, sans
+quoi leur comparaison mesure la différence de code autant que celle du
+critère »).
+
+**Question 4 — `_run_level` contre `_run_level_classical`, terme à terme.**
+
+| point comparé | verdict |
+|---|---|
+| garde `min_size` | identique (`height < min_size or width < min_size`) |
+| `pad = 1 if depth > 0 else 0` | identique dans les deux fonctions |
+| seuil de sondage de bord (`should_probe`, bande `[thr·0,5, thr[`) | identique, et le commentaire de la version classique le dit explicitement |
+| correction du double-comptage (D-16 : la décision AVANT ventilation, un seul `if/elif/else`) | présente **des deux côtés** — pas seulement sur le bras corrigé à l'origine |
+| **le score de départ, censé être LE MÊME sur les deux bras** (`run_adaptive_vqa` : *« so that VQA and classical AMR start from the SAME score map »*) | **vérifié, pas supposé** — `_prepare_vqa_input` obtient `mini_score` via `get_adaptive_flux(...)`, qui appelle en interne `_process_score(score, type_filter, target_dim)` (`RescaleArrays.py:214`) ; `_run_level_classical` appelle `_process_score(local_score, is_periodic, target_dim)` **directement**, mêmes trois arguments, même fonction. Un seul écart trouvé et écarté à la mesure : le bras VQA fait `np.clip(mini_score, 0, 1)` (`:221`) que le bras classique ne fait pas — mais `classical_score` (`PhysToAngle.py:209`) clippe déjà à la source, et `_process_score` ne fait que du max-pooling sur un champ déjà dans [0, 1] (aucune interpolation qui dépasserait l'intervalle) : le clip du bras VQA est **redondant, jamais actif**, pas une divergence |
+| `boundary_flags` : calculé sur le score **avant** QAOA côté classique (seul score qu'il a), sur la probabilité **après** QAOA côté VQA (`prob_map`, pas `prob_map_avant_qaoa`) | **différence voulue, pas un défaut** — le sondage de bord doit réagir à ce que chaque bras a réellement décidé, sinon le bras VQA ne testerait jamais sa propre sortie |
+
+**Aucun écart trouvé entre les deux bras** sur ce qui devrait coïncider.
+
+**Question 1.** À `depth >= max_depth`, `_run_level` calcule **tout**
+`_prepare_vqa_input` (y compris `HamiltMapper.compute_coefficients`, le
+plus coûteux) avant de jeter le résultat et de ne garder que
+`np.max(prob_map_avant_qaoa)` pour la feuille — le VQA n'est jamais appelé
+à ce point (`call_vqa_shell` est après le `continue`), donc ce calcul est
+gaspillé mais pas faux : aucune valeur erronée n'en sort, juste du temps de
+calcul perdu à la dernière profondeur. Observation, pas un défaut.
+
+**Question 2.** Docstrings vérifiées contre leur calcul : `_downsample_fields`
+(D-89, les trois branches — division exacte / quasi-exacte / générale par
+`linspace`), `_prepare_vqa_input` (le commentaire `target_dim`, PAS
+`target_dim + 2*pad`, D-37), le bloc de sondage de bord (D-16, double
+comptage). Aucun écart neuf.
+
+**Vérifié et trouvé sain.** Axes empruntés — les sept de la fiche sont TOUS
+présents dans ce seul fichier : bras (les deux fonctions elles-mêmes),
+bord du patch (`depth == 0` périodique / `depth > 0` borné, dans les deux
+bras), profondeur AMR (`depth < max_depth` / `depth >= max_depth`,
+feuille), warm start (`warm_start_cache` alimenté ou `None`), hamiltonien
+nul (branche `NullHamiltonianError`, décision classique conservée).
+Optimiseur et backend ne sont pas des axes de ce fichier — ils vivent dans
+`VQA/`, déjà traversés (voir §`src/VQA/` plus haut).
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
