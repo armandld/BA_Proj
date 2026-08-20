@@ -43,10 +43,21 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **14** |
+| **ouverts** — décision ou campagne requise | **13** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **14** au 18 août
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **13** au 20 août
+(nuit, Vigil) — l'entrée « D-132 » (bras QAOA, bisection close sur D-25) en
+est sortie : élucidée, elle ne bloque plus rien et vit désormais comme
+résultat dans `RESULTS.md`. **⚠️ Renumérotée `D-176` en sortant** : `D-132`
+désignait déjà, sans rapport, un défaut distinct de `RESULTS.md` (le garde
+`test_source_no_longer_asks_for_the_halo_twice`, famille D-114…D-139) —
+collision de numéro non vue avant cette passe, ce fichier ayant utilisé
+`D-132` pour deux défauts différents. Toute mention de « D-132 » dans les
+commentaires de PR antérieurs au 20 août, et dans les entrées D-141/D-165
+ci-dessous non encore corrigées à la relecture, désignait le bras QAOA —
+lire `D-176`, comme dans `RESULTS.md`. Le numéro `D-132` reste au défaut
+qui le porte légitimement, il n'est pas réattribué. Avant cela, **14** au 18 août
 (nuit) — le paragraphe ci-dessous s'arrêtait à 13, avant que **D-165** ne
 soit entré (rapport seul, décision requise) sans que le compte de tête ne
 soit mis à jour. C'est exactement le travers que ce paragraphe se reproche
@@ -112,12 +123,14 @@ mesurées, pas une : le solveur (D-25, D-26/D-27), puis **D-70 seul** pour
 tout le reste du déplacement. Ce qui subsiste est plus faible que ce qui
 était écrit : les quatre Δ sont négatifs, aucun n'est significatif.
 
-**Rien ne bloque plus la réoptimisation côté code.** D-132 (bras QAOA
-instable selon les hyperparamètres) est **élucidé** : la bisection nomme
+**Rien ne bloque plus la réoptimisation côté code.** D-176, ex-D-132 (bras
+QAOA instable selon les hyperparamètres) est **élucidé** : la bisection nomme
 `6ecaecf` — D-25, la projection spectrale — dont la correction a retiré
 l'artefact sur lequel reposait le classement. Ce n'est pas une régression
 à défaire, et l'instabilité résiduelle est précisément ce que la campagne
-arbitre.
+arbitre. Sorti d'ici pour cette raison même — ne satisfaisant plus le
+critère « bloque la réoptimisation » de la règle d'arrêt ci-dessus — il vit
+désormais comme résultat dans `RESULTS.md`.
 
 ---
 
@@ -999,128 +1012,6 @@ vérification n'a pas sa place ici.
 
 ---
 
-## D-132 — le bras QAOA ne classe plus, sur une partie de l'espace
-
-**Où ça bloque.** Une campagne Optuna explore l'espace d'hyperparamètres.
-Si le bras quantique n'y porte aucun signal sur une partie de cet espace,
-la campagne y optimise du bruit — et elle y passera du temps de calcul
-payé. À trancher **avant** de louer des cœurs.
-
-**Comment on est tombé dessus.** Passage de recette complet après l'ajout
-du 9ᵉ paramètre : `2006 passed, 3 failed` en 1 h 32. Les trois échecs sont
-dans la suite QAOA.
-
-**Ce qui est établi.**
-
-| | |
-|---|---|
-| `test_hyperparameter_sweep` | **échoue**, reproductible (3 exécutions) |
-| `test_noise_robustness` | **échoue**, reproductible (2 exécutions) |
-| `test_the_ranking_survives_the_sampling` | **passe** à la réexécution — celui-là est bien un tirage |
-
-L'assertion qui tombe dans le balayage n'est **pas** le plafond
-`MAX_CLEAN_ADVANTAGE`, qui passe. C'est la garde de vivacité une ligne
-plus bas :
-
-```
-AssertionError: correlation de rang QAOA/verite negative (-0.467) :
-le bras ne classe plus rien, le plafond ci-dessus ne prouve alors rien
-assert -0.467 > 0.0
-  where -0.467 = min([-0.467, -0.467, 0.75, 0.95, -0.467, 0.933, ...])
-```
-
-Trois des douze combinaisons d'hyperparamètres donnent une corrélation de
-rang **négative** avec la vérité terrain ; d'autres donnent +0,95. Le
-second échec dit la même chose autrement :
-
-```
-Orszag-Tang: without noise the QAOA arm is expected to lose by more than
-0.09 captured fraction, measured gap +0.0000
-```
-
-Un écart **exactement nul** : les deux bras sélectionnent les mêmes blocs.
-C'est ce qu'on verrait si l'hamiltonien était devenu inerte dans cette
-configuration et que QAOA retombait sur le biais classique.
-
-**Ce n'est pas l'ajout de `relative_percentile`.** Le chemin par défaut est
-un no-op **bit-à-bit**, épinglé par
-`tests/pipeline/test_relative_percentile_is_trainable.py::test_le_defaut_est_un_NO_OP_bit_a_bit`.
-
-**Bisection — CLOS. Le coupable est `6ecaecf` (D-25).**
-
-`e4d6bbc` est son **parent direct** et passe ; `6ecaecf` échoue. Un seul
-commit les sépare : c'est établi, pas inféré.
-
-| commit | verdict | durée |
-|---|---|---|
-| `d978539` — naissance de la garde | passe | 46 min |
-| `d212e54` — D-8, hamiltonien borné | passe | 10 min 43 |
-| `6de5fbf` — D-24, `PROJECT_RHS` à False | passe | 9 min 15 |
-| `e4d6bbc` — projection indépendante de la taille | passe | 9 min 06 |
-| **`6ecaecf` — D-25, projection spectrale** | **ÉCHOUE** (−0,467) | **2 min 20** |
-| `854ba24` — pénalité de divergence partagée | échoue | 10 min 32 |
-| `91951df` — D-37 / D-38 | *(après un rouge : non concluant)* | — |
-| `403240b` — avant les corrections de coefficients | échoue | 2 min 55 |
-| `5bdcf80` — après elles | échoue | 13 min |
-
-Diff de `6ecaecf` : **39 lignes dans `src/Simulation/solver.py`**, rien
-d'autre.
-
-**Trois hypothèses successives réfutées par cette bisection**, toutes
-plausibles et toutes fausses : **D-1** (bascule de convention du
-rotationnel, `bb6a387`), **D-8** (coefficients exactement nuls,
-`d212e54`), **D-37** (biais Z et couplages sur deux grilles, `91951df` —
-écarté parce qu'il vient *après* `854ba24`, déjà rouge).
-
-**Ce que D-25 a corrigé** : *« la projection spectrale abîmait un champ
-déjà solénoïdal »*. Le commit ajoute un contrôle **négatif** — vérifier
-que le second membre de `v` ne préserve pas la divergence — précisément
-pour qu'on ne puisse pas croire qu'aucune projection n'est nécessaire.
-
-**Ce n'est donc pas une régression à défaire.** D-25 est une correction
-juste, mesurée, avec son contrôle négatif. Avant elle, le bras QAOA
-classait « bien » parce qu'il lisait des champs **abîmés par une
-projection fautive** : l'ordre des blocs qu'il produisait tenait à un
-artefact numérique, pas à la physique.
-
-**Ce que cela ajoute à la figure d'ensemble.** C'est le quatrième point,
-et il en change le statut :
-
-| | |
-|---|---|
-| D-47 | le fondamental exact = « tout raffiner », 40/40 |
-| D-53 | optimum atteint 0,062–0,156 contre 1,000 exigé, **sous** le classique |
-| ρ(E_gap, F1) | +0,870 — mieux résoudre H dégrade la décision |
-| **D-132 / D-25** | le classement du bras reposait sur une projection fautive |
-
-Chaque correction qui retire un artefact rend le bras quantique **moins**
-bon. Ce n'est plus « quatre mesures concordantes » mais une **direction
-systématique**, ce qui est un argument plus fort.
-
-**La nuance à ne pas perdre** : les corrélations restent hétérogènes —
-−0,467 sur 3 combinaisons, +0,95 sur d'autres. Le bras n'est pas mort
-partout, il est devenu **instable selon les hyperparamètres**. C'est
-exactement ce que la réoptimisation arbitre : **D-132 ne bloque donc plus
-la campagne**, il en change la lecture attendue.
-
-**Conséquence sur les deux tests rouges.** Ils épinglent l'état d'avant
-D-25 : ce sont des **seuils périmés**, le code a légitimement changé sous
-eux. Ils se remesurent après la campagne, avec les autres. Ils ne se
-retouchent pas et ne se suppriment pas.
-
-**Ce qu'il faut noter sur ces deux tests.** Tous deux encodent d'anciens
-**résultats** comme assertions — « QAOA perd d'au moins 0,09 », « QAOA
-classe positivement ». Un changement de physique s'y manifeste donc en
-rouge, pas en résultat. Ne pas déplacer les seuils avant de savoir ce que
-la physique a fait : ce serait effacer la mesure au lieu de la lire.
-
-**Ce que ça n'invalide pas.** `preflight_coefficients.py` passe 5/5, mais
-il vérifie que les coefficients corrèlent avec le **besoin de
-raffinement** — pas que le bras quantique classe mieux que le hasard.
-Deux affirmations distinctes ; seule la seconde échoue.
-
----
-
 ## D-141 — la porte de la campagne est franchie plus haut par la baseline que par le coefficient
 
 **Rapport seul. Décision requise, rien n'est corrigé.**
@@ -1181,8 +1072,8 @@ franchiraient pas le seuil.
 
 **Ce que ça ne dit pas.** Rien ici ne dit que la campagne est inutile, ni
 qu'un nombre publié est faux. Aucun nombre publié ne dépend de ce module :
-c'est un contrôle avant vol, pas une mesure. D-132 notait déjà que le
-preflight « ne vérifie pas que le bras quantique classe mieux que le
+c'est un contrôle avant vol, pas une mesure. D-176 (ex-D-132) notait déjà
+que le preflight « ne vérifie pas que le bras quantique classe mieux que le
 hasard » ; D-141 est un cran en deçà — il ne vérifie pas non plus que le
 coefficient fasse mieux que la baseline sur ce que le contrôle mesure.
 
@@ -1579,7 +1470,7 @@ de choisir *quelle autre grandeur* asserter, et c'est une décision
 scientifique, pas une retouche de seuil.
 
 **Où ça bloque.** La suite complète à l'arrivée de cette passe rend **7
-échecs**, pas 5. Les cinq connus sont là (les deux de D-132, le trio
+échecs**, pas 5. Les cinq connus sont là (les deux de D-176/ex-D-132, le trio
 `a0e0e02`). Les deux autres ne figurent **ni dans `BRIEF_REPRISE.md` §
 « Quatre tests rouges connus », ni dans aucun commentaire de PR** :
 
@@ -1681,7 +1572,7 @@ dans le même conteneur.
 ### Addendum du 19 août — la même famille mord sur DEUX tests de plus, non prévus par le décompte ci-dessus
 
 Suite complète de cette passe (`163bd38`..`5b8c99c`, conteneur neuf,
-dépendances complètes) : **7 échecs**, pas 5. Les cinq connus (D-132, trio
+dépendances complètes) : **7 échecs**, pas 5. Les cinq connus (D-176/ex-D-132, trio
 `a0e0e02`) plus **deux nouveaux, ni l'un ni l'autre dans le tableau
 ci-dessus** :
 
@@ -1820,7 +1711,7 @@ début de la passe), ligne de résumé lue :
 6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed, 652 warnings in 3710.08s (1:01:50)
 ```
 
-Cinq échecs connus (D-132 ×2, trio `a0e0e02` ×3) plus **un nouveau, jamais
+Cinq échecs connus (D-176/ex-D-132 ×2, trio `a0e0e02` ×3) plus **un nouveau, jamais
 vu dans aucun commentaire de PR** :
 
 ```
@@ -1920,7 +1811,7 @@ Suite complète relancée après les deux addenda ci-dessus (aucune ligne de
 6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed in 3705,58s (1:01:45)
 ```
 
-**Même compte, ensemble différent.** Les cinq connus sont revenus (D-132
+**Même compte, ensemble différent.** Les cinq connus sont revenus (D-176/ex-D-132
 ×2, trio `a0e0e02`), mais le sixième n'est **plus** le test L-BFGS-B de
 `test_optimiser_axis.py` — cette fois c'est
 `tests/pipeline/test_module_validation.py::TestQAOAExecution::test_strong_positive_Z_drives_to_one`,
