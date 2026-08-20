@@ -6977,6 +6977,26 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   incohérence entre `docs/BRIEF_REPRISE.md` §7 (juste) et §8 (périmé).
 - **`DEFAUTS.md` présente encore D-58 comme ouvert** dans son paragraphe
   d'ouverture, alors qu'il est clos et sorti du fichier.
+- **`figures/pareto_frontier.interp_frontier` suppose `front` déjà trié par
+  `patch`, sans le vérifier ni le garantir — contrairement à sa jumelle**
+  `study/closed_loop/closed_loop_fold_synthesis.interp_frontier`, qui trie
+  `trace` en interne avant d'appeler `np.interp` (et dont
+  `tests/study/test_t15c_synthesis.py:127` épingle explicitement
+  l'invariance à l'ordre d'entrée). Trouvé par un balayage systématique des
+  noms de fonction dupliqués entre fichiers (question 4 de `VIGIL.md`,
+  appliquée à l'échelle du dépôt plutôt qu'à un module). Mesuré :
+  `interp_frontier([{"patch":.6,"phys":.1},{"patch":.2,"phys":.4},{"patch":.9,"phys":.02}], 0.40)`
+  rend **0,1** côté `pareto_frontier` (faux — `np.interp` sur des `xs` non
+  croissants ne dit rien) contre **0,25** côté `closed_loop_fold_synthesis`
+  (correct, identique qu'on lui donne l'entrée triée ou non). **Piège armé,
+  non déclenché** : les deux seuls appelants réels de la version
+  `pareto_frontier` (`main()` du même fichier et `pareto_panel.draw_panel`)
+  reçoivent tous les deux `front` depuis `load_points`, qui trie déjà
+  (`figures/pareto_frontier.py:62-64`) — vérifié par lecture de tous les
+  sites d'appel (`grep -rn "interp_frontier("`), aucun nombre publié n'en
+  dépend aujourd'hui. `tests/study/test_v4_modules.py:450-459` ne couvre
+  que l'entrée déjà triée, donc ne l'aurait pas vu. Non corrigé ici : sans
+  conséquence mesurée et hors campagne en cours, à traiter avec le lot.
 
 # D-47 — l'Hamiltonien v1 dégénère vers « raffiner partout » à résolution VQA
 
