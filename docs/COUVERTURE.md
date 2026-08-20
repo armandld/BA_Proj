@@ -3661,6 +3661,63 @@ Aucun nouvel écart.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/grid.py` lu en entier comme un tout
+
+**382 lignes, 90 % de couverture — le fichier qui « fait foi » sur la
+convention d'axes (fiche du dépôt) mais jamais lu comme un tout, même après
+que D-175 y a été trouvé en passant par `PhysToAngle.py`.**
+
+**Question 4 — la vérification la plus consequente de cette lecture :
+`project_divergence_free_any` (fonction libre) contre
+`PeriodicGrid.project_divergence_free` (méthode), que le docstring de la
+première annonce « identique … à la méthode, pour un champ de taille N ».**
+Les deux diffèrent par leur normalisation de nombre d'onde :
+`project_divergence_free_any` utilise `fftfreq(n, d=1/n)` — des **numéros
+de mode entiers**, sans dimension — tandis que la méthode de classe utilise
+`fftfreq(N, d=self.dx) * 2π` — des **nombres d'onde physiques**
+(`2π·mode/L`). Repris par le calcul plutôt que supposé identique parce que
+« ça se ressemble » : le projecteur de Leray `P = I − KKᵀ/|K|²` est
+**homogène de degré 0** en `K` — multiplier `KX, KY` par une constante `c`
+laisse `div_hat` scalé par `c`, `K2` par `c²`, donc `phi_hat = −div_hat/K2`
+par `1/c`, et la correction finale `KX·phi_hat` retrouve exactement le
+même facteur `c/c = 1` : le passage mode-entier ↔ physique s'annule
+algébriquement, à l'exception du clamp `K2[K2==0]=1`, qui porte sur les
+mêmes cellules (`KX=KY=0` en mode comme en physique) et n'y change rien
+puisque le numérateur y est déjà nul des deux côtés. **La revendication du
+docstring tient**, vérifiée par dérivation et non par confiance dans la
+ressemblance — c'est exactement la forme de piège que ce dépôt a déjà vue
+ailleurs (mode de Nyquist, D-7 ; alignement aux nœuds, D-2) où une
+différence d'échelle **semblait** anodine et ne l'était pas.
+
+**Question 1 — `PeriodicGrid.grad`/`.div`/`.laplacian`/`.create_refined_grid`
+(et sa seule dépendance, `extract_patch_data`) : jamais appelées par
+`src/` ni `study/`, seulement par deux fichiers de tests** (dérivées
+analytiques `test_analytic_fields.py`, Laplacien `test_objective_and_
+estimators_analytic.py`) pour `grad`/`laplacian` — `div`, `create_refined_
+grid` et `extract_patch_data` n'ont **aucun** appelant, pas même dans les
+tests (0 % de couverture réelle, ce sont les 13 instructions manquantes du
+tableau de couverture). Le solveur réimplémente ses propres opérateurs FD4
+(`MHDSolver._fd_grad`/`_fd_laplacian`) sans jamais déléguer à `self.grid`.
+Relues pour vérifier qu'aucune n'est un piège armé (l'exemple de la fiche :
+un cache d'ansatz jamais appelé, indexé sur la mauvaise clé) : `grad`,
+`div`, `laplacian` sont des formules centrées ordre 2 correctes, convention
+`AXIS_X`/`AXIS_Y` respectée. `create_refined_grid` fait un `zoom(order=1)`
+sans `mode` explicite — la même famille de paramètre qui a produit D-2
+ailleurs dans ce dépôt — mais **rien ne le consomme, jamais**, donc aucune
+mesure avant/après n'est possible et aucune conséquence n'est démontrable.
+Noté, pas corrigé : corriger du code que rien n'appelle et que rien ne
+teste ne se mesure pas, et `VIGIL.md` réserve cela à un constat, pas à un
+correctif spéculatif.
+
+**Vérifié et trouvé sain.** Les deux fonctions renumérotées par D-175
+(`curl_z`, `divergence`) relues dans leur contexte complet, cohérentes
+avec `forward_*`/`legacy_forward_*` juste au-dessus — pas de nouvel écart.
+Axes : convention d'axes elle-même (le fichier qui la définit), périodique
+(toutes les fonctions de ce fichier le sont par construction — aucun bord
+absorbant ici, contrairement à `refinement.py`).
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
