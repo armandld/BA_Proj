@@ -26,6 +26,36 @@ Architecture:
 
 Fixed weights: w_ZZ = 2, w_ZZZZ = 1. Negative signs = ferromagnetic.
 
+Normalisation (`norm=`, defaut `legacy`)
+----------------------------------------
+Les formules ci-dessus sont le chemin `legacy`. Elles emploient TROIS
+normalisateurs differents — moyenne (ZZ), somme de deux maxima (ZZZZ),
+mediane (biais) — sur un champ dont la FORME depend de `dim` : moyenner par
+blocs a la resolution `dim` est un filtre passe-bas, et monter `dim` resout
+des echelles plus fines, donc dissymetrise la distribution des sauts. Le pic
+suit la queue, la mediane non : le rapport biais/couplage DERIVE avec `dim`,
+par construction. Un reglage obtenu a une taille ne transfere alors pas a
+une autre, et un balayage en `dim` mesure deux choses a la fois.
+
+`norm="max"` accroche les trois termes a la meme statistique :
+
+    C_ij = -w_ZZ   * |saut_ij|      / max|saut|          -> max|C| == w_ZZ
+    K_p  = -w_ZZZZ * (|omega|+|J|)  / max(|omega|+|J|)   -> max|K| == w_ZZZZ
+    h_i  = +c_bias * max(|C|,|K|)   * (s_i - thr)
+
+L'EQUILIBRE entre les termes devient independant de `dim` (rapport fixe a
+`c_bias`), et les gardes y sont multiplicatifs, si bien que les invariances
+en `dx` et en amplitude sont EXACTES (4,8e-16) la ou `legacy` ne les tient
+qu'a 9,8e-11 pres — son `+ EPS` additif decale l'echelle.
+
+Ce que `max` ne fait PAS : rendre les coefficients identiques d'un `dim` a
+l'autre. Le MOTIF spatial change necessairement, puisque le champ d'entree
+change avec la coupure du filtre. Et le max est sensible aux extremes la ou
+la moyenne ne l'est pas : sur un champ intermittent, un seul saut fixe
+l'echelle de tout le domaine.
+
+`tests/mapping/test_normalisation_max_invariante.py` mesure les deux.
+
 Phase encoding (for AngleMapper_v2):
   phi_ij = (pi/2) * tanh(delta_Phi_ij / (<|delta_Phi|> + eps))
   No beta parameter -- tanh normalises naturally.
@@ -38,7 +68,7 @@ Differences from v1 (HamiltParams.py):
   - Removed: beta_curl, beta_xpoint (Michelson sensitivity)
   - Removed: w_z_frac as tuneable (fixed at c=0.1)
   - Removed: f-gate, g-gate, threshold-contrast, Gaussian weighting
-  - Added: simple domain-normalized ratios (mean for ZZ, max for ZZZZ)
+  - Added: simple domain-normalized ratios (voir « Normalisation »)
   - Result: 0 trainable parameters in Hamiltonian (was ~8)
 """
 
@@ -77,8 +107,14 @@ class PhysicalMapperV2:
     C_BIAS = 0.1     # Z bias scale: fraction of median(|C|,|K|). Default.
     EPS = 1e-10       # division-by-zero guard
 
+    #: Normalisations disponibles. `legacy` = le chemin historique (moyenne
+    #: pour ZZ, somme des deux maxima pour ZZZZ, mediane pour le biais).
+    #: `max` = tout normalise par le max de son propre signal, biais accroche
+    #: au max des couplages.
+    NORMALISATIONS = ("legacy", "max")
+
     def __init__(self, dx=1.0, c_bias=None, w_zz=None, w_zzzz=None,
-                 fixed_curl=True):
+                 fixed_curl=True, norm="legacy"):
         """
         Parameters
         ----------
@@ -97,6 +133,11 @@ class PhysicalMapperV2:
         # Voir Simulation.grid : False reproduit bit-a-bit le chemin
         # historique, True applique la convention AXIS_X/AXIS_Y du depot.
         self.fixed_curl = bool(fixed_curl)
+        if norm not in self.NORMALISATIONS:
+            raise ValueError(
+                f"norm={norm!r} inconnue ; attendu l'une de "
+                f"{self.NORMALISATIONS}")
+        self.norm = norm
         self.c_bias = self.C_BIAS if c_bias is None else float(c_bias)
         self.w_zz = self.W_ZZ if w_zz is None else float(w_zz)
         self.w_zzzz = self.W_ZZZZ if w_zzzz is None else float(w_zzzz)
@@ -161,11 +202,24 @@ class PhysicalMapperV2:
         dBy_v = By - np.roll(By, -1, axis=0)
         jump_v = np.sqrt(dvx_v**2 + dvy_v**2 + dBx_v**2 + dBy_v**2)
 
-        # domain-average normalisation
-        mean_jump = 0.5 * (np.mean(jump_h) + np.mean(jump_v)) + self.EPS
+        # Normalisation du couplage ZZ.
+        #
+        # `legacy` divise par la MOYENNE des sauts. `max` divise par le MAX,
+        # ce qui borne le terme : max|C| == w_zz exactement, quel que soit
+        # `dim`. Voir l'en-tete de la classe pour ce que ce choix change et
+        # ce qu'il ne peut pas changer.
+        if self.norm == "max":
+            # Garde MULTIPLICATIF, pas additif : `+ EPS` decalerait l'echelle
+            # et max|C| ne vaudrait plus w_zz qu'a ~1e-10 pres. Ici
+            # l'invariance est exacte, et le cas degenere (champ uniforme,
+            # aucun saut) rend un champ de zeros plutot qu'un 0/0.
+            pic = max(float(np.max(jump_h)), float(np.max(jump_v)))
+            norm_jump = pic if pic > self.EPS else 1.0
+        else:
+            norm_jump = 0.5 * (np.mean(jump_h) + np.mean(jump_v)) + self.EPS
 
-        C_horiz = -self.w_zz * jump_h / mean_jump
-        C_vert = -self.w_zz * jump_v / mean_jump
+        C_horiz = -self.w_zz * jump_h / norm_jump
+        C_vert = -self.w_zz * jump_v / norm_jump
 
         # ==============================================================
         #  2. ZZZZ (circulation plaquette)
@@ -178,12 +232,22 @@ class PhysicalMapperV2:
         # discrete current density: J_z = dBy/dx - dBx/dy
         Jz_curl = curl_z(Bx, By, self.fixed_curl)
 
-        # domain-max normalisation
-        max_omega = np.max(np.abs(omega_z))
-        max_Jz = np.max(np.abs(Jz_curl))
-        norm_plaq = max_omega + max_Jz + self.EPS
+        # Normalisation de la plaquette.
+        #
+        # `legacy` divise par max|omega| + max|J|, DEUX maxima pris en des
+        # points possiblement differents : max|K| < w_zzzz des que les deux
+        # extrema ne coincident pas, d'une quantite qui depend du champ.
+        # `max` divise par le max de la SOMME, donc max|K| == w_zzzz
+        # exactement — c'est ce qui rend le terme comparable d'un `dim` a
+        # l'autre.
+        signal_plaq = np.abs(omega_z) + np.abs(Jz_curl)
+        if self.norm == "max":
+            pic_plaq = float(np.max(signal_plaq))
+            norm_plaq = pic_plaq if pic_plaq > self.EPS else 1.0
+        else:
+            norm_plaq = np.max(np.abs(omega_z)) + np.max(np.abs(Jz_curl)) + self.EPS
 
-        K_plaquettes = -self.w_zzzz * (np.abs(omega_z) + np.abs(Jz_curl)) / norm_plaq
+        K_plaquettes = -self.w_zzzz * signal_plaq / norm_plaq
 
         # ==============================================================
         #  3. Z (activity bias)
@@ -198,9 +262,20 @@ class PhysicalMapperV2:
             np.abs(K_plaquettes).ravel(),
         ])
         nonzero = all_coeffs[all_coeffs > self.EPS]
-        median_scale = float(np.median(nonzero)) if len(nonzero) > 0 else 0.0
+        if len(nonzero) == 0:
+            echelle = 0.0
+        elif self.norm == "max":
+            # Accroche le biais au MAX des couplages : le rapport
+            # biais/couplage vaut alors exactement `c_bias`, fixe par
+            # construction et independant de `dim`. Avec la mediane
+            # (`legacy`), ce rapport suit la dissymetrie de la distribution
+            # des sauts, qui croit avec la resolution — donc le biais
+            # decroche des couplages quand `dim` monte.
+            echelle = float(np.max(nonzero))
+        else:
+            echelle = float(np.median(nonzero))
 
-        z_bias = self.c_bias * median_scale * (score - threshold_amr)
+        z_bias = self.c_bias * echelle * (score - threshold_amr)
         H_horiz = z_bias.copy()
         H_vert = z_bias.copy()
 

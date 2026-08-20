@@ -7166,6 +7166,78 @@ bases de `optuna_studies/` sont vides.
 Les bases gelées ne sont **pas** nettoyées : leurs comptes sont publiés, les
 toucher déplacerait des nombres. La garde 5 n'agit que sur la base de
 réoptimisation.
+# Une normalisation dont l'équilibre ne dépend plus de `dim`
+
+Décidé par USER après l'analyse théorique des trois normalisateurs du v2.
+**Ajout derrière un drapeau** — `norm="legacy"` reste le défaut, donc aucun
+nombre publié ne bouge (table maîtresse : **180 / 176 OK / 4 DIFF /
+0 MISSING**, inchangée). Même idiome que `fixed_curl` : les deux chemins
+coexistent et se comparent.
+
+## Le fait, théorique avant d'être mesuré
+
+`build_patch_hamiltonian` moyenne les champs par blocs à `dim × dim` et
+calcule *tous* les coefficients sur ce champ grossier. `dim` est donc la
+coupure d'un filtre passe-bas appliqué à l'entrée.
+
+Or les trois termes du chemin `legacy` emploient **trois normalisateurs
+différents** :
+
+| terme | normalisé par | quand `dim` monte |
+|---|---|---|
+| ZZ | la **moyenne** des sauts | `max|C| = w_ZZ · max(saut)/⟨saut⟩` — le rapport pic/moyenne, qui **croît** avec l'intermittence |
+| ZZZZ | `max|ω| + max|J|` — **deux** maxima en des points distincts | borné, `max|K| < w_ZZZZ` d'une quantité qui dépend du champ |
+| biais Z | la **médiane** des couplages | la médiane/moyenne **décroît** quand la distribution se dissymétrise |
+
+Un champ MHD est intermittent par nature — nappes de courant, chocs. Donc
+le rapport biais/couplage **dérive avec `dim` par construction**, et la
+dérive est scénario-dépendante. Conséquence pratique : **un réglage
+d'hyperparamètres obtenu à une taille ne transfère pas à une autre**, et un
+balayage en `dim` mesurerait deux choses à la fois.
+
+## Ce que `norm="max"` change
+
+```
+C_ij = -w_ZZ   * |saut_ij|     / max|saut|         ->  max|C| == w_ZZ
+K_p  = -w_ZZZZ * (|ω| + |J|)   / max(|ω| + |J|)    ->  max|K| == w_ZZZZ
+h_i  = +c_bias * max(|C|,|K|)  * (s_i - thr)
+```
+
+L'**équilibre** entre les termes devient indépendant de `dim` : le rapport
+biais/couplage vaut exactement `c_bias`. Les gardes y sont **multiplicatifs**
+(`pic if pic > EPS else 1.0`) et non additifs, ce qui rend les invariances
+exactes.
+
+## Mesuré
+
+Invariance d'amplitude (multiplier v et B par 10), écart relatif max :
+
+| chemin | écart | cause |
+|---|---|---|
+| `legacy` | **9,8e-11** | garde additif `+ EPS`, qui décale l'échelle |
+| `max` | **4,8e-16** | garde multiplicatif — exact à la précision machine |
+
+La docstring de la classe annonçait cette invariance sans la qualifier ;
+elle tient à 1e-10 près sur `legacy`, exactement sur `max`. Les deux
+tolérances sont désormais épinglées séparément — une tolérance unique et
+lâche cacherait que `max` est exact.
+
+Équilibre à `dim ∈ {4, 8, 16, 32}`, même champ d'essai : `max|C|`, `max|K|`
+et `max|h|` identiques aux quatre tailles à 1e-12 près sous `max` ; sous
+`legacy` le rapport biais/couplage s'étale d'un facteur > 1,5.
+
+## Ce que ça ne fait pas
+
+Le **motif spatial** de `C` dépend encore de `dim`, et ne peut pas ne pas en
+dépendre : le champ d'entrée lui-même change avec la coupure. Un test le
+vérifie explicitement — s'il venait à passer, c'est que le champ d'essai
+serait devenu auto-similaire et que les tests d'invariance ne prouveraient
+plus ce qu'ils annoncent.
+
+Et le max est **sensible aux extrêmes** là où la moyenne ne l'est pas : sur
+un champ intermittent un seul saut fixe l'échelle du domaine. Si cela devient
+gênant, un percentile haut garde l'invariance d'échelle sans la fragilité du
+max strict.
 
 ## Vérification
 
@@ -7178,6 +7250,11 @@ python -m pytest tests/pipeline/test_campagne_noms_et_fantomes.py -q
 **15 tests, tous verts.** Ils construisent leurs propres bases SQLite : ils
 ne dépendent d'aucun artefact et ne peuvent pas devenir verts par
 disparition de leur entrée.
+
+python -m pytest tests/mapping/test_normalisation_max_invariante.py -q   # 24 passed
+python -m pytest tests/mapping -q                                        # 436 passed
+python study/common/aggregate_master_table.py                            # 180 / 176 / 4 / 0
+```
 
 **Les tests mordent, mesuré par mutation** :
 
@@ -7198,3 +7275,10 @@ Rien sur le fond, tout sur l'attribution : la base à venir portera un nom qui
 désigne son contenu, et son compte d'essais sera celui du travail réellement
 fait. Sans ces deux gardes, la campagne censée lever D-22 aurait reproduit
 la cause de D-22.
+| le biais repasse à la médiane en mode `max` | 5 failed |
+| ZZ repasse à la moyenne en mode `max` | 6 failed |
+| le défaut bascule sur `max` | 1 failed |
+
+La troisième est délibérée : basculer le défaut est un changement de
+comportement scientifique, il doit échouer tant qu'il n'est pas décidé et
+consigné.
