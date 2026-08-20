@@ -48,18 +48,20 @@ conclusion.
 
 *(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **13** au 20 août
 (nuit, Vigil) — l'entrée « D-132 » (bras QAOA, bisection close sur D-25) en
-est sortie : élucidée, elle ne bloque plus rien et vit désormais comme
-résultat dans `RESULTS.md`. **⚠️ Renumérotée `D-176` en sortant** : `D-132`
-désignait déjà, sans rapport, un défaut distinct de `RESULTS.md` (le garde
-`test_source_no_longer_asks_for_the_halo_twice`, famille D-114…D-139) —
-collision de numéro non vue avant cette passe, ce fichier ayant utilisé
-`D-132` pour deux défauts différents. Les cinq mentions internes de
-« D-132 » (QAOA) dans les entrées D-141 et D-165 ci-dessous ont été mises à
-jour vers `D-176/ex-D-132` dans le même geste. Toute mention de « D-132 »
-dans les commentaires de PR antérieurs au 20 août — hors de ce fichier,
-donc non corrigeable — désignait le bras QAOA : lire `D-176`, comme dans
-`RESULTS.md`. Le numéro `D-132` reste au défaut qui le porte légitimement,
-il n'est pas réattribué. Avant cela, **14** au 18 août
+est sortie : élucidée, elle ne bloque plus rien (ni la réoptimisation, ni
+aucune lecture publiée), donc elle ne satisfait plus la règle d'arrêt de ce
+fichier, et vit désormais comme résultat dans `RESULTS.md` — **sans
+numéro**, ⚠️ **volontairement**. J'avais d'abord renuméroté cette sortie
+`D-176`, avant de trouver, plus bas dans `RESULTS.md` (§ « Compte de tête
+inexact »), qu'une passe du 17 août avait déjà posé cette collision — `D-132`
+y désigne aussi, sans rapport, le garde `test_source_no_longer_asks_for_
+the_halo_twice` (famille D-114…D-139) — et l'avait **explicitement laissée
+à USER** : *« Aucun des deux ne peut être renuméroté par la règle de la
+fiche … C'est une décision, pas une correction. »* Je n'avais pas lu cette
+note avant de trancher. Retiré : le contenu sort (justifié indépendamment
+de la numérotation), le numéro reste en attente, comme il l'était. `D-176`
+porte maintenant un défaut différent (`physical_score`, ci-dessous). Avant
+cela, **14** au 18 août
 (nuit) — le paragraphe ci-dessous s'arrêtait à 13, avant que **D-165** ne
 soit entré (rapport seul, décision requise) sans que le compte de tête ne
 soit mis à jour. C'est exactement le travers que ce paragraphe se reproche
@@ -125,8 +127,8 @@ mesurées, pas une : le solveur (D-25, D-26/D-27), puis **D-70 seul** pour
 tout le reste du déplacement. Ce qui subsiste est plus faible que ce qui
 était écrit : les quatre Δ sont négatifs, aucun n'est significatif.
 
-**Rien ne bloque plus la réoptimisation côté code.** D-176, ex-D-132 (bras
-QAOA instable selon les hyperparamètres) est **élucidé** : la bisection nomme
+**Rien ne bloque plus la réoptimisation côté code.** D-132 (bras QAOA
+instable selon les hyperparamètres) est **élucidé** : la bisection nomme
 `6ecaecf` — D-25, la projection spectrale — dont la correction a retiré
 l'artefact sur lequel reposait le classement. Ce n'est pas une régression
 à défaire, et l'instabilité résiduelle est précisément ce que la campagne
@@ -1074,8 +1076,8 @@ franchiraient pas le seuil.
 
 **Ce que ça ne dit pas.** Rien ici ne dit que la campagne est inutile, ni
 qu'un nombre publié est faux. Aucun nombre publié ne dépend de ce module :
-c'est un contrôle avant vol, pas une mesure. D-176 (ex-D-132) notait déjà
-que le preflight « ne vérifie pas que le bras quantique classe mieux que le
+c'est un contrôle avant vol, pas une mesure. D-132 notait déjà que le
+preflight « ne vérifie pas que le bras quantique classe mieux que le
 hasard » ; D-141 est un cran en deçà — il ne vérifie pas non plus que le
 coefficient fasse mieux que la baseline sur ce que le contrôle mesure.
 
@@ -1472,7 +1474,7 @@ de choisir *quelle autre grandeur* asserter, et c'est une décision
 scientifique, pas une retouche de seuil.
 
 **Où ça bloque.** La suite complète à l'arrivée de cette passe rend **7
-échecs**, pas 5. Les cinq connus sont là (les deux de D-176/ex-D-132, le trio
+échecs**, pas 5. Les cinq connus sont là (les deux de D-132, le trio
 `a0e0e02`). Les deux autres ne figurent **ni dans `BRIEF_REPRISE.md` §
 « Quatre tests rouges connus », ni dans aucun commentaire de PR** :
 
@@ -1574,7 +1576,7 @@ dans le même conteneur.
 ### Addendum du 19 août — la même famille mord sur DEUX tests de plus, non prévus par le décompte ci-dessus
 
 Suite complète de cette passe (`163bd38`..`5b8c99c`, conteneur neuf,
-dépendances complètes) : **7 échecs**, pas 5. Les cinq connus (D-176/ex-D-132, trio
+dépendances complètes) : **7 échecs**, pas 5. Les cinq connus (D-132, trio
 `a0e0e02`) plus **deux nouveaux, ni l'un ni l'autre dans le tableau
 ci-dessus** :
 
@@ -1713,7 +1715,7 @@ début de la passe), ligne de résumé lue :
 6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed, 652 warnings in 3710.08s (1:01:50)
 ```
 
-Cinq échecs connus (D-176/ex-D-132 ×2, trio `a0e0e02` ×3) plus **un nouveau, jamais
+Cinq échecs connus (D-132 ×2, trio `a0e0e02` ×3) plus **un nouveau, jamais
 vu dans aucun commentaire de PR** :
 
 ```
@@ -1813,7 +1815,7 @@ Suite complète relancée après les deux addenda ci-dessus (aucune ligne de
 6 failed, 2920 passed, 74 skipped, 5 deselected, 4 xfailed in 3705,58s (1:01:45)
 ```
 
-**Même compte, ensemble différent.** Les cinq connus sont revenus (D-176/ex-D-132
+**Même compte, ensemble différent.** Les cinq connus sont revenus (D-132
 ×2, trio `a0e0e02`), mais le sixième n'est **plus** le test L-BFGS-B de
 `test_optimiser_axis.py` — cette fois c'est
 `tests/pipeline/test_module_validation.py::TestQAOAExecution::test_strong_positive_Z_drives_to_one`,

@@ -3583,7 +3583,7 @@ correction `g_mag`/`Jz_phys`, la correction `xpoint_grad` dx², la porte
 retirée du canal X-point) mais toujours par fonction, jamais le fichier
 entier.
 
-**⚠️ D-177 — question 2 : `physical_score` promettait un rôle de
+**⚠️ D-176 — question 2 : `physical_score` promettait un rôle de
 déploiement qu'elle n'a jamais tenu.** Voir `RESULTS.md`. Trouvé en lisant
 la docstring de la fonction comme un contrat puis en vérifiant par grep
 qu'aucun site de `src/`/`study/` ne l'appelle — le θ-init déployé vient
@@ -3606,7 +3606,7 @@ qu'**une seule** cellule (max global, pas par cellule) le franchit — conforme
 à ce que le texte annonce.
 
 **Question 1.** Aucune fonction non appelée trouvée hormis `physical_score`
-elle-même (D-177) — tout le reste (`_f_gate`, `_g_strain`, `_g_rot`,
+elle-même (D-176) — tout le reste (`_f_gate`, `_g_strain`, `_g_rot`,
 `_g_mag`, `_effective_crit`, `_compute_det_jacobian_B`,
 `_threshold_contrast`) est exercé par `compute_coefficients`, le seul
 chemin de production du fichier. `_michelson_relu` (« legacy, kept for
@@ -3615,7 +3615,7 @@ reference » dans son propre commentaire de section) reste, comme
 cohérente avec ce que sa section annonce déjà elle-même, pas une
 découverte.
 
-**Vérifié et trouvé sain, un défaut hors chemin critique corrigé (D-177).**
+**Vérifié et trouvé sain, un défaut hors chemin critique corrigé (D-176).**
 Axes empruntés : hamiltonien non nul (le chemin normal de
 `compute_coefficients`) et nul (`advanced_anomalies_enabled=False`, le
 défaut — le bloc X-point n'est alors pas construit) ; bord du patch

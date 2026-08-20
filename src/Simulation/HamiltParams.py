@@ -289,7 +289,7 @@ class PhysicalMapper:
 
     # ══════════════════════════════════════════════════════════════════
     #  Physical score — NOT wired to θ initialization in the deployed
-    #  pipeline. See the docstring below (D-177, RESULTS.md) before
+    #  pipeline. See the docstring below (D-176, RESULTS.md) before
     #  reading this header as a claim about production behaviour.
     # ══════════════════════════════════════════════════════════════════
 
@@ -300,7 +300,7 @@ class PhysicalMapper:
         Physics-grounded instability score — an alternative to
         `AngleMapper.classical_score`, exercised only by the test suite.
 
-        D-177 : cette docstring annoncait "replaces classical_score for
+        D-176 : cette docstring annoncait "replaces classical_score for
         theta initialization" et se presentait comme le score DEPLOYE.
         C'etait deja faux avant D-9 (qui a corrige le seul appelant errone,
         `h3_uncertainty_window.py`, sans toucher a cette ligne) et c'est
