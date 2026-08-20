@@ -3783,6 +3783,52 @@ tous deux exercés par le même appelant selon `--v2`.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/utils.py` lu en entier comme un tout
+
+**103 lignes, 65 % de couverture (la fonction non appelée
+`slice_hamiltonian_params`) — jamais lu narrativement comme un module.**
+
+**Question 1.** `slice_hamiltonian_params` n'est appelée que par
+`src/compare_rotor_budget.py` (déjà audité, D-91, clos) — aucun appelant sur
+le chemin déployé. `refinement.py` l'importe
+(`from Simulation.utils import slice_hamiltonian_params, get_periodic_patch`)
+mais ne l'appelle jamais : import mort. Le bloc `D_edges`/`D_kink`
+(lignes 57-64) est un commentaire triple-guillemet, jamais exécuté, et
+référence une clé `'D_edges'` qui n'existe nulle part ailleurs dans le
+dépôt (aucun producteur de Hamiltonien — `HamiltParams.py`,
+`HamiltParams_v2.py`, lus en entier plus haut cette même nuit — ne produit
+cette clé) : du code mort dans du code mort, sans conséquence mesurable
+puisque rien ne peut jamais l'atteindre.
+
+**Question 2/4 — `compute_local_factor`, la revendication « shared between
+solver and pipeline to guarantee consistency ».** Vérifié par grep sur tout
+`src/`/`study/` : le seul appelant réel est `solver.py:887`. Le second
+consommateur promis par le docstring n'est pas `src/pipeline.py` (qui
+calcule `solve_max_depth` par une formule indépendante mais triviale —
+`depth == max_depth` implique `local_factor = target_dim**0 = 1` par
+construction, aucune divergence possible) mais `figures/v1_legacy/
+fig_utils.py`, dont les deux métriques (`compute_ratio`,
+`captured_fraction`) réimplémentent le calcul via
+`max(p['depth'] for p in patches)` plutôt que d'appeler
+`compute_local_factor`. **Déjà trouvé et mesuré** (`d3f8d48`,
+`COUVERTURE.md` § `figures/v1_legacy/fig_utils.py`, 16 août) : les deux
+coïncident tant qu'un patch `leaf_depth` existe dans la liste (observé 6/6
+sur les exécutions réelles), latent sinon — classé « latent, pas un
+défaut », reconfirmé ici indépendamment, rien de neuf.
+
+**Vérifié et trouvé sain.** `get_periodic_patch` : la revendication du
+docstring (extraction périodique avec wraparound modulo) vérifiée par
+calcul — `y_range = arange(y_s-pad, y_e+pad)`, longueur `(y_e-y_s)+2*pad`,
+cohérente avec le commentaire de `refinement.py` (« extent + 2*pad »).
+Live, appelée à 9 sites de production dans `refinement.py`, testée par 5
+fichiers de tests distincts. Axes empruntés : bord du patch (`pad=0` et
+`pad>0`, les deux exercés par les appelants réels de `refinement.py`) ; les
+autres axes de la fiche (bras, backend, warm start, hamiltonien,
+optimiseur, profondeur AMR) ne s'appliquent pas à ce fichier utilitaire —
+il ne décide ni n'exécute de physique, il découpe des tableaux.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
