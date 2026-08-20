@@ -53,10 +53,10 @@ aucune lecture publiée), donc elle ne satisfait plus la règle d'arrêt de ce
 fichier, et vit désormais comme résultat dans `RESULTS.md` — **sans
 numéro**, ⚠️ **volontairement**. J'avais d'abord renuméroté cette sortie
 `D-176`, avant de trouver, plus bas dans `RESULTS.md` (§ « Compte de tête
-inexact »), qu'une passe du 17 août avait déjà posé cette collision — `D-132`
-y désigne aussi, sans rapport, le garde `test_source_no_longer_asks_for_
-the_halo_twice` (famille D-114…D-139) — et l'avait **explicitement laissée
-à USER** : *« Aucun des deux ne peut être renuméroté par la règle de la
+inexact »), qu'une passe du 17 août avait déjà posé cette collision —
+`D-132` y désigne aussi, sans rapport, le garde
+`test_source_no_longer_asks_for_the_halo_twice` (famille D-114…D-139) — et
+l'avait **explicitement laissée à USER** : *« Aucun des deux ne peut être renuméroté par la règle de la
 fiche … C'est une décision, pas une correction. »* Je n'avais pas lu cette
 note avant de trancher. Retiré : le contenu sort (justifié indépendamment
 de la numérotation), le numéro reste en attente, comme il l'était. `D-176`
