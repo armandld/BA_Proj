@@ -3827,6 +3827,58 @@ autres axes de la fiche (bras, backend, warm start, hamiltonien,
 optimiseur, profondeur AMR) ne s'appliquent pas à ce fichier utilitaire —
 il ne décide ni n'exécute de physique, il découpe des tableaux.
 
+## Passe du 20 août (nuit, Vigil, suite) — `study/pipeline/` repris par les **configurations**, pas par les fonctions
+
+La piste que le commentaire du 20 août désignait lui-même : `study/pipeline/`
+était **lu en entier** depuis le 13 août, et « pas audité au sens de la fiche »
+— aucun test n'en traversant les axes. Cette passe reprend les deux modules
+par la **question 5**. Trois défauts, tous dans du code déjà lu, aucun dans
+du code neuf.
+
+### `exact_diagonalisation.py` — rouvert par la configuration `--v2`
+
+| ce qui a été traversé | verdict |
+|---|---|
+| `main()` sous **`--v2`** | **D-178** — aucun test n'avait jamais exécuté cette configuration. Le résumé cross-Re relisait un artefact **sans** le suffixe `_v2` que `save_results` venait d'écrire : relance fraîche → **0 ligne** de résumé et code 0 (famille D-55/D-56/D-75/D-148, dans la fonction qui lève déjà pour un balayage vide douze lignes plus haut) ; artefact v1 présent → la ligne du **v1**. Corrigé : un seul constructeur, `artifact_name()` |
+| contrat de retour de `build_patch_hamiltonian` | **D-179** — trois valeurs rendues, deux annoncées, et la 2ᵉ décrite avec la forme de la 3ᵉ. Mesuré : `(2, 2)` contre `(32, 32)`. Deux scores classiques de **même type et même intervalle** sur des grilles différentes — la forme de piège de D-9. **Armé, jamais tiré** : les 15 sites d'appel prennent tous le bon, vérifié un par un |
+| `analyze_snapshot` ignore `is_hard` | **sain** — vérifié : `l2_ground_truth` (`l2_errors >= threshold`) est **identique** à `hard_patch_labels.py:226` (`all_l2 >= threshold_l2`), pas seulement « recalculé » |
+| ordre des qubits, `ground_state_decisions` contre `create_period_hamiltonian` | **sain** — `marginals[q] → (q//dim, q%dim)` coïncide avec `idx_H(y,x) = y*dim + x`, et `(basis_idx >> qi) & 1` est bien la convention little-endian de Qiskit (le piège que `BRIEF_REPRISE.md` §7 signale) |
+| `snap_indices` de `run_phase4` contre ceux que lit la phase 5 | **sain** — `qaoa_inputs.py:456` **lit** `ed["snap_indices"]` au lieu de le reconstruire : rien à désaligner. Le `continue` sur `result is None` est **inatteignable** (`run_phase4` est déjà sorti si `n_qubits > 20`), donc pas un désalignement latent |
+| `n_energies_below_gap` | **déjà consigné** plus haut comme défaut sans conséquence, non corrigé — non re-signalé |
+
+### `pipeline_verification.py` (phase 6) — rouvert par la configuration `--v1`
+
+| ce qui a été traversé | verdict |
+|---|---|
+| branche **`--v1`** de `analyze` | **D-180, ⚠️ il porte une lecture publiée** — le sigma lu était le **premier membre du `.npz`**, sur six. Le verdict F1 flippe entre eux à échantillon apparié (PASS, PASS, WARN, TIE, WARN, WARN). Les nombres de D-40/D-77 sont ceux de `0,023`. Provenance corrigée, **lecture laissée à USER** |
+| branche `--v2` | **non exécutable aujourd'hui** — les **4** artefacts `coefficients_*` du dépôt sont tous v1 ; sous son défaut (`use_v2=True`) le module lève le garde de balayage vide de D-56. La seule configuration runnable de la phase 6 est celle qui portait D-180 |
+| `snap_indices` reconstruits contre `hamiltonian_coefficients.analyze_one` | **sain** — les deux formules comparées ligne à ligne : `range(0, n, max(1, n//10))` puis `if len < 3: range(n)`, **identiques**. Le commentaire « must match analyze_one logic » dit vrai. C'est une duplication, pas une divergence |
+| `[:n_snaps_sub]`, troncature silencieuse | **sain dans les deux sens** — le sens dangereux (prendre un préfixe désaligné) exigerait que les deux formules diffèrent, ce qui est écarté ci-dessus ; l'autre sens échoue bruyamment |
+| `best_f1` sur étiquettes mono-classe, `degenerate_E` | **sains** — déjà couverts par D-40 et son test |
+
+### Axes de la fiche traversés par ce lot
+
+**hamiltonien v1 ET v2** — c'est l'axe que cette passe ouvre : `--v2` de la
+phase 4 et `--v1` de la phase 6 n'avaient **jamais** été exécutés par un test,
+et chacun portait un défaut. **Hamiltonien non nul** partout ; **bord
+périodique** (`create_period_hamiltonian`) ; **profondeur AMR `depth = 0`** ;
+**bras quantique**, **backend `state_vector`** (diagonalisation exacte),
+**warm start absent**, **optimiseur aucun** — les côtés opposés de ces
+quatre-là restent non traversés par ces deux modules, comme déjà écrit plus
+haut pour `exact_diagonalisation.py`.
+
+`dim` : **2** seulement pour la phase 4 (plafond de 20 qubits ; `dim = 3` fait
+262 144² en dense, cf. `BRIEF_REPRISE.md` §7), **4** seulement pour la phase 6
+— c'est la seule taille pour laquelle des `coefficients_*` existent.
+
+**Ce que la reprise montre, au-delà des trois défauts** : les deux modules
+étaient lus en entier et déclarés lus, et les trois défauts sont sortis de
+**configurations**, pas de fonctions. C'est le troisième et le quatrième cas
+de « défaut trouvé dans du code déjà déclaré audité » de l'étalonnage de la
+fiche.
+
+---
+
 ---
 
 ## Tenir ce document à jour
