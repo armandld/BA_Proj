@@ -3921,6 +3921,40 @@ la construction des coefficients précède le choix du bras.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `study/common/ising_terms_and_annealing.py` : le recuit repris par Q4, **rien trouvé**
+
+Consigné pour ne pas le relire : un module qui ne rend rien après une lecture
+complète est un résultat.
+
+Pris par la **question 4** (deux chemins censés coïncider coïncident-ils
+encore ?), qui est la plus rentable, et par l'axe **warm start** de la fiche —
+`--classical-warm` est l'un des drapeaux qu'un lanceur emploie et
+qu'**aucun test n'exécute**.
+
+| ce qui a été traversé | verdict |
+|---|---|
+| `best_E` **accumulé** (`current_E += dE`, ~64 000 flips acceptés) contre `total_energy(best_spins)` **recalculé** | **sain** — les deux chemins coïncident à la précision machine : écart **7,1e−15** à 100 et 500 sweeps, **2,1e−14** à 2 000, **6,4e−14** à 5 000. La dérive croît comme attendu et reste à 13 ordres sous la valeur (−51,015). C'était le candidat le plus sérieux du fichier : une énergie rendue qui ne serait plus celle de la configuration rendue |
+| `init_spins` est-il réellement honoré, ou effacé par `T_start = 2,0` ? | **sain** — mesuré sur le champ qui **sépare** : à peu de sweeps le recuit ne peut pas effacer l'initialisation, et les deux chemins divergent bien (`sweeps=1` : −15,558 froid contre −24,172 warm ; 2, 5, 20 : spins différents à graine identique). `total_energy(init) = −7,082` et `best_E ≤ E_init` après un sweep |
+| effet de `--classical-warm` au réglage déployé (2 000 sweeps, 10 restarts) | **nul, et ce n'est pas un défaut** — l'instance converge au même optimum quelle que soit l'initialisation : `−51,0153240947` des deux côtés, écart **3,6e−14**. C'est une propriété de l'instance, pas du drapeau, et la mesure ci-dessus le démontre en montrant le drapeau agir quand il le peut |
+| variance de la mesure, **avant** de conclure sur l'écart | **nulle** — deux exécutions de la mesure de référence, mêmes graines, 8 tirages : écart **0,000e+00**. Le recuit est déterministe à graine fixée, donc l'écart cherché (3,6e−14) est lisible et non noyé |
+| convention de spin, aller-retour | **saine** — `classical_warm` écrit `refine → spin = −1`, `spins_to_decisions` relit `refine = (spins == −1)`. Et l'indexation `classical_refine.flatten()` (ordre C, `y*dim + x`) coïncide avec `idx_H(y, x) = y*dim + x` de `create_period_hamiltonian` |
+
+**Axes de la fiche traversés** : **warm start absent ET présent** — c'est
+l'axe que cette lecture ouvre sur ce module, et le premier passage du
+drapeau `--classical-warm` par autre chose qu'un lanceur ; **hamiltonien non
+nul** ; `dim = 4`. Le bras y est classique par construction (c'est le
+solveur de recuit, il n'y a pas de bras quantique dans ce fichier), et
+backend / optimiseur / bord / profondeur AMR ne s'y appliquent pas.
+
+**Ce que la non-trouvaille vaut.** L'étalonnage de la fiche dit que la
+majorité du code est juste et qu'un faux positif coûte plus cher qu'un
+défaut manqué. Les deux candidats de ce fichier étaient plausibles —
+une énergie accumulée jamais recalculée, un warm start noyé par un recuit
+qui démarre chaud — et **la mesure les a écartés tous les deux**. Écrit ici
+pour que personne ne les re-soupçonne.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
