@@ -53,11 +53,13 @@ résultat dans `RESULTS.md`. **⚠️ Renumérotée `D-176` en sortant** : `D-13
 désignait déjà, sans rapport, un défaut distinct de `RESULTS.md` (le garde
 `test_source_no_longer_asks_for_the_halo_twice`, famille D-114…D-139) —
 collision de numéro non vue avant cette passe, ce fichier ayant utilisé
-`D-132` pour deux défauts différents. Toute mention de « D-132 » dans les
-commentaires de PR antérieurs au 20 août, et dans les entrées D-141/D-165
-ci-dessous non encore corrigées à la relecture, désignait le bras QAOA —
-lire `D-176`, comme dans `RESULTS.md`. Le numéro `D-132` reste au défaut
-qui le porte légitimement, il n'est pas réattribué. Avant cela, **14** au 18 août
+`D-132` pour deux défauts différents. Les cinq mentions internes de
+« D-132 » (QAOA) dans les entrées D-141 et D-165 ci-dessous ont été mises à
+jour vers `D-176/ex-D-132` dans le même geste. Toute mention de « D-132 »
+dans les commentaires de PR antérieurs au 20 août — hors de ce fichier,
+donc non corrigeable — désignait le bras QAOA : lire `D-176`, comme dans
+`RESULTS.md`. Le numéro `D-132` reste au défaut qui le porte légitimement,
+il n'est pas réattribué. Avant cela, **14** au 18 août
 (nuit) — le paragraphe ci-dessous s'arrêtait à 13, avant que **D-165** ne
 soit entré (rapport seul, décision requise) sans que le compte de tête ne
 soit mis à jour. C'est exactement le travers que ce paragraphe se reproche
