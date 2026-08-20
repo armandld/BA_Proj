@@ -3955,6 +3955,76 @@ pour que personne ne les re-soupçonne.
 
 ---
 
+## File ouverte — les **drapeaux de production qu'aucun test n'exécute** (101 sur 449)
+
+C'est l'instrument qui a rendu D-51 cette nuit, et il reste plein. Il
+matérialise la question 5 : un module n'est pas audité parce que ses
+fonctions sont lues, mais quand un test traverse **chacune des
+configurations que le code emprunte en production**.
+
+Mesure d'ouverture (20 août, nuit) : **449** `add_argument` déclarés par
+`src/` et `study/`, dont **101 dont le nom n'apparaît dans aucun fichier de
+`tests/`**.
+
+```bash
+python3 - <<'EOF'
+import glob, os, re, collections
+flags = collections.defaultdict(set)
+for p in sorted(glob.glob('study/**/*.py', recursive=True)
+                + glob.glob('src/**/*.py', recursive=True)):
+    for m in re.finditer(r'add_argument\(\s*["\'](--[a-zA-Z0-9_-]+)["\']',
+                         open(p, encoding='utf-8').read()):
+        flags[p].add(m.group(1))
+corpus = {q: open(q, encoding='utf-8', errors='ignore').read()
+          for q in glob.glob('tests/**/*.py', recursive=True)
+          + glob.glob('scripts/**/*', recursive=True) if os.path.isfile(q)}
+for p, fs in sorted(flags.items()):
+    for f in sorted(fs):
+        t = sum(1 for q in corpus if q.startswith('tests/') and f in corpus[q])
+        s_ = sum(1 for q in corpus if q.startswith('scripts/') and f in corpus[q])
+        if t == 0:
+            print(f"{p:52} {f:26} scripts={s_}")
+EOF
+```
+
+**Trier par `scripts=`, pas par fichier.** Un drapeau à `scripts=1` est une
+configuration qu'**un lanceur emploie réellement** et qu'aucun test ne
+traverse : c'est exactement la forme de D-178 (`--v2` de la phase 4, employé
+par `run_study_v2b.sh`, jamais testé) et de D-180. Les `scripts=0` sont des
+options offertes que personne n'a jamais prises — même classe, priorité
+moindre.
+
+Les **onze** à `scripts=1`, l'ordre de la file :
+
+| module | drapeau | statut |
+|---|---|---|
+| `study/common/qaoa_inputs.py` | `--warm-start` | **traité** — chemin lu ; D-48 le couvre déjà (schedule constant, gel documenté) |
+| `study/common/ising_terms_and_annealing.py` | `--classical-warm` | **traité** — mesuré sain, voir la section ci-dessus |
+| `study/common/qaoa_inputs.py` | `--prune-eps` | ouvert |
+| `study/common/qaoa_inputs.py` | `--K_opt` | ouvert |
+| `study/h3_representation/h3_depth_report.py` | `--prune-eps` | ouvert |
+| `study/h2b_prediction/h2b_train_linear_hamiltonian.py` | `--optimiser` | ouvert |
+| `study/h2b_prediction/h2b_scenario_specialisation.py` | `--model` | ouvert |
+| `study/h2b_prediction/h2b_learned_meanfield_h.py` | `--loso` | ouvert |
+| `study/h2b_prediction/h2b_multiseed.py` | `--n-seeds` | ouvert |
+| `study/h2b_prediction/h2b_variational_classifier.py` | `--reps-ansatz` | ouvert |
+| `study/closed_loop/closed_loop_campaign.py` | `--n-trials` / `--n-trials-classical` | ouvert |
+| `study/closed_loop/closed_loop_budget_matched.py` | `--max-iter` | ouvert |
+| `src/analyze_hyperparams.py` | `--full` | ouvert |
+
+**Une réserve sur l'instrument, à ne pas oublier.** Il mesure une
+**mention textuelle** du nom du drapeau dans `tests/`, pas une exécution.
+Un drapeau cité dans un test qui ne l'exerce pas compte comme traversé : le
+compte de 101 est donc un **plancher**, jamais un plafond. Pour un verdict,
+c'est `trace_fiche_axes` qui compte les appels réels — cet instrument-ci
+sert à **choisir où regarder**, pas à conclure.
+
+Et la réciproque, que D-51 illustre : un drapeau *présent* dans `tests/`
+peut n'atteindre aucun producteur. `advanced_anomalies_enabled` était cité
+partout, et mesuré sans effet.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
