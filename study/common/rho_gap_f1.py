@@ -4,7 +4,13 @@
 MESURE DE REFERENCE, avant campagne, sur
 `h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz` :
 
-    rho = +0.970   p = 0.0001   8 solveurs
+    rho = +0.870   p = 0.0023   9 solveurs
+
+(D-172 : la reference citait ici +0.970 / p=0.0001 / 8 solveurs, un calcul
+manuel qui excluait `qaoa_shots_p3`. Rejouee par ce module meme sur le
+fichier qu'elle nomme, la mesure rend +0.870 / p=0.0023 / 9 solveurs --
+deja la valeur publiee dans RESULTS.md ("rho vaut +0,870, pas +0,970"),
+jamais reportee ici. Le signe et la conclusion ne bougent pas.)
 
 Un rho POSITIF signifie que **mieux resoudre H degrade la decision** : le
 solveur qui atteint l'optimum certifie a le F1 le plus bas, celui qui s'en
@@ -85,7 +91,7 @@ def main():
 
     print("=" * 72)
     print("  rho(E_gap, F1) — mieux resoudre H aide-t-il a mieux decider ?")
-    print("  Reference avant campagne : rho = +0.970 (p = 1e-4)")
+    print("  Reference avant campagne : rho = +0.870 (p = 0.0023, 9 solveurs)")
     print("=" * 72)
 
     rapport = []

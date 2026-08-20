@@ -44,6 +44,7 @@ s'exerce sur `_effective_crit` canal par canal, ou l'invariant est exact.
 
 import ast
 import os
+import re
 import sys
 
 import numpy as np
@@ -124,16 +125,60 @@ def _cles_hp_get_vivantes():
     return cles
 
 
+def _cles_des_blocs_morts():
+    """Les cles `hp.get('...')` qui vivent dans un LITTERAL de chaine.
+
+    Le bloc mort de `pipeline.py` est un litteral triple-quote pose comme
+    instruction. On le retrouve par l'AST, pas par son indentation :
+    l'ancienne version de ce garde comptait la chaine
+    `"w_z_frac    = hp.get("` -- quatre espaces compris -- ce qui la rendait
+    rouge sur une reindentation voulue (D-149).
+    """
+    tree = ast.parse(open(os.path.join(_SRC, "pipeline.py")).read())
+    cles = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+                and "hp.get(" in node.value.value):
+            cles |= set(re.findall(r"hp\.get\(\s*'([^']+)'", node.value.value))
+    return cles
+
+
+def test_le_bloc_mort_existe_encore():
+    """Sans bloc mort, la canarie ci-dessous ne prouve rien : un balayage
+    vide doit crier."""
+    assert _cles_des_blocs_morts(), (
+        "aucun litteral de chaine de `pipeline.py` ne contient de `hp.get(` : "
+        "le bloc mort a disparu. Le test suivant deviendrait vide -- le "
+        "relire avant de le laisser passer.")
+
+
 def test_le_bloc_mort_ne_compte_pas():
-    """Garde-fou du garde-fou. Si le bloc commente de `pipeline.py`
-    disparait ou devient du code, ce test le dit -- sinon le balayage
-    ci-dessous pourrait etre satisfait par du texte."""
-    source = open(os.path.join(_SRC, "pipeline.py")).read()
-    occurrences = source.count("w_z_frac    = hp.get(")
-    assert occurrences == 2, (
-        f"{occurrences} occurrences de l'affectation de w_z_frac : le bloc "
-        f"mort a change de forme, revoir `_cles_hp_get_vivantes`.")
-    assert "w_z_frac" in _cles_hp_get_vivantes()
+    """Garde-fou du garde-fou, par le COMPORTEMENT du balayage.
+
+    Mesure (D-149) : l'ancienne version comptait
+    `source.count("w_z_frac    = hp.get(") == 2`. Le bloc mort transforme en
+    CODE -- son texte laisse intact, donc le compte inchange -- laissait le
+    fichier a **21 passed**, alors que c'est exactement ce que la docstring
+    d'origine annoncait detecter. La cle qui tranche est celle qui n'existe
+    QUE dans le bloc mort : `beta_grad`. Si elle apparait parmi les cles
+    vivantes, le bloc est devenu du code, et le balayage anti-D-31 peut
+    desormais etre satisfait par des lectures que le bloc vivant reecrit
+    quinze lignes plus bas -- D-31 exactement.
+    """
+    mortes = _cles_des_blocs_morts()
+    vivantes = _cles_hp_get_vivantes()
+    canaries = mortes - vivantes
+    assert canaries, (
+        f"toutes les cles du bloc mort {sorted(mortes)} sont aussi lues par "
+        f"le code vivant : plus aucune canarie ne distingue les deux, revoir "
+        f"`_cles_hp_get_vivantes`.")
+    assert "beta_grad" in canaries, (
+        f"`beta_grad` n'est plus la canarie attendue (canaries : "
+        f"{sorted(canaries)}) : soit le bloc mort a change, soit le code "
+        f"vivant lit maintenant `beta_grad`. Les deux demandent une relecture.")
+    assert "w_z_frac" in vivantes
 
 
 @pytest.mark.parametrize("nom", sorted(TH.SEARCH_SPACE))

@@ -220,9 +220,13 @@ def test_the_detector_does_not_cry_on_a_cli_flag_or_a_loud_exit():
 
 
 def test_the_sweep_itself_is_not_empty():
-    """Un balayage vide doit crier — y compris celui-ci."""
-    assert len(STUDY_FILES) > 40, (
-        f"seulement {len(STUDY_FILES)} modules de study/ collectes : le "
-        "balayage du detecteur est vide ou tronque")
+    """Un balayage vide doit crier — y compris celui-ci.
+
+    D-167 : le plancher a 40 ne detectait plus rien -- 66 modules mesures
+    a `1bee385` (18 aout 2026), meme quantite qu'en face dans
+    `tests/study/test_empty_sweep_never_silent.py`."""
+    assert len(STUDY_FILES) >= 66, (
+        f"{len(STUDY_FILES)} modules de study/ collectes ; 66 mesures a "
+        "`1bee385` (18 aout 2026) : le balayage du detecteur a retreci")
     assert sum(1 for p in STUDY_FILES
                if "main" in open(p, encoding="utf-8").read()) > 30

@@ -109,8 +109,10 @@ def _score_at(dns_path, si, dim, fixed_curl):
                       for k in ("vx", "vy", "Bx", "By"))
     N = vx.shape[0]
     dx = 2 * np.pi / N
-    Jz = ((np.roll(By, -1, axis=0) - np.roll(By, 1, axis=0)) / (2 * dx)
-          - (np.roll(Bx, -1, axis=1) - np.roll(Bx, 1, axis=1)) / (2 * dx))
+    #  D-153 : les axes sont NOMMES — `grid.py` fait foi.
+    from Simulation.grid import AXIS_X, AXIS_Y
+    Jz = ((np.roll(By, -1, axis=AXIS_X) - np.roll(By, 1, axis=AXIS_X)) / (2 * dx)
+          - (np.roll(Bx, -1, axis=AXIS_Y) - np.roll(Bx, 1, axis=AXIS_Y)) / (2 * dx))
     full = AngleMapper.classical_score(
         {"vx": vx, "vy": vy, "Bx": Bx, "By": By, "Jz": Jz, "dx": dx},
         fixed_curl=fixed_curl)

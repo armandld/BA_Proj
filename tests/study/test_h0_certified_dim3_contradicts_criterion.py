@@ -20,6 +20,7 @@ Aucun nombre publie n'en depend : `aggregate_master_table.collect` lit
 import io
 import contextlib
 import os
+import re
 import sys
 
 import numpy as np
@@ -123,18 +124,161 @@ def test_scaled_budget_does_not_rescue_the_qaoa_arm():
         check_expected_behaviour(summary, solvers, diag)
 
 
-def test_the_decision_not_to_correct_stays_written():
+# ══════════════════════════════════════════════════════════════════
+#  D-146 — la decision de ne pas corriger doit rester ECRITE
+# ══════════════════════════════════════════════════════════════════
+#
+# L'ancien garde faisait `assert "D-53" in docs/DEFAUTS.md`. Quatre
+# caracteres, cherches dans 1 361 lignes : n'importe quelle reference
+# croisee le satisfait. Ce n'est pas theorique — la decision a DEJA quitte
+# `DEFAUTS.md` (D-53 est clos, son entree vit sous `# D-53` dans
+# `RESULTS.md`) et le garde n'a rien vu, parce qu'un tableau de synthese
+# de l'entree D-132 porte encore une ligne `| D-53 | ... |`.
+#
+# Ce que le garde doit distinguer : une ENTREE (un titre qui nomme le
+# defaut, ou une ligne du registre des corriges) d'une REFERENCE CROISEE
+# (le numero cite dans la prose d'une autre entree). Et il doit exiger que
+# l'entree porte encore les nombres qui la rendent lisible : un titre nu ne
+# consigne aucune decision.
+#
+# Mesure (voir `RESULTS.md`, ligne D-146) :
+#   A' — les deux sections `# ...D-53...` retirees de `RESULTS.md`, toutes
+#        les references croisees laissees en place, dans les deux fichiers
+#        ancien garde : 6 passed  |  nouveau : 1 failed
+#   B  — l'entree DEPLACEE de `RESULTS.md` vers `DEFAUTS.md` en `## D-53`
+#        (changement voulu, la decision reste ecrite)
+#        nouveau : pas de faux rouge
+
+_REGISTRES = ("DEFAUTS.md", "RESULTS.md")
+
+# Le titre du registre des defauts corriges : la seule table dont une ligne
+# `| D-N | ... |` EST l'entree du defaut N. Ailleurs, une telle ligne est un
+# tableau de synthese range dans l'entree d'un AUTRE defaut.
+_TITRE_DU_REGISTRE = re.compile(r"d[ée]fauts\s+corrig[ée]s", re.IGNORECASE)
+
+
+def _entrees_du_defaut(texte, numero):
+    """Les entrees du defaut `numero` dans un document markdown.
+
+    Rend une liste de corps (str). Une entree est :
+
+      - une SECTION dont le titre nomme le defaut (`# D-53 — ...`), corps
+        = jusqu'au titre suivant de niveau inferieur ou egal, donc les
+        sous-titres de la section en font partie ; ou
+      - une LIGNE DU REGISTRE (`| D-53 | ... |`) placee sous le titre du
+        registre des defauts corriges.
+
+    N'est PAS une entree : le numero cite dans la prose, ni une ligne
+    `| D-53 | ... |` rangee sous le titre d'un autre defaut.
+    """
+    jeton = re.compile(r"\bD-%d\b" % numero)
+    titre = re.compile(r"^(#{1,6})\s+(.*)$")
+    ligne_registre = re.compile(r"^\|\s*D-%d\s*\|" % numero)
+
+    lignes = texte.split("\n")
+    # (niveau, titre) de la section courante, du plus englobant au plus fin
+    pile = []
+    entrees = []
+    ouverte = None          # (niveau, [lignes de corps])
+
+    for ligne in lignes:
+        m = titre.match(ligne)
+        if m:
+            niveau, intitule = len(m.group(1)), m.group(2)
+            if ouverte is not None and niveau <= ouverte[0]:
+                entrees.append("\n".join(ouverte[1]))
+                ouverte = None
+            while pile and pile[-1][0] >= niveau:
+                pile.pop()
+            pile.append((niveau, intitule))
+            if jeton.search(intitule) and ouverte is None:
+                ouverte = (niveau, [ligne])
+            continue
+        if ouverte is not None:
+            ouverte[1].append(ligne)
+        if ligne_registre.match(ligne) and any(
+                _TITRE_DU_REGISTRE.search(t) for _, t in pile):
+            entrees.append(ligne)
+
+    if ouverte is not None:
+        entrees.append("\n".join(ouverte[1]))
+    return entrees
+
+
+# Les nombres SANS lesquels l'entree ne consigne plus rien : le taux
+# atteint par le bras QAOA a dim=3, sa borne basse, et le 1,000 exige.
+# Virgule ou point : la mise en forme n'est pas ce qui est garde.
+_NOMBRES_DE_D53 = (r"0[.,]156", r"0[.,]062", r"1[.,]000")
+
+
+def test_la_decision_de_ne_pas_corriger_D53_reste_ecrite():
     """`VIGIL.md` : une deviation connue mais non consignee se fait
     recorriger par erreur ; toute decision de ne pas corriger s'ecrit, et un
     test verifie que la mention y reste.
 
-    Volontairement PAS l'inverse (« dim3 est absent de RESULTS.md ») : ce
-    test-la echouerait le jour ou quelqu'un fait la bonne chose et publie le
-    balayage, c'est-a-dire sur un changement voulu — le piege que `VIGIL.md`
-    documente trois fois.
+    Volontairement pas « dans DEFAUTS.md » : un defaut clos SORT de
+    `DEFAUTS.md` et entre dans `RESULTS.md` — c'est la regle des six
+    documents, et l'exiger dans un fichier nomme ferait rougir le test sur
+    ce mouvement-la, qui est voulu. On exige l'entree dans l'un OU l'autre
+    registre, et on exige qu'elle porte encore ses nombres.
     """
-    with open(os.path.join(_REPO_ROOT, "docs", "DEFAUTS.md"), encoding="utf-8") as fh:
-        defauts = fh.read()
-    assert "D-53" in defauts, (
-        "la decision de ne pas corriger D-53 a disparu de DEFAUTS.md : sans "
-        "elle, le critere MIN_HIT=1.0 se relit comme valide a toute taille")
+    trouvees = []
+    for nom in _REGISTRES:
+        with open(os.path.join(_REPO_ROOT, "docs", nom), encoding="utf-8") as fh:
+            trouvees += [(nom, corps) for corps in _entrees_du_defaut(fh.read(), 53)]
+
+    assert trouvees, (
+        "aucune ENTREE D-53 dans " + " ni ".join(_REGISTRES) + " : la decision "
+        "de ne pas corriger a disparu des registres. Sans elle, le critere "
+        "MIN_HIT=1.0 se relit comme valide a toute taille. (Une reference "
+        "croisee dans la prose d'un autre defaut ne compte pas : c'est "
+        "exactement ce qui a laisse l'ancien garde vert, D-146.)")
+
+    porteuses = [nom for nom, corps in trouvees
+                 if all(re.search(n, corps) for n in _NOMBRES_DE_D53)]
+    assert porteuses, (
+        f"{len(trouvees)} entree(s) D-53 trouvee(s), aucune ne porte encore "
+        f"les trois nombres qui la rendent lisible "
+        f"({', '.join(_NOMBRES_DE_D53)}) : un titre nu ne consigne pas une "
+        f"decision.")
+
+
+def test_le_detecteur_dentree_ne_confond_pas_une_reference_croisee():
+    """Auto-test du detecteur — sans lui, on ne saurait pas dire sur quelle
+    entree le garde ci-dessus echouerait.
+
+    Les trois premiers cas sont ceux qui laissaient l'ancien garde vert.
+    """
+    croisee = (
+        "## D-132 — le bras QAOA ne classe plus\n\n"
+        "Voir la ligne D-53 de RESULTS.md.\n\n"
+        "| | |\n|---|---|\n"
+        "| D-53 | optimum atteint 0,062-0,156 contre 1,000 exige |\n")
+    assert "D-53" in croisee                     # l'ancien garde : VERT
+    assert _entrees_du_defaut(croisee, 53) == [], (
+        "une reference croisee, et une ligne de synthese rangee sous le "
+        "titre d'un AUTRE defaut, ne sont pas des entrees")
+
+    prose = "D-53 est le plus lourd de la liste et se lit en premier.\n"
+    assert "D-53" in prose                       # l'ancien garde : VERT
+    assert _entrees_du_defaut(prose, 53) == []
+
+    section = ("# D-53 — la seule taille certifiee non degeneree\n\n"
+               "Le QAOA atteint 0,156 puis 0,062 la ou 1,000 est exige.\n\n"
+               "## Ce que dit dim = 3\n\nsuite de la meme section\n\n"
+               "# D-54 — autre chose\n\ncorps de D-54\n")
+    corps = _entrees_du_defaut(section, 53)
+    assert len(corps) == 1, corps
+    assert "suite de la meme section" in corps[0], (
+        "les sous-titres appartiennent a la section : le corps doit aller "
+        "jusqu'au titre suivant de niveau INFERIEUR ou egal")
+    assert "corps de D-54" not in corps[0]
+
+    registre = ("## Les 64 defauts corriges\n\n"
+                "| # | ce qui etait faux | verifier |\n|---|---|---|\n"
+                "| D-53 | 0,156 -> 0,062 contre 1,000 exige | pytest ... |\n")
+    assert len(_entrees_du_defaut(registre, 53)) == 1, (
+        "une ligne du registre des corriges EST une entree")
+
+    assert _entrees_du_defaut(section, 5) == [], (
+        "`D-5` ne doit pas etre trouve dans `D-53` : le jeton est borne")

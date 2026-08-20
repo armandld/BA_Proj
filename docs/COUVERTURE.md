@@ -368,15 +368,23 @@ seront que si un appelant apparaît.
 
 ---
 
-## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut ouvert (D-91)
+## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut trouvé (D-91, depuis clos)
 
-Note obsolète : le `TypeError` décrit ci-dessous a été corrigé le
-13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne soit
-écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit son
-`.npz`, et est désormais lu en entier, fonction par fonction (question 2 de
-`VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
+Note obsolète (deux fois) : le `TypeError` décrit ci-dessous a été corrigé
+le 13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne
+soit écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit
+son `.npz`, et est désormais lu en entier, fonction par fonction (question
+2 de `VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
 
-**D-91, ouvert** (`DEFAUTS.md`) : `compute_block_errors` divise par
+**Mise à jour (Vigil, 19 août) : D-91 a depuis été corrigé et est sorti de
+`DEFAUTS.md`.** Le titre de cette section et le paragraphe suivant le
+disaient encore « ouvert » ; ce n'est plus le cas — `RESULTS.md` porte la
+mesure avant/après (normalisation par bloc → normalisation globale par
+champ, le bruit de fond ne domine plus la structure d'un facteur 1,0e+07).
+Le paragraphe ci-dessous est laissé tel quel comme trace de ce qui a été
+trouvé ; seul son statut change.
+
+**D-91** (`DEFAUTS.md` → `RESULTS.md`, **clos**) : `compute_block_errors` divisait par
 `ref = sqrt(mean(dns_block**2)) + 1e-10`, plancher côté dénominateur
 seul — deux blocs au même écart absolu reçoivent un score qui dépend de
 l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
@@ -384,8 +392,10 @@ l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
 vraie structure), au profit de coins de fond quasi vide. C'est la cause de
 l'anomalie déjà notée dans `RESULTS.md` (D-10 : sélection ground truth
 0,3079, à peine mieux que l'absence d'AMR à 0,3074, contre 0,0208 pour
-classique/Q-HAS). Non corrigé : changer la métrique changerait ces deux
-nombres déjà publiés.
+classique/Q-HAS). **Depuis corrigé** (normalisation globale par champ au
+lieu de par bloc) et remesuré — voir `RESULTS.md`, D-91 : les deux nombres
+publiés cités ici sont ceux d'AVANT la correction, gardés pour la trace de
+ce qui a été trouvé, pas les valeurs courantes.
 
 Sain par ailleurs : `select_top_k` (testé, `argsort` décroissant correct),
 `build_patches_from_selection` (même convention `bi,bj` que les trois
@@ -2004,9 +2014,10 @@ couverture ne dit rien du contrat.
 | `execute` — bornes du mixeur par méthode | **sain** — `bounds` pour L-BFGS-B et Powell, `constraints` pour COBYLA, et un `raise` explicite pour toute autre méthode plutôt qu'une borne perdue en silence (correction antérieure, D-38) |
 | `execute` — ordre des paramètres `[β…, γ…]` | **sain** — les bornes et les contraintes indexent `x[0:reps]` comme β, ce qui est l'ordre que `QAOAAnsatz` expose (β avant γ) |
 | `execute` — restauration de `default_shots` après une lecture MPS | **saine** — le `sampler` peut être partagé par toute la campagne, la valeur d'origine est remise |
-| `optimize` — les trois backends | **sain** — `state_vector` force `opt_level = 0`, et un backend inconnu lève |
+| `optimize` — les trois backends | **sain sur la valeur**, mais son seul test était **D-174** : `state_vector force opt_level=0` était vérifié en cherchant deux chaînes littérales dans le SOURCE, pas en appelant la fonction — corrigé, `pytest tests/quantum/test_vqa_chain_contracts.py -q -k optimisation_level`. Un backend inconnu lève toujours. **Chemin mort en production** : `optimize()` n'est atteint que par le `else` legacy de `call_vqa_shell` (`vqa_runtime is None`) ; `pipeline.py` ne construit `vqa_runtime=None` qu'en `classical_only` (le VQA n'y est jamais appelé), et les sept sites d'appel de `call_vqa_shell` dans `tests/` passent tous `vqa_runtime=...` — noté ici, pas corrigé : pas une valeur fausse, un signalement pour la prochaine passe |
 | `postprocess` — convention de bits et contrat d'entrée | **sain** — parcourt `bitstring[::-1]` (qubit 0 à droite, la convention de `probabilities_dict()` et de `get_counts()`), et **refuse** trois entrées qui rendraient des marginales plausibles et fausses : distribution non normalisée, chaîne multi-registres (l'espace décalerait toutes les positions suivantes), longueur ≠ `num_qubits` |
 | `runtime.VQARuntime` — mode, backend, cache d'ansatz | **sain** — `mode` hors `('simulator',)` lève (D-48 : `_init_backend` rend un simulateur quel que soit le mode, un run « hardware » tournait donc sur simulateur sans le dire), un `backend_name` inconnu lève au constructeur plutôt qu'un `AttributeError` cinquante lignes plus loin, et la clé du cache d'ansatz inclut une **empreinte des coefficients**, pas seulement la topologie |
+| `mapping` — seule fonction du dossier absente de cette table jusqu'ici, bien que le fichier soit « lu en entier » | **sain sur les deux branches** — Q4 : `dim = len(theta_h) − halo_dim` (0 périodique, 2 borné) doit accorder les tableaux `theta_*`/`hamilt_params` transmis tels quels à `create_bounded_hamiltonian`/`create_period_hamiltonian`. Côté borné, le garde A0 de `create_bounded_hamiltonian` (`cost_hamiltonian.py` L69-93) vérifie que TOUS les tableaux (`theta_h_full`, `theta_v_full`, `C_edges`, `H_edges`, `K_plaquettes`) valent exactement `(dim+2, dim+2)` et lève sinon — un désaccord ne peut pas produire de valeur silencieuse, seulement un crash. Côté périodique, `create_period_hamiltonian` n'a **pas** cette garde (indexation `hamilt_params[...][i, j]` pour `i, j < dim`, sans vérifier la forme) — asymétrie notée, pas un défaut mesuré : `dim` y vient de la même source (`theta_h`) que les `hamilt_params` normalisés par `call_vqa_shell`, aucun site d'appel réel n'a été trouvé où les deux divergent. À revisiter si un appelant construit un jour `hamilt_params` de taille différente du patch d'angles |
 
 **Axes traversés — mesurés sur la suite ENTIÈRE, pas supposés.** Un plugin de
 trace enrobe les points de décision et compte les appels réels :
@@ -2422,6 +2433,220 @@ depuis D-119.
 
 ---
 
+## Les commandes publiées — deux trous, mesurés et fermés (D-140, D-142)
+
+**D-142 d'abord, parce qu'il est plus large.** Le balayage de D-71 couvre
+`study|scripts|figures`. Les commandes les plus nombreuses de `RESULTS.md`
+sont des `pytest tests/…`, et **rien** ne les regardait : 29 chemins cités
+comme commande, **10 absents**, deux blocs de recette entiers morts
+(`exit 4`). `test_every_pytest_command_in_results_md_points_to_a_real_file`
+les couvre désormais. Il suit le **contexte de commande** — une commande
+`pytest` s'étale sur plusieurs lignes — et exclut les lignes de **table**
+par leur forme, sans liste d'exceptions à tenir à la main. Vérifié en
+rejouant le garde sur le `RESULTS.md` d'avant : **10 chemins listés, 1
+failed** ; après : **1 passed**.
+
+**Une note qui vaut avertissement** : ce garde s'exécute en 0,04 s, celui
+de D-140 en ~20 s. Ce n'est pas le même travail — l'un lit le système de
+fichiers, l'autre interroge douze parseurs. Ne pas les fusionner.
+
+## Les options des commandes publiées — le chemin était testé, l'option non (D-140)
+
+`tests/study/test_repro_commands_point_to_real_files.py` vérifiait depuis
+D-71 que tout script cité par une commande de `RESULTS.md` **existe**. Rien
+ne vérifiait que les **options** citées existent : une commande peut pointer
+sur un fichier bien réel et sortir en 2 sur `unrecognized arguments`.
+
+C'est ce qui est arrivé à la ligne « Vérifier » de **D-53**, le résultat le
+plus fort du dépôt — voir `RESULTS.md`, D-140.
+
+**Ce qui est testé maintenant.** `test_every_repro_command_uses_options_its_script_declares`
+extrait chaque commande `python <script du dépôt> --…` de `RESULTS.md`, puis
+interroge le **parseur** du script par son propre `--help`. L'assertion porte
+sur le comportement déclaré, pas sur le texte du source : renommer une option
+dans le code la fait rougir, reformater le fichier non.
+
+**Ce qui est mesuré.** 16 commandes distinctes à options, 12 scripts
+interrogés, 0 ignoré. Garde anti-balayage-vide : le test exige d'en trouver
+au moins 10 et le dit dans son message. ~20 s.
+
+**Ce que ce test ne couvre pas, écrit pour ne pas le croire couvert :**
+
+- les options **courtes** (`-q`, `-k`) et les commandes `pytest`, hors motif ;
+- les **valeurs** passées aux options — `--dim 3` est accepté ici quelle que
+  soit la valeur, seul le nom de l'option est vérifié ;
+- les commandes de `DEFAUTS.md` et de `COUVERTURE.md` : seul `RESULTS.md`
+  est balayé, parce que c'est lui qui porte le contrat « un résultat qu'on ne
+  sait pas refaire n'est pas un résultat » ;
+- un script dont `--help` ne rend pas 0 est **ignoré**, pas signalé — aucun
+  aujourd'hui, mais le jour où il y en aura un, il passera en silence.
+
+## `preflight_coefficients.py` — la porte de la campagne, ses cinq contrôles sondés (D-141)
+
+Module lu en entier. C'est la porte de la réoptimisation : il décide si
+~224 h CPU partent. Rien ne le testait.
+
+**Ce qui est vérifié maintenant** — `tests/study/test_preflight_pertinence_separates.py`,
+5 tests, ~10 s, déterministe (deux exécutions identiques au dernier
+chiffre) :
+
+| test | ce qu'il tient |
+|---|---|
+| `the_replica_is_the_control_itself` | **opérateur assorti** : la réplique du calcul rend le rho du contrôle à **1e−12**. Sans lui, tout le reste du fichier mesurerait autre chose |
+| `the_control_rejects_pure_noise` | contrôle positif : le seuil n'est pas vide, le bruit blanc rate à −0,0401 |
+| `bare_physical_fields_clear_the_same_threshold` | le cœur de D-141 : \|Jz\|, \|v\| et \|∇\|B\|\| passent sans porter aucun coefficient |
+| `the_classical_baseline_clears_it_better…` | le point qui décide : score classique **+0,8137** contre `K_plaquettes` **+0,7977** |
+| `only_one_of_the_four_channels_is_looked_at` | `K_xpoint` (+0,4345) ne franchirait pas le seuil — « les coefficients » désigne un seul canal |
+
+Les assertions portent sur des **ordres**, pas sur les valeurs : le dépôt
+n'épingle aucune version de `numpy`/`scipy`. Les valeurs sont écrites dans
+la docstring pour qu'une dérive se voie à la lecture.
+
+**Ce sont des tests de déviation**, comme ceux de D-53 : ils échouent le
+jour où le contrôle gagne un critère de discrimination, donc le jour où
+D-141 est tranché. Vérifié en mutant le seuil du contrôle de 0,6 à 0,85 :
+**2 failed** — ils suivent bien le critère et ne sont pas décoratifs.
+
+**Les quatre autres contrôles sont sondés par mutation**, dans le même
+fichier : on mute la sortie de `PhysicalMapper.compute_coefficients` et on
+regarde lesquels mordent. Matrice complète dans `DEFAUTS.md`, D-141.
+`test_the_cheap_controls_are_blind_to_a_spatial_shuffle` (rapide) épingle
+que `specificite` et `equilibre` restent verts sur un coefficient dont la
+structure spatiale est détruite ; `test_the_full_mutation_matrix_of_the_gate`
+(marqué `slow`, ~73 s) rejoue les quatre mutations sur les quatre contrôles,
+pour que la matrice citée soit refaisable.
+
+**Ce que ce fichier ne couvre PAS**, écrit pour ne pas le croire couvert :
+`coincidence` n'est sondé par aucune mutation — il n'appelle pas
+`PhysicalMapper`, il compare deux chemins de calcul d'énergie sur des
+coefficients tirés au hasard, donc cette famille de mutations ne l'atteint
+pas. On ne sait toujours pas sur quelle entrée il échouerait.
+
+## Le score intermédiaire d'Optuna — le chemin le moins regardé de `pipeline()` (D-143)
+
+`src/pipeline.py` porte **trois** sites de notation, et la suite n'en
+couvrait que deux. Le score **final** et le score du **chemin de
+divergence** ont chacun leurs tests ; le score **intermédiaire** — celui
+que `trial.report()` envoie à l'élagueur d'Optuna — n'était traversé par
+aucun test avant cette passe. C'est là qu'était D-143.
+
+**Pourquoi il échappait au balayage.** Il ne s'atteint qu'avec
+`trial is not None`, `did_hybrid` vrai et `steps_hybrid_count > 1` : il
+faut donc un essai Optuna *et* au moins deux frontières hybrides dans le
+run. Les fixtures rapides du dépôt passent `trial=None` (c'est le cas de
+`petit_run` dans `test_v1_partial_pockets.py`), et la seule configuration
+qui l'emprunte réellement est la campagne. **Un module n'est pas audité
+parce que ses fonctions ont été lues** — celle-ci l'avait été.
+
+**Ce qui est vérifié maintenant** —
+`tests/pipeline/test_intermediate_score_time_alignment.py`, **7 tests**,
+~3 s, déterministe (deux exécutions identiques au dernier chiffre) :
+
+| test | ce qu'il tient |
+|---|---|
+| `the_arm_reproduces_the_dns_so_a_reported_error_can_only_be_the_reference` | **validité de la mesure d'abord** : `patch_ratio = 1,0` et `phys_score` final à 3,06e−15. Sans lui, les six autres mesureraient autre chose |
+| `the_sweep_is_not_empty` | garde anti-balayage-vide : au moins 3 rapports exploitables |
+| `the_intermediate_reference_is_the_snapshot_of_the_previous_step` | le cœur de D-143, **par identité de tableaux** : réf. consommée ≡ `trace[k−1]` à 0,000e+00, bras ≡ `trace[k]` à ≤ 8,9e−16, les deux instantanés séparés de 1,8e−03 |
+| `the_intermediate_score_reports_the_dns_own_motion_not_the_arm_error` | l'écart chiffré à l'**opérateur assorti** (`score` lui-même) : 3,1e−02 annoncé contre 1e−15 aligné |
+| `the_two_readings_of_dns_trace_disagree_inside_one_function` | question 4 : le score final, lui, est aligné — c'est le contraste qui fait le défaut |
+| `the_last_report_is_aligned_only_by_the_end_of_run_overwrite` | épingle que **un** point sur cinq tombe juste, et par accident |
+| `the_open_defect_stays_written_in_the_registry` | la déviation reste écrite là où elle vit |
+
+**Ce sont des tests de déviation**, comme ceux de D-141 : ils épinglent un
+défaut **non corrigé** et rougissent le jour où il est tranché. Vérifié en
+mutant `src/pipeline.py:718` dans les deux sens — **A** (index aligné) :
+**3 failed** ; **B** (réécriture équivalente `get(step - 1) or {}`) :
+**7 passed**, pas de faux rouge.
+
+**Axes empruntés** : `classical_only` ; `dns_trace` présent (départ à
+chaud, donc `sim_temoin = None`) ; `max_depth_override = 1` ; élagage
+branché mais jamais mordant.
+
+**Ce que ce fichier ne couvre PAS**, écrit pour ne pas le croire couvert :
+
+- le **bras quantique** — le run est `classical_only`, pour rester à ~3 s
+  et déterministe ; rien n'indique que l'alignement en dépende, mais ce
+  n'est pas mesuré ;
+- la configuration de **campagne** (`N = 256`, `HYBRID_DT = 0,10`) : les
+  nombres sont pris à `N = 32` ;
+- le **classement** entre essais. Le terme parasite est commun à tous les
+  essais d'une même trace DNS ; savoir s'il s'annule dans la comparaison
+  qu'un élagueur fait demanderait deux essais d'hyperparamètres différents
+  avec un bras non exact. **Non fait, et donc non conclu** ;
+- la branche `elif sim_temoin is not None` du même bloc : elle est **morte**
+  dès qu'une trace DNS est fournie, et aucun test ne l'emprunte.
+
+## `src/pipeline.py` — lu en entier, 919 lignes, un défaut (D-143)
+
+Module rouvert par une trouvaille, donc relu **en entier** et non par
+échantillon : en-tête et table `PHASE`, `main()` et sa résolution CLI
+(D-66), `_init_scenario`, tout le corps de `pipeline()`, et les trois
+fonctions de queue (`instability_weight_map`, `weighted_relative_error`,
+`score`).
+
+**Ce qui est sorti** : **D-143** — le score intermédiaire d'Optuna lit
+`dns_trace[step - 1]` après `step += 1` (`DEFAUTS.md`), et une **branche
+morte** notée en une ligne dans `RESULTS.md` (le repli `patch_ratio = 1,0`
+de `:678`, que `step_simulated += 1` rend inatteignable).
+
+**Ce qui a été vérifié et trouvé SAIN** — écrit pour ne pas être relu deux
+fois :
+
+| ce qui a été soumis aux quatre questions | verdict |
+|---|---|
+| `instability_weight_map` contre sa docstring | **saine** — la docstring annonce `1 + 0,25·(…)`, le code écrit `1 + 0,5·(…)·0,5` : identique, et l'`omega_z` est bien `∂vy/∂x − ∂vx/∂y` sous la convention `grid.py` (`AXIS_X = 0`) |
+| les deux consommateurs de la pondération | **coïncident** — `score()` et le chemin de divergence appellent tous deux `instability_weight_map(référence)` puis `weighted_relative_error` ; c'est la correction D-5, et elle tient |
+| `patch_ratio` des deux chemins de notation | **coïncident** — `total_pixel_used / (pas × N²)` des deux côtés |
+| le garde D-67 sur le chemin final | **vivant** — `:751` passe `step_simulated` à `score()`, qui LÈVE sur `total_steps <= 0` ; un run vide y crie |
+| la graine de l'EMA contre ses mises à jour | **saine** — `Phi_ema` est semé par `mapper.compute_stress_flux` et `run_adaptive_*` rend un `Phi` produit par **le même** appel (`refinement.py:562` et `:648`). Opérateur assorti des deux côtés |
+| `first_step_with_flux = min(…)` | **sain** — `pre_compute_dns` pose son premier instantané à `T_START − HYBRID_DT` par construction, donc le `min` désigne bien celui-là ; et le cas froid ne prend pas cette branche (`hot_start_state is None`) |
+| `sim_classical` au départ à chaud | **sain** — recopié depuis `sim_quantum`, donc les deux bras partent du même état ; `sim_temoin` est délibérément `None` quand une trace DNS est fournie |
+| `_details` / `_divergence_details` | **sains** — les quatre sorties `return_details` passent par `_details`, donc toutes portent `sigma_source` (c'était D-36) |
+
+**Axes empruntés par la lecture ET par une exécution** : `classical_only` ;
+`dns_trace` présent (départ à chaud, `sim_temoin = None`) ;
+`max_depth_override = 1` ; `trial` non nul, donc le bloc d'élagage
+réellement traversé — c'est ce qui a rendu D-143.
+
+**Axes NON empruntés**, nommés pour ne pas être supposés : bras quantique
+(`classical_only=False`), `classic_AMR_comp=True`, mode sans trace DNS
+(`sim_temoin` vivant), départ à froid, et le **chemin de divergence**
+lui-même — atteignable, mais aucune entrée ne le sépare aujourd'hui
+(cf. D-135, direction 2, toujours ouverte).
+
+## `src/Simulation/pre_compute_dns.py` — lu en entier, RIEN trouvé
+
+Relu parce que D-143 le met en cause : c'est lui qui produit la référence
+contre laquelle **tout** nombre publié est mesuré. Verdict : **le
+producteur est juste, ce sont ses consommateurs qui lisent de travers.**
+C'est un résultat, écrit pour ne pas le relire une troisième fois.
+
+| ce qui a été soumis aux quatre questions | verdict |
+|---|---|
+| la **double convention** de la trace (`fluxes` avant le pas, sauf la dernière entrée) | **saine** — annoncée dans la docstring ET figée par deux tests de `tests/solver/test_precompute_dns_contracts.py`. **Ne pas la « corriger »** : la dernière entrée sert le score final, qui compare après le dernier pas |
+| le clamp `dt = min(dt, T_MAX - t_current)` | **sain** — réécrit dans le solveur (`sim_dns.dt = dt`) après `adapt_dt`, qui l'avait fixé. C'est la forme « variable locale non réécrite » de `VIGIL.md`, ici déjà corrigée et commentée avec sa mesure |
+| le même motif dans `pipeline()`, branche sans trace DNS | **sain** — `dt_q`, `dt_t` (et `dt_c`) sont réduits par `min`, puis **réécrits** sur les trois solveurs |
+| l'index du départ à chaud contre celui de la trace | **sain, et c'est la preuve structurelle de D-143** — `hot_start_state['step'] = s` est posé AVANT `step_full`, donc l'état à chaud est celui de `dns_trace[s]`. À l'entrée de la boucle du pipeline, le bras au pas `s` correspond à `dns_trace[s]` ; après `step += 1` il correspond à `dns_trace[s+1]`. La convention n'est pas ambiguë |
+| le départ à chaud tombe-t-il toujours sur un index porteur de `fluxes` ? | **oui, par construction** — l'instantané exige `t >= T_START - HYBRID_DT`, le départ à chaud exige `t >= T_START`, le second implique le premier |
+| le garde de divergence du DNS | **sain** — il **lève** au lieu de rendre une trace empoisonnée |
+| `is_last_step` | **sain** — `dt` étant clampé à `T_MAX - t_current`, la condition est exacte au dernier pas |
+
+**Ce qui a été noté sans être un défaut** (une ligne dans `RESULTS.md`,
+règle d'arrêt) : la docstring renvoie à `tests/test_precompute_dns_contracts.py`,
+qui vit sous `tests/solver/` depuis `17d983d`.
+
+**Ce qui n'est PAS un défaut et pourrait le paraître** : quand `dt` dépasse
+`HYBRID_DT`, `next_snapshot_time += HYBRID_DT` reste en retard et **chaque**
+pas devient une frontière — d'où 7 instantanés consécutifs (index 18…24)
+sur le run de 25 pas utilisé par D-143. C'est du sur-échantillonnage, donc
+de la mémoire, jamais une valeur fausse. Noté pour qu'une passe future ne
+le « corrige » pas en pensant tenir quelque chose.
+
+**Axes empruntés** : Kelvin-Helmholtz, `N = 32`, `T_START = 0,9`,
+`T_MAX` de 1,0 et 1,2, `HYBRID_DT` de 0,02 — donc le régime
+`dt > HYBRID_DT`. **Axes non empruntés** : `dt < HYBRID_DT` (le régime de
+la campagne, `N = 256`), les neuf autres scénarios, et le chemin de
+divergence du DNS (qui lève).
 ## Passe du 17 août (suite) — la liste des 23 candidats est VIDE
 
 Cinq derniers sites du tri automatisé vérifiés par mutation : **2 défauts**
@@ -2560,6 +2785,1047 @@ Restent **6 sites de la forme**, et **tous portent désormais un verdict** :
 comptait 14 relevés moins 2 vérifiés, sans que les 14 aient été recomptés —
 le compte de tête inexact que ce document reproche ailleurs, commis ici.
 Le nombre à citer est **6**, mesuré par la commande ci-dessus.
+
+---
+
+## Passe du 17 août (soir) — la file `.read()`, cinq fichiers de plus, deux défauts
+
+La seconde file de la fiche — les sites `.read()` **jamais relus** — a été
+reprise après la fusion de la branche vive. Cinq fichiers lus en entier,
+chaque site vérifié par mutation (casser le comportement, laisser le texte
+source intact, relancer) :
+
+| fichier (`tests/`) | sites | verdict |
+|---|---|---|
+| `study/test_phase5_ne_filtre_plus_sur_promising.py` | 4 | **D-144** — deux des quatre gardes ne peuvent pas rougir (le filtre revient sans `if`, le `print` disparaît en laissant ses jetons dans le commentaire) ; un banc **comportemental** ajouté qui exécute `run_phase5` |
+| `study/test_hyperparams_two_sources.py` | 3 | **D-145** — le balayage anti-fuite du JSON ne voyait que `hp.get('…')` par regex, pas `hp['…']` ; passé à l'AST, avec un plancher et une levée sur clé calculée |
+| `pipeline/test_src_coverage_inventory.py` | 5 | **sain** — tous les sites `ast.parse` puis interrogent l'arbre ; `test_no_module_defines_the_same_constant_twice` filtre les noms `≥4` car. **par choix** : mesuré, un détecteur AST au périmètre module ne trouve aucun défaut de plus (0 constante module courte) et le filtre `{3,}` évite les faux positifs sur `KX = KX.copy()` (locals numpy) |
+| `study/test_provenance.py` | 3 | **sain** — le seul site en `"chaîne" in src` (`git_commit_hash()`) est gardé **à côté** par `test_long_tasks_never_call_the_stamp_under_any_name`, structurel (AST) — le patron « texte + comportement » que `VIGIL.md` autorise |
+| `lint/test_scripts_point_somewhere.py` | 4 | **sain** — lisent des `.sh` et `CLAUDE.md` pour en extraire des chemins, puis vérifient **l'existence** et la **collecte** (`n > 0`) ; comportement sur le système de fichiers, pas texte du source |
+
+**État de la file `.read()` : 21 fichiers portent désormais un verdict** (16
+avant cette passe + 5). Le recomptage du 17 août donnait **85 sites,
+45 fichiers** ; les 24 fichiers restants attendent une passe future.
+
+**La forme que D-144 ajoute à la liste : filtrer sans `if`.** Le détecteur
+AST du garde cherchait `if ... promising ...: continue`. Réduire l'itérable
+en amont de la boucle filtre tout aussi bien, et aucune recherche de forme
+`if` ne le voit — il faut mesurer le **nombre d'instantanés qui ressortent**,
+pas la présence d'un mot-clé. C'est le corollaire, appliqué aux gardes
+eux-mêmes, de « choisir le champ d'essai qui SÉPARE ».
+
+---
+
+## Passe du 18 août — la file `.read()` est VIDE
+
+Les 4 fichiers de la passe du 17 août (nuit) — D-146 à D-149 — n'avaient pas
+été inscrits ici : ils le sont ci-dessous avec les 23 de cette passe. **Les
+54 fichiers de `tests/` qui lisent un fichier portent désormais un verdict.**
+
+Le balayage a été refait à `1e2bc63` (`grep -rln "\.read()\|read_text()" tests/`)
+et rend **54 fichiers** — le recomptage du 17 août en donnait 45, la
+différence étant les fichiers écrits depuis et les sites `ast.parse` que le
+premier balayage excluait. Les excluer était une erreur de méthode : D-149
+et D-150 sont tous deux des sites **AST** ou l'AST était la correction, pas
+la maladie.
+
+### Les deux défauts de cette passe
+
+| fichier (`tests/`) | verdict |
+|---|---|
+| `study/test_fig15_sigma_narration.py` | **D-150** — le garde de D-102 cherchait `"σ=0.023"` et une ligne d'affectation mot pour mot : `σ = 0.023` (avec espaces) passe, et une réécriture de guillemets rougit. Remplacé par un détecteur sur les **littéraux de chaîne de l'AST**, f-strings comprises |
+| `test_launcher_paths_resolve.py` | **D-151** — le parseur résolvait ses cibles contre la racine du dépôt après un `cd` posé sur sa propre ligne : **faux rouge** sur `run_reoptimisation.sh:72` (le 6ᵉ échec signalé le 17 août), et **faux vert** sur un homonyme de la racine |
+
+### Les 4 fichiers de la passe précédente (D-146 à D-149)
+
+| fichier (`tests/`) | verdict |
+|---|---|
+| `study/test_h0_certified_dim3_contradicts_criterion.py` | **D-146** — `assert "D-53" in DEFAUTS.md` : un jeton, pas une entrée. Détecteur d'entrées qui suit la hiérarchie des titres |
+| `study/test_hyperparams_provenance.py` | **D-147** — sous-chaînes numériques (`"345"` satisfait par `3450`). Nombres recalculés depuis les bases Optuna, cherchés délimités |
+| `pipeline/test_relative_percentile_is_trainable.py` | **D-149** — `source.count("w_z_frac    = hp.get(") == 2`, à l'espacement près. Bloc mort retrouvé par l'AST, garde porté sur la canarie `beta_grad` |
+| `study/test_empty_sweep_never_silent.py` | écrit par **D-148** — garde comportemental (il exécute les 61 modules lançables de `study/`), pas un site à auditer |
+
+### Les 17 fichiers classés cette passe — et sur quelle base
+
+**Base de la classification, dite pour ne pas être surestimée** : ces
+verdicts viennent de la lecture du **mécanisme**, pas d'une mutation. Le
+critère est celui que ce document fixe depuis le premier sondage : lire le
+source est juste quand l'objet du test EST le texte, faux quand l'objet est
+un comportement que le texte ne fait qu'indiquer. Aucun des 17 n'est du
+second type — ils n'assertent pas sur du texte du tout.
+
+| forme | fichiers | pourquoi c'est sain |
+|---|---|---|
+| **extraction + exécution de la vraie fonction** (le fichier lance sa campagne à l'import, donc on compile la seule `FunctionDef` visée) | `study/test_fig3_periodic_coherence.py`, `study/test_fig5_depth0_cell_size.py`, `study/test_fig5_gt_threshold_scale.py`, `study/test_fig7_single_trial_dispersion.py`, `study/test_fig7_trial_perturbation_shared.py`, `study/test_fig9_synthetic_fields_solenoidal.py` | l'opérateur mesuré EST celui du dépôt ; le source est lu pour l'**exécuter**, pas pour l'inspecter. Un renommage de la fonction visée fait échouer explicitement (`pytest.fail`), pas silencieusement |
+| **interrogation structurelle de l'AST** | `test_suite_integrity.py`, `pipeline/test_compare_rotor_budget.py`, `pipeline/test_full_launch_config.py`, `pipeline/test_v1_partial_pockets.py`, `study/test_psi_coverage_inventory.py`, `study/test_t24_source_text_guards_are_behavioural.py`, `study/test_t29_verdict_excludes_only_the_compared_arms.py`, `study/test_xpoint_reaches_study.py`, `quantum/test_optimiser_axis.py`, `quantum/test_estimator_backend_axis.py` | la structure interrogée est la garantie elle-même (une conjonction, des `choices` d'argparse, une affectation d'artefact), insensible à la mise en forme |
+| **comportement, le texte n'étant que le support** | `study/test_empty_sweep_guard_shapes.py`, `study/test_t13_control_is_not_vacuous.py`, `study/test_closed_loop_budget_matched_missing_input_not_silent.py`, `study/test_repro_commands_point_to_real_files.py` | détecteurs AST **auto-testés** (ils vérifient qu'ils trouvent quelque chose), doublés d'assertions sur l'exécution réelle ou l'existence des fichiers |
+| **mention d'une déviation documentée** | `study/test_fig9_negative_control.py` (`"D-98"` dans la docstring de `pixel_prf`) | forme explicitement exigée par `VIGIL.md` : « un test vérifie que la mention y reste » |
+
+**`pipeline/test_v1_partial_pockets.py` : un site surestimé, pas un défaut.**
+`test_the_mode_parameter_is_now_read` exige par l'AST qu'un `self.mode` soit
+lu quelque part dans `runtime.py`. La garantie réelle — un mode non simulateur
+est refusé — est couverte à côté, et **comportementalement**, par
+`test_a_non_simulator_mode_is_refused_at_construction` (4 modes paramétrés).
+Le seul `self.mode` lu du fichier est celui de `_validate_mode` : la lecture
+ne peut pas disparaître sans que le test comportemental tombe d'abord. Rien
+à corriger — noté pour ne pas être resondé.
+
+**Trois fichiers sortent de la file : ils ne lisent pas un source.**
+`pipeline/test_extract_best_hyperparams_columns.py`,
+`pipeline/test_extract_best_hyperparams_selection.py` et
+`pipeline/test_recompute_lambda_scores.py` font `json.loads(...read_text())`
+sur l'**artefact que le script produit** — c'est une assertion sur une
+sortie, pas sur un texte de code. Le balayage `grep .read()` les attrapait
+par la forme ; ils n'ont jamais appartenu à la famille.
+
+### Ce que cette file laisse derrière elle
+
+**Deux défauts sur 27 fichiers audités cette passe et la précédente** —
+proportion cohérente avec l'étalonnage du dépôt, et avec ce que le premier
+sondage annonçait : la majorité des gardes est juste. Les deux trouvés
+partagent la même racine que les six qui précèdent : **une chaîne cherchée
+dans un source garde une mise en forme, jamais un comportement.** Sur les
+huit, sept ont été corrigés en passant à l'AST, et le huitième (D-151) en
+suivant l'état du shell plutôt que la ligne courante.
+
+**La forme que D-151 ajoute à la liste : l'état porté par les lignes
+précédentes.** Un parseur ligne à ligne lit chaque ligne dans un contexte
+qu'il ne connaît pas — ici le dossier courant. Il ne se trompe pas de forme :
+il se trompe d'**environnement**, et l'erreur va dans les deux sens (un faux
+rouge visible, un faux vert qui ne l'est pas). Chercher, dans les autres
+balayages du dépôt, ceux qui supposent une ligne autonome.
+
+---
+
+## Passe du 18 août (suite) — la file suivante : les BALAYAGES du dépôt
+
+La file `.read()` vidée, D-151 a ouvert la suivante en désignant sa propre
+forme : **un balayage qui suppose ce qu'il ne vérifie pas.** Trois questions,
+posées à chaque balayage du dépôt :
+
+1. **son périmètre** — quels dossiers, quelles extensions ? La fuite suivante
+   se posera-t-elle dedans ?
+2. **son unité de lecture** — la ligne physique est-elle une unité de sens ?
+   (`cd` d'une ligne plus haut, continuation `\`, appel sur deux lignes)
+3. **sa forme cherchée** — un nom tenu à la main, ou une structure ?
+
+Deux défauts en sont sortis cette passe.
+
+| balayage | verdict |
+|---|---|
+| `pipeline/test_no_credential_in_source.py` | **D-152** — périmètre : `src/*.py` seulement, **25 fichiers sur 409**. Le dépôt est public et son historique porte un mot de passe non tourné (D-65) ; la fuite suivante n'avait qu'à se poser dans un `.sh`, dans `study/` ou dans un `.yaml`. Plus le trou d'unité de lecture : une URL coupée par une continuation `\` — la forme normale d'un long `export` — n'était vue par personne |
+| `study/test_no_private_curl_survives.py` | **D-153** — forme cherchée : une fenêtre de ±4 lignes autour de six mots (`curl`, `jz =`, `omega_z`…). Un rotationnel nommé `rot_z` échappe ; un axe passé en **positionnel** (`np.roll(By, -1, 0)`) échappe aussi, faute de `axis=` dans la ligne ; et `tests/` n'était pas balayé. Remplacé par la **signature** du rotationnel discret — deux tableaux différents, deux axes différents, soustraits |
+
+**Ce que D-153 a mesuré du dépôt lui-même, et qui vaut d'être écrit** :
+les **12** sites de forme rotationnelle ont été relevés et lus. **Aucune
+inversion vivante.** Les deux seuls à axe nu étaient dans `tests/`, de
+convention correcte, et sont passés à `AXIS_X`/`AXIS_Y` (70 passed avant
+comme après). La convention d'axes de ce dépôt tient — ce qui ne tenait pas,
+c'est le garde qui devait la faire tenir.
+
+**Trois balayages passés aux trois questions cette passe — mesurés, aucun
+défaut vivant.** Ce sont des résultats : ils évitent de les relire.
+
+| balayage | mesure |
+|---|---|
+| `run_tests.sh` — ses cibles `pytest` | hors du périmètre du garde de collecte (`lint/test_scripts_point_somewhere.py` ne suit que les cibles sous `$ROOT_DIR/` dans `scripts/*.sh`). Collectées une à une : **18, 30, 1, 7, 98, 14, 12, 2, 26, 2, 54, 44** — **aucun zéro**. Trou de périmètre réel, conséquence nulle aujourd'hui |
+| le piège `\| tail` de `BRIEF_REPRISE.md` §10 | **hypothèse réfutée par la mesure.** `scripts/generate_figures_v1.sh:253` fait bien `if python … \| tail -5; then`, mais pose `set -o pipefail` ligne 3. Les 10 lanceurs : les 2 qui pipent vers `tail` ont `pipefail` ; les 2 sans `pipefail` n'ont aucun pipe |
+| le détecteur de D-148 appliqué à `src/` et `figures/` | **3 sites** hors de son périmètre `study/`, tous dans `figures/v1_legacy/` (`fig11:79`, `fig12:213`, `fig13:101`), **0 dans `src/`**. Ils impriment leur abandon avant de rendre 0 — moins grave que les six de D-148, mais le compteur du lanceur les compte en succès. **Rapport seul, non corrigé** : décision de USER (`RESULTS.md`) |
+
+**Les balayages qui restent à passer aux trois questions** — ils sont
+nommés ici pour que la file se compte :
+
+| balayage | ce qu'il suppose |
+|---|---|
+| `study/test_empty_sweep_guard_shapes.py` | périmètre `study/` seul, et la garde vit dans une fonction `main` |
+| `pipeline/test_src_coverage_inventory.py` | périmètre `src/`, noms de constantes ≥ 4 caractères (**choix mesuré**, voir plus haut) |
+| `test_suite_integrity.py` | périmètre `tests/` |
+| `lint/test_scripts_point_somewhere.py` | les chemins cités par les `.sh` et `CLAUDE.md` |
+| `study/test_repro_commands_point_to_real_files.py` | le contexte de commande de `RESULTS.md` (déjà élargi par D-142) |
+| `study/test_psi_coverage_inventory.py` | les deux formes d'appel `f(...)` / `module.f(...)` |
+| `study/test_empty_sweep_never_silent.py` | les 61 modules **lançables** de `study/` (comportemental, pas de forme supposée) |
+
+## Passe du 18 août (soir) — la file des BALAYAGES est VIDE
+
+Les 7 balayages nommés à la passe précédente sont passés aux trois
+questions. **Quatre défauts, un rapport seul, deux sains.** Les deux sains
+sont un résultat : ils évitent de les relire.
+
+| balayage | verdict |
+|---|---|
+| `test_suite_integrity.py` | **D-154** — périmètre : il ne vérifiait que les imports dont le module commence par `tests.`, **3 sites sur 480** qui désignent un module du dépôt (1347 sites d'import en tout), dont **381 écrits dans le corps d'une fonction** — la position même qui échappe à `--collect-only`. Conséquence mesurée : trois modules de `src/` renommés → **45 tests disparaissent en `skip`** (les fixtures passent par `pytest.importorskip`) et ce fichier reste **158 passed** |
+| `test_psi_coverage_inventory.py` | **D-155** — forme cherchée : la **présence** du mot-clé `with_psi`, pas sa valeur. Le seul script déclaré câblé mis à `with_psi=False` en dur — psi mort dans tout `study/` — laissait **4 passed**. Plus les alias (`import … as prep`), par lesquels un script sortait de l'inventaire en silence |
+| `test_repro_commands_point_to_real_files.py` | **D-156** — unité de lecture : l'aplatissement global pour recoller les spans inline appariait aussi les backquotes des **clôtures** ```. Une seconde commande ajoutée à un bloc, document juste : **faux rouge**. Et `h4_unseen_conditions.py` était lu tronqué — deux options d'une commande publiée n'étaient confrontées à rien |
+| `test_empty_sweep_never_silent.py` | **D-157** — l'invocation elle-même : `--scenario no_such_scenario --N 64` envoyé aux 60 modules, **21 mouraient dans argparse** (`exit 2`) sans exécuter une ligne. Le test n'exigeait qu'un code non nul : un refus du parseur le satisfaisait |
+| `test_src_coverage_inventory.py` | **D-159** — le corpus fouillé contenait **le fichier qui déclare les noms cherchés**. Ses deux tests de couverture étaient structurellement incapables d'échouer : un module neuf déclaré couvert et critique, qu'aucun test ne nomme, laissait **102 passed** |
+| `test_empty_sweep_guard_shapes.py` | **sain**, trois questions passées, tout mesuré. Périmètre : le détecteur appliqué à `src/` rend **0**, à `scripts/` **0**, à `figures/` les **3** sites déjà rapportés le 18 août au matin. Forme : **0** module de `study/` porte un bloc `__main__` sans fonction `main()` ; les **4** sorties exemptées par la règle `{args, os, sys}` sont toutes de vrais drapeaux CLI (`args.list`, `args.trace_only`, `args.dry_run`, `args.validate_only`) ; et faire cesser `raise SystemExit(0)` d'exempter ne rend **0 site nouveau** — le seul du dépôt (`h4_physics_robustness:291`) clôt la branche `--recompute` après avoir écrit son artefact |
+| `lint/test_scripts_point_somewhere.py` | **sain**, trou réel et sans conséquence vivante. Son motif ne suit que `$ROOT_DIR`/`$REPO`/`$REPO_ROOT` : **25** chemins vus sur les **29** réellement construits — `$ROOT/` (`run_leak_free_campaign.sh`), `$SCRIPT_DIR/`, `$TRAIN_RESULTS_DIR/`, `$RESULTS_DIR/` lui échappent, et les 2 `.sh` de la racine (`run_tests.sh`, `setup_env.sh`) sont hors périmètre. Les 29 résolus un à un contre la racine, commentaires exclus et interpolations écartées : **0 chemin mort** |
+
+### Et un sixième, trouvé en ouvrant la file suivante — D-160
+
+La première question posée aux inventaires (« qui le remplit, qui le
+vide ? ») a immédiatement rouvert
+`test_repro_commands_point_to_real_files.py` : son `_HISTORICAL_EXCEPTIONS`
+listait des couples (fichier, jeton) dont **seul le compte servait**. Le
+jeton n'était jamais confronté au fichier — et n'y figurait pas. En
+mesurant, un second trou est apparu dans le même fichier : la commande
+citée **au fil du texte** (« reproduire : ``…`` ») n'était vue par aucun
+garde d'existence, **16 → 23** chemins une fois le motif corrigé. Les deux
+composent : une mention narrative remplacée par une commande morte écrite
+en prose restait verte sur les trois gardes. Détail et mesures : `RESULTS.md`,
+entrée D-160.
+
+**Le garde corrigé a mordu sur sa propre ligne de registre** dès la
+première exécution — la ligne de réservation de D-160 citait un chemin
+d'exemple qui n'existe pas. C'est la meilleure preuve qu'il peut échouer.
+
+### Ce que le rapport seul ajoute — D-158
+
+Construire, pour D-157, une invocation que chaque module **accepte** a
+révélé un défaut qui n'est pas dans un test :
+`study/common/aggregate_master_table.py --N 7 --dim 99` — une taille pour
+laquelle aucune campagne n'a jamais tourné — sort avec le **code 0**,
+imprime `V4 Task 16 complete.` et **réécrit les trois artefacts publiés** :
+180 → 161 lignes, OK 176 → 113, MISSING 0 → 48. `aggregate_v3.py` fait de
+même ; `aggregate_v2.py` nomme sa sortie par la configuration et n'écrase
+rien. Détail, mesures et trois options : `DEFAUTS.md`, entrée D-158.
+**Rien n'est corrigé** — cela change ce qu'écrit une commande publiée.
+
+### Une leçon de méthode, propre à cette file
+
+Deux des cinq défauts viennent de la même faute et elle n'est ni le
+périmètre ni la forme : **le balayage cherche dans un texte qu'il produit
+lui-même**. D-159 en est le cas pur — l'inventaire est dans le corpus qu'il
+fouille. D-156 en est la variante mécanique — le document est aplati par un
+motif que sa propre syntaxe de bloc déclenche. Une quatrième question, à
+poser aux balayages qui restent : *le balayage figure-t-il dans ce qu'il
+balaie ?*
+
+### La file suivante — les INVENTAIRES tenus à la main
+
+D-155 et D-159 l'ont désignée : un ensemble de noms écrit dans un test, que
+rien ne dérive du dépôt. Trois questions — qui le remplit, qui le vide, et
+que se passe-t-il si une entrée est fausse ? Ils sont nommés ici pour que la
+file se compte :
+
+| inventaire | ce qu'il suppose |
+|---|---|
+| `ACCUMULATORS` de `test_empty_sweep_never_silent.py` | 9 noms d'accumulateurs tenus à la main — D-148 a déjà mesuré que **30 sites y répondent 0** |
+| `SANS_ASSERTION_LEGITIMES` de `test_suite_integrity.py` | 3 exemptions, dont une qui s'annonce elle-même « à convertir ou à sortir de tests/ » |
+| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | 5 couples (fichier, fragment) dont le fragment n'est **jamais confronté au fichier** |
+| `EXCLUDED` / `COVERED` / `ENTRY_POINTS` de `test_src_coverage_inventory.py` | la partition de `src/`, et le sens de « couvert » une fois D-159 fermé |
+| `_EXEMPTIONS` de `test_empty_sweep_never_silent.py` | 7 modules non lancés, dont 4 entrés cette passe |
+| les 8 modèles d'URL exemptés de `test_no_credential_in_source.py` (D-152) | exemptés **par couple utilisateur:motdepasse** — que se passe-t-il si le modèle change ? |
+| `PSI_STILL_ZERO` / `PSI_WIRED` | 7 noms, plancher de dette écrit à 6 |
+
+---
+
+## Passe du 18 août (nuit) — la file des INVENTAIRES, quatre entrées
+
+Session concurrente sur cette même branche : D-161 (`test_no_credential_in_source.py`),
+D-162 (`ENTRY_POINTS` / `test_every_entry_point_guards_its_main`) et D-163
+(`SANS_ASSERTION_LEGITIMES`, `_EXEMPTIONS` — la péremption d'exemption qui
+vérifie le FICHIER, pas la chose exemptée) sont **réservés et en cours**
+ailleurs sur cette branche au moment où cette passe commence. Non repris ici
+pour ne pas dupliquer — les trois questions leur ont déjà été posées par
+cette session-là.
+
+Quatre entrées restantes, aux trois questions (qui le remplit, qui le vide,
+que se passe-t-il si une entrée est fausse) :
+
+| inventaire | verdict |
+|---|---|
+| `_HISTORICAL_EXCEPTIONS` de `test_repro_commands_point_to_real_files.py` | **déjà fermé par D-160**, avant l'ouverture formelle de cette file — vérifié à nouveau ici : `non_documentees`/`orphelines` confrontent maintenant chaque fragment déclaré aux lignes réelles du prefixe mort, dans les deux sens. Rien à rouvrir |
+| `ACCUMULATORS` de `test_empty_sweep_never_silent.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
+| `PSI_STILL_ZERO` / `PSI_WIRED` de `test_psi_coverage_inventory.py` | **vérifié et trouvé sain**, voir mesure ci-dessous |
+| `COVERED` de `test_src_coverage_inventory.py` | **D-164** — un homonyme d'attribut suffisait, sans import réel. `EXCLUDED`/`ENTRY_POINTS` non repris ici (D-162, en cours ailleurs) |
+
+### `ACCUMULATORS` — vérifié et trouvé sain
+
+Qui le remplit : neuf noms tenus à la main (`rows`, `records`, `results`,
+`configs`, `by_scene`, `per_cfg`, `out_rows`, `all_rows`, `entries`). Qui le
+vide : personne — c'est le point d'entrée d'un détecteur AST, pas une liste
+qu'on retire. Que se passe-t-il si une entrée est fausse : c'est la
+question qui compte ici, parce que D-148 a déjà mesuré que la liste ne
+recoupe **aucun** des 30 sites `if not <accumulateur>` réels de `study/`
+(tous portent un autre nom).
+
+Remesuré indépendamment cette passe, à l'octet : sur les **66** sites
+`if not <Name>` réels de `study/` aujourd'hui, **25** portent un nom de
+`ACCUMULATORS` (`rows` ×13, `configs` ×5, `records` ×4, `per_cfg`,
+`by_scene`, `results` ×1) — et **aucun des 25 n'est silencieux** (0 retour
+sans lever). Les **12** sites réellement silencieux (`if not X: ... return`
+sans `raise`) portent tous un nom hors liste (`all_results`, `seen`,
+`recs`, `certified`, `voting`, `checked`, `unseen`, `rows_summary`,
+`deltas`, `m`). Lus un à un : ce sont des fonctions auxiliaires qui
+rendent `None`/un message à l'appelant (`save_results`, `decision_rule_lines`,
+`interpretation_message`…), pas des `main()` qui sortent en silence sur un
+balayage vide — le patron que la famille D-56/D-148 cible. Aucun n'est un
+point d'entrée de script.
+
+Donc : le détecteur nommé (`ACCUMULATORS`) est aujourd'hui **vide sur du
+code sain** — pas un défaut, une conséquence directe de D-56 (les seuls
+sites qu'il pouvait voir ont été corrigés). Il reste capable de mordre
+(`test_the_detector_itself_can_fail` le prouve sur un cas synthétique), et
+le risque qu'il masque — un futur `if not <nom hors liste>: return`
+silencieux dans un vrai point d'entrée — est **déjà couvert, indépendamment
+du nom**, par le balayage comportemental de D-157
+(`test_aucun_module_de_study_ne_sort_zero_sur_un_balayage_vide`), qui
+exécute chaque module réellement plutôt que de chercher une forme. Les deux
+détecteurs ne se recoupent pas par construction (l'un lit le texte, l'autre
+exécute), donc aucune entrée fausse dans `ACCUMULATORS` ne peut aujourd'hui
+laisser passer un vrai défaut sans qu'un des deux gardes le voie. Rien
+corrigé — vérifié, pas de commit.
+
+```bash
+python3 -c "
+import ast, glob
+files = sorted(glob.glob('study/**/*.py', recursive=True))
+ACC = {'rows','records','results','configs','by_scene','per_cfg','out_rows','all_rows','entries'}
+n_named = n_named_silent = n_other = n_other_silent = 0
+for p in files:
+    tree = ast.parse(open(p, encoding='utf-8').read())
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.UnaryOp)
+                and isinstance(node.test.op, ast.Not)
+                and isinstance(node.test.operand, ast.Name)):
+            name = node.test.operand.id
+            silent = (any(isinstance(n, ast.Return) for n in ast.walk(node))
+                       and not any(isinstance(n, ast.Raise) for n in ast.walk(node)))
+            if name in ACC: n_named += 1; n_named_silent += silent
+            else: n_other += 1; n_other_silent += silent
+print(n_named, n_named_silent, n_other, n_other_silent)
+"
+# -> 25 0 41 12
+```
+
+### `PSI_STILL_ZERO` / `PSI_WIRED` — vérifié et trouvé sain
+
+Qui le remplit : deux ensembles de noms de fichiers, 6 et 1. Qui le vide :
+`test_the_inventory_lists_exactly_the_callers` — égalité d'ensemble contre
+les appelants réels de `prepare_qaoa_inputs`, alias compris (D-155).
+Qu'arrive-t-il si une entrée est fausse : `test_the_wired_scripts_really_pass_with_psi`
+et `test_the_unwired_scripts_really_run_with_psi_zero` relisent la VALEUR
+du mot-clé `with_psi`, pas sa présence (D-155) — un script classé
+`PSI_STILL_ZERO` qui rebrancherait psi ferait tomber le second, un script
+`PSI_WIRED` dont le câblage régresserait ferait tomber le premier.
+
+Vérifié spécifiquement pour le risque d'appelant caché — un script qui
+appellerait `prepare_qaoa_inputs` **indirectement**, via une fonction
+d'un autre module de `study/`, échapperait à `_callers()` (qui ne lit que
+les appels directs de chaque fichier). Le seul candidat plausible est
+`h0_optimiser_equivalence.solver_panel`, qui encapsule l'appel réel :
+balayé, **aucun** des quatre autres scripts qui importent depuis
+`h0_optimiser_equivalence` (`h3_window_counterfactual`, `h3_equivariance`,
+`h3_term_ablation`, `h3_size_scan`, `h0_qaoa_displacement`) n'importe
+`solver_panel` — ils importent `exhaustive_ground_state`, `f1_from_masks`,
+`classical_init_spins`, des fonctions sans rapport avec psi. Pas d'appelant
+caché aujourd'hui. Rien corrigé — vérifié, pas de commit.
+
+```bash
+pytest tests/study/test_psi_coverage_inventory.py -q      # 7 passed
+grep -rn "solver_panel" study/ tests/ --include="*.py"     # défini + 6 sites, aucun import ailleurs
+```
+
+### Confirmation indépendante sur les 12 sites silencieux
+
+Les deux seuls des 12 qui ne sont **pas** couverts par le balayage
+comportemental de D-157 — `aggregate_master_table.py:589` (`seen`) et
+`:654` (`recs`) — le sont parce que ce module est exempté (D-158, il
+détruirait la table publiée). Lus : tous deux rendent
+`make_row(..., None, None)`, c'est-à-dire une ligne **`MISSING`**. Ils ne
+sont donc pas silencieux — ils crient par le compteur que `CLAUDE.md`
+désigne comme « toujours une régression ». Le verdict « sain » ci-dessus
+tient sur les 12, y compris ces deux-là.
+
+---
+
+## Passe du 18 août (nuit) — les trois inventaires restants de la file
+
+Session concurrente sur la même branche que la passe ci-dessus ; les deux se
+partagent les 7 inventaires sans se recouvrir. **Trois défauts, chacun
+verrouillé par une mutation.** Mesures chiffrées dans `RESULTS.md`.
+
+| inventaire | verdict |
+|---|---|
+| les modèles d'URL de `test_no_credential_in_source.py` | **D-161** — le contrôle de péremption ne peut pas échouer, et **2 des 4 exemptions étaient déjà mortes** |
+| `EXCLUDED` / `ENTRY_POINTS` de `test_src_coverage_inventory.py` | **D-162** — `ENTRY_POINTS` n'exige rien et dispense de tout ; un module de bibliothèque du chemin déployé y était garé |
+| `SANS_ASSERTION_LEGITIMES` de `test_suite_integrity.py`, `_EXEMPTIONS` de `test_empty_sweep_never_silent.py` | **D-163** — les deux péremptions vérifient le **fichier**, pas la chose exemptée |
+
+### La leçon de cette moitié de file
+
+Les trois posent la même question, et ce n'est aucune des trois annoncées à
+l'ouverture (qui le remplit, qui le vide, que se passe-t-il si une entrée
+est fausse). C'est une quatrième : **une exemption supprime-t-elle encore
+quelque chose ?**
+
+Un inventaire d'exemptions a deux façons de pourrir, et les contrôles
+existants n'en voyaient aucune. Il peut désigner ce qui n'existe plus — la
+forme attendue, celle que les contrôles croyaient tester. Il peut surtout
+désigner ce qui existe encore mais n'a **plus besoin d'être exempté** : la
+fonction a gagné son assertion, le module a quitté le balayage, la
+documentation ne montre plus l'URL. Cette seconde forme est la dangereuse,
+parce que l'entrée reste vraie au sens où le contrôle la mesure, et devient
+une **permission accordée d'avance** à la prochaine chose qui portera ce
+nom. Mesuré : 2 exemptions sur 4 dans ce cas (D-161), aucune dans les 3 + 7
+de D-163 — le trou y était réel et sans conséquence vivante, fermé pendant
+qu'il l'était.
+
+D'où le critère, qui remplace « l'entrée existe encore » partout :
+**mesurer l'exemption avec l'opérateur qui la consomme.** `_MODELES` est
+consommé sur une URL reconnue par `_URL_WITH_PASSWORD` — donc l'exemption
+se vérifie sur une URL, pas sur du texte. `_EXEMPTIONS` est consommé sur
+l'appartenance à `_LANCABLES` — donc l'exemption se vérifie là. Là où les
+deux opérateurs divergeaient, l'exemption dormait.
+
+**D-161 est aussi la deuxième instance pure de la quatrième question**
+ajoutée aux balayages la passe précédente — *le balayage figure-t-il dans
+ce qu'il balaie ?* Elle se transporte telle quelle aux inventaires : le
+fichier qui **déclare** les exemptions était dans le corpus fouillé pour
+vérifier qu'elles servent encore.
+
+### Une hypothèse posée, mesurée, **réfutée**
+
+Soumettre `ENTRY_POINTS` au contrôle « nommé par la suite » semblait fermer
+la trappe de D-162 d'un mot. Mesuré avant d'écrire : sous le critère de
+D-164 (un import **réel**), **3 des 4 pilotes ne sont pas importés** par
+`tests/` — c'est exactement ce que `test_every_entry_point_parses` annonce
+(« les pilotes sont lourds à importer »). L'extension aurait fabriqué
+**3 faux rouges sur du code sain**. Non appliquée, raison écrite dans le
+fichier ; la trappe est fermée autrement, par l'assertion du bloc `__main__`.
+
+### La file suivante — les PLANCHERS de balayage écrits à la main
+
+D-161 l'a désignée : un plancher écrit dans un test (`assert len(X) >= N`)
+dit « ce balayage est encore assez grand pour prouver quelque chose ». Mais
+un plancher posé loin sous la valeur réelle ne détecte plus rien — le
+balayage peut fondre des deux tiers avant qu'il ne morde. Trois questions :
+**quand ce nombre a-t-il été mesuré, quelle est la valeur aujourd'hui, et
+de combien le balayage peut-il rétrécir avant que le plancher ne morde ?**
+
+Comptée pour qu'elle se compte : **50 planchers** (`assert len(X) >= N` ou
+`> N`) dans **28 fichiers** de `tests/`.
+
+```bash
+python3 -c "
+import ast, os
+n=0; files=set()
+for d,_s,ns in os.walk('tests'):
+    if '__pycache__' in d: continue
+    for fn in sorted(ns):
+        if not fn.endswith('.py'): continue
+        p=os.path.join(d,fn)
+        try: t=ast.parse(open(p,encoding='utf-8').read())
+        except SyntaxError: continue
+        for x in ast.walk(t):
+            if not (isinstance(x,ast.Assert) and isinstance(x.test,ast.Compare)): continue
+            c=x.test
+            if not (isinstance(c.left,ast.Call) and getattr(c.left.func,'id','')=='len'): continue
+            if len(c.ops)!=1 or not isinstance(c.ops[0],(ast.GtE,ast.Gt)): continue
+            if isinstance(c.comparators[0],ast.Constant) and isinstance(c.comparators[0].value,int):
+                n+=1; files.add(p)
+print(n, len(files))
+"
+# -> 50 28
+```
+
+**Mesure d'ouverture de la file** (18 août au soir) : sur les **44 des 50**
+planchers dont la grandeur s'évalue hors contexte de test, la marge
+plancher → valeur réelle va de **1,0×** à **3,8×**. Le dépôt porte déjà les
+deux patrons, et la file consiste à trier lesquels sont lesquels :
+
+- **le bon** — `tests/test_launcher_paths_resolve.py` : `>= 79` et `>= 83`,
+  chacun avec **le hash du commit qui l'a mesuré** écrit dans son message.
+  Une dérive s'y verrait au prochain point. (Le `>= 45` de la même quantité,
+  plus ancien et non daté, est strictement plus faible : superflu, pas faux.)
+- **celui qui ne détecte rien** — `assert len(_test_files()) > 40` dans
+  `tests/test_suite_integrity.py` (deux sites), quand la valeur réelle est
+  **153** : la suite peut perdre **113 fichiers de test sur 153** avant que
+  le plancher ne morde. Même forme pour `STUDY_FILES > 40` contre **66**
+  (deux sites), et `len(_modules_importes_du_corpus()) >= 50` contre **130**.
+
+Le critère à appliquer à chacun n'est pas « le plancher est-il franchi »
+— ils le sont tous — mais **« de combien ce balayage peut-il fondre sans
+que personne ne le voie »**. Un plancher large est parfois un garde-fou
+voulu plutôt qu'un détecteur de dérive, et la distinction se tranche
+entrée par entrée.
+
+**File fermée (18 août, passe complète)** : les 50 entrées ont été
+relues une à une, avec l'opérateur assorti à chacune. Statut final :
+
+- **6 défauts corrigés** (D-166 à D-171), 8 sites au total — chacun mesuré
+  avant/après, verrouillé par une mutation (ancien plancher rejoué sur une
+  valeur réduite : vert à tort ; nouveau plancher sur la même valeur :
+  rouge) et consigné dans le tableau des défauts corrigés plus haut :
+  `_test_files() > 40` (153 réel, 2 sites, D-166) ; `STUDY_FILES > 40`
+  (66 réel, 2 sites, D-167) ; `_modules_importes_du_corpus() >= 50`
+  (130 réel, D-168) ; `dans_src >= 10` (25 réel, D-169) ; le troisième
+  site indépendant de la même quantité que D-167, `fichiers > 40` dans
+  `test_psi_coverage_inventory.py` (66 réel, D-170) ; `referenced > 10`
+  dans `test_repro_commands_point_to_real_files.py` (23 réel, D-171).
+- **42 entrées relues et laissées telles quelles**, jugement entrée par
+  entrée :
+  - **déjà le bon patron** (daté, hash du commit qui a mesuré, marge
+    1,0×–1,3×) : les deux plancher de `test_launcher_paths_resolve.py`
+    (`>=79`, `>=83`), les trois de `test_suite_integrity.py` (`>=60`,
+    `>=1200`, `>=400`, `>=300`), `test_fig15_sigma_narration.py` (`>=2`),
+    `test_t24_leak_free.py` (`>=2`), `test_psi_coverage_inventory.py`
+    (`_callers() >= 7`), `test_no_credential_in_source.py`
+    (`lanceurs >= 8`, réel 10, marge 1,25×, déjà cité dans le message) ;
+  - **classe différente de la file — pas un compte de corpus** : les
+    planchers `>0`/`>1` qui bornent une propriété de correction sur une
+    construction synthétique (Hamiltonien, TTL, Pareto…), où le plafond
+    atteignable est déjà 1, 2 ou 3 et où le plancher vaut ce plafond —
+    aucune marge n'a de sens à mesurer. Douze sites de cette forme dans
+    `tests/quantum/`, `tests/pipeline/test_module_validation.py`,
+    `tests/pipeline/test_v1_guards.py`,
+    `tests/pipeline/test_v1_partial_pockets.py`,
+    `tests/solver/test_precompute_dns_contracts.py` (réel 3 = plancher),
+    `tests/study/test_check_tearing_end_pinned_peak.py` (réel 6 =
+    plancher), `tests/study/test_fig0_pareto_paths.py`,
+    `tests/study/test_preflight_pertinence_separates.py`,
+    `tests/study/test_hyperparams_two_sources.py` (réel 7, plafond
+    atteignable 7), `tests/study/test_t13_control_is_not_vacuous.py`
+    (réel 3 = plancher), `tests/study/test_t6_dynamic_gt.py`,
+    `tests/pipeline/test_recompute_lambda_scores.py` (distinction sur 3
+    lambdas au plus, confirmé vert) ; de même deux `len(raison) > N`
+    (`test_suite_integrity.py`, `test_empty_sweep_never_silent.py`) qui
+    bornent la longueur d'une chaîne d'exemption, pas une taille de
+    corpus ;
+  - **garde-fou de non-vacuité, marge 1,2×–2,0×, mesuré et laissé** :
+    `test_launcher_paths_resolve.py:228` (`>=6` lanceurs, réel 10, 1,7×),
+    `test_optimiser_axis.py` (`>=6`, réel 10, 1,7×),
+    `test_every_launcher_invokes_real_files.py` (`>=5`, réel 10, 2,0× —
+    le plus large de ce sous-groupe, à revoir à la prochaine passe si la
+    file se rouvre), `test_empty_sweep_never_silent.py:168`
+    (`_LANCABLES > 50`, réel 61, 1,2×), `test_silent_failure_sweep.py`
+    (`>=45`, réel 65, 1,4×), `test_src_coverage_inventory.py:563`
+    (`>=3000`, réel 4545, 1,5× — déjà daté « 4531 » dans le docstring),
+    `test_patches_classical_score_provenance.py` (`>=50`, réel 56, 1,1×),
+    `test_repro_commands_point_to_real_files.py:228` (`>=20`, réel 32,
+    déjà daté « 29 » dans le docstring, 1,45× à l'écriture).
+- **Entrée résolue — D-173 (19 août) : ce n'était ni une régression ni un
+  plancher trop haut, mais un conteneur incomplet.** `sans_selecteur`
+  (5 modules — `qaoa_inputs.py`, `h3_depth_report.py`, `h3_size_scan.py`,
+  `h3_uncertainty_window.py`, `pipeline/sanity_check.py`) n'était pas
+  préexistant au sens d'un vrai défaut : `qiskit_ibm_runtime` manquait du
+  conteneur qui a produit cette mesure comme de celui de la passe
+  précédente (le `git stash` comparait deux mesures également incomplètes,
+  donc les trouvait identiques sans que ni l'une ni l'autre ne soit
+  juste). Les 5 modules importent `VQA.execute`, qui importe
+  `qiskit_ibm_runtime` ; son absence faisait planter leur `--help` **avant
+  argparse**, et `_options_declarees` classait ce plantage en silence
+  comme « aucune option déclarée » — repli silencieux, la forme de défaut
+  déjà cataloguée par `VIGIL.md`. Dépendance installée, mesuré à nouveau :
+  `qaoa_inputs.py --help` déclare bien `--scenario`, et les 5 modules
+  passent. **Valeur réelle, dépendances complètes : 61 lançables, 7
+  exemptés, 0 sans sélecteur, 54 couverts** — ni 49 ni les 55 du docstring
+  périmé. `_options_declarees` lève désormais sur tout `--help` en échec
+  au lieu de classer ; plancher porté à `>= 54` ; test ajouté qui épingle
+  le nouveau comportement sur un module synthétique à import cassé. Voir
+  `RESULTS.md`.
+
+---
+
+## Passe du 19 août (suite) — `study/common/rho_gap_f1.py`, dernier fichier hors de ce document, et `src/Simulation/PhysToAngle.py` rouvert par Q4 (D-175)
+
+`rho_gap_f1.py` (136 lignes) n'était cité nulle part dans ce document —
+seul fichier de `src/`+`study/`+`figures/` dans ce cas, confirmé par
+comparaison automatique de la liste des `.py` du dépôt contre le texte de
+ce fichier. Lu en entier, les quatre questions posées :
+
+1. **Pourquoi il existe** — c'est le critère pré-enregistré de la
+   campagne : rho(E_gap, F1) positif → la forme de l'hamiltonien est en
+   cause, négatif → le réglage suffit. Retiré, aucune décision post-campagne
+   ne serait mesurable.
+2. **Ce qu'il promet** — la docstring et la bannière de `main()` citent
+   « rho = +0,870, p = 0,0023, 9 solveurs » comme référence (déjà corrigée
+   par D-172). Rejoué sur l'artefact qu'il nomme
+   (`h0_optimiser_equivalence_N96_dim3_hamiltonien_corrige.npz`) :
+   **rho = +0,870, p = 0,0023, 9 solveurs**, bannière et calcul identiques,
+   aucun écart.
+3. **Ce qu'il consomme** — `d["solver"]`, `d["E_gap"]`, `d["f1"]` : ce sont
+   exactement les trois clés que `h0_optimiser_equivalence.py` écrit
+   (`records`, ligne ~853-860). Pas de clé homonyme sans rapport.
+4. **Deux chemins censés coïncider** — l'agrégation par solveur
+   (`np.nanmean` par nom, sur les lignes qui portent ce nom) reproduit
+   exactement l'agrégation que `h0_optimiser_equivalence.py` calcule
+   déjà pour son propre tableau récapitulatif (lignes 819-838, même
+   `np.mean` par solveur) : opérateur assorti. `--dim` y est un entier
+   unique par artefact (le nom de fichier le porte), donc `rho_gap_f1.py`
+   ne peut pas mélanger deux dimensions dans une même moyenne par solveur.
+
+**Vérifié et trouvé sain.** Axes empruntés : aucun des sept axes de la
+fiche n'est pertinent ici (module de post-traitement statique, pas de
+solveur/QAOA/AMR à l'exécution) — l'axe qui s'applique est « artefact
+`dim=3`, 9 solveurs, régime déjà utilisé par D-172 », rejoué une fois,
+sain. Non exercé : le cas `--json`, et le cas où plusieurs fichiers sont
+passés en une commande (branche `signes mélangés`).
+
+**Rouverture par Q4 : `src/Simulation/PhysToAngle.py`.** Le fichier était
+déjà couvert en ligne (100 %, tableau §1) et ses fonctions individuellement
+citées à plusieurs reprises (`_psi_from_pipeline` ligne 483,
+`classical_score` lignes 1233/1666, `compute_stress_flux` ligne 2591) mais
+jamais lu comme un tout ni déclaré « lu en entier ». Lu en entier ici,
+187 lignes. `_lohner_estimator`, `compute_stress_flux` (le partage
+normale/tangentielle de D-37) et `classical_score` (convention d'axes de
+D-1) portent déjà leur historique de correction en commentaire, avec
+justification écrite et test qui l'épingle — rien de neuf sur ces trois-là,
+vérifié à nouveau plutôt que supposé. La question 4 appliquée à
+`Simulation.grid.curl_z`/`divergence`, que `classical_score` appelle,
+a mordu — voir **D-175** ci-dessous.
+
+### D-175 — `curl_z`/`divergence` : la docstring annonçait l'inverse du défaut réellement exécuté
+
+`grid.py:76-85` documentait « forme historique par défaut, forme 'ij' si
+demandé », alors que `fixed_curl=True` — la forme 'ij'/`forward_*`,
+conforme à `AXIS_X`/`AXIS_Y` — est déjà le défaut des deux signatures.
+Mesuré : `curl_z(vx, vy)` sans troisième argument, champ 8×8 aléatoire
+(`seed=0`), identique bit à bit à `forward_curl_z`, écart à
+`legacy_forward_curl_z` de **1,1006**. Même mesure pour `divergence`.
+
+Question 4 appliquée à ce module précisément parce qu'il sert de référence
+au reste de `src/` (`HamiltParams`, `HamiltParams_v2`, `PhysToAngle` en
+héritent tous par `self.fixed_curl`) : les sept sites d'appel réels
+passent tous `fixed_curl` explicitement (grep vérifié), et
+`tests/solver/test_analytic_fields.py:445-447` épinglait déjà
+`curl_z(vx, vy) == forward_curl_z(vx, vy)` sur l'appel par défaut — c'est
+le texte qui contredisait un comportement déjà mesuré et déjà testé, pas
+le comportement qui était faux. Hors chemin critique (aucune valeur,
+aucun appelant, aucun nombre publié ne bouge) : une ligne dans
+`RESULTS.md`, pas d'entrée `DEFAUTS.md`. Docstrings corrigées ; comportement
+réverifié identique après coup (0,0e+00 d'écart) ; `pytest
+tests/solver/test_analytic_fields.py -q` : **53 passed** avant et après.
+
+**Terrain neuf de fichiers épuisé** : tout `.py` de `src/`, `study/`,
+`figures/`, `scripts/` est maintenant cité par ce document. Ce qui reste
+à faire relève soit d'une décision USER (les 14 entrées de `DEFAUTS.md`),
+soit d'une réouverture par Q4 d'un module déjà « trouvé sain » — c'est par
+cette seconde voie que D-175 est venu, et la même méthode reste la piste
+la plus rentable pour la prochaine passe.
+
+---
+
+## Passe du 19 août (nuit, Vigil) — Q4 sur trois modules déjà audités, rien de neuf
+
+Conformément à la piste que la section précédente désigne : Q4 rejoué sur
+trois fichiers déjà « trouvés sains » ailleurs dans ce document, plus un qui
+n'y avait jamais eu d'entrée narrative propre.
+
+**`src/VQA/cost_hamiltonian.py` et `execute.py`** — relus en entier
+indépendamment (sans consulter d'abord la table `src/VQA/` plus haut dans ce
+document). Mêmes points vérifiés, même verdict : bornes du mixeur
+cohérentes entre les trois méthodes (`bounds_beta + bounds_gamma` respecte
+l'ordre `[β…, γ…]` de `initial_params`), halos gauche/haut/droite/bas de
+`create_bounded_hamiltonian` chacun lus sur leur propre famille de `theta`,
+garde de forme A0 stricte dans les deux sens. Confirme la table ci-dessus,
+n'ajoute rien de neuf — reconfirmation, pas nouvelle couverture.
+
+**`src/Simulation/RescaleArrays.py`** (242 lignes, 97 % de ligne, jamais
+lu comme un tout dans ce document malgré le pourcentage cité). Lu en
+entier, Q4 appliquée aux trois dispatchers de `get_adaptive_flux`
+(`_process_flux`, `_process_hamilt`, appelés localement ; `_process_score`,
+au niveau module) : les trois branchent sur le **même** `is_periodic_scan`
+et retombent sur les **mêmes** `_maxabs_pool_2d`/`_resize_padded_maxpool` —
+aucune des trois quantités qui descendent vers le VQA (score, coefficients,
+flux) n'a de chemin de réduction distinct, conforme à ce que la docstring
+annonce (« Les TROIS chemins … appliquent la meme reduction »). Autre Q4 :
+`_resize_padded_bilinear` et `_resize_padded_maxpool` partagent une
+structure identique d'extraction cœur/halo/coins et de réassemblage — seule
+la méthode de réduction du cœur et des halos diffère (`zoom(order=1)`
+contre max-abs), comme prévu. `_maxabs_pool_2d`/`_maxabs_pool_1d` bornent
+leurs blocs par `np.linspace(0, h, target+1).astype(int)`, qui couvre toute
+l'étendue (correction déjà en place, commentée dans le fichier). **Vérifié
+et trouvé sain.** Axe exercé : réduction périodique (`is_periodic_scan`
+vrai) et réduction à halo (patch borné, `is_periodic_scan` faux) toutes
+deux lues et comparées — c'est l'axe « bord du patch » de la fiche. Non
+exercé ici : le chemin `bh < 1` / `bs < 1` (repli sur `zoom` simple quand
+la cible est plus grande que l'entrée), jamais vu dans une trace de
+production.
+
+Aucun défaut trouvé sur ces trois fichiers cette passe. Les deux
+mesures qui ont rapporté quelque chose de neuf cette nuit portent sur des
+entrées déjà ouvertes de `DEFAUTS.md` (D-39, D-41), pas sur un module.
+
+---
+
+## Passe du 20 août (nuit, Vigil) — `src/Simulation/solver.py` lu en entier comme un tout, pour la première fois
+
+**966 lignes, 99 % de couverture de ligne — jamais lu narrativement comme un
+module dans ce document.** Toutes les mentions antérieures (D-2, D-6, D-7,
+D-24, D-25, D-26, D-27) viennent de mesures ciblées sur une fonction ou un
+scénario d'initialisation, jamais d'une lecture de bout en bout appliquant
+les quatre questions au fichier entier. C'est exactement la forme d'un
+module « couvert mais pas audité » que `VIGIL.md` distingue.
+
+**Question 4, le fil conducteur.** Trois paires de chemins censés
+coïncider, ou dont la non-coïncidence est déjà documentée dans le code :
+
+1. **`step_layered` à `local_factor = 1` partout contre `step_full`.**
+   C'est la garantie que le docstring de `step_layered` énonce explicitement
+   (« lorsque TOUS les patches sont actifs à `max_depth`… le résultat est
+   IDENTIQUE »). Déjà mesurée et verrouillée ailleurs (D-24 : accord à
+   `3,331e-16`, `tests/solver/test_solver_convergence.py`) — reconfirmée
+   par lecture du code, pas rejouée : les Phases 1+2 de `step_layered`
+   réduisent algébriquement à un unique `_rk4_step` global quand `cf = 1`
+   et tous les patches ont `local_factor = 1` (delta coarse et tau
+   s'additionnent sans reste). Rien de neuf, cohérent avec ce qui est
+   publié.
+2. **`get_fluxes().Jz`** (différences centrées ordre 2, `roll(∓1)/2dx`)
+   **contre le `Jz` interne à `_compute_rhs_fd`** (ordre 4, `_fd_grad`,
+   utilisé pour la force de Lorentz). Les deux ne prétendent PAS mesurer la
+   même chose — le second n'est jamais exposé, il ne sert qu'au second
+   membre de l'induction — et rien dans le fichier ni chez ses appelants
+   n'annonce qu'ils devraient coïncider. Vérifié que `get_fluxes` est bien
+   la SEULE source de `Jz` côté `study/` (déjà confirmé identique
+   `hard_patch_labels`/`dns_validation`, `COUVERTURE.md` plus haut) : pas
+   un défaut, une distinction de rôle déjà cohérente partout où `Jz` est
+   consommé.
+3. **`_upsample_local` (zoom local, non périodique) contre
+   `_upsample_global` (périodique, `grid-wrap`, alignement aux nœuds
+   corrigé par D-2).** Utilisés sur des rôles différents et non
+   substituables — le premier reconstruit un `tau` de patch dont seul le
+   cœur (`[cut:-cut]`) est injecté, donc les artefacts de bord du `zoom`
+   local tombent dans le halo jeté ; le second reconstruit la correction
+   coarse sur tout le domaine périodique. `pad_local = base_pad *
+   local_factor` garantit une taille de halo exactement multiple de
+   `local_factor`, donc `_downsample_local`/`_upsample_local` restent
+   inverses l'un de l'autre en forme sur le patch entier (padding compris)
+   — vérifié par lecture, pas de troncature silencieuse à la
+   `_downsample_local` (`H // factor` avec `H = (y1-y0) + 2·pad_local`,
+   toujours multiple de `local_factor` par construction du padding).
+
+**Question 1.** `_rk2_step` (Heun, ordre 2) — **jamais appelée par
+`src/`**, seul appelant `tests/solver/test_solver_analytic.py:442`. Piège
+potentiel de la forme « code mort qui n'attend qu'un appelant » (comme
+l'ansatz jamais indexé de la fiche), mais ici sans conséquence : aucun
+artefact ni nombre publié n'en dépend, c'est un schéma alternatif gardé
+pour un test de convergence comparatif. Noté, pas corrigé — rien à corriger,
+observation seule.
+
+**Question 2.** Chaque docstring vérifiée contre son calcul : `get_fluxes`
+n'a pas de docstring mais son contrat implicite (les 5 clés que `study/`
+consomme) est stable, déjà croisé plus haut dans ce document.
+`enforce_incompressibility`, `is_diverged`, `_rk4_step`,
+`_upsample_global` portent chacune leur historique de correction en
+commentaire avec la mesure qui l'a motivée (D-2, D-6/D-25/D-26/D-27) — pas
+de nouvel écart entre ce qui est écrit et ce que fait le code.
+
+**Vérifié et trouvé sain.** Axes empruntés — ceux de la fiche qui
+s'appliquent à un solveur, pas à l'encodage : profondeur AMR (`depth = 0`
+via `step_full`, `depth > 0` via `step_layered`, les deux présents comme
+chemins distincts dans ce fichier même) et bord du patch (périodique pour
+`step_full`/Phase 1, patch local avec halo pour la Phase 2 de
+`step_layered`, extrait par indexation modulo — donc toujours périodique au
+niveau du domaine, jamais un vrai bord absorbant). Les cinq autres axes
+(bras, backend, warm start, hamiltonien, optimiseur) ne s'appliquent pas à
+ce fichier : il n'encode ni ne décide, il intègre.
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/refinement.py` lu en entier comme un tout
+
+**754 lignes, 82 % de couverture de ligne — jamais lu narrativement comme un
+module.** C'est le fichier qui **décide** le raffinement, sur les deux
+bras : `_run_level` (VQA) et `_run_level_classical` (baseline), toutes deux
+appelées depuis `run_adaptive_vqa`. De nombreux morceaux étaient déjà
+audités isolément (D-16, D-37, mémoire TTL, chaînage du warm start,
+graine de l'EMA — voir les entrées dispersées plus haut dans ce document)
+mais jamais le fichier entier, et jamais les deux fonctions **comparées
+ligne à ligne** — exactement la question 4 que leur propre commentaire
+appelle (« les deux bras doivent rester structurellement identiques, sans
+quoi leur comparaison mesure la différence de code autant que celle du
+critère »).
+
+**Question 4 — `_run_level` contre `_run_level_classical`, terme à terme.**
+
+| point comparé | verdict |
+|---|---|
+| garde `min_size` | identique (`height < min_size or width < min_size`) |
+| `pad = 1 if depth > 0 else 0` | identique dans les deux fonctions |
+| seuil de sondage de bord (`should_probe`, bande `[thr·0,5, thr[`) | identique, et le commentaire de la version classique le dit explicitement |
+| correction du double-comptage (D-16 : la décision AVANT ventilation, un seul `if/elif/else`) | présente **des deux côtés** — pas seulement sur le bras corrigé à l'origine |
+| **le score de départ, censé être LE MÊME sur les deux bras** (`run_adaptive_vqa` : *« so that VQA and classical AMR start from the SAME score map »*) | **vérifié, pas supposé** — `_prepare_vqa_input` obtient `mini_score` via `get_adaptive_flux(...)`, qui appelle en interne `_process_score(score, type_filter, target_dim)` (`RescaleArrays.py:214`) ; `_run_level_classical` appelle `_process_score(local_score, is_periodic, target_dim)` **directement**, mêmes trois arguments, même fonction. Un seul écart trouvé et écarté à la mesure : le bras VQA fait `np.clip(mini_score, 0, 1)` (`:221`) que le bras classique ne fait pas — mais `classical_score` (`PhysToAngle.py:209`) clippe déjà à la source, et `_process_score` ne fait que du max-pooling sur un champ déjà dans [0, 1] (aucune interpolation qui dépasserait l'intervalle) : le clip du bras VQA est **redondant, jamais actif**, pas une divergence |
+| `boundary_flags` : calculé sur le score **avant** QAOA côté classique (seul score qu'il a), sur la probabilité **après** QAOA côté VQA (`prob_map`, pas `prob_map_avant_qaoa`) | **différence voulue, pas un défaut** — le sondage de bord doit réagir à ce que chaque bras a réellement décidé, sinon le bras VQA ne testerait jamais sa propre sortie |
+
+**Aucun écart trouvé entre les deux bras** sur ce qui devrait coïncider.
+
+**Question 1.** À `depth >= max_depth`, `_run_level` calcule **tout**
+`_prepare_vqa_input` (y compris `HamiltMapper.compute_coefficients`, le
+plus coûteux) avant de jeter le résultat et de ne garder que
+`np.max(prob_map_avant_qaoa)` pour la feuille — le VQA n'est jamais appelé
+à ce point (`call_vqa_shell` est après le `continue`), donc ce calcul est
+gaspillé mais pas faux : aucune valeur erronée n'en sort, juste du temps de
+calcul perdu à la dernière profondeur. Observation, pas un défaut.
+
+**Question 2.** Docstrings vérifiées contre leur calcul : `_downsample_fields`
+(D-89, les trois branches — division exacte / quasi-exacte / générale par
+`linspace`), `_prepare_vqa_input` (le commentaire `target_dim`, PAS
+`target_dim + 2*pad`, D-37), le bloc de sondage de bord (D-16, double
+comptage). Aucun écart neuf.
+
+**Vérifié et trouvé sain.** Axes empruntés — les sept de la fiche sont TOUS
+présents dans ce seul fichier : bras (les deux fonctions elles-mêmes),
+bord du patch (`depth == 0` périodique / `depth > 0` borné, dans les deux
+bras), profondeur AMR (`depth < max_depth` / `depth >= max_depth`,
+feuille), warm start (`warm_start_cache` alimenté ou `None`), hamiltonien
+nul (branche `NullHamiltonianError`, décision classique conservée).
+Optimiseur et backend ne sont pas des axes de ce fichier — ils vivent dans
+`VQA/`, déjà traversés (voir §`src/VQA/` plus haut).
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/HamiltParams.py` (le mappeur v1) lu en entier comme un tout
+
+**709 lignes, 99 % de couverture de ligne, jamais lu narrativement comme un
+module** — de nombreuses corrections y vivent (D-11 diode de choc, la
+correction `g_mag`/`Jz_phys`, la correction `xpoint_grad` dx², la porte
+retirée du canal X-point) mais toujours par fonction, jamais le fichier
+entier.
+
+**⚠️ D-176 — question 2 : `physical_score` promettait un rôle de
+déploiement qu'elle n'a jamais tenu.** Voir `RESULTS.md`. Trouvé en lisant
+la docstring de la fonction comme un contrat puis en vérifiant par grep
+qu'aucun site de `src/`/`study/` ne l'appelle — le θ-init déployé vient
+partout de `AngleMapper.classical_score`. Corrigé (docstring seule,
+comportement inchangé).
+
+**Question 4, le reste du fichier.** `z_bias = alpha_z * (score −
+threshold_amr)` (`H_horiz`/`H_vert`, ligne 626) utilise `score` **et non**
+`score_resized` — suspecté un temps comme la forme exacte de D-37 (deux
+champs sur deux grilles), **écarté à la mesure** : `_process_score` (via
+`_resize_padded_maxpool` à `depth > 0`) rend déjà `(target_dim+2,
+target_dim+2)` — le halo est inclus dans `score` lui-même avant l'appel à
+`compute_coefficients`, donc `score.shape == field_shape` dans tous les
+cas empruntés en production, et la branche `zoom` de redimensionnement
+(`:518-521`) n'est jamais prise sur le chemin déployé. Vérifié en lisant
+le contrat de `_process_score` (déjà établi par D-37, `refinement.py`),
+pas supposé. `_effective_crit` (le critère relatif ajouté au périmètre
+d'entraînement) relu contre sa docstring : le seuil absolu l'emporte dès
+qu'**une seule** cellule (max global, pas par cellule) le franchit — conforme
+à ce que le texte annonce.
+
+**Question 1.** Aucune fonction non appelée trouvée hormis `physical_score`
+elle-même (D-176) — tout le reste (`_f_gate`, `_g_strain`, `_g_rot`,
+`_g_mag`, `_effective_crit`, `_compute_det_jacobian_B`,
+`_threshold_contrast`) est exercé par `compute_coefficients`, le seul
+chemin de production du fichier. `_michelson_relu` (« legacy, kept for
+reference » dans son propre commentaire de section) reste, comme
+`physical_score`, testée mais jamais appelée en production — observation,
+cohérente avec ce que sa section annonce déjà elle-même, pas une
+découverte.
+
+**Vérifié et trouvé sain, un défaut hors chemin critique corrigé (D-176).**
+Axes empruntés : hamiltonien non nul (le chemin normal de
+`compute_coefficients`) et nul (`advanced_anomalies_enabled=False`, le
+défaut — le bloc X-point n'est alors pas construit) ; bord du patch
+périodique/borné, par la forme de `score`/`fields` reçus (`target_dim` ou
+`target_dim+2`), les deux lues et vérifiées cohérentes. Les axes bras,
+backend, warm start, optimiseur ne s'appliquent pas — ce fichier encode,
+il ne décide ni n'exécute.
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/HamiltParams_v2.py` (le mappeur v2) lu en entier comme un tout
+
+**276 lignes, 100 % de couverture de ligne — jamais lu narrativement,
+malgré le pourcentage.** C'est le mappeur `study/` (adimensionnel, sans
+paramètre entraîné — voir la fiche du dépôt) ; ses trois invariances
+revendiquées dans le docstring de classe sont vérifiées **par calcul**,
+pas relues comme une affirmation :
+
+| revendication | vérification |
+|---|---|
+| `dx` se simplifie exactement | `_compute_det_jacobian_B` produit `det ∝ 1/dx²` (chaque dérivée en `/dx`, le déterminant est un produit de deux) ; `K_xpoint = xpoint_signal / max_det` divise deux quantités en `1/dx²` — le rapport est sans dimension. Seul endroit où `dx` apparaît dans le fichier |
+| amplitude des champs invariante (`v, B → 10v, 10B` laisse `C, K, H` inchangés) | `C_horiz = -w_zz·jump_h/mean_jump` : `jump_h` et `mean_jump` scalent tous deux linéairement en `v, B`, le rapport est invariant. Même argument pour `K_plaquettes` (`omega_z`, `Jz_curl` linéaires, normalisés par leur propre max). `H` en hérite via `median_scale`, lui-même invariant ; le score externe n'est pas mis à l'échelle par ce fichier |
+| `nu`, `eta` n'entrent nulle part | confirmé — aucun attribut `nu`/`eta` sur `PhysicalMapperV2`, aucune référence dans `compute_coefficients` |
+
+**Ce qui diffère de v1, structurellement (pas juste par les paramètres
+retirés).** v1 sépare `v_jump` et `B_jump` (deux critères de Reynolds
+distincts, `Re`/`Rm`, combinés par `√(f_Re²+f_Rm²)`) ; v2 les **fusionne**
+en un seul `jump = √(dv² + dB²)` avant normalisation — une différence de
+conception documentée dans la liste « Differences from v1 », pas une
+divergence accidentelle entre deux chemins censés coïncider : le docstring
+de `sim` (paramètre non utilisé, gardé pour la signature commune) renvoie
+explicitement à `tests/test_mapper_contracts.py` pour ce qui doit encore
+coïncider entre v1 et v2 — pas les valeurs (les architectures diffèrent
+par construction), un contrat plus faible. Non re-vérifié en détail ici,
+cohérent avec ce que le fichier annonce de lui-même.
+
+**Vérifié et trouvé sain.** Axes empruntés : hamiltonien non nul et nul
+(même structure qu'en v1), bord du patch (mêmes appelants que v1 —
+`hamiltonian_coefficients.py`, `preflight_coefficients.py`,
+`qaoa_inputs.py`, `sanity_check.py`, `exact_diagonalisation.py` —
+`score`/`fields` accordés en amont par le même contrat `_process_score`).
+Aucun nouvel écart.
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/grid.py` lu en entier comme un tout
+
+**382 lignes, 90 % de couverture — le fichier qui « fait foi » sur la
+convention d'axes (fiche du dépôt) mais jamais lu comme un tout, même après
+que D-175 y a été trouvé en passant par `PhysToAngle.py`.**
+
+**Question 4 — la vérification la plus consequente de cette lecture :
+`project_divergence_free_any` (fonction libre) contre
+`PeriodicGrid.project_divergence_free` (méthode), que le docstring de la
+première annonce « identique … à la méthode, pour un champ de taille N ».**
+Les deux diffèrent par leur normalisation de nombre d'onde :
+`project_divergence_free_any` utilise `fftfreq(n, d=1/n)` — des **numéros
+de mode entiers**, sans dimension — tandis que la méthode de classe utilise
+`fftfreq(N, d=self.dx) * 2π` — des **nombres d'onde physiques**
+(`2π·mode/L`). Repris par le calcul plutôt que supposé identique parce que
+« ça se ressemble » : le projecteur de Leray `P = I − KKᵀ/|K|²` est
+**homogène de degré 0** en `K` — multiplier `KX, KY` par une constante `c`
+laisse `div_hat` scalé par `c`, `K2` par `c²`, donc `phi_hat = −div_hat/K2`
+par `1/c`, et la correction finale `KX·phi_hat` retrouve exactement le
+même facteur `c/c = 1` : le passage mode-entier ↔ physique s'annule
+algébriquement, à l'exception du clamp `K2[K2==0]=1`, qui porte sur les
+mêmes cellules (`KX=KY=0` en mode comme en physique) et n'y change rien
+puisque le numérateur y est déjà nul des deux côtés. **La revendication du
+docstring tient**, vérifiée par dérivation et non par confiance dans la
+ressemblance — c'est exactement la forme de piège que ce dépôt a déjà vue
+ailleurs (mode de Nyquist, D-7 ; alignement aux nœuds, D-2) où une
+différence d'échelle **semblait** anodine et ne l'était pas.
+
+**Question 1 — `PeriodicGrid.grad`/`.div`/`.laplacian`/`.create_refined_grid`
+(et sa seule dépendance, `extract_patch_data`) : jamais appelées par
+`src/` ni `study/`, seulement par deux fichiers de tests** (dérivées
+analytiques `test_analytic_fields.py`, Laplacien `test_objective_and_
+estimators_analytic.py`) pour `grad`/`laplacian` — `div`, `create_refined_
+grid` et `extract_patch_data` n'ont **aucun** appelant, pas même dans les
+tests (0 % de couverture réelle, ce sont les 13 instructions manquantes du
+tableau de couverture). Le solveur réimplémente ses propres opérateurs FD4
+(`MHDSolver._fd_grad`/`_fd_laplacian`) sans jamais déléguer à `self.grid`.
+Relues pour vérifier qu'aucune n'est un piège armé (l'exemple de la fiche :
+un cache d'ansatz jamais appelé, indexé sur la mauvaise clé) : `grad`,
+`div`, `laplacian` sont des formules centrées ordre 2 correctes, convention
+`AXIS_X`/`AXIS_Y` respectée. `create_refined_grid` fait un `zoom(order=1)`
+sans `mode` explicite — la même famille de paramètre qui a produit D-2
+ailleurs dans ce dépôt — mais **rien ne le consomme, jamais**, donc aucune
+mesure avant/après n'est possible et aucune conséquence n'est démontrable.
+Noté, pas corrigé : corriger du code que rien n'appelle et que rien ne
+teste ne se mesure pas, et `VIGIL.md` réserve cela à un constat, pas à un
+correctif spéculatif.
+
+**Vérifié et trouvé sain.** Les deux fonctions renumérotées par D-175
+(`curl_z`, `divergence`) relues dans leur contexte complet, cohérentes
+avec `forward_*`/`legacy_forward_*` juste au-dessus — pas de nouvel écart.
+Axes : convention d'axes elle-même (le fichier qui la définit), périodique
+(toutes les fonctions de ce fichier le sont par construction — aucun bord
+absorbant ici, contrairement à `refinement.py`).
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/call_vqa_shell.py` lu en entier (101 lignes, 100 % de couverture)
+
+L'orchestrateur entre `refinement.py` et `VQA/` — normalise les
+coefficients, calcule `E_max`, transpile ou pas selon `vqa_runtime`,
+appelle `execute` puis `postprocess`. Deux points vérifiés par le calcul,
+pas par la lecture seule :
+
+- **Les deux seuils qui décident un Hamiltonien nul ne se contredisent
+  pas.** Le garde de division (`max_coeff > 1e-10`, ici) et `COEFF_MIN =
+  1e-6` (`cost_hamiltonian.py`, après normalisation) opèrent sur deux
+  échelles différentes par construction : si `max_coeff > 1e-10`, la
+  normalisation ramène le plus grand coefficient à exactement `1,0`, et
+  `COEFF_MIN` juge alors des termes individuels contre cette échelle ; si
+  `max_coeff <= 1e-10`, `hamilt_params` reste **non normalisé** (valeurs
+  déjà sous `COEFF_MIN`), donc `NullHamiltonianError` lève bien en aval.
+  Les deux guards ne se recouvrent jamais sur une zone où ils
+  décideraient différemment.
+- La normalisation (`/max_coeff`) porte sur **tous** les tableaux de
+  `hamilt_params`, `K_xpoint` compris quand il est présent — pas de clé
+  oubliée, vérifié par la structure du `for key, value in
+  hamilt_params.items()` généraliste (aucun nom de clé codé en dur).
+
+**Vérifié et trouvé sain.** Chemin mort déjà noté ailleurs dans ce
+document (`optimize()` via le `else` legacy) — pas de nouvel écart.
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `study/pipeline/hamiltonian_coefficients.py` lu en entier (444 lignes)
+
+Jamais lu comme un tout, malgré son rôle central : c'est le script cité
+par D-41 (« En auditant `study/pipeline/hamiltonian_coefficients.py` »)
+comme source de la mesure `E_patch`. Q1-Q4 sur le fichier complet, pas
+seulement la fonction que D-41 a lue.
+
+**Q4 — l'identité algébrique qui devait tenir, vérifiée par le calcul.**
+`E_all = mean(H_mag + C_mag + K_mag)` par bloc, tandis que `H_all`,
+`C_all`, `K_all` sont chacun `mean(...)` séparément du même bloc : la
+moyenne étant linéaire, `E_all == H_all + C_all + K_all` **exactement**
+(à l'associativité flottante près), vérifié par l'algèbre plutôt que
+supposé de la ressemblance des noms.
+
+**Q4 — la divergence de réducteur `score_all` (`np.max`) contre
+`H_all`/`C_all`/`K_all`/`E_all` (`np.mean`) sur le MÊME bloc n'est pas
+neuve : déjà consignée** dans ce document (§ « Lu en entier le 13 août,
+`study/pipeline/` », ligne « réduction en patchs ») comme choix de
+conception assumé (« le max reproduit la décision AMR de production… la
+moyenne une densité d'énergie… écart non mesuré »), pas une divergence
+accidentelle. Retrouvée ici en lisant le fichier qui la produit
+directement, pas re-signalée comme neuve — exactement le piège que la
+fiche du dépôt met en garde (« une passe entière a conclu que le défaut
+trouvé et son correctif existaient déjà »).
+
+**Q2 — `V2_THRESHOLD` (0,15) contre `TRAINED_THRESHOLD` (0,1496)** :
+deux constantes distinctes, utilisées correctement selon `use_v2`
+(`config.py:65,77`) — le commentaire de `V2_THRESHOLD` (« physical
+choice, not trained ») est cohérent avec le fait établi de la fiche du
+dépôt (v2 sans paramètre entraîné). Pas une confusion entre les deux
+seuils.
+
+**Vérifié et trouvé sain.** Axes : hamiltonien v1 (`nu`/`eta` réels, la
+sortie de `sim.get_fluxes()`) et v2 (`PhysicalMapperV2`, sans `nu`/`eta`),
+tous deux exercés par le même appelant selon `--v2`.
+
+---
+
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/utils.py` lu en entier comme un tout
+
+**103 lignes, 65 % de couverture (la fonction non appelée
+`slice_hamiltonian_params`) — jamais lu narrativement comme un module.**
+
+**Question 1.** `slice_hamiltonian_params` n'est appelée que par
+`src/compare_rotor_budget.py` (déjà audité, D-91, clos) — aucun appelant sur
+le chemin déployé. `refinement.py` l'importe
+(`from Simulation.utils import slice_hamiltonian_params, get_periodic_patch`)
+mais ne l'appelle jamais : import mort. Le bloc `D_edges`/`D_kink`
+(lignes 57-64) est un commentaire triple-guillemet, jamais exécuté, et
+référence une clé `'D_edges'` qui n'existe nulle part ailleurs dans le
+dépôt (aucun producteur de Hamiltonien — `HamiltParams.py`,
+`HamiltParams_v2.py`, lus en entier plus haut cette même nuit — ne produit
+cette clé) : du code mort dans du code mort, sans conséquence mesurable
+puisque rien ne peut jamais l'atteindre.
+
+**Question 2/4 — `compute_local_factor`, la revendication « shared between
+solver and pipeline to guarantee consistency ».** Vérifié par grep sur tout
+`src/`/`study/` : le seul appelant réel est `solver.py:887`. Le second
+consommateur promis par le docstring n'est pas `src/pipeline.py` (qui
+calcule `solve_max_depth` par une formule indépendante mais triviale —
+`depth == max_depth` implique `local_factor = target_dim**0 = 1` par
+construction, aucune divergence possible) mais `figures/v1_legacy/
+fig_utils.py`, dont les deux métriques (`compute_ratio`,
+`captured_fraction`) réimplémentent le calcul via
+`max(p['depth'] for p in patches)` plutôt que d'appeler
+`compute_local_factor`. **Déjà trouvé et mesuré** (`d3f8d48`,
+`COUVERTURE.md` § `figures/v1_legacy/fig_utils.py`, 16 août) : les deux
+coïncident tant qu'un patch `leaf_depth` existe dans la liste (observé 6/6
+sur les exécutions réelles), latent sinon — classé « latent, pas un
+défaut », reconfirmé ici indépendamment, rien de neuf.
+
+**Vérifié et trouvé sain.** `get_periodic_patch` : la revendication du
+docstring (extraction périodique avec wraparound modulo) vérifiée par
+calcul — `y_range = arange(y_s-pad, y_e+pad)`, longueur `(y_e-y_s)+2*pad`,
+cohérente avec le commentaire de `refinement.py` (« extent + 2*pad »).
+Live, appelée à 9 sites de production dans `refinement.py`, testée par 5
+fichiers de tests distincts. Axes empruntés : bord du patch (`pad=0` et
+`pad>0`, les deux exercés par les appelants réels de `refinement.py`) ; les
+autres axes de la fiche (bras, backend, warm start, hamiltonien,
+optimiseur, profondeur AMR) ne s'appliquent pas à ce fichier utilitaire —
+il ne décide ni n'exécute de physique, il découpe des tableaux.
 
 ---
 

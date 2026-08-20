@@ -458,3 +458,193 @@ def test_both_frozen_deviations_are_written_down_where_they_live():
                             "dns_validation.py"), encoding="utf-8").read().lower()
     for marker in ("deviation d2", "deviation d3", "phase 1b reste intouchee"):
         assert marker in src, f"{marker} n'est pas consigne dans le fichier gele"
+
+
+# ======================================================================
+#  D-153 — le rotationnel se reconnaît a sa FORME, pas a son nom
+# ======================================================================
+#
+#  L'ancien balayage cherchait `np.roll(` + `axis=` sur UNE ligne, puis
+#  decidait par une fenetre de +/-4 lignes contenant l'un des mots
+#  `curl`, `jz =`, `j_z`, `omega_z`, `vortic`, `enstroph`. Trois trous,
+#  tous mesures :
+#
+#    1. **le nom** — un rotationnel appele `rot_z`, `w_z` ou `dvydx`
+#       n'emploie aucun de ces mots : invisible. C'est le defaut de D-148
+#       (un detecteur de forme pilote par une liste tenue a la main) sur la
+#       famille la plus dangereuse de ce depot ;
+#    2. **la syntaxe** — `np.roll(By, -1, 0)` passe l'axe en POSITIONNEL et
+#       ne contient donc pas `axis=`. Mesure : 2 sites du depot l'ecrivaient
+#       ainsi, tous deux dans `tests/` ;
+#    3. **le perimetre** — `src`, `study`, `figures` seulement. Un test qui
+#       calcule sa propre reference avec le rotationnel inverse mesure autre
+#       chose que ce qu'il annonce, et rien ne le voyait. C'est la regle
+#       « mesurer avec l'operateur assorti », retournee contre la suite.
+#
+#  Le detecteur ci-dessous ne connaît aucun nom : il cherche la SIGNATURE
+#  d'un rotationnel discret — une soustraction dont les deux cotes roulent
+#  DEUX tableaux differents sur DEUX axes differents. Un laplacien (meme
+#  tableau) et un gradient (un seul roll) n'y repondent pas.
+
+import ast as _ast
+
+_RACINES_BALAYEES = ("src", "study", "figures", "tests", "scripts")
+
+#: Fichiers autorises a ecrire un axe nu, avec leur raison. Une exemption
+#: perimee est un mensonge qui dort : le test plus bas exige que chacune
+#: designe un fichier qui existe et qui porte encore un site.
+_AXE_NU_AUTORISE = {
+    os.path.join("tests", "study", "test_no_private_curl_survives.py"):
+        "ce fichier REPRODUIT les deux conventions pour les mesurer : "
+        "l'ancienne y est ecrite exprès (sections 3 et 4)",
+}
+
+#: Plancher mesure a `38389e5`. Un balayage qui retrecit ne prouve rien.
+_PLANCHER_FICHIERS_PY = 200
+
+
+def _axe_de(appel):
+    """L'expression d'axe d'un `np.roll`, mot-cle OU positionnel."""
+    for kw in appel.keywords:
+        if kw.arg == "axis":
+            return _ast.unparse(kw.value)
+    if len(appel.args) >= 3:
+        return _ast.unparse(appel.args[2])
+    return None
+
+
+def _rolls_de(noeud):
+    out = []
+    for n in _ast.walk(noeud):
+        if isinstance(n, _ast.Call) and getattr(n.func, "attr", None) == "roll":
+            if not n.args:
+                continue
+            axe = _axe_de(n)
+            if axe is not None:
+                out.append((_ast.unparse(n.args[0]), axe))
+    return out
+
+
+def _sites_de_forme_rotationnelle(arbre):
+    """(ligne, description, axes) des expressions en forme de rotationnel.
+
+    Signature : `A - B` ou A roule un tableau sur un axe et B un AUTRE
+    tableau sur un AUTRE axe. C'est ce que fait tout rotationnel discret, et
+    ce que ne fait ni un laplacien ni un gradient.
+    """
+    sites = {}
+    for n in _ast.walk(arbre):
+        if not (isinstance(n, _ast.BinOp) and isinstance(n.op, _ast.Sub)):
+            continue
+        for arr_g, axe_g in _rolls_de(n.left):
+            for arr_d, axe_d in _rolls_de(n.right):
+                if arr_g != arr_d and axe_g != axe_d:
+                    sites[n.lineno] = (f"{arr_g}@{axe_g} - {arr_d}@{axe_d}",
+                                       (axe_g, axe_d))
+    return [(l, d, a) for l, (d, a) in sorted(sites.items())]
+
+
+def _fichiers_python_balayes():
+    out = []
+    for racine in _RACINES_BALAYEES:
+        base = os.path.join(_REPO, racine)
+        for dirpath, _dirs, files in os.walk(base):
+            if "__pycache__" in dirpath:
+                continue
+            for fn in files:
+                if fn.endswith(".py"):
+                    out.append(os.path.join(dirpath, fn))
+    return sorted(out)
+
+
+def _axe_est_nomme(expr):
+    return "AXIS_X" in expr or "AXIS_Y" in expr
+
+
+def test_no_hand_rolled_curl_uses_a_bare_axis_anywhere():
+    """Tout rotationnel ecrit a la main nomme ses axes — partout, `tests/`
+    compris.
+
+    Sur quelle entree ce test echoue : sur `w = np.roll(vy,-1,1) -
+    np.roll(vx,-1,0)`, un rotationnel INVERSE dont aucun nom ne dit qu'il en
+    est un. L'ancien garde restait vert dessus (mesure D-153).
+    """
+    fichiers = _fichiers_python_balayes()
+    assert len(fichiers) >= _PLANCHER_FICHIERS_PY, (
+        f"{len(fichiers)} fichiers balayes, {_PLANCHER_FICHIERS_PY} exiges "
+        "(mesure a `38389e5`) : le balayage a retreci")
+
+    offenders = []
+    for chemin in fichiers:
+        rel = os.path.relpath(chemin, _REPO)
+        if rel in _AXE_NU_AUTORISE:
+            continue
+        try:
+            arbre = _ast.parse(open(chemin, encoding="utf-8").read())
+        except SyntaxError:                               # pragma: no cover
+            continue
+        for lineno, description, axes in _sites_de_forme_rotationnelle(arbre):
+            if all(_axe_est_nomme(a) for a in axes):
+                continue
+            offenders.append(f"{rel}:{lineno}  {description}")
+    assert not offenders, (
+        "rotationnel ecrit a la main avec un axe numerique nu — `grid.py` "
+        "fait foi (AXIS_X = 0, AXIS_Y = 1) :\n  " + "\n  ".join(offenders))
+
+
+def test_the_shape_detector_knows_a_curl_from_a_laplacian():
+    """Le detecteur doit trouver ce qu'il annonce, et RIEN d'autre.
+
+    Les quatre cas qui l'ont ecrit — dont les deux qui doivent rester
+    muets, sans quoi le balayage crierait sur tout le solveur.
+    """
+    def _sites(code):
+        return _sites_de_forme_rotationnelle(_ast.parse(code))
+
+    #  un rotationnel, axes nus : vu
+    assert len(_sites("w = np.roll(vy,-1,1) - np.roll(vx,-1,0)")) == 1
+    #  le meme, axe passe par mot-cle : vu aussi (le premier cas ci-dessus
+    #  est la forme POSITIONNELLE, celle qui ne contient pas `axis=`)
+    assert len(_sites("w = np.roll(vy,-1,axis=1) - np.roll(vx,-1,axis=0)")) == 1
+    #  un laplacien : MEME tableau des deux cotes -> muet
+    assert _sites("l = np.roll(f,-1,0) - np.roll(f,1,0)") == []
+    #  deux tableaux mais le MEME axe (une divergence partielle) -> muet
+    assert _sites("d = np.roll(vx,-1,0) - np.roll(vy,-1,0)") == []
+    #  un seul roll -> muet
+    assert _sites("g = np.roll(f,-1,0) - f") == []
+    #  la forme nommee, celle qu'on exige : vue comme site, axes nommes
+    sites = _sites("w = np.roll(vy,-1,AXIS_X) - np.roll(vx,-1,AXIS_Y)")
+    assert len(sites) == 1 and all(_axe_est_nomme(a) for a in sites[0][2])
+
+
+def test_every_bare_axis_exemption_still_names_a_real_site():
+    """Une exemption perimee doit crier."""
+    for rel, raison in _AXE_NU_AUTORISE.items():
+        assert raison.strip(), f"{rel} exempte sans raison"
+        chemin = os.path.join(_REPO, rel)
+        assert os.path.exists(chemin), (
+            f"{rel} n'existe plus : retirer son exemption")
+        arbre = _ast.parse(open(chemin, encoding="utf-8").read())
+        nus = [s for s in _sites_de_forme_rotationnelle(arbre)
+               if not all(_axe_est_nomme(a) for a in s[2])]
+        assert nus, (
+            f"{rel} ne porte plus aucun axe nu : son exemption ne couvre "
+            "plus rien, la retirer")
+
+
+def test_the_sweep_sees_the_shapes_the_repository_actually_contains():
+    """Un balayage qui ne trouve AUCUN rotationnel ne prouve rien.
+
+    Mesure a `38389e5` : **12 sites** de forme rotationnelle dans les cinq
+    racines, dont 3 dans ce fichier (les deux conventions reproduites).
+    """
+    total = 0
+    for chemin in _fichiers_python_balayes():
+        try:
+            arbre = _ast.parse(open(chemin, encoding="utf-8").read())
+        except SyntaxError:                               # pragma: no cover
+            continue
+        total += len(_sites_de_forme_rotationnelle(arbre))
+    assert total >= 10, (
+        f"{total} sites de forme rotationnelle trouves, 12 mesures a "
+        "`38389e5` : le detecteur ne reconnaît plus la forme")

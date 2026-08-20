@@ -423,8 +423,19 @@ def main():
             print(f"  Saved: {fname}")
             print()
 
-    if all_results:
-        threshold_stability_report(all_results)
+    if not all_results:
+        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 3. Mesure :
+        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
+        # avoir imprime « Phase 3 complete. », sans ecrire d'artefact — donc
+        # en laissant en place ceux de la campagne precedente. Le rapport de
+        # stabilite etait deja garde par `if all_results:`, mais rien ne
+        # criait quand la condition etait fausse.
+        raise RuntimeError(
+            "balayage vide : aucun couple (scenario, Re) n'a d'artefact "
+            "d'entree pour les arguments donnes. Le script sortait ici avec "
+            "le code 0 et sans artefact (D-148).")
+
+    threshold_stability_report(all_results)
 
     print("\nPhase 3 complete.")
 

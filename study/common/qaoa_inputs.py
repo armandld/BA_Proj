@@ -715,6 +715,16 @@ def main():
                         }
                     print()
 
+    if not final_summary:
+        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 5. Mesure :
+        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
+        # avoir imprime « Phase 5 complete. », sans artefact et sans verdict
+        # — indiscernable d'une campagne reussie.
+        raise RuntimeError(
+            "balayage vide : aucun (scenario, Re, dim) n'a produit de "
+            "resultat QAOA pour les arguments donnes. Le script sortait ici "
+            "avec le code 0, sans artefact et sans verdict (D-148).")
+
     # final verdict
     if final_summary:
         print("=" * 70)

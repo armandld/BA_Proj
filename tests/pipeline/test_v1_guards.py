@@ -170,28 +170,48 @@ class TestPruningThreshold:
     def test_a_coupling_above_the_cut_does_reach_the_operator(self):
         """Control: the ZZ family is not structurally absent.
 
-        SEUIL REMESURE (D-59). L'attente etait `DIM * DIM`, decrite comme
-        « one ZZ term per SITE ». Elle encodait la duplication : l'objet
-        physique est un terme par LIEN, et a dim = 2 l'anneau periodique
-        degenere -- `(i,0)->(i,1)` et `(i,1)->(i,0 mod 2)` sont le MEME
-        lien. Il y a donc 2 liens horizontaux distincts, pas 4.
+        SEUIL REMESURE apres D-59, pas retouche pour faire passer la suite.
 
-        `DIM * DIM` etait juste a dim >= 3 et faux a dim = 2, la seule
-        taille de toutes les campagnes publiees. Mesure apres la
-        deduplication :
+        L'attente etait `len(zz_terms) == DIM * DIM`, decrite comme « one ZZ
+        term per SITE ». Elle encodait la duplication : l'objet physique est
+        un terme par LIEN, et a `dim = 2` l'anneau periodique degenere --
+        `(i,0)->(i,1)` et `(i,1)->(i,0 mod 2)` sont le MEME lien -- alors
+        que les deux iterations ajoutaient chacune une entree de liste. Ce
+        controle voyait donc 4 ENTREES sur **2 etiquettes distinctes**, et
+        passait : c'est ce qui a laisse vivre D-59.
 
-            dim = 2   ZZ emis =  2   liens distincts =  2   (dim*dim = 4)
-            dim = 3   ZZ emis =  9   liens distincts =  9
-            dim = 4   ZZ emis = 16   liens distincts = 16
+        Mesure, `create_period_hamiltonian` avec `C_edges[0] = 0.5` :
 
-        L'attente est desormais ENUMEREE independamment plutot qu'ecrite
-        en dur : elle reste juste a toute dimension, et elle tomberait si
-        la deduplication retirait un lien legitime.
+            dim   entrees avant D-59   entrees apres   dim*dim   etiquettes
+             2            4                  2            4          2
+             3            9                  9            9          9
+             4           16                 16           16         16
+
+        `dim * dim` etait donc juste a `dim >= 3` et faux au seul `dim = 2`,
+        la taille de toutes les campagnes publiees. La valeur remesuree y
+        est **2**, et le nombre d'etiquettes distinctes -- 2 -- n'a jamais
+        bouge : il donnait la bonne reponse avant comme apres.
+
+        D'ou les deux assertions ci-dessous, gardees toutes les deux a la
+        fusion des deux corrections :
+
+        1. entrees == etiquettes distinctes -- le controle qui aurait trouve
+           D-59, et qui ROUGIT sur le code d'avant `7b12857` ;
+        2. entrees == liens ENUMERES independamment, plutot qu'un nombre
+           ecrit en dur : juste a toute dimension, et rouge aussi si la
+           deduplication retirait un lien legitime.
         """
         hp = _flat_params(0.0)
         hp['C_edges'][0][:] = 0.5
         op = create_period_hamiltonian(hp, DIM)
         zz_terms = [t for t in op.to_list() if t[0].count("Z") == 2]
+
+        etiquettes = {t[0] for t in zz_terms}
+        assert len(zz_terms) == len(etiquettes), (
+            f"{len(zz_terms)} entrees ZZ pour {len(etiquettes)} liens "
+            f"distincts : un lien est compte deux fois, donc pondere x2. "
+            f"C'est D-59, corrige a 7b12857 -- voir RESULTS.md"
+        )
 
         # Liens horizontaux distincts, enumeres a la main : paire NON
         # ORDONNEE des deux qubits que le lien relie.

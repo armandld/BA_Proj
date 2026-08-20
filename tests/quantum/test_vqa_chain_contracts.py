@@ -245,13 +245,67 @@ def test_the_tolerance_accepts_ordinary_floating_point_drift():
 def test_the_state_vector_backend_silently_forces_optimisation_level_zero():
     """Fige un comportement non documente : un appelant qui demande 3
     obtient 0. Ce n'est pas faux — un statevector n'a rien a transpiler —
-    mais cela doit etre visible plutot que devine."""
-    import inspect
+    mais cela doit etre visible plutot que devine.
 
+    D-174 : la version precedente cherchait les chaines litterales
+    "opt_level = 0" et "state_vector" dans le SOURCE de `optimize()`, pas
+    son comportement. Une mutation qui rend le forcage mort (`if False:
+    opt_level = 0`, texte inchange) la laissait verte — voir
+    `docs/RESULTS.md`. Celle-ci appelle `optimize()` pour de vrai et lit le
+    `optimization_level` REELLEMENT transmis au pass manager.
+    """
     from VQA import optimize as opt_mod
-    src = inspect.getsource(opt_mod.optimize)
-    assert "opt_level = 0" in src
-    assert "state_vector" in src
+
+    captured = {}
+
+    def _fake_pass_manager(optimization_level, backend):
+        captured["level"] = optimization_level
+
+        class _NoOpPM:
+            def run(self, qc):
+                return qc
+        return _NoOpPM()
+
+    orig = opt_mod.generate_preset_pass_manager
+    opt_mod.generate_preset_pass_manager = _fake_pass_manager
+    try:
+        opt_mod.optimize(QuantumCircuit(1), "state_vector", 3, False)
+    finally:
+        opt_mod.generate_preset_pass_manager = orig
+
+    assert captured["level"] == 0, (
+        f"state_vector a transmis optimization_level={captured['level']!r} "
+        "au pass manager alors que 0 est attendu, quel que soit le niveau "
+        "demande par l'appelant"
+    )
+
+
+def test_a_non_state_vector_backend_keeps_the_requested_optimisation_level():
+    """Champ qui SEPARE : `aer` ne doit PAS subir le meme forcage que
+    `state_vector`, sinon le test precedent ne distinguerait rien."""
+    from VQA import optimize as opt_mod
+
+    captured = {}
+
+    def _fake_pass_manager(optimization_level, backend):
+        captured["level"] = optimization_level
+
+        class _NoOpPM:
+            def run(self, qc):
+                return qc
+        return _NoOpPM()
+
+    orig = opt_mod.generate_preset_pass_manager
+    opt_mod.generate_preset_pass_manager = _fake_pass_manager
+    try:
+        opt_mod.optimize(QuantumCircuit(1), "aer", 3, False)
+    finally:
+        opt_mod.generate_preset_pass_manager = orig
+
+    assert captured["level"] == 3, (
+        f"aer a transmis optimization_level={captured['level']!r} : le "
+        "niveau demande par l'appelant doit passer inchange sur ce backend"
+    )
 
 
 def test_an_unknown_backend_is_refused_instead_of_silently_defaulting():

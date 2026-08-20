@@ -172,3 +172,72 @@ def test_the_published_artefact_carries_its_verdict(dim):
         assert block["ci_low"] <= block["observed"] <= block["ci_high"], (
             f"{key}: l'observation doit tomber dans son propre intervalle")
     assert "provenance" in d and "cli_args" in d
+
+
+# ── la table refaite de D-69 ──────────────────────────────────────────
+
+# Nombres de la table T31 telle que `RESULTS.md` la publie depuis D-69,
+# mesures au hash 95571d1 par les deux commandes que la section cite.
+# Ils sont ecrits ici pour qu'une derive se voie : l'artefact et la table
+# ne peuvent plus se desynchroniser en silence, ce qui est exactement ce
+# qui a produit D-69 (table publiee a `8ee5c8a`, artefact deplace ensuite
+# par D-25, D-26/D-27 puis D-70, sans que la prose suive).
+#
+# La tolerance est absolue et serree (5e-4) parce que la mesure est
+# DETERMINISTE : les deux commandes rejouees a l'identique rendent une
+# sortie bit-a-bit identique (verifie deux fois par dim, 2026-08-17).
+# Une derive au-dela de ce seuil signifie que le code a bouge sous la
+# table, pas que la mesure a du bruit.
+_T31_TABLE_PUBLIEE = {
+    8: {"spearman_fixed": (-0.0266, -0.1096, +0.0233),
+        "f1_matched_fixed": (-0.0312, -0.1146, +0.0156)},
+    16: {"spearman_fixed": (-0.0534, -0.1673, +0.0343),
+         "f1_matched_fixed": (-0.0599, -0.1719, +0.0052)},
+}
+
+
+@pytest.mark.parametrize("dim", [8, 16])
+def test_the_published_artefact_matches_the_published_table(dim):
+    """L'artefact porte les nombres que `RESULTS.md` cite — D-69.
+
+    Echoue si l'artefact est regenere sur du code qui deplace la mesure
+    sans que la table de `RESULTS.md` soit remesuree avec lui.
+    """
+    import json
+    p = os.path.join(_REPO_ROOT, "results",
+                     f"h1_curl_convention_gap_N128_dim{dim}_v2.npz")
+    if not os.path.exists(p):
+        pytest.skip(f"artefact dim={dim} absent")
+    v = json.loads(str(np.load(p, allow_pickle=True)["verdicts"]))
+    for key, (obs, lo, hi) in _T31_TABLE_PUBLIEE[dim].items():
+        b = v[key]
+        assert b["observed"] == pytest.approx(obs, abs=5e-4), (
+            f"dim={dim} {key}: l'artefact rend {b['observed']:+.4f}, la table "
+            f"de RESULTS.md publie {obs:+.4f} — remesurer la table, "
+            "pas retoucher ce nombre (D-69)")
+        assert b["ci_low"] == pytest.approx(lo, abs=5e-4)
+        assert b["ci_high"] == pytest.approx(hi, abs=5e-4)
+
+
+@pytest.mark.parametrize("dim", [8, 16])
+def test_no_verdict_of_t31_excludes_zero_any_more(dim):
+    """La lecture retractee par D-69, epinglee.
+
+    T31 publiait « corriger sans reoptimiser DEGRADE a dim=16 » sur le
+    seul intervalle des quatre qui excluait zero. Refaite a HEAD, la
+    table ne porte plus aucun verdict tranche. Ce test rougit le jour ou
+    l'un des quatre redevient tranche : ce serait un resultat, et il
+    devrait etre relu avant d'etre cite, pas reapparaitre en silence.
+    """
+    import json
+    p = os.path.join(_REPO_ROOT, "results",
+                     f"h1_curl_convention_gap_N128_dim{dim}_v2.npz")
+    if not os.path.exists(p):
+        pytest.skip(f"artefact dim={dim} absent")
+    v = json.loads(str(np.load(p, allow_pickle=True)["verdicts"]))
+    for key, b in v.items():
+        assert b["verdict"] == "indecidable", (
+            f"dim={dim} {key}: verdict « {b['verdict']} », IC95 "
+            f"[{b['ci_low']:+.4f}, {b['ci_high']:+.4f}] — un verdict tranche "
+            "est reapparu, relire D-69 avant de le citer")
+        assert b["ci_low"] <= 0.0 <= b["ci_high"]
