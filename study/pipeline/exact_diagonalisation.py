@@ -16,7 +16,8 @@ Only these patches proceed to Phase 5 (QAOA).
 
 Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
         results/patches_{scenario}_Re{Re}_N{N}_dim{D}.npz
-Output: results/exact_diag_{scenario}_Re{Re}_N{N}_dim{D}.npz
+Output: results/exact_diag_{scenario}_Re{Re}_N{N}_dim{D}{sfx}.npz
+        (sfx = "_v2" sous --v2, "" sinon)
 
 Usage:
   python study/exact_diagonalisation.py
@@ -476,14 +477,26 @@ def run_phase4(dns_path, patches_path, n_patches, use_v2=False):
     return all_results, meta
 
 
+def artifact_name(scenario, Re, N, n_patches, suffix=""):
+    """
+    Nom de l'artefact de la phase 4 — UNE seule source, ecrite ET relue.
+
+    D-178 : le resume cross-Re de `main()` reconstruisait ce nom a la main,
+    sans le suffixe. Sous `--v2` il relisait donc l'artefact **v1** homonyme
+    (ou rien du tout), alors que `save_results` venait d'ecrire le `_v2`.
+    `qaoa_inputs.py` (phase 5), l'autre lecteur, applique bien le suffixe :
+    c'est le producteur qui divergeait de son propre consommateur.
+    """
+    return f"exact_diag_{scenario}_Re{Re}_N{N}_dim{n_patches}{suffix}.npz"
+
+
 def save_results(all_results, meta, outdir=RESULTS_DIR):
     """Save Phase 4 results."""
     if all_results is None:
         return None
 
-    suffix = meta.get("suffix", "")
-    fname = (f"exact_diag_{meta['scenario']}_Re{meta['Re']}"
-             f"_N{meta['N']}_dim{meta['n_patches']}{suffix}.npz")
+    fname = artifact_name(meta["scenario"], meta["Re"], meta["N"],
+                          meta["n_patches"], meta.get("suffix", ""))
     path = os.path.join(outdir, fname)
 
     n = len(all_results)
@@ -602,7 +615,7 @@ def main():
         for (sc, re, dim), meta in sorted(all_meta.items()):
             ed_path = os.path.join(
                 RESULTS_DIR,
-                f"exact_diag_{sc}_Re{re}_N{meta['N']}_dim{dim}.npz")
+                artifact_name(sc, re, meta["N"], dim, meta.get("suffix", "")))
             if os.path.exists(ed_path):
                 d = np.load(ed_path)
                 n_prom = np.sum(d["promising"])
