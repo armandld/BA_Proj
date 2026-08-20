@@ -63,9 +63,14 @@ def build_patch_hamiltonian(vx, vy, Bx, By, N, n_patches, Re,
     """
     Build the full Hamiltonian for the entire n_patches x n_patches grid.
 
-    Returns:
+    Returns TROIS valeurs, dont deux scores classiques de MEME type et de
+    MEME intervalle sur des grilles DIFFERENTES — D-179 : la docstring n'en
+    annoncait que deux, et donnait au second la forme du troisieme.
+
       hamilt_params: dict with H_edges, C_edges, K_plaquettes
-      score: (N, N) classical score
+      score_vqa:  (n_patches, n_patches) — score classique REDUIT par
+                  `block_max`, celui qui entre dans le hamiltonien
+      full_score: (N, N) — score classique a pleine resolution
     """
     dx = 2 * np.pi / N
     nu = 1.0 / Re

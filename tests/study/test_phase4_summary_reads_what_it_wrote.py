@@ -166,3 +166,41 @@ def test_artifact_name_is_the_only_source_of_the_filename(tmp_path):
     assert os.path.basename(path) == ed.artifact_name(SC, RE, N, DIM, "_v2")
     assert ed.artifact_name(SC, RE, N, DIM, "_v2") != \
         ed.artifact_name(SC, RE, N, DIM, "")
+
+
+# ------------------------------------------------------------------
+# 4. D-179 — le contrat de `build_patch_hamiltonian`, verifie point par point
+# ------------------------------------------------------------------
+
+def test_build_patch_hamiltonian_returns_what_its_docstring_says():
+    """Deux scores classiques de meme type et de meme intervalle, sur des
+    grilles differentes : la docstring n'en annoncait qu'un, avec la forme
+    de l'autre. Les 15 sites d'appel prennent tous le bon, mais rien ne le
+    verifiait — l'assertion porte sur les FORMES, pas sur le texte."""
+    n_full = 32
+    x = np.linspace(0, 2 * np.pi, n_full, endpoint=False)
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    vx, vy, Bx, By = [np.sin(X + k) * np.cos(Y) for k in (0.1, 0.2, 0.3, 0.4)]
+
+    out = ed.build_patch_hamiltonian(
+        vx, vy, Bx, By, n_full, DIM, RE, threshold_amr=0.15, use_v2=True)
+
+    assert len(out) == 3, f"{len(out)} valeurs rendues, 3 documentees"
+    hamilt_params, score_vqa, full_score = out
+
+    for key in ("H_edges", "C_edges", "K_plaquettes"):
+        assert key in hamilt_params, f"{key} absent de hamilt_params"
+
+    assert score_vqa.shape == (DIM, DIM), (
+        f"score_vqa : {score_vqa.shape}, attendu {(DIM, DIM)} — c'est le "
+        f"score REDUIT, pas celui a pleine resolution")
+    assert full_score.shape == (n_full, n_full), (
+        f"full_score : {full_score.shape}, attendu {(n_full, n_full)}")
+
+    # Le champ qui SEPARE : block_max sur un score non constant rend une
+    # reduction strictement au-dessus de la moyenne des blocs, donc les deux
+    # grandeurs ne peuvent pas etre confondues par egalite numerique.
+    patch = n_full // DIM
+    blocks = full_score.reshape(DIM, patch, DIM, patch)
+    assert np.allclose(score_vqa, blocks.max(axis=(1, 3))), (
+        "score_vqa n'est pas le block_max de full_score")
