@@ -3449,6 +3449,80 @@ entrées déjà ouvertes de `DEFAUTS.md` (D-39, D-41), pas sur un module.
 
 ---
 
+## Passe du 20 août (nuit, Vigil) — `src/Simulation/solver.py` lu en entier comme un tout, pour la première fois
+
+**966 lignes, 99 % de couverture de ligne — jamais lu narrativement comme un
+module dans ce document.** Toutes les mentions antérieures (D-2, D-6, D-7,
+D-24, D-25, D-26, D-27) viennent de mesures ciblées sur une fonction ou un
+scénario d'initialisation, jamais d'une lecture de bout en bout appliquant
+les quatre questions au fichier entier. C'est exactement la forme d'un
+module « couvert mais pas audité » que `VIGIL.md` distingue.
+
+**Question 4, le fil conducteur.** Trois paires de chemins censés
+coïncider, ou dont la non-coïncidence est déjà documentée dans le code :
+
+1. **`step_layered` à `local_factor = 1` partout contre `step_full`.**
+   C'est la garantie que le docstring de `step_layered` énonce explicitement
+   (« lorsque TOUS les patches sont actifs à `max_depth`… le résultat est
+   IDENTIQUE »). Déjà mesurée et verrouillée ailleurs (D-24 : accord à
+   `3,331e-16`, `tests/solver/test_solver_convergence.py`) — reconfirmée
+   par lecture du code, pas rejouée : les Phases 1+2 de `step_layered`
+   réduisent algébriquement à un unique `_rk4_step` global quand `cf = 1`
+   et tous les patches ont `local_factor = 1` (delta coarse et tau
+   s'additionnent sans reste). Rien de neuf, cohérent avec ce qui est
+   publié.
+2. **`get_fluxes().Jz`** (différences centrées ordre 2, `roll(∓1)/2dx`)
+   **contre le `Jz` interne à `_compute_rhs_fd`** (ordre 4, `_fd_grad`,
+   utilisé pour la force de Lorentz). Les deux ne prétendent PAS mesurer la
+   même chose — le second n'est jamais exposé, il ne sert qu'au second
+   membre de l'induction — et rien dans le fichier ni chez ses appelants
+   n'annonce qu'ils devraient coïncider. Vérifié que `get_fluxes` est bien
+   la SEULE source de `Jz` côté `study/` (déjà confirmé identique
+   `hard_patch_labels`/`dns_validation`, `COUVERTURE.md` plus haut) : pas
+   un défaut, une distinction de rôle déjà cohérente partout où `Jz` est
+   consommé.
+3. **`_upsample_local` (zoom local, non périodique) contre
+   `_upsample_global` (périodique, `grid-wrap`, alignement aux nœuds
+   corrigé par D-2).** Utilisés sur des rôles différents et non
+   substituables — le premier reconstruit un `tau` de patch dont seul le
+   cœur (`[cut:-cut]`) est injecté, donc les artefacts de bord du `zoom`
+   local tombent dans le halo jeté ; le second reconstruit la correction
+   coarse sur tout le domaine périodique. `pad_local = base_pad *
+   local_factor` garantit une taille de halo exactement multiple de
+   `local_factor`, donc `_downsample_local`/`_upsample_local` restent
+   inverses l'un de l'autre en forme sur le patch entier (padding compris)
+   — vérifié par lecture, pas de troncature silencieuse à la
+   `_downsample_local` (`H // factor` avec `H = (y1-y0) + 2·pad_local`,
+   toujours multiple de `local_factor` par construction du padding).
+
+**Question 1.** `_rk2_step` (Heun, ordre 2) — **jamais appelée par
+`src/`**, seul appelant `tests/solver/test_solver_analytic.py:442`. Piège
+potentiel de la forme « code mort qui n'attend qu'un appelant » (comme
+l'ansatz jamais indexé de la fiche), mais ici sans conséquence : aucun
+artefact ni nombre publié n'en dépend, c'est un schéma alternatif gardé
+pour un test de convergence comparatif. Noté, pas corrigé — rien à corriger,
+observation seule.
+
+**Question 2.** Chaque docstring vérifiée contre son calcul : `get_fluxes`
+n'a pas de docstring mais son contrat implicite (les 5 clés que `study/`
+consomme) est stable, déjà croisé plus haut dans ce document.
+`enforce_incompressibility`, `is_diverged`, `_rk4_step`,
+`_upsample_global` portent chacune leur historique de correction en
+commentaire avec la mesure qui l'a motivée (D-2, D-6/D-25/D-26/D-27) — pas
+de nouvel écart entre ce qui est écrit et ce que fait le code.
+
+**Vérifié et trouvé sain.** Axes empruntés — ceux de la fiche qui
+s'appliquent à un solveur, pas à l'encodage : profondeur AMR (`depth = 0`
+via `step_full`, `depth > 0` via `step_layered`, les deux présents comme
+chemins distincts dans ce fichier même) et bord du patch (périodique pour
+`step_full`/Phase 1, patch local avec halo pour la Phase 2 de
+`step_layered`, extrait par indexation modulo — donc toujours périodique au
+niveau du domaine, jamais un vrai bord absorbant). Les cinq autres axes
+(bras, backend, warm start, hamiltonien, optimiseur) ne s'appliquent pas à
+ce fichier : il n'encode ni ne décide, il intègre.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
