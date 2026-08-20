@@ -3626,6 +3626,41 @@ il ne décide ni n'exécute.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/HamiltParams_v2.py` (le mappeur v2) lu en entier comme un tout
+
+**276 lignes, 100 % de couverture de ligne — jamais lu narrativement,
+malgré le pourcentage.** C'est le mappeur `study/` (adimensionnel, sans
+paramètre entraîné — voir la fiche du dépôt) ; ses trois invariances
+revendiquées dans le docstring de classe sont vérifiées **par calcul**,
+pas relues comme une affirmation :
+
+| revendication | vérification |
+|---|---|
+| `dx` se simplifie exactement | `_compute_det_jacobian_B` produit `det ∝ 1/dx²` (chaque dérivée en `/dx`, le déterminant est un produit de deux) ; `K_xpoint = xpoint_signal / max_det` divise deux quantités en `1/dx²` — le rapport est sans dimension. Seul endroit où `dx` apparaît dans le fichier |
+| amplitude des champs invariante (`v, B → 10v, 10B` laisse `C, K, H` inchangés) | `C_horiz = -w_zz·jump_h/mean_jump` : `jump_h` et `mean_jump` scalent tous deux linéairement en `v, B`, le rapport est invariant. Même argument pour `K_plaquettes` (`omega_z`, `Jz_curl` linéaires, normalisés par leur propre max). `H` en hérite via `median_scale`, lui-même invariant ; le score externe n'est pas mis à l'échelle par ce fichier |
+| `nu`, `eta` n'entrent nulle part | confirmé — aucun attribut `nu`/`eta` sur `PhysicalMapperV2`, aucune référence dans `compute_coefficients` |
+
+**Ce qui diffère de v1, structurellement (pas juste par les paramètres
+retirés).** v1 sépare `v_jump` et `B_jump` (deux critères de Reynolds
+distincts, `Re`/`Rm`, combinés par `√(f_Re²+f_Rm²)`) ; v2 les **fusionne**
+en un seul `jump = √(dv² + dB²)` avant normalisation — une différence de
+conception documentée dans la liste « Differences from v1 », pas une
+divergence accidentelle entre deux chemins censés coïncider : le docstring
+de `sim` (paramètre non utilisé, gardé pour la signature commune) renvoie
+explicitement à `tests/test_mapper_contracts.py` pour ce qui doit encore
+coïncider entre v1 et v2 — pas les valeurs (les architectures diffèrent
+par construction), un contrat plus faible. Non re-vérifié en détail ici,
+cohérent avec ce que le fichier annonce de lui-même.
+
+**Vérifié et trouvé sain.** Axes empruntés : hamiltonien non nul et nul
+(même structure qu'en v1), bord du patch (mêmes appelants que v1 —
+`hamiltonian_coefficients.py`, `preflight_coefficients.py`,
+`qaoa_inputs.py`, `sanity_check.py`, `exact_diagonalisation.py` —
+`score`/`fields` accordés en amont par le même contrat `_process_score`).
+Aucun nouvel écart.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
