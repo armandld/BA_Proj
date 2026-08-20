@@ -3575,6 +3575,57 @@ Optimiseur et backend ne sont pas des axes de ce fichier — ils vivent dans
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `src/Simulation/HamiltParams.py` (le mappeur v1) lu en entier comme un tout
+
+**709 lignes, 99 % de couverture de ligne, jamais lu narrativement comme un
+module** — de nombreuses corrections y vivent (D-11 diode de choc, la
+correction `g_mag`/`Jz_phys`, la correction `xpoint_grad` dx², la porte
+retirée du canal X-point) mais toujours par fonction, jamais le fichier
+entier.
+
+**⚠️ D-177 — question 2 : `physical_score` promettait un rôle de
+déploiement qu'elle n'a jamais tenu.** Voir `RESULTS.md`. Trouvé en lisant
+la docstring de la fonction comme un contrat puis en vérifiant par grep
+qu'aucun site de `src/`/`study/` ne l'appelle — le θ-init déployé vient
+partout de `AngleMapper.classical_score`. Corrigé (docstring seule,
+comportement inchangé).
+
+**Question 4, le reste du fichier.** `z_bias = alpha_z * (score −
+threshold_amr)` (`H_horiz`/`H_vert`, ligne 626) utilise `score` **et non**
+`score_resized` — suspecté un temps comme la forme exacte de D-37 (deux
+champs sur deux grilles), **écarté à la mesure** : `_process_score` (via
+`_resize_padded_maxpool` à `depth > 0`) rend déjà `(target_dim+2,
+target_dim+2)` — le halo est inclus dans `score` lui-même avant l'appel à
+`compute_coefficients`, donc `score.shape == field_shape` dans tous les
+cas empruntés en production, et la branche `zoom` de redimensionnement
+(`:518-521`) n'est jamais prise sur le chemin déployé. Vérifié en lisant
+le contrat de `_process_score` (déjà établi par D-37, `refinement.py`),
+pas supposé. `_effective_crit` (le critère relatif ajouté au périmètre
+d'entraînement) relu contre sa docstring : le seuil absolu l'emporte dès
+qu'**une seule** cellule (max global, pas par cellule) le franchit — conforme
+à ce que le texte annonce.
+
+**Question 1.** Aucune fonction non appelée trouvée hormis `physical_score`
+elle-même (D-177) — tout le reste (`_f_gate`, `_g_strain`, `_g_rot`,
+`_g_mag`, `_effective_crit`, `_compute_det_jacobian_B`,
+`_threshold_contrast`) est exercé par `compute_coefficients`, le seul
+chemin de production du fichier. `_michelson_relu` (« legacy, kept for
+reference » dans son propre commentaire de section) reste, comme
+`physical_score`, testée mais jamais appelée en production — observation,
+cohérente avec ce que sa section annonce déjà elle-même, pas une
+découverte.
+
+**Vérifié et trouvé sain, un défaut hors chemin critique corrigé (D-177).**
+Axes empruntés : hamiltonien non nul (le chemin normal de
+`compute_coefficients`) et nul (`advanced_anomalies_enabled=False`, le
+défaut — le bloc X-point n'est alors pas construit) ; bord du patch
+périodique/borné, par la forme de `score`/`fields` reçus (`target_dim` ou
+`target_dim+2`), les deux lues et vérifiées cohérentes. Les axes bras,
+backend, warm start, optimiseur ne s'appliquent pas — ce fichier encode,
+il ne décide ni n'exécute.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

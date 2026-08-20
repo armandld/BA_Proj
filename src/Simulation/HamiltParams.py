@@ -288,14 +288,31 @@ class PhysicalMapper:
         return np.minimum(raw, tc_max)
 
     # ══════════════════════════════════════════════════════════════════
-    #  Physical score: replaces classical_score for θ initialization
+    #  Physical score — NOT wired to θ initialization in the deployed
+    #  pipeline. See the docstring below (D-177, RESULTS.md) before
+    #  reading this header as a claim about production behaviour.
     # ══════════════════════════════════════════════════════════════════
 
     LOHNER_CRIT = 0.3   # Löhner > 0.3 → genuine discontinuity
 
     def physical_score(self, physics_state):
         """
-        Physics-grounded instability score for qubit initialization.
+        Physics-grounded instability score — an alternative to
+        `AngleMapper.classical_score`, exercised only by the test suite.
+
+        D-177 : cette docstring annoncait "replaces classical_score for
+        theta initialization" et se presentait comme le score DEPLOYE.
+        C'etait deja faux avant D-9 (qui a corrige le seul appelant errone,
+        `h3_uncertainty_window.py`, sans toucher a cette ligne) et c'est
+        toujours faux : AUCUN site de `src/` ni de `study/` n'appelle
+        `physical_score` (verifie par grep, 0 site hors sa propre
+        definition et ses tests). Le theta-init deploye vient partout de
+        `AngleMapper.classical_score` (`refinement.py`, `qaoa_inputs.py`).
+        `physical_score` n'est ni mort au sens du bytecode -- ~30 sites de
+        tests l'appellent directement, comme formule alternative a
+        comparer -- ni vivant au sens du pipeline : aucun artefact publie
+        n'en depend. Hors chemin critique, comportement inchange : une
+        ligne dans `RESULTS.md`, pas d'entree `DEFAUTS.md`.
 
         Each indicator is normalized by its **physical critical value**
         (not by the domain maximum). This ensures:
