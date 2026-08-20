@@ -3879,6 +3879,46 @@ fiche.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — l'axe des **anomalies avancées** repris par le PRODUCTEUR
+
+La passe précédente reprenait `study/pipeline/` par les **configurations** et
+y trouvait trois défauts. Celle-ci prend le même angle sur l'axe que D-51
+avait ajouté à la fiche — et le trouve **du mauvais côté**, alors que D-51
+est consigné clos.
+
+**Ce qui a été fait de neuf : interroger le producteur, pas le consommateur.**
+Tout le dossier D-51 — la fermeture, son `controle_coincidence`, et le
+fichier de gardes `test_xpoint_term_absent_from_study.py` — porte sur ce qui
+**lit** `K_xpoint`. Aucun ne demandait qui l'**écrit**.
+
+| ce qui a été traversé | verdict |
+|---|---|
+| `create_period_hamiltonian(..., advanced_anomalies_enabled=True)` sur le `hamilt_params` que `study/` produit réellement | **D-51 ROUVERT** — opérateur **identique bit à bit** à `False` : 48 termes des deux côtés, `max\|coeff(H_on − H_off)\| = 0,0`, `to_list() == to_list()`. Le drapeau ouvre une branche qui trouve `hp.get('K_xpoint') is None` et ne fait rien |
+| les 8 sites d'appel de `compute_coefficients` de `study/`, par l'AST | **7 muets sur 8** — seul `preflight_coefficients.py:64` passe le kwarg, et c'est un diagnostic. L'énoncé d'origine de D-51 (*« tout `study/` code `advanced_anomalies_enabled = False` »*) est **toujours vrai du côté qui décide si le terme existe** |
+| `dim = 2` contre `dim = 4` contre `dim = 8` | **le champ d'essai de la fermeture ne SÉPARE pas** — `max\|K_xpoint\|` vaut **0,0000** à `dim = 2`, la seule taille de toutes les campagnes publiées, et c'est là que les deux contrôles tournent. À `dim = 8` : `study/` bâtit **192** termes contre **224** au déploiement, le terme manquant valant **10 %** de l'échelle de plaquette |
+| `controle_coincidence` (`preflight_coefficients.py:158`) et `_params(True)` du fichier de gardes voisin | **ne peuvent pas séparer** — tous deux **fabriquent eux-mêmes** la clé `"K_xpoint"` que le chemin réel n'écrit jamais. Ils mesurent l'accord de deux lecteurs, pas l'existence de ce qu'ils lisent |
+
+**Vérifié et trouvé sain, au passage** : le déploiement, lui, produit bien le
+terme — `refinement.py:197` passe `advanced_anomalies_enabled=args.AdvAnomaliesEnable`,
+et `train_hyperparams.py` code `AdvAnomaliesEnable: True` sur **6 scénarios
+sur 6**. L'asymétrie est réelle, elle n'est pas un artefact de mesure.
+
+**Ce que cette reprise apprend sur la méthode.** Un axe dont les deux côtés
+sont *écrits* dans le code n'est pas traversé pour autant : ici le côté
+« activé » est écrit chez le consommateur et **inatteignable** parce que le
+producteur ne l'alimente pas. Compter les drapeaux dit ce que le code
+**déclare** ; il faut encore mesurer ce qu'il **rend**. C'est le cinquième
+cas de « défaut trouvé dans du code déjà déclaré audité » de l'étalonnage de
+la fiche — et le premier qui renverse une **fermeture**, pas une lecture.
+
+**Axes de la fiche traversés par ce lot** : *anomalies avancées* des deux
+côtés (c'est l'axe que cette passe ouvre) ; **hamiltonien v1 et v2** (les deux
+mappeurs mesurés, même verdict) ; **bord périodique** ; **hamiltonien non
+nul** ; `dim` **2, 4 et 8** — la première mesure de ce document à `dim = 8`,
+que le comptage de `trace_fiche_axes` donnait à **0** test. Les autres axes
+(bras, backend, warm start, optimiseur, profondeur AMR) ne s'appliquent pas :
+la construction des coefficients précède le choix du bras.
+
 ---
 
 ## Tenir ce document à jour
