@@ -43,10 +43,12 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **13** |
+| **ouverts** — décision ou campagne requise | **14** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **13** au 20 août
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **14** au 20 août
+(nuit, Vigil) — **D-180** est entré : le verdict PASS de la phase 6 porte une
+lecture publiée (D-40, D-77) et n'a pas de provenance de sigma. Avant lui, **13** au 20 août
 (nuit, Vigil) — l'entrée « D-132 » (bras QAOA, bisection close sur D-25) en
 est sortie : élucidée, elle ne bloque plus rien (ni la réoptimisation, ni
 aucune lecture publiée), donc elle ne satisfait plus la règle d'arrêt de ce
@@ -1378,6 +1380,83 @@ pytest tests/pipeline/test_intermediate_score_time_alignment.py -q
 C'est un test de **déviation**, comme ceux de D-141 : il épingle le
 décalage mesuré et rougit le jour où D-143 est tranché — c'est-à-dire le
 jour où il doit être relu.
+
+## D-180 — le verdict PASS de la phase 6 est le plus favorable de six, choisi par l'ordre des membres d'un `.npz`
+
+**⚠️ Il porte une lecture publiée.** Les nombres de D-40 — `AUC(E) = 0,874`,
+`F1(E) = 0,729` contre `F1(classique) = 0,654`, verdict **PASS** — et leur
+re-vérification par D-77 sont ceux de **`sigma = 0,023`**. Rien, ni dans le
+code ni dans la sortie, ne nomme ce sigma.
+
+**Correction poussée avec cette entrée : la provenance seulement.** Les
+nombres publiés ne bougent pas (0,874 / 0,729 / 0,654 / PASS, identiques
+avant et après). **Ce qui reste ouvert et demande une décision, c'est la
+lecture** : un PASS qui tient à 2 sigmas sur 6 est-il le résultat que le
+manuscrit doit porter ? Cette question n'est pas tranchée ici.
+
+**Où ça bloque.** `study/pipeline/pipeline_verification.py:66-70`, branche
+`--v1`, choisissait l'énergie ainsi :
+
+```python
+for k in coefs.files:
+    if k.endswith("_E"):
+        E = coefs[k]
+        break
+```
+
+La phase 3 (`hamiltonian_coefficients.py:228`) écrit **six** sigmas dans le
+même artefact — `s0.023_E`, `s0.050_E`, `s0.100_E`, `s0.150_E`, `s0.200_E`,
+`s0.300_E`. `break` prend le **premier membre du `.npz`**, pas un sigma
+choisi. Il tombe aujourd'hui sur `0,023` = `TRAINED_SIGMA` parce que
+`sigma_values` est écrit dans cet ordre : réordonner cette liste — une
+liste de balayage, la chose qu'on réordonne — change le verdict publié sans
+qu'aucune ligne de sortie ne bouge de vocabulaire.
+
+**Le verdict flippe sur le sigma seul.** Mesuré sur les 4 scénarios
+canoniques `Re=400 N=256 dim=4`, artefacts du dépôt, deux exécutions
+**bit-à-bit identiques** :
+
+| sigma | AUC(E) | F1(E) | F1(classique) | verdict F1 |
+|---|---|---|---|---|
+| **0,023** | **0,8737** | **0,7288** | 0,6543 | **PASS** |
+| 0,050 | 0,8653 | 0,6988 | 0,6543 | PASS |
+| 0,100 | 0,8351 | 0,6114 | 0,6543 | **WARN** |
+| 0,150 | 0,8253 | 0,6372 | 0,6543 | **TIE** |
+| 0,200 | 0,8194 | 0,6256 | 0,6543 | **WARN** |
+| 0,300 | 0,7932 | 0,6269 | 0,6543 | **WARN** |
+
+La comparaison est appariée : **les mêmes 2 lignes sur 4** (`orszag_tang`,
+`mhd_rotor`) survivent au tri de D-40 à **tous** les sigmas — les deux
+autres sont dégénérées (E constant) partout. Ce n'est donc pas un
+changement d'échantillon, c'est le sigma seul. Le verdict AUC, lui, tient :
+PASS aux six.
+
+**Comment on est tombé dessus.** Question 3 de `VIGIL.md` — *consomme-t-elle
+ce que sa signature annonce ?* — sur `pipeline_verification.analyze`, en
+épuisant `study/pipeline/`, la file que le commentaire du 20 août désigne.
+Formes du tableau de `VIGIL.md` : **repli silencieux** et **valeur sans
+provenance**.
+
+**Ce qui est corrigé** (`c62f3ab`, voir `RESULTS.md`) : `--sigma`, défaut
+`TRAINED_SIGMA`, clé construite explicitement, **`KeyError` nommant les
+sigmas disponibles** si le demandé manque — plus de repli sur le premier
+venu — et le sigma **imprimé dans l'en-tête et dans chaque ligne de
+verdict**. Comportement à `sigma = 0,023` inchangé au dernier chiffre.
+
+**Ce qui reste à trancher, et n'est pas de mon ressort.** Le manuscrit doit
+dire lequel :
+
+1. **PASS à `TRAINED_SIGMA`**, avec le sigma nommé — la lecture actuelle,
+   désormais attribuée ;
+2. **PASS, avec sa sensibilité publiée** — le PASS tient à 2 sigmas sur 6,
+   et le tableau ci-dessus l'accompagne ;
+3. **la lecture est retirée** — un verdict qui dépend du sigma à ce point
+   ne sépare pas l'hamiltonien du choix d'hyperparamètre, et D-22
+   (réoptimisation) va de toute façon redéplacer `sigma`.
+
+Mon avis, à trancher par USER : **2**. Le nombre est juste et le sigma est
+le bon ; c'est son unicité qui était fausse, et la publier coûte un
+tableau.
 
 ## D-158 — l'agrégateur du master table réécrit la table publiée sur une configuration qui ne correspond à rien, et sort avec le code 0
 
