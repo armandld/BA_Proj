@@ -3745,6 +3745,44 @@ document (`optimize()` via le `else` legacy) — pas de nouvel écart.
 
 ---
 
+## Passe du 20 août (nuit, Vigil, suite) — `study/pipeline/hamiltonian_coefficients.py` lu en entier (444 lignes)
+
+Jamais lu comme un tout, malgré son rôle central : c'est le script cité
+par D-41 (« En auditant `study/pipeline/hamiltonian_coefficients.py` »)
+comme source de la mesure `E_patch`. Q1-Q4 sur le fichier complet, pas
+seulement la fonction que D-41 a lue.
+
+**Q4 — l'identité algébrique qui devait tenir, vérifiée par le calcul.**
+`E_all = mean(H_mag + C_mag + K_mag)` par bloc, tandis que `H_all`,
+`C_all`, `K_all` sont chacun `mean(...)` séparément du même bloc : la
+moyenne étant linéaire, `E_all == H_all + C_all + K_all` **exactement**
+(à l'associativité flottante près), vérifié par l'algèbre plutôt que
+supposé de la ressemblance des noms.
+
+**Q4 — la divergence de réducteur `score_all` (`np.max`) contre
+`H_all`/`C_all`/`K_all`/`E_all` (`np.mean`) sur le MÊME bloc n'est pas
+neuve : déjà consignée** dans ce document (§ « Lu en entier le 13 août,
+`study/pipeline/` », ligne « réduction en patchs ») comme choix de
+conception assumé (« le max reproduit la décision AMR de production… la
+moyenne une densité d'énergie… écart non mesuré »), pas une divergence
+accidentelle. Retrouvée ici en lisant le fichier qui la produit
+directement, pas re-signalée comme neuve — exactement le piège que la
+fiche du dépôt met en garde (« une passe entière a conclu que le défaut
+trouvé et son correctif existaient déjà »).
+
+**Q2 — `V2_THRESHOLD` (0,15) contre `TRAINED_THRESHOLD` (0,1496)** :
+deux constantes distinctes, utilisées correctement selon `use_v2`
+(`config.py:65,77`) — le commentaire de `V2_THRESHOLD` (« physical
+choice, not trained ») est cohérent avec le fait établi de la fiche du
+dépôt (v2 sans paramètre entraîné). Pas une confusion entre les deux
+seuils.
+
+**Vérifié et trouvé sain.** Axes : hamiltonien v1 (`nu`/`eta` réels, la
+sortie de `sim.get_fluxes()`) et v2 (`PhysicalMapperV2`, sans `nu`/`eta`),
+tous deux exercés par le même appelant selon `--v2`.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
