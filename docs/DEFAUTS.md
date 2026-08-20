@@ -1099,7 +1099,30 @@ Je n'en applique aucune.
 ton commentaire du 17 août interdit de toucher `src/` et `study/` pendant la
 campagne. À écrire quand le gel lève.
 
+**La porte de la campagne s'ouvre sur ce défaut, vérifié en la franchissant.**
+`python study/common/preflight_coefficients.py` — la commande que la
+fermeture de D-51 cite comme sa vérification — rend aujourd'hui :
+
+```
+[OK ] vivant — termes a quatre corps non nuls a N=256
+        K_plaquettes       0.24322854060857615
+        K_xpoint           0.980529695624487
+[OK ] coincidence — study/ et le circuit rendent la meme energie
+        ecart_max          3.552713678800501e-15
+
+VERDICT : les coefficients font leur travail. Campagne possible.
+```
+
+**5 contrôles sur 5, et « Campagne possible ».** Le `K_xpoint = 0,9805` du
+contrôle « vivant » est réel — parce que `_coeffs()` (`ligne 64`) est le
+**seul** site de `study/` qui demande le terme au producteur. La porte
+mesure donc un chemin que la campagne ne prendra pas : elle certifie que le
+terme est vivant et que ses deux lecteurs s'accordent, sans jamais demander
+si le chemin de mesure l'écrit. Le feu vert est sincère et hors sujet.
+
 Vérifier : `pytest tests/study/test_xpoint_producer_never_writes_the_key.py -q`
+et `python study/common/preflight_coefficients.py` → 5/5, `K_xpoint` non nul,
+alors que `prepare_qaoa_inputs` n'en produit aucun.
 
 ---
 
