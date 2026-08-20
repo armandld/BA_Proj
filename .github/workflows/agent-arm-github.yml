@@ -1,0 +1,34 @@
+name: agent-arm GitHub action
+
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: Demande JSON décidée par l'agent Claude agent-arm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-arm-github-action
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Le script et le workflow viennent toujours de la branche par défaut.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Exécuter la demande de l'agent
+        env:
+          EXPECTED_AGENT: agent-arm
+          AGENT_REQUEST: ${{ inputs.request }}
+          AGENT_GITHUB_TOKEN: ${{ secrets.AGENT_ARM_GITHUB_TOKEN }}
+        run: python3 scripts/agent-github-action.py
