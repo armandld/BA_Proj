@@ -4000,7 +4000,7 @@ Les **onze** à `scripts=1`, l'ordre de la file :
 |---|---|---|
 | `study/common/qaoa_inputs.py` | `--warm-start` | **traité** — chemin lu ; D-48 le couvre déjà (schedule constant, gel documenté) |
 | `study/common/ising_terms_and_annealing.py` | `--classical-warm` | **traité** — mesuré sain, voir la section ci-dessus |
-| `study/common/qaoa_inputs.py` | `--prune-eps` | ouvert |
+| `study/common/qaoa_inputs.py` | `--prune-eps` | **traité — rien trouvé.** Le rationnel de la docstring (« par bloc, parce que H, C et K vivent sur des échelles différentes ») est plus grossier que le code, qui normalise par **tableau** — donc H0 et H1 séparément. Mesuré sur le champ MHD analytique (`N=32 dim=4 Re=400`) : les deux granularités rendent des survivants **identiques** à eps 0,05 / 0,1 / 0,3, parce que `max\|H0\| = max\|H1\| = 330,5`. Divergence possible sur un champ fortement anisotrope, **non démontrée** : les deux essais construits pour la produire ont fait sous-déborder les coefficients (`C ~ 1e−242`, la fenêtre gaussienne de D-47) et le garde de balayage vide a levé, correctement. Le drapeau ne mord qu'à eps ≥ 0,6 (K perd 4 termes sur 16) |
 | `study/common/qaoa_inputs.py` | `--K_opt` | ouvert |
 | `study/h3_representation/h3_depth_report.py` | `--prune-eps` | ouvert |
 | `study/h2b_prediction/h2b_train_linear_hamiltonian.py` | `--optimiser` | ouvert |
