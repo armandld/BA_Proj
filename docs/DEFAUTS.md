@@ -43,11 +43,14 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **14** |
+| **ouverts** — décision ou campagne requise | **15** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **14** au 20 août
-(nuit, Vigil) — **D-180** est entré : le verdict PASS de la phase 6 porte une
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **15** au 20 août
+(nuit, Vigil) — **D-51 est ROUVERT** : sa fermeture annonçait que `study/`
+construit le même hamiltonien que le déploiement, et le drapeau qui devait
+l'assurer est mesuré sans effet (opérateur identique bit à bit). Avant lui,
+**14** au 20 août (nuit, Vigil) — **D-180** est entré : le verdict PASS de la phase 6 porte une
 lecture publiée (D-40, D-77) et n'a pas de provenance de sigma. Avant lui, **13** au 20 août
 (nuit, Vigil) — l'entrée « D-132 » (bras QAOA, bisection close sur D-25) en
 est sortie : élucidée, elle ne bloque plus rien (ni la réoptimisation, ni
@@ -1015,6 +1018,88 @@ l'état.
 Un défaut sans mesure est une suspicion. Un défaut sans commande de
 vérification n'a pas sa place ici.
 
+
+---
+
+## D-51 — ROUVERT : sa fermeture repose sur un drapeau qui ne fait rien
+
+**⚠️ Une lecture publiée tombe.** `RESULTS.md` § « D-51 — clos » écrit :
+
+> `study/common/qaoa_inputs.py:350` passe `advanced_anomalies_enabled=True`
+> — `study/` construit désormais **le même hamiltonien que le déploiement**.
+
+**C'est faux, et mesuré tel.** Le drapeau est passé au **consommateur**
+(`mapping` → `create_period_hamiltonian`), qui lit `hamilt_params['K_xpoint']`.
+Le **producteur** ne l'a jamais écrit : `prepare_qaoa_inputs`
+(`qaoa_inputs.py:284`) appelle `compute_coefficients` **sans** le kwarg, qui
+vaut `False` par défaut. La branche ouverte trouve `hp.get('K_xpoint') is
+None` et ne fait rien — silencieusement.
+
+Mesuré, `N=32 Re=400`, champ MHD analytique, mappeur v1 :
+
+| | `adv=False` | `adv=True` |
+|---|---|---|
+| termes de l'opérateur | 48 | **48** |
+| `max\|coeff(H_on − H_off)\|` | — | **0,0** |
+
+Identiques **bit à bit** : `H_on.to_list() == H_off.to_list()` → `True`.
+
+**Ce n'est pas un cas isolé de `qaoa_inputs`.** Les **sept** sites d'appel
+de `compute_coefficients` de `study/` omettent le kwarg —
+`hamiltonian_coefficients.py:95`, `exact_diagonalisation.py:129`,
+`sanity_check.py:122/124/198`, `h3_uncertainty_window.py:126`,
+`qaoa_inputs.py:284`. Le seul qui le passe est
+`preflight_coefficients.py:64`, un diagnostic. L'énoncé d'origine de D-51 —
+*« tout `study/` code `advanced_anomalies_enabled = False` »* — est donc
+**toujours vrai du côté qui décide si le terme existe**.
+
+**Pourquoi aucun contrôle ne l'a vu : ils ne SÉPARENT pas.** Les deux
+vérifications citées à l'appui de la fermeture fabriquent elles-mêmes la
+clé que le chemin réel n'écrit jamais — `controle_coincidence`
+(`preflight_coefficients.py:158`) construit `hp` à la main avec un
+`"K_xpoint"`, et `test_xpoint_term_absent_from_study.py::_params(True)` de
+même. Elles mesurent le consommateur, jamais le producteur. Et toutes deux
+tournent à `dim = 2`, où le terme vaut **exactement zéro** :
+
+| dim | termes `study/` | termes déploiement | `max\|K_xpoint\|` | `max\|K_plaquettes\|` | rapport |
+|---|---|---|---|---|---|
+| 2 | 12 | **12** | **0,0000** | 47,5538 | 0,0000 |
+| 4 | 48 | 50 | 0,0885 | 62,7811 | 0,0014 |
+| 8 | 192 | **224** | **10,0000** | 99,7800 | **0,1002** |
+
+`dim = 2` est la seule taille de toutes les campagnes publiées : le champ
+d'essai de la fermeture est précisément celui sur lequel les deux
+hypothèses rendent la même réponse. À `dim = 8` il manque **32 termes** sur
+224, à **10 %** de l'échelle de plaquette — ce n'est plus négligeable, et
+l'axe `dim = 8` est traversé par **0** test de la suite (compté par
+`trace_fiche_axes`).
+
+**Ce qui reste bloqué est ce que D-51 disait déjà.** `beta_xpoint`, que
+D-22 range parmi les 8 paramètres à réoptimiser, est un hyperparamètre
+qu'**aucune** mesure de `study/` ne peut voir. Critère 2 de la règle
+d'arrêt : la réoptimisation ne mesurerait pas ce qu'elle prétend mesurer.
+
+**Non corrigé, et volontairement.** Activer le producteur changerait
+l'hamiltonien de **toutes** les mesures de `study/` — donc des nombres
+publiés. `VIGIL.md` : *tout ce qui change un nombre publié se signale et ne
+s'applique pas.* Trois lectures possibles, à trancher par USER :
+
+1. **c'est le défaut** — `study/` doit voir ce que le déploiement voit ;
+   activer le producteur aux sept sites et **rejouer** ce qui en dépend ;
+2. **c'est un gel assumé** — `study/` mesure volontairement l'hamiltonien
+   sans point X ; alors `qaoa_inputs.py:350` et la fermeture de D-51
+   doivent le **dire**, au lieu d'annoncer l'inverse ;
+3. **portée réduite** — le terme ne compte qu'à `dim ≥ 4` ; borner
+   l'énoncé aux tailles publiées et le documenter.
+
+Je n'en applique aucune.
+
+**La déviation n'est pas écrite dans le fichier concerné**
+(`study/common/qaoa_inputs.py`), contrairement à ce que `VIGIL.md` demande :
+ton commentaire du 17 août interdit de toucher `src/` et `study/` pendant la
+campagne. À écrire quand le gel lève.
+
+Vérifier : `pytest tests/study/test_xpoint_producer_never_writes_the_key.py -q`
 
 ---
 
