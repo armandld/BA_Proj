@@ -35,10 +35,10 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
     if _p not in sys.path:
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
-from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, TRAINED_SIGMA
 
 
-def analyze(scenario, Re, dim, N, use_v2=True):
+def analyze(scenario, Re, dim, N, use_v2=True, sigma=TRAINED_SIGMA):
     suffix = "_v2" if use_v2 else ""
     coef_path = os.path.join(
         RESULTS_DIR,
@@ -58,16 +58,26 @@ def analyze(scenario, Re, dim, N, use_v2=True):
 
     # coefficients were computed only on every k-th snapshot; figure out
     # which snapshots are there by reading the C array shape
-    # v2 uses key s0.000_E
-    E_key = "s0.000_E" if use_v2 else None
-    if use_v2:
-        E = coefs[E_key]
-    else:
-        # pick the first sigma key
-        for k in coefs.files:
-            if k.endswith("_E"):
-                E = coefs[k]
-                break
+    #
+    # D-180 : la branche v1 prenait `for k in coefs.files: if
+    # k.endswith("_E"): break` — la PREMIERE cle du .npz, pas un sigma
+    # choisi. La phase 3 en ecrit SIX (0,023 a 0,300, `sigma_values`) dans
+    # le meme artefact, et le verdict F1 flippe entre eux a echantillon
+    # apparie : PASS a 0,023 et 0,050, WARN a 0,100/0,200/0,300, TIE a
+    # 0,150. Les nombres publies (D-40, D-77 : 0,874 / 0,729 / 0,654 /
+    # PASS) sont ceux de 0,023 = TRAINED_SIGMA, atteint parce que
+    # `sigma_values` est ecrit dans cet ordre — reordonner cette liste de
+    # balayage aurait change le verdict sans qu'aucun mot de la sortie ne
+    # bouge. La cle est desormais construite, et son absence LEVE : un
+    # repli silencieux sur le premier venu est indiscernable d'un choix.
+    E_key = "s0.000_E" if use_v2 else f"s{sigma:.3f}_E"
+    if E_key not in coefs.files:
+        available = sorted(k[:-2] for k in coefs.files if k.endswith("_E"))
+        raise KeyError(
+            f"{os.path.basename(coef_path)} ne porte pas {E_key!r} — "
+            f"sigmas disponibles : {available}. Aucun repli : le sigma "
+            f"decide le verdict (D-180).")
+    E = coefs[E_key]
 
     n_snaps_sub = E.shape[0]
     n_snaps_full = l2_full.shape[0]
@@ -187,10 +197,16 @@ def main():
     parser.add_argument("--N", type=int, default=DNS_N)
     parser.add_argument("--v1", action="store_true",
                         help="Use v1 coefficients file instead of v2")
+    parser.add_argument("--sigma", type=float, default=TRAINED_SIGMA,
+                        help="D-180 : sigma lu dans l'artefact v1. La phase 3 "
+                             "en ecrit six et le verdict F1 flippe entre eux ; "
+                             "il n'y a pas de defaut sain, seulement un defaut "
+                             "DIT. Sans effet sous v2.")
     args = parser.parse_args()
 
     use_v2 = not args.v1
-    version = "v2 (parameter-free)" if use_v2 else "v1 (trained)"
+    version = ("v2 (parameter-free)" if use_v2
+               else f"v1 (trained, sigma={args.sigma:.3f})")
 
     print("=" * 78)
     print(f"  Phase 6: Hard-patch detection via {version} Hamiltonian energy")
@@ -209,7 +225,8 @@ def main():
     for sc in args.scenario:
         for re in args.re:
             for dim in args.dim:
-                r = analyze(sc, re, dim, args.N, use_v2=use_v2)
+                r = analyze(sc, re, dim, args.N, use_v2=use_v2,
+                            sigma=args.sigma)
                 if r is None:
                     continue
                 rows.append(r)
@@ -272,33 +289,35 @@ def main():
     mean_f1_c = np.nanmean(f1_c)
     mean_recall_c = np.nanmean(recall_c)
 
-    print(f"\n  Hamiltonian energy:  AUC = {mean_auc_E:.3f}  "
+    # D-180 : le sigma accompagne le nombre partout ou le nombre parait.
+    tag = "" if use_v2 else f" [sigma={args.sigma:.3f}]"
+    print(f"\n  Hamiltonian energy{tag}:  AUC = {mean_auc_E:.3f}  "
           f"F1 = {mean_f1_E:.3f}  Recall@K = {mean_recall_E:.3f}")
     print(f"  Classical score:     AUC = {mean_auc_c:.3f}  "
           f"F1 = {mean_f1_c:.3f}  Recall@K = {mean_recall_c:.3f}")
 
     print()
     if mean_auc_E > 0.5 + 0.05:
-        print(f"  PASS: Hamiltonian energy ranks hard patches above chance "
-              f"(AUC={mean_auc_E:.3f} > 0.5).")
+        print(f"  PASS{tag}: Hamiltonian energy ranks hard patches above "
+              f"chance (AUC={mean_auc_E:.3f} > 0.5).")
         print(f"        Minimizing H (i.e. picking low-E states) does identify "
               f"non-hard patches.")
         print(f"        Maximizing E identifies the hard patches.")
     else:
-        print(f"  FAIL: Hamiltonian energy does not rank hard patches "
+        print(f"  FAIL{tag}: Hamiltonian energy does not rank hard patches "
               f"(AUC={mean_auc_E:.3f}).")
 
     if mean_f1_E > mean_f1_c + 0.02:
-        print(f"\n  PASS: Hamiltonian F1 ({mean_f1_E:.3f}) > "
+        print(f"\n  PASS{tag}: Hamiltonian F1 ({mean_f1_E:.3f}) > "
               f"Classical F1 ({mean_f1_c:.3f}).")
         print(f"        The quantum Hamiltonian adds discrimination power beyond "
               f"the classical score.")
     elif mean_f1_E > mean_f1_c - 0.02:
-        print(f"\n  TIE:  Hamiltonian F1 ({mean_f1_E:.3f}) ~= "
+        print(f"\n  TIE{tag}:  Hamiltonian F1 ({mean_f1_E:.3f}) ~= "
               f"Classical F1 ({mean_f1_c:.3f}).")
         print(f"        The Hamiltonian matches the classical baseline.")
     else:
-        print(f"\n  WARN: Hamiltonian F1 ({mean_f1_E:.3f}) < "
+        print(f"\n  WARN{tag}: Hamiltonian F1 ({mean_f1_E:.3f}) < "
               f"Classical F1 ({mean_f1_c:.3f}).")
 
 

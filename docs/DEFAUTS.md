@@ -1437,7 +1437,7 @@ ce que sa signature annonce ?* — sur `pipeline_verification.analyze`, en
 Formes du tableau de `VIGIL.md` : **repli silencieux** et **valeur sans
 provenance**.
 
-**Ce qui est corrigé** (`c62f3ab`, voir `RESULTS.md`) : `--sigma`, défaut
+**Ce qui est corrigé** (ligne D-180 de `RESULTS.md`, avec sa mesure) : `--sigma`, défaut
 `TRAINED_SIGMA`, clé construite explicitement, **`KeyError` nommant les
 sigmas disponibles** si le demandé manque — plus de repli sur le premier
 venu — et le sigma **imprimé dans l'en-tête et dans chaque ligne de
