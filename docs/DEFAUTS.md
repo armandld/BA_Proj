@@ -47,7 +47,22 @@ conclusion.
 | **gelés** volontairement | 2 |
 
 *(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **16** au 21 août
-(nuit, Vigil) — **D-181 est entré** : `bisect_threshold_for_budget`
+(nuit, Vigil) — **une seconde collision de numérotation trouvée, même forme
+que D-132 : « D-50 » désigne DEUX défauts sans rapport.** En examinant la
+file ouverte de `COUVERTURE.md` (`src/analyze_hyperparams.py --full`), le
+fichier lui-même porte un commentaire citant « D-50 » pour son propre
+scope de `try/except` (`main()`, ligne ~967) — et `docs/RESULTS.md`
+contient bien un « D-50 » clos et daté sur exactement ce sujet
+(`analyze_hyperparams` : l'échec accusait Neon, code 0, corrigé). Mais
+`docs/DEFAUTS.md` porte **déjà** un « D-50 » ouvert, sans rapport : « le
+verdict imprimé de T11b bascule d'une exécution à l'autre » (QAOA warm
+start, ci-dessous). Comme pour D-132, **aucun des deux ne se renumérote
+par une passe seule** — c'est une décision, pas une correction, et je ne
+la prends pas : laissé à USER, écrit ici pour qu'une future lecture de
+« D-50 » vérifie d'abord DANS QUEL FICHIER avant de citer un nombre. Ne
+compte pas dans le total ci-dessus (ni +1 ni −1 : les deux D-50 existaient
+déjà, seule la collision est nouvellement remarquée). — **D-181 est
+entré** : `bisect_threshold_for_budget`
 (`closed_loop_budget_matched.py`, T15b) pique une entrée `NaN` de sa trace
 comme « meilleure » via `min(trace, key=…)` si la toute première évaluation
 (bord bas de la fourchette) échoue — latent dans les 4 artefacts publiés
