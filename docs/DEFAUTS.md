@@ -43,10 +43,17 @@ conclusion.
 
 | | |
 |---|---|
-| **ouverts** — décision ou campagne requise | **15** |
+| **ouverts** — décision ou campagne requise | **16** |
 | **gelés** volontairement | 2 |
 
-*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **15** au 20 août
+*(compté, pas estimé : `grep -c '^## D-' docs/DEFAUTS.md` → **16** au 21 août
+(nuit, Vigil) — **D-181 est entré** : `bisect_threshold_for_budget`
+(`closed_loop_budget_matched.py`, T15b) pique une entrée `NaN` de sa trace
+comme « meilleure » via `min(trace, key=…)` si la toute première évaluation
+(bord bas de la fourchette) échoue — latent dans les 4 artefacts publiés
+aujourd'hui (aucun n'a de `NaN`), mais T15b nourrit T19/T20/T23 et
+`pareto_frontier.py` par la suite, et le gel empêche de le corriger tant que
+la campagne tourne. Avant lui, **15** au 20 août
 (nuit, Vigil) — **D-51 est ROUVERT** : sa fermeture annonçait que `study/`
 construit le même hamiltonien que le déploiement, et le drapeau qui devait
 l'assurer est mesuré sans effet (opérateur identique bit à bit). Avant lui,
@@ -2040,3 +2047,98 @@ découverte isolée, c'est un fait déjà écrit qui n'avait pas traversé jusqu
 `D-165`, où le contraire avait été affirmé sans le vérifier contre
 `RESULTS.md`. Rien de plus à corriger ici — seulement le lien, pour que la
 prochaine relecture de `state_vector` ne reparte pas de zéro.
+
+---
+
+## D-181 — la bissection à budget apparié pique un `NaN` comme « meilleure » évaluation si le bord bas échoue
+
+**Rapport seul. Rien n'est corrigé** — la correction touche
+`study/closed_loop/closed_loop_budget_matched.py`, gelé pendant la
+campagne (`armandld/BA_Proj#2`, 17 août).
+
+**Où ça bloque.** `bisect_threshold_for_budget` cherche par bissection le
+seuil classique qui reproduit le `patch_ratio` de Q-HAS (T15b). Sa
+dernière ligne :
+
+```python
+best = min(trace, key=lambda r: abs(r["patch_ratio"] - target_patch))
+```
+
+Les comparaisons flottantes avec `NaN` sont **toujours fausses** en
+Python : `x < nan` et `nan < x` valent `False` quel que soit `x`. `min()`
+part du premier élément du trace et ne le remplace que sur une
+comparaison strictement vraie. Le premier élément est **toujours**
+`_eval(lo)` — la première évaluation, au bord bas de la fourchette
+(`lo=0.05` par défaut). Si `run_arm` y échoue (solveur divergent) et
+rend un `patch_ratio` `NaN`, ce candidat reste « meilleur » **jusqu'à la
+fin**, quel que soit le nombre d'itérations de bissection qui suivent et
+aussi près de la cible que leur résultat tombe.
+
+**Comment on est tombé dessus.** Question 5 de `VIGIL.md` — la file
+ouverte de `COUVERTURE.md`, item `closed_loop_budget_matched.py
+--max-iter`, `scripts=1`, jamais exercé par un test. Question 4 en le
+lisant en entier : le contrat de `bisect_threshold_for_budget` (« retourne
+l'évaluation la plus proche de la cible ») et son implémentation
+(`min()` + `NaN`) ne coïncident plus dès qu'une évaluation échoue.
+
+**Ce qui est établi — mesuré, pas supposé.** `run_arm` remplacé par un
+double, patch_ratio décroissant en seuil sauf au bord bas où il rend
+`NaN` :
+
+| | trace complète | `best` rendu |
+|---|---|---|
+| bissection normale (4 itérations, `tol=0,02`) | une entrée à `patch=0,505` (écart 0,005 à la cible 0,5) existe dans le trace | **l'entrée `NaN` du bord bas** (`thr=0,05`), écart `NaN` |
+
+`delta_phys_matched = rec['qhas']['phys_score'] - best['phys_score']`
+devient `NaN` — silencieusement : le seul garde existant (`[warn] target
+budget outside the bracket`) porte sur les deux **premières** évaluations
+seules et ne revoit rien après. La phrase `READING` imprimée par
+`main()` teste `d_phys < -0.01` : `NaN` comparé à quoi que ce soit vaut
+`False`, donc la branche *« at equal compute the classical arm recovers
+the fidelity »* s'imprime **comme si la comparaison avait réussi**, sans
+jamais mentionner `NaN`. C'est la forme exacte que `VIGIL.md` vise — une
+valeur finale plausible, un texte de conclusion assertif, aucun crash.
+
+**Ce qui n'est pas en cause : les 4 artefacts publiés aujourd'hui.**
+Vérifié directement sur `results/t15b_budget_matched_{ot,kh,rotor,
+tearing}.json` : **aucune** trace n'y contient de `patch_ratio` `NaN`,
+et dans chaque cas `matched_classical` est bien l'entrée du trace la plus
+proche de `target_patch` (recalculé indépendamment, `min()` sur les
+entrées finies). Le défaut est **latent**, pas manifesté — mais ces
+quatre artefacts sont la référence « budget-matched » citée à travers
+T15b, T19, T20, T23 et `figures/pareto_frontier.py` dans `RESULTS.md`
+(ratios 1,30×/1,90×/2,74×/1,81×, D-92). Un futur re-run — la campagne
+tourne activement sur une autre branche au moment de cette passe — qui
+rencontre une seule évaluation solveur divergente au bord bas produirait
+un artefact publié corrompu sans le moindre avertissement visible au-delà
+d'un champ `NaN` qu'aucun code en aval (mesuré : `figures/
+pareto_frontier.py`, D-92 déjà cité) ne semble filtrer explicitement.
+
+**Une seconde observation, mesurée, non numérotée séparément — même
+fichier.** Le fold `tearing` publié montre `patch_ratio` strictement
+identique (`0,625`, bit à bit, `phys_score` compris) sur **quatre**
+seuils très différents (`0,425`, `0,2375`, `0,14375`, `0,09688`) — un
+plateau réel du bras classique sur ce fold, pas un artefact de bissection
+(vérifié : `lo`/`hi` se resserrent normalement, chaque `mid` est bien
+évalué). La bissection épuise ses 4 itérations sans jamais approcher la
+cible à `tol` près (écart final `0,144`, sept fois la tolérance), et rien
+ne le signale au-delà du champ `budget mismatch remaining` lui-même —
+correctement rapporté, à la différence du cas `NaN` ci-dessus. Pas un
+défaut : la valeur écrite est honnête, juste éloignée de la cible. Écrit
+ici parce que c'est le même fichier et le même mécanisme de sortie
+silencieuse au-delà d'un seul contrôle de bracket initial.
+
+**Où on en est.** Deux directions possibles, à trancher, aucune
+appliquée :
+
+1. **Filtrer les `NaN` avant `min()`** — `min((r for r in trace if
+   np.isfinite(r["patch_ratio"])), key=…)`, et lever si aucune évaluation
+   n'est finie. Corrige le défaut `NaN` sans toucher au plateau `tearing`.
+2. **Avertir explicitement sur non-convergence** — comparer l'écart final
+   à `tol` après la boucle, pas seulement le bracket initial, et l'écrire
+   dans l'artefact (`converged: bool`). Couvre les deux observations à la
+   fois, coût plus élevé.
+
+```bash
+pytest tests/study/test_bisect_budget_matched_nan_min.py -q   # 2 passed, épingle le défaut NaN actuel
+```
