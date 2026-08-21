@@ -115,12 +115,24 @@ H3**. Le pari de départ est que le quantique optimise mieux le combinatoire ;
 H0b montre que mieux optimiser n'améliore pas la tâche. C'est la valeur de
 l'optimisation qui est attaquée — précisément ce qu'on paierait en qubits.
 
-Sur H3, l'énoncé défendable est **économique**, pas un argument d'inutilité.
-La courbe de cône a désormais son premier artefact (`dim = 8`, → `RESULTS.md`)
-et va dans ce sens : gain faible en distribution, aucun sous transfert. Deux
-choses manquent encore pour que la clause « décroît quand on affine » soit
-mesurée et non postulée — le balayage en `dim`, et l'explication du pli
-`harris_tearing`, mort à tous les k :
+Sur H3, l'énoncé **doit être réécrit** : la courbe de cône a maintenant deux
+artefacts (`dim = 8` et `dim = 16`, → `RESULTS.md`) et ils vont **contre** la
+formulation ci-dessous.
+
+- Le cône **n'est pas plat** : écarts par saut +0,123 / −0,076 / +0,100 à
+  `dim = 16`, contre un seuil de retrait pré-enregistré de 0,01.
+- Hors pli dégénéré, à la seule taille où les quatre k sont des voisinages,
+  un saut fait passer de 0,429 à 0,593 et le cône **dépasse** le classique.
+- Le gain **croît** de `dim = 8` à `dim = 16` — la clause « décroît quand on
+  affine » est contredite par les deux seuls points mesurés.
+
+Ce qui borne cette lecture : `harris_tearing` rend 0,000 à tous les k, et la
+conclusion change de signe selon qu'on compte ce pli ou non. Rien n'est
+tranché tant qu'il n'est pas expliqué.
+
+**Conséquence de structure** : la fermeture ne peut pas reposer sur H3. Elle
+repose sur **H0b**, qui n'en dépend pas. L'ancienne formulation, conservée
+ici pour mémoire et à ne plus citer telle quelle :
 
 > Le gain apporté par l'information des voisins est réel mais petit, il
 > décroît quand on affine la grille, et il ne justifie pas le coût d'un

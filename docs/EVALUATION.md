@@ -53,19 +53,32 @@ d'aucune campagne.
 
 ## A bis — Ce qui vient d'entrer en A
 
-**La courbe de cône d'information, `dim = 8`.** Premier artefact
-(`t1b_cone_curve_N96_dim8.npz`, git `1dd3ce2`), déterministe — deux
-exécutions rendent les 19 clés sans écart. Elle passe en A parce qu'elle est
-reproductible par une commande, mesurée sur le code actuel, et entourée par
+**La courbe de cône d'information, `dim = 8` et `dim = 16`.** Deux artefacts
+(`t1b_cone_curve_N96_dim{8,16}.npz`, git `ef5f0a4`), déterministes.
+Reproductibles par une commande, mesurés sur le code actuel, entourés par
 `tests/study/test_t1b_cone_curve.py`.
 
-**Ce qui est exploitable** : la courbe elle-même, ses `n_distinct` (la
-saturation de D-88 est visible dans l'artefact), et le constat qualitatif —
-gain faible en distribution, aucun sous transfert.
+**Exploitable** : les courbes, leurs `n_distinct`, et la table de couverture
+du carré de Chebyshev par taille — `dim = 16` est la première où les quatre
+k sont des voisinages (k=3 y couvre 19 % de la grille, contre 77 % à
+`dim = 8` et 100 % à `dim = 4`).
 
-**Ce qui ne l'est pas, et reste en C** : la *moyenne* LOSO, tant que le pli
-`harris_tearing` rend 0,000 à tous les k sans explication ; et le +0,122 du
-k=3, dont le refit plafonné rend 0,392. Un pli dégénéré ne vote pas.
+**Exploitable aussi, et c'est le fait qui compte** : le cône **n'est pas
+plat**. Écarts par saut à `dim = 16` : +0,123 / −0,076 / +0,100, contre le
+seuil de retrait pré-enregistré de 0,01.
+
+**NON exploitable, et cela borne tout le reste** : la *moyenne* LOSO, dans un
+sens comme dans l'autre. `harris_tearing` rend 0,000 à tous les k et aux deux
+tailles — pli dégénéré au sens du protocole §1.3 B3. Avec ce pli, le cône
+reste sous le classique ; sans lui, il le dépasse (0,625 contre 0,444 à
+`dim = 16`). **La conclusion change de signe selon qu'on le compte ou non**,
+et rien ne tranche tant que le pli n'est pas expliqué : le classique y rend
+0,976 pendant que le GBT s'effondre.
+
+**Rétractation.** Une première lecture, publiée puis retirée le 21 août,
+annonçait « gain faible, aucun sous transfert ». Elle venait de deux
+paramètres non justifiés — 8 instantanés sur 20 disponibles, et `dim = 8` où
+k=3 n'est plus un voisinage. → `RESULTS.md`.
 
 ---
 

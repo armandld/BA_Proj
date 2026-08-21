@@ -7285,92 +7285,107 @@ consigné.
 
 ---
 
-# La courbe de cône a enfin un artefact — H3 cesse d'être une jambe vide
+# La courbe de cône : deux artefacts, et une conclusion qui s'inverse avec `dim`
 
-D-88 notait que `results/` ne contenait **aucun** `t1b_cone_curve_*.npz` et
-que `main()` n'avait jamais tourné, faute d'artefacts DNS. La mesure qui
-soutient ou réfute H3 — *l'information des voisins apporte-t-elle quelque
-chose ?* — n'existait donc pas.
+D-88 notait que `results/` ne contenait **aucun** `t1b_cone_curve_*.npz`. La
+mesure qui décide de H3 — *l'information des voisins apporte-t-elle quelque
+chose ?* — n'existait pas. Elle existe, à deux tailles.
 
 ```bash
+python study/pipeline/hard_patch_labels.py --dim 16 --N 96      # patches manquants
 cd study/h2b_prediction
-python h2b_neighbour_cone_curve.py --dim 8 --N 96 --max-snaps 8 --seed 0
+python h2b_neighbour_cone_curve.py --dim  8 --N 96 --max-snaps 20 --seed 0
+python h2b_neighbour_cone_curve.py --dim 16 --N 96 --max-snaps 20 --seed 0
 ```
 
-git `1dd3ce2`. **Déterministe** : deux exécutions identiques rendent les 19
-clés de l'artefact sans un écart.
+git `ef5f0a4`. Déterministe (vérifié à `dim = 8` : 19 clés identiques sur
+deux exécutions).
 
-## Pourquoi `dim = 8` et pas `dim = 4`
+## ⚠️ Rétractation d'une première lecture, publiée le 21 août
 
-D-88 : sur une grille périodique de côté 4, `k = 2` couvre déjà les quatre
-résidus de chaque axe, donc la grille entière — k=2 et k=3 y rendent les
-mêmes 144 colonnes. **À `dim = 4` la courbe ne compare pas deux voisinages.**
-À `dim = 8`, `2k+1 ≤ 7 < 8` pour tout k ≤ 3 : `n_distinct == n_feats` aux
-quatre k, aucune saturation. C'est la première taille où la question a un
-sens, et l'artefact le porte dans ses clés.
+Une version antérieure de cette section annonçait *« gain faible en
+distribution (+0,053), aucun sous transfert »* et concluait que la courbe
+allait dans le sens de l'énoncé économique. **Les deux moitiés sont
+retirées.** Deux choix de paramètres, non justifiés, la produisaient :
 
-## Split bloqué (en distribution)
+| choix | ce qu'il faussait |
+|---|---|
+| `--max-snaps 8` alors que **20** étaient disponibles | sous-échantillonnage. Le `[FLAG n_tr/F<20]` sur k=2 et k=3 était **fabriqué par ce choix**, pas une propriété des données : à 20 instantanés, `n_tr/F` vaut 34,8 à k=3. Le gain du premier saut passe de **+0,006 à +0,099** en distribution |
+| `--dim 8` | à cette taille **k=3 couvre 76,6 % de la grille**. Ce n'est plus un voisinage. D-88 n'attrape que les colonnes dupliquées à l'identique, pas le fait que le voisinage ait avalé le domaine |
 
-Prévalence val 0,263 ; plancher « tout raffiner » F1 = 0,417.
+**La couverture du carré de Chebyshev, par taille** — la table qui manquait :
 
-| k | n_feats | n_tr/F | F1 | δ/saut |
+| dim | k=0 | k=1 | k=2 | k=3 |
 |---|---|---|---|---|
-| classique | — | — | 0,592 | — |
-| 0 | 9 | 455 | 0,708 | — |
-| 1 | 45 | 91 | 0,714 | +0,006 |
-| 2 | 225 | 18,2 | 0,761 | +0,047 [FLAG] |
-| 3 | 441 | 9,3 | 0,748 | −0,013 [FLAG] |
+| 4 | 6,2 % | 56,2 % | **100 %** | **100 %** |
+| 8 | 1,6 % | 14,1 % | 39,1 % | **76,6 %** |
+| 16 | 0,4 % | 3,5 % | 9,8 % | 19,1 % |
+| 32 | 0,1 % | 0,9 % | 2,4 % | 4,8 % |
 
-## LOSO (transfert)
+`dim = 16` est la **première taille où les quatre k sont des voisinages**.
 
-Prévalence par pli 0,250 ; plancher « tout raffiner » F1 = 0,400.
+## Le résultat, aux deux tailles, 20 instantanés
 
-| k | orszag | harris | kh | rotor | moyenne | δ/saut |
-|---|---|---|---|---|---|---|
-| classique | 0,286 | 0,667 | 0,449 | 0,146 | **0,387** | — |
-| 0 | 0,312 | **0,000** | 0,403 | 0,345 | 0,265 | — |
-| 1 | 0,319 | **0,000** | 0,403 | 0,295 | 0,254 | −0,010 |
-| 2 | 0,319 | **0,000** | 0,238 | 0,397 | 0,239 | −0,016 |
-| 3 | 0,311 | **0,000** | 0,506 | 0,625 | 0,360 | +0,122 [FLAG] |
+Moyennes LOSO. `harris_tearing` rend **0,000 à tous les k, aux deux
+tailles** : le modèle n'y prédit aucun positif. C'est un pli **dégénéré** au
+sens du protocole §1.3 B3, et un prédicteur dégénéré ne vote pas. Les deux
+colonnes sont données, parce que la conclusion en dépend.
 
-## Ce que ça dit, et ce que ça ne dit pas
+| | dim=8 (k=3 = 77 %) | | dim=16 (k=3 = 19 %) | |
+|---|---|---|---|---|
+| | 4 plis | hors pli mort | 4 plis | hors pli mort |
+| classique | 0,443 | 0,369 | 0,577 | 0,444 |
+| k=0 | 0,245 | 0,327 | 0,322 | **0,429** |
+| k=1 | 0,250 | 0,333 | 0,445 | **0,593** |
+| k=2 | 0,168 | 0,223 | 0,369 | 0,491 |
+| k=3 | 0,261 | 0,349 | 0,469 | **0,625** |
 
-**En distribution, le cône apporte quelque chose** : +0,053 de k=0 à k=2.
-C'est réel et c'est petit.
+## Ce que ça dit — et c'est l'inverse de ce qui était écrit
 
-**Sous transfert, il n'apporte rien** : les deux premiers sauts sont
-négatifs, et la moyenne LOSO reste sous le classique aux quatre k.
+**Le cône n'est pas plat.** La règle de décision pré-enregistrée du module
+est explicite : *« flat : every |delta| ≤ 0.01 → cone retired »*. Les écarts
+par saut valent **+0,123 / −0,076 / +0,100** à `dim = 16`. Par sa propre
+règle, **le cône n'est pas retiré.**
 
-**Quatre réserves, qui interdisent d'en faire un verdict :**
+**À la taille la mieux posée, l'information des voisins aide beaucoup.**
+Hors pli mort, à `dim = 16`, un seul saut fait passer de 0,429 à **0,593**
+(+0,164), et le meilleur k rend **0,625 contre 0,444** pour le classique.
 
-1. **`harris_tearing` vaut 0,000 à tous les k.** Ce pli est mort, pas
-   informatif, et il tire la moyenne. Tant qu'il n'est pas expliqué, la
-   moyenne LOSO n'est pas une grandeur à citer.
-2. **Le +0,122 de k=3 est un artefact de comptage** : `n_tr/F` = 13,9,
-   sous le garde-fou de 20, et le refit plafonné à √F rend **0,392** — le
-   gain s'évapore. Le garde fait son travail ; le nombre non plafonné ne se
-   cite pas.
-3. **Un seul point** : une graine, un N, un `dim`. La clause du plan —
-   *« le gain décroît quand on affine la grille »* — demande le balayage en
-   `dim`, qui n'est pas fait.
-4. Le critère d'acceptation du module attend `0,215 ± 0,001` (valeur publiée
-   à `dim = 4`, N = 256) et mesure **0,254** ici : les deux ne portent pas
-   sur la même configuration, ce n'est pas un échec du module.
+**Et le gain CROÎT quand on affine.** De `dim = 8` à `dim = 16`, hors pli
+mort, le gain du premier saut passe de +0,006 à **+0,164**. C'est la
+**direction opposée** à la clause de `PLAN_PREPRINT` §7 — *« le gain décroît
+quand on affine la grille »*. Cette clause n'est pas soutenue par ces deux
+points ; elle est contredite.
 
-**Formulation défendable en l'état** : *le cône d'information apporte un gain
-faible en distribution et aucun gain mesurable sous transfert, à `dim = 8`,
-N = 96, une graine.* C'est l'énoncé **économique** de `PLAN_PREPRINT` §7, pas
-un argument d'inutilité — et surtout pas « l'AMR est locale », que le
-protocole §0.3 interdit de conclure depuis un apprenant ERM.
+## Ce qui empêche d'en faire un verdict
 
-## Ce qui manque encore à `study/`
+1. **Tout dépend du pli mort.** Avec les quatre plis, le cône reste sous le
+   classique aux deux tailles (0,469 contre 0,577 à `dim = 16`). Hors pli
+   mort il le dépasse. Tant que `harris_tearing` n'est pas expliqué — le
+   classique y rend 0,976 pendant que le GBT s'effondre à 0,000, une
+   asymétrie qui demande sa propre mesure — la moyenne n'est pas citable
+   dans un sens ni dans l'autre.
+2. **La courbe n'est pas monotone** (+0,123, −0,076, +0,100) : aucune pente
+   ne se cite. Le creux à k=2 se reproduit aux deux tailles, il n'est pas du
+   bruit et il n'est pas expliqué.
+3. **Deux points en `dim`, une graine, un N.** Une direction lue sur deux
+   points n'est pas une tendance.
+4. **Un biais de construction qui borne toute lecture** : les 8 features
+   autres que `score_vqa` sont calculées sur les champs **moyennés par
+   blocs**, alors que le label est la variance **intra-patch** que ce
+   moyennage supprime. Ajouter des voisins de moyennes de patch ne peut pas
+   restituer une variance sous-patch. Une courbe plate serait donc en partie
+   garantie par la construction — ce qui rend d'autant plus notable qu'elle
+   ne le soit pas.
 
-| artefact | état | ce qu'il bloque |
-|---|---|---|
-| `t1b_cone_curve_*` | **1 fichier** (`N96_dim8`) | le balayage en `dim` reste à faire |
-| `d_patches_*` | **0 fichier** | la vérité terrain **dynamique** du protocole §1.2 — jamais calculée |
+## Conséquence pour le manuscrit
 
-`d_patches_*` est l'autre jambe absente : tant qu'elle manque, le label reste
-l'écart-type intra-patch, une statistique **statique**, alors que le
-protocole prévoit l'erreur d'évolution `d_i(t; δt)`. La commande existe
-(`h2b_dynamic_ground_truth.py`, pilote obligatoire par défaut).
+L'énoncé *« l'information des voisins ne sert à rien »* n'est pas soutenu :
+il est **contredit** à la seule taille où la question est bien posée. Et
+l'énoncé économique de `PLAN_PREPRINT` §7 doit être **réécrit** : sa clause
+« décroît quand on affine » va contre la mesure.
+
+Ce qui reste vrai et défendable : le cône ne suffit pas à porter la
+fermeture de l'approche. C'est **H0b** qui la porte — mieux résoudre
+l'hamiltonien dégrade la décision — et H0b ne dépend ni de la localité ni de
+ce résultat.
