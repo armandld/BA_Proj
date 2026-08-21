@@ -7530,3 +7530,101 @@ plancher **ne pouvait pas échouer** — baisser un seuil déjà satisfait ne fa
 rien tomber. Le balayage prend désormais son répertoire en paramètre, et un
 test lui donne un dossier vide pour vérifier que le plancher se déclenche.
 Un plancher qu'on ne peut pas faire tomber n'est pas un garde.
+
+---
+
+# Le zéro de `harris_tearing` n'est pas physique : c'est un seuil transféré
+
+Demandé par USER : *« réinvestigue sur harris tearing, le zéro bizarre »*.
+Le paradoxe posé était réel — le score classique rend **0,976** sur ce pli
+pendant que le GBT, qui a ce même score comme feature #0, rend **0,000**.
+
+## Mesuré (LOSO, `dim = 16`, N = 96, 20 instantanés)
+
+```
+probabilités du GBT sur harris   min/méd/max = 0,0000 / 0,0025 / 0,1243
+seuil ajusté sur les 3 autres    = 0,4000
+-> positifs prédits : 0 / 20 480   ->  F1 = 0,000
+```
+
+**Aucune probabilité n'atteint le seuil.** Le zéro est arithmétique, pas
+physique. Ce que la même sortie dit quand on retire le seuil :
+
+| grandeur | valeur |
+|---|---|
+| F1 au seuil transféré | **0,000** |
+| **AUC (classement, sans seuil)** | **0,908** |
+| **F1 à budget apparié** (5 120 patches) | **0,659** |
+
+Le classement est bon. C'est l'**opérateur de décision** qui ne traverse pas
+la frontière de scénario — les distributions de probabilité des scénarios
+d'entraînement et de harris ne se recouvrent pas.
+
+## Un second fait, qui n'était pas cherché
+
+AUC du **score classique seul** contre le label, par scénario :
+
+| scénario | AUC | taux positif |
+|---|---|---|
+| orszag_tang | 0,592 | 0,157 |
+| harris_tearing | **1,000** | 0,250 |
+| kelvin_helmholtz | **0,997** | 0,250 |
+| mhd_rotor | **0,948** | 0,205 |
+
+Sur trois scénarios sur quatre, le label est **presque une fonction
+déterministe du score classique**. C'est cohérent avec sa définition — la
+variance intra-patch et un détecteur de gradient agrégé par block-max
+désignent la même structure sur une nappe de courant — mais cela veut dire
+que la tâche y est quasi gratuite. Un plafond de 1,000 laisse peu de place à
+une méthode qui prétendrait faire mieux, et un écart mesuré contre une
+baseline parfaite ne mesure pas ce qu'on croit. À verser au dossier de la
+spécification de la tâche (H5).
+
+## Ce qui est corrigé
+
+Le protocole §1.3-B3 traite déjà « prédiction constante » comme dégénéré, et
+`metrics.degeneracy_flag` l'implémente — mais il rend le **même** verdict
+qu'il y ait du signal ou non. C'est cette confusion qui a fait lire harris
+comme un pli mort, dans deux versions de ce document.
+
+`metrics.threshold_transfer_flag(gt, proba, seuil)` sépare désormais :
+
+| verdict | condition | ce qu'il faut citer |
+|---|---|---|
+| `ok` | prédiction non constante | le F1 |
+| `aucun_signal` | constante **et** AUC < 0,70 | rien : la méthode n'ordonne pas |
+| `seuil_non_transfere` | constante **et** AUC ≥ 0,70 | le **F1 à budget apparié**, jamais le F1 au seuil |
+
+`seuil_non_transfere` **n'est pas un résultat sur la tâche** : c'est un
+défaut de l'opérateur de mesure.
+
+## Vérification
+
+```bash
+python -m pytest tests/study/test_seuil_non_transfere_vs_absence_de_signal.py -q
+```
+
+**8 tests** (7 rapides + 1 `slow` qui rejoue le pli harris réel et exige le
+verdict `seuil_non_transfere`, l'AUC > 0,80 et `proba_max < seuil`). Ce
+dernier échoue le jour où l'AUC tombe — harris serait alors un **vrai** pli
+mort, et la lecture changerait.
+
+Les cas de test sont choisis pour **séparer** : mêmes probabilités basses,
+une fois avec classement, une fois sans. Un test vérifie explicitement que
+`degeneracy_flag` seul rend le même verdict sur les deux — c'est la
+confusion qu'on corrige.
+
+**Mutations** :
+
+| mutation | effet |
+|---|---|
+| le verdict ignore l'AUC (retour à §1.3-B3 seul) | 2 failed |
+| le plancher d'AUC mis à 0 | 2 failed |
+| la détection de dégénérescence neutralisée | 5 failed |
+
+## Conséquence sur ce qui a été écrit
+
+Les moyennes LOSO de la courbe de cône, publiées plus haut avec la mention
+« pli mort », doivent être relues : `harris_tearing` n'est pas mort, il est
+**mal seuillé**. La colonne « hors pli mort » de cette table reste la bonne à
+lire, mais pour une raison différente de celle qui y était donnée.
