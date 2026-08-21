@@ -105,6 +105,33 @@ Ce fait a sa place dans la section : il montre qu'un coefficient peut être
 *bien formé, borné, adimensionnel* et pourtant ne mesurer qu'une moitié de ce
 qu'il annonce — et que seule une mesure sur les champs réels le révèle.
 
+### La spécification de la tâche — H5, et ce qu'une vérité terrain dynamique en dit
+
+Le label de la phase 2, `e_i`, est l'écart intra-patch à la moyenne : une
+mesure de non-lissité, instantanée et confinée au patch. Ce n'est pas ce que
+l'AMR cherche à contrôler, et l'AUC du score classique seul contre `e_i` —
+**1,000** (harris), **0,997** (KH), **0,948** (rotor), 0,592 (OT) — dit que
+sur trois scénarios sur quatre la tâche est quasi gratuite.
+
+La vérité terrain **dynamique** `d_i` du protocole §1.2 existe désormais, et
+sa mesure appartient au manuscrit :
+
+- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,990 sur les
+  quatre scénarios** : le label dynamique est une renumérotation monotone du
+  statique, et le contrôle d'acceptation du protocole (« Spearman > 0 ») le
+  laisse passer ;
+- la raison est physique et se calcule : à cet horizon la perturbation
+  parcourt **0,11 à 0,25** d'une largeur de patch — il n'y a rien à propager ;
+- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,714) — le seul
+  dont la perturbation **amplifie** (1,41×), et le seul où la tâche statique
+  n'était pas déjà résolue.
+
+Ce que la section doit dire : **changer de label ne suffit pas à réparer la
+spécification de la tâche.** Là où la tâche était triviale, elle le reste ;
+elle ne cesse de l'être que là où l'écoulement est turbulent. C'est une
+contrainte sur ce que ce corpus peut établir, et elle se dit avant les
+résultats, pas après.
+
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 
 Features locales contre features en cône, le protocole d'entraînement, et le

@@ -227,6 +227,19 @@ ce qu'il résout ne va pas dans le sens de Q-HAS. Une configuration ne fait pas
 un verdict — mais elle interdit de présenter le basculement comme une bonne
 nouvelle pour l'hypothèse.
 
+**La vérité terrain dynamique, et ce qu'elle vaut.** `d_patches_*` existe
+désormais (4 scénarios × 2 horizons, N=96, dim=8). Le résultat est une mesure
+sur les champs réels, reproductible par une commande, et il est **négatif au
+sens utile** : à l'horizon du protocole, ρ(d, e) ≥ 0,990 — le label dynamique
+ne répare pas H5. Cela ne se range dans aucun niveau A/B/C/D parce que ce
+n'est pas un résultat sur l'objet : c'est une mesure **sur le protocole
+lui-même**, qui invalide son critère d'acceptation (« Spearman > 0 ») et son
+horizon (δt = 0,1).
+
+Conséquence pratique : toute tâche du protocole qui devait consommer `d_i`
+comme label alternatif doit d'abord fixer l'horizon sur `t_x`, le temps de
+traversée d'un patch. Sans quoi elle mesurerait deux fois la même chose.
+
 Ce que tout ceci autorise : poser proprement la question « un hamiltonien dont
 les deux structures pèsent également décide-t-il mieux ? ». **Cette question
 est ouverte, et seule une campagne peut y répondre** — les mesures d'avant

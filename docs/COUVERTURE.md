@@ -3990,6 +3990,53 @@ donc non couvert tant que la campagne n'a pas tourné (D-186).
 
 ---
 
+## Passe du 21 août (suite) — `study/pipeline/dynamic_patch_labels.py`, module neuf
+
+Premier module écrit pour la tâche 6 du protocole. Ce qu'il couvre, et par
+quel moyen :
+
+| ce qui est vérifié | comment |
+|---|---|
+| le grossissement et la normalisation | **identité analytique** `d0 = e / dim`, à `rtol=1e-12`, dim ∈ {2,4,8} — sans passer par le solveur |
+| que cette identité peut tomber | même calcul avec la **médiane** au lieu de la moyenne : elle tombe |
+| que la variante ne touche que son patch | égalité stricte hors fenêtre, moyenne dedans |
+| le refus de `p = 1` | `ValueError`, même famille que `test_label_degenere_quand_le_patch_est_trop_petit` |
+| le gel de la séquence de pas | atterrissage exact sur l'horizon, déterminisme du rejeu, **et** un champ où référence et variante divergent réellement |
+| que le gel serve à quelque chose | mesure sur les vrais champs : 100 % des patches divergent sur 3 scénarios sur 4 |
+| que le label ne soit pas une redite | ρ(d, e) épinglé aux deux horizons, avec le champ qui les sépare |
+| la traçabilité | `git_hash` et `argv` présents dans le `.npz` |
+| la déviation de format assumée | `l2_errors` de l'artefact recalculé indépendamment : c'est bien le label **statique** |
+| deux horizons ne s'écrasent pas | `main` appelé deux fois, fichiers comptés |
+
+**Un test à moi qui n'a pas pu réussir, et l'a dit.** Le test du gel de la
+séquence a échoué à la première exécution : sur un champ banal, grossir un
+patch ne déplace pas les maxima **globaux** que lit `adapt_dt`, donc les deux
+séquences coïncident. La première version aurait conclu que le gel est
+inutile. Elle avait tort — mesure sur les vrais champs : 100 % des patches
+divergent sur 3 scénarios sur 4, parce que c'est l'**évolution** qui déplace
+les maxima, pas le grossissement initial. Le champ d'essai place désormais
+l'extremum global dans le patch grossi, ce qui force le cas au pas zéro.
+
+**Un test tautologique, retiré.** La première version du test de nommage
+reconstruisait le nom de fichier dans le test lui-même au lieu d'appeler
+`main` : elle ne lisait pas le code testé et ne pouvait donc pas échouer.
+Elle compte maintenant les fichiers réellement écrits par deux appels.
+
+### Ce que ce module ne couvre pas
+
+- **Un seul Re (400) et une seule résolution (N=96).** Le protocole demande
+  un pilote ; la projection de coût vers N=256 est calculée (× 19) mais pas
+  vérifiée.
+- **Aucun consommateur ne lit encore `d_errors`.** Le label existe, aucune
+  tâche du protocole ne le consomme : brancher les tâches 7 et suivantes
+  dessus reste à faire, et demande d'abord de fixer l'horizon sur `t_x`.
+- **Le choix « le patch grossi est remplacé par sa moyenne »** reproduit la
+  définition de la phase 2, donc les deux labels sont comparables. Un vrai
+  AMR ferait une restriction/prolongation d'ordre supérieur : l'écart entre
+  les deux n'est pas mesuré.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

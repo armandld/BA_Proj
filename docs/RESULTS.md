@@ -8151,3 +8151,158 @@ Un test `@pytest.mark.slow` rejoue le fait sur les vrais artefacts DNS et
 rougit le jour où les scénarios du dépôt cessent d'être dominés par une seule
 structure — auquel cas la justification du changement tombe et il faut la
 réécrire, pas retoucher le seuil.
+
+---
+
+# Vérité terrain dynamique : elle existe, et elle dit que l'horizon du protocole est trop court
+
+Protocole v3 §1.2, tâche 6 — le seul « heavy new code » du protocole, et le
+seul artefact qu'aucune campagne n'avait jamais produit : `d_patches_*`
+comptait **0 fichier**.
+
+## Ce que le label calcule
+
+Pour un instantané `t` et un patch `i` : le champ de référence évolué de
+`δt`, contre le même champ où **le patch `i` seul** a été remplacé par sa
+moyenne, évolué de `δt` avec **la même séquence de pas**. `d_i` est la
+distance L2 entre les deux, **sur le champ entier** — c'est tout l'intérêt :
+`e_i` est confiné au patch, `d_i` compte ce que l'erreur abîme ailleurs.
+
+## Le gel de la séquence de pas n'est pas une précaution théorique
+
+`dns_sweep.py` appelle `adapt_dt()` à chaque pas. Si chaque variante adaptait
+la sienne, `d_i` compterait un écart de **pas de temps** comme de la
+physique. Mesuré (N=96, Re=400, δt=0,05) — fraction des patches dont la
+variante adapterait une séquence différente :
+
+| scénario | dim=4 | dim=8 |
+|---|---|---|
+| `harris_tearing` | 0 / 16 | 0 / 64 |
+| `kelvin_helmholtz` | **16 / 16** | **64 / 64** |
+| `mhd_rotor` | **16 / 16** | **64 / 64** |
+| `orszag_tang` | **16 / 16** | **64 / 64** |
+
+Sur trois scénarios sur quatre, **chaque** patch divergerait. Le mécanisme
+n'est pas l'extremum initial — `adapt_dt` lit des maxima globaux, qu'un patch
+grossi ne déplace pas — mais l'évolution, qui les déplace dès le premier pas.
+
+## Le résultat : à l'horizon du protocole, `d` est une redite de `e`
+
+N=96, Re=400, `dim=8` (64 patches), 3 instantanés par scénario. ρ est le
+Spearman entre le label dynamique et le label statique ; l'amplification est
+`d_i / d0_i`, où `d0_i` est la perturbation **avant** toute évolution.
+
+| scénario | ρ(d,e) à δt=0,1 | ρ(d,e) à δt=2,0 | amplif. δt=2,0 (méd. / p90) |
+|---|---|---|---|
+| `harris_tearing` | **+1,0000** | **+1,0000** | 0,58 / 0,66 |
+| `kelvin_helmholtz` | +0,996 | +0,991 | 0,82 / 1,03 |
+| `mhd_rotor` | +0,995 | +0,985 | 0,61 / 1,49 |
+| `orszag_tang` | +0,990 | **+0,714** | **1,41 / 2,03** |
+| **moyenne** | **+0,9954** (min +0,9902) | +0,9230 (min +0,7143) | |
+
+**À `δt = 0,1` — la valeur que le protocole impose — ρ ≥ 0,990 sur les quatre
+scénarios.** Le label dynamique est une renumérotation monotone du label
+statique. Il ne répond donc **pas** au problème de spécification de tâche
+(H5) pour lequel il avait été demandé.
+
+Le contrôle d'acceptation du protocole, *« sanity check Spearman(d_i, e_i) >
+0 reported »*, est **satisfait** — et c'est exactement le problème : un
+contrôle qu'un label redondant passe haut la main ne contrôle rien.
+
+## Pourquoi, et ce n'est pas un accident numérique
+
+Deux mécanismes, tous deux mesurés.
+
+**1. La perturbation n'a pas quitté son patch.** Temps de traversée
+`t_x = (largeur du patch) / (v_rms + b_rms)`, à `dim = 8` :
+
+| scénario | v+b (rms) | `t_x` | ce que vaut δt=0,1 |
+|---|---|---|---|
+| `harris_tearing` | 0,893 | 0,880 | **0,11 t_x** |
+| `kelvin_helmholtz` | 1,062 | 0,739 | **0,14 t_x** |
+| `mhd_rotor` | 1,684 | 0,466 | **0,21 t_x** |
+| `orszag_tang` | 1,926 | 0,408 | **0,25 t_x** |
+
+À δt = 0,1 la perturbation parcourt **un dixième à un quart** d'une largeur de
+patch. Il n'y a rien à propager — donc rien que `d` puisse dire de plus que
+`e`. L'ordre des scénarios suit exactement celui des ρ : harris parcourt le
+moins (0,11 t_x) et rend ρ = 1,0000 **exactement**.
+
+**2. L'amplification est quasi constante d'un patch à l'autre.** Comme
+`d0_i = e_i / dim` exactement (identité démontrée et épinglée), si le facteur
+`d_i/d0_i` ne varie pas entre patches alors `d = constante × e` et ρ = 1 par
+construction. À δt=0,1, médiane 0,88 et p90 0,88–1,01 : la dispersion est
+nulle. **C'est la dispersion de l'amplification, pas sa valeur, qui décide si
+le label dit quelque chose.**
+
+## Ce qui décolle, et où
+
+Un seul scénario sort du lot à δt=2,0 : **`orszag_tang`**, ρ = 0,714, et le
+seul dont la perturbation **amplifie** (1,41 médian, 2,03 au p90) au lieu de
+décroître. C'est aussi le seul scénario où le label statique n'était **pas**
+quasi gratuit — AUC du score classique seul 0,592, contre 1,000 / 0,997 /
+0,948 pour les trois autres.
+
+Les deux faits se tiennent : **là où l'écoulement est assez turbulent pour
+propager et amplifier une perturbation, le label dynamique dit autre chose —
+et c'est précisément là que la tâche statique n'était pas déjà résolue.**
+
+## Ce que ça change pour le protocole
+
+**L'horizon δt = 0,1 (« one hybrid step ») est à réviser.** Le critère
+défendable n'est pas un nombre de pas hybrides mais une **échelle physique** :
+`δt ≳ t_x = 2π / (dim · (v+b)_rms)`, soit 0,41 à 0,88 à `dim = 8` et 0,82 à
+1,76 à `dim = 4`. C'est ce que la mesure à δt=2,0 confirme.
+
+Ce que ça **ne** dit pas : que le label dynamique sauve H5. Sur trois
+scénarios sur quatre il reste à ρ ≥ 0,985 même à δt=2,0. Le problème « la
+tâche est quasi gratuite » n'est levé que sur `orszag_tang`. Produire ce
+label était nécessaire — c'était le seul moyen de le savoir — mais il ne
+suffit pas.
+
+## Coût, mesuré
+
+N=96, `dim=8`, 65 évolutions par instantané :
+
+| scénario | δt=0,1 | δt=2,0 |
+|---|---|---|
+| `harris_tearing` | 3,1 s | 57 s |
+| `kelvin_helmholtz` | 5,4 s | 90 s |
+| `mhd_rotor` | 19 s | 258 s |
+| `orszag_tang` | 9,6 s | 208 s |
+
+Projection N=256 (échelle N³ : N² cellules × N pas) : **× 19**, soit ~1 à 80
+min par instantané selon le scénario et l'horizon. Le label est donc
+abordable à la résolution de production — ce que le protocole demandait de
+vérifier avant de lancer (« report wall-clock … and project the full cost
+before launching N=256 »).
+
+## Déviations au protocole, assumées
+
+| point | protocole | ici | pourquoi |
+|---|---|---|---|
+| chemin | `study/v3/t6_dynamic_gt.py` | `study/pipeline/dynamic_patch_labels.py` | le dépôt a été réorganisé ; `phase2_hard_patches.py` est aujourd'hui `pipeline/hard_patch_labels.py` |
+| pilote | N=128 | **N=96** | aucun artefact DNS N=128 dans le dépôt (N ∈ {64, 96, 256}) |
+| format | « drop-in » : le label dynamique sous la clé `l2_errors` | clés explicites `d_errors` / `d0_errors` ; `l2_errors` reste le label **statique** | un artefact de la forme phase 2 dont `l2_errors` désigne autre chose est la classe de défaut que `CODE_REVIEW.md` retient comme la seule qui compte |
+| nom | — | `δt` dans le nom du fichier | c'est le paramètre qui décide si le label dit quelque chose ; deux horizons partageant un nom s'écraseraient en silence |
+
+## Vérification
+
+```bash
+python study/pipeline/dynamic_patch_labels.py --scenario orszag_tang \
+    --re 400 --N 96 --dim 8 --snaps 5 --delta-t 2.0
+python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 16 passed, 3 deselected
+python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow
+```
+
+L'identité `d0 = e / dim` est vérifiée à `rtol=1e-12` pour dim ∈ {2, 4, 8} :
+elle teste le grossissement et la normalisation **sans passer par le
+solveur**, et aucune tolérance ne pourrait la masquer.
+
+**Un test à moi qui a mordu.** Le test « la variante adapterait une autre
+séquence » a d'abord échoué, sur un champ où il ne pouvait pas réussir :
+`adapt_dt` lit des maxima **globaux**, que grossir un patch quelconque ne
+déplace pas au premier pas. La première version concluait donc que le gel ne
+servait à rien — faux, et la mesure sur les vrais champs le dit (100 % des
+patches sur 3 scénarios sur 4). Le champ d'essai place désormais l'extremum
+global **dans** le patch grossi.

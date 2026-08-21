@@ -1949,3 +1949,52 @@ reste, comme D-165 le dit, inutilisable comme comparaison d'une passe à
 l'autre tant que ces quatre tests restent en l'état. Les trois options de
 D-165 s'appliquent telles quelles.
 
+---
+
+## D-188 — le critère d'acceptation de la tâche 6 est passé par un label redondant
+
+**Rapport seul. Rien n'est corrigé** — changer l'horizon du protocole est une
+décision de campagne, pas une retouche.
+
+**Où ça bloque.** Le protocole §1.2 fixe la vérité terrain dynamique à
+`δt = one hybrid step (0.1)` et pose comme seul critère d'acceptation
+*« sanity check Spearman(d_i, e_i) > 0 reported »*.
+
+Mesuré (N=96, Re=400, `dim=8`, 3 instantanés par scénario) :
+
+| scénario | ρ(d, e) à δt=0,1 |
+|---|---|
+| `harris_tearing` | **+1,0000** |
+| `kelvin_helmholtz` | +0,996 |
+| `mhd_rotor` | +0,995 |
+| `orszag_tang` | +0,990 |
+
+Le critère est **satisfait** — et il ne contrôle rien : à cet horizon le label
+dynamique est une **renumérotation monotone** du label statique. Un contrôle
+qu'un label entièrement redondant passe haut la main n'est pas un contrôle.
+
+**Le mécanisme, mesuré, pas supposé.** Deux causes, chacune suffisante :
+
+1. À δt = 0,1, la perturbation parcourt **0,11 à 0,25** d'une largeur de patch
+   (`t_x = 2π / (dim·(v+b)_rms)` vaut 0,41 à 0,88 à dim=8). Elle n'a pas
+   quitté son patch : il n'y a rien à propager.
+2. `d0_i = e_i / dim` **exactement**. Si le facteur `d_i/d0_i` ne varie pas
+   d'un patch à l'autre, alors `d = constante × e` et ρ = 1 par construction.
+   Mesuré à δt=0,1 : médiane 0,88, p90 0,88–1,01 — dispersion nulle.
+
+**Ce qui bloque, concrètement.** La tâche 7 du protocole (dataset prédictif,
+Level 2) prévoit des cibles `d_i(t+h)` « when Task 6 outputs exist ». Elles
+existent maintenant — et à l'horizon prescrit elles mesureraient **deux fois
+la même chose** que les cibles `e_i(t+h)`. Toute tâche consommant `d_i` doit
+d'abord fixer son horizon sur `t_x`.
+
+**Ce qu'il faudrait pour clore.** Trancher l'horizon (proposition :
+`δt ≳ t_x`, donc dépendant de `dim` et du scénario), et remplacer le critère
+d'acceptation par quelque chose qu'un label redondant échoue — par exemple
+**la dispersion de l'amplification** `d_i/d0_i`, qui est nulle quand `d` redit
+`e` et vaut 1,41 / 2,03 (médiane / p90) sur `orszag_tang` à δt=2,0.
+
+**Épinglé par**
+`tests/study/test_dynamic_patch_labels.py::test_a_lhorizon_du_protocole_le_label_dynamique_est_une_redite_du_statique`
+et son champ séparateur `test_le_label_se_decolle_quand_on_allonge_lhorizon`.
+
