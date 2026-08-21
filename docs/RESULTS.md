@@ -7628,3 +7628,80 @@ Les moyennes LOSO de la courbe de cône, publiées plus haut avec la mention
 « pli mort », doivent être relues : `harris_tearing` n'est pas mort, il est
 **mal seuillé**. La colonne « hors pli mort » de cette table reste la bonne à
 lire, mais pour une raison différente de celle qui y était donnée.
+
+---
+
+# Sélectivité des coefficients : deux des trois ne captent pas un type
+
+Exigence de USER : *« tous les coeffs doivent être intuitifs — adimensionnels,
+indépendants de tout sauf de capter leur type d'instabilité »*. Les
+invariances sont mesurées ailleurs ; c'est la **sélectivité** qui manquait,
+et elle n'était vérifiée nulle part.
+
+## Le trou de couverture qui rendait la question urgente
+
+Avant ce fichier, **aucun test n'exerçait `norm="max"`** hors des invariances.
+Basculer le défaut aurait laissé toute la réponse physique non vérifiée.
+Les deux normalisations sont désormais exercées à chaque cas.
+
+## Mesuré, sur champs analytiques à réponse connue
+
+Pic de chaque famille, `dim = 32` :
+
+| champ | max\|C\| (ZZ) | max\|K\| (ZZZZ) | max\|K_xp\| |
+|---|---|---|---|
+| uniforme | 0 | 0 | 0 |
+| rotation solide (ω≠0, J=0) | ≠0 | **1,000** | 0 |
+| nappe de courant (ω=0, J≠0) | ≠0 | **1,000** | 0 |
+| X-point (det ∇B < 0) | ≠0 | 1,000 | **1,000** |
+
+## Les trois verdicts
+
+**`K_xpoint` est sélectif** — et c'est le seul. Il ne répond qu'au
+det(∇B) < 0, il est exactement muet là où det > 0 (points elliptiques,
+cœurs d'îlots), et il survit à un facteur d'échelle 10.
+
+**`K_plaquettes` ne l'est pas.** `(|ω| + |J|)/norme` somme les deux
+magnitudes : un vortex pur et une nappe de courant pure rendent **exactement
+la même valeur** (1,000 contre 1,000). Le terme capte « il se passe quelque
+chose de rotationnel **ou** magnétique », pas un type. C'est une propriété de
+conception, pas un défaut — mais elle contredit l'exigence « capter son type
+d'instabilité », et elle est désormais épinglée.
+
+**`C_edges` ne l'est pas non plus.** `sqrt(|dv|² + |dB|²)` fait entrer un
+saut hydrodynamique et un saut magnétique dans la même racine.
+
+## Une conséquence de `norm="max"` qu'il faut connaître
+
+Sous `max`, `max|C| = w_ZZ` et `max|K| = w_ZZZZ` sur **tout** champ non
+uniforme. Par construction, **la magnitude ne distingue plus rien** : toute
+l'information de structure passe dans le motif spatial.
+
+Sous `legacy`, le pic varie (nappe raide 8,09 contre rotation lisse 3,12 —
+c'est le rapport pic/moyenne, une mesure d'intermittence) et porte donc une
+information de structure — au prix de la dépendance en `dim`.
+
+**Le choix est donc un arbitrage, pas une amélioration pure** : `max` achète
+l'invariance en `dim` en retirant au pic tout contenu structurel. Les deux
+faits sont épinglés, chacun par son test, avec le champ qui les sépare.
+
+## Vérification
+
+```bash
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q   # 13 passed
+```
+
+| mutation | effet |
+|---|---|
+| la plaquette devient sélective (`\|ω\|` seul) | 3 failed |
+| ZZ ignore la partie magnétique du saut | 4 failed |
+| le mode `max` cesse de borner le pic | 2 failed |
+| `K_xpoint` : `max(0,−det)` → `\|det\|` | 1 failed |
+| `K_xpoint` : signe inversé (X-point ↔ O-point) | 1 failed |
+
+**Un trou de mon propre fait, corrigé en le mutant.** La première version du
+test de sélectivité X-point ne regardait qu'un **maximum sur tout le champ** :
+`max(0,−det)` et `|det|` y donnent le même pic, donc la mutation passait au
+vert. Le test compare désormais **point par point**, et exige que `K_xpoint`
+soit exactement nul là où det > 0. Sans cette correction, le fichier aurait
+affirmé une sélectivité qu'il ne vérifiait pas.
