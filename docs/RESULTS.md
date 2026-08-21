@@ -7389,3 +7389,60 @@ Ce qui reste vrai et défendable : le cône ne suffit pas à porter la
 fermeture de l'approche. C'est **H0b** qui la porte — mieux résoudre
 l'hamiltonien dégrade la décision — et H0b ne dépend ni de la localité ni de
 ce résultat.
+
+---
+
+# Le corpus de patches vit dans DEUX conventions de rotationnel
+
+Trouvé en régénérant les patches `dim = 16` à N = 96 : la commande a aussi
+réécrit huit artefacts `dim = 16` à N = 256 et N = 64, et
+`tests/study/test_patches_classical_score_provenance.py` a rougi — 25 cas.
+
+**Ce n'était pas un dégât, c'était un gel documenté que j'avais ignoré.**
+Les huit fichiers sont **délibérément conservés dans l'ancienne convention**
+(`fixed_curl=False`), et un test épingle ce fait, artefact par artefact.
+Les huit ont été restaurés ; le test rend de nouveau **62 passed**.
+
+## Le fait, mesuré
+
+Sur les huit fichiers réécrits, avant restauration :
+
+| grandeur | écart |
+|---|---|
+| `l2_errors` | **identique** |
+| `is_hard` | **identique** |
+| `classical_scores` | **100 % des cellules diffèrent**, jusqu'à 0,39 en absolu (3,7× en relatif) |
+
+Le **label ne bouge pas** — il ne passe pas par les mappeurs. Seul le score
+classique bouge, et il bouge partout.
+
+## L'état réel du corpus
+
+Recalcul à HEAD (`fixed_curl=True` par défaut), écart au score stocké :
+
+| famille | convention | écart au recalcul HEAD |
+|---|---|---|
+| `*_N96_dim8` | **HEAD** | 0,000e+00 |
+| `*_N96_dim16` (produits ici) | **HEAD** | 0,000e+00 |
+| `*_N256_dim16`, `*_N64_dim16` | **ancienne**, gelée | ≠ 0 (c'est le gel) |
+
+**Conséquence à ne pas perdre** : les deux points de la courbe de cône
+(`dim = 8` et `dim = 16`, tous deux à N = 96) sont dans la **même**
+convention et se comparent entre eux. Ils ne se comparent **pas** à un
+nombre calculé sur la famille gelée N = 256 / N = 64.
+
+## Deux défauts de garde, notés sans correction
+
+1. **Le test de provenance porte une liste de noms en dur** : les seize
+   fichiers `N96_dim16` produits ici ne sont couverts par **aucun** de ses
+   cas (`--collect-only` : 0). Son vert ne dit donc rien de leur convention —
+   il a fallu la mesurer à la main. Un garde dont le balayage ne suit pas le
+   corpus laisse entrer ce qu'il est censé surveiller.
+2. **`hard_patch_labels.py --N 96` réécrit des artefacts d'autres N.** Le
+   sélecteur `--N` filtre les DNS lus, pas les fichiers écrits : la commande
+   a touché des N qu'on ne lui avait pas demandés. Même famille que D-158,
+   où l'agrégateur réécrit la table publiée sur une configuration qui ne
+   correspond à rien.
+
+Aucun des deux n'est corrigé ici : le premier touche un test de gel, le
+second un écrivain d'artefacts publiés — les deux demandent une décision.
