@@ -7282,3 +7282,95 @@ la cause de D-22.
 La troisième est délibérée : basculer le défaut est un changement de
 comportement scientifique, il doit échouer tant qu'il n'est pas décidé et
 consigné.
+
+---
+
+# La courbe de cône a enfin un artefact — H3 cesse d'être une jambe vide
+
+D-88 notait que `results/` ne contenait **aucun** `t1b_cone_curve_*.npz` et
+que `main()` n'avait jamais tourné, faute d'artefacts DNS. La mesure qui
+soutient ou réfute H3 — *l'information des voisins apporte-t-elle quelque
+chose ?* — n'existait donc pas.
+
+```bash
+cd study/h2b_prediction
+python h2b_neighbour_cone_curve.py --dim 8 --N 96 --max-snaps 8 --seed 0
+```
+
+git `1dd3ce2`. **Déterministe** : deux exécutions identiques rendent les 19
+clés de l'artefact sans un écart.
+
+## Pourquoi `dim = 8` et pas `dim = 4`
+
+D-88 : sur une grille périodique de côté 4, `k = 2` couvre déjà les quatre
+résidus de chaque axe, donc la grille entière — k=2 et k=3 y rendent les
+mêmes 144 colonnes. **À `dim = 4` la courbe ne compare pas deux voisinages.**
+À `dim = 8`, `2k+1 ≤ 7 < 8` pour tout k ≤ 3 : `n_distinct == n_feats` aux
+quatre k, aucune saturation. C'est la première taille où la question a un
+sens, et l'artefact le porte dans ses clés.
+
+## Split bloqué (en distribution)
+
+Prévalence val 0,263 ; plancher « tout raffiner » F1 = 0,417.
+
+| k | n_feats | n_tr/F | F1 | δ/saut |
+|---|---|---|---|---|
+| classique | — | — | 0,592 | — |
+| 0 | 9 | 455 | 0,708 | — |
+| 1 | 45 | 91 | 0,714 | +0,006 |
+| 2 | 225 | 18,2 | 0,761 | +0,047 [FLAG] |
+| 3 | 441 | 9,3 | 0,748 | −0,013 [FLAG] |
+
+## LOSO (transfert)
+
+Prévalence par pli 0,250 ; plancher « tout raffiner » F1 = 0,400.
+
+| k | orszag | harris | kh | rotor | moyenne | δ/saut |
+|---|---|---|---|---|---|---|
+| classique | 0,286 | 0,667 | 0,449 | 0,146 | **0,387** | — |
+| 0 | 0,312 | **0,000** | 0,403 | 0,345 | 0,265 | — |
+| 1 | 0,319 | **0,000** | 0,403 | 0,295 | 0,254 | −0,010 |
+| 2 | 0,319 | **0,000** | 0,238 | 0,397 | 0,239 | −0,016 |
+| 3 | 0,311 | **0,000** | 0,506 | 0,625 | 0,360 | +0,122 [FLAG] |
+
+## Ce que ça dit, et ce que ça ne dit pas
+
+**En distribution, le cône apporte quelque chose** : +0,053 de k=0 à k=2.
+C'est réel et c'est petit.
+
+**Sous transfert, il n'apporte rien** : les deux premiers sauts sont
+négatifs, et la moyenne LOSO reste sous le classique aux quatre k.
+
+**Quatre réserves, qui interdisent d'en faire un verdict :**
+
+1. **`harris_tearing` vaut 0,000 à tous les k.** Ce pli est mort, pas
+   informatif, et il tire la moyenne. Tant qu'il n'est pas expliqué, la
+   moyenne LOSO n'est pas une grandeur à citer.
+2. **Le +0,122 de k=3 est un artefact de comptage** : `n_tr/F` = 13,9,
+   sous le garde-fou de 20, et le refit plafonné à √F rend **0,392** — le
+   gain s'évapore. Le garde fait son travail ; le nombre non plafonné ne se
+   cite pas.
+3. **Un seul point** : une graine, un N, un `dim`. La clause du plan —
+   *« le gain décroît quand on affine la grille »* — demande le balayage en
+   `dim`, qui n'est pas fait.
+4. Le critère d'acceptation du module attend `0,215 ± 0,001` (valeur publiée
+   à `dim = 4`, N = 256) et mesure **0,254** ici : les deux ne portent pas
+   sur la même configuration, ce n'est pas un échec du module.
+
+**Formulation défendable en l'état** : *le cône d'information apporte un gain
+faible en distribution et aucun gain mesurable sous transfert, à `dim = 8`,
+N = 96, une graine.* C'est l'énoncé **économique** de `PLAN_PREPRINT` §7, pas
+un argument d'inutilité — et surtout pas « l'AMR est locale », que le
+protocole §0.3 interdit de conclure depuis un apprenant ERM.
+
+## Ce qui manque encore à `study/`
+
+| artefact | état | ce qu'il bloque |
+|---|---|---|
+| `t1b_cone_curve_*` | **1 fichier** (`N96_dim8`) | le balayage en `dim` reste à faire |
+| `d_patches_*` | **0 fichier** | la vérité terrain **dynamique** du protocole §1.2 — jamais calculée |
+
+`d_patches_*` est l'autre jambe absente : tant qu'elle manque, le label reste
+l'écart-type intra-patch, une statistique **statique**, alors que le
+protocole prévoit l'erreur d'évolution `d_i(t; δt)`. La commande existe
+(`h2b_dynamic_ground_truth.py`, pilote obligatoire par défaut).

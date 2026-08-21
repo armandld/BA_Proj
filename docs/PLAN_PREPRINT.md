@@ -115,7 +115,12 @@ H3**. Le pari de départ est que le quantique optimise mieux le combinatoire ;
 H0b montre que mieux optimiser n'améliore pas la tâche. C'est la valeur de
 l'optimisation qui est attaquée — précisément ce qu'on paierait en qubits.
 
-Sur H3, l'énoncé défendable est **économique**, pas un argument d'inutilité :
+Sur H3, l'énoncé défendable est **économique**, pas un argument d'inutilité.
+La courbe de cône a désormais son premier artefact (`dim = 8`, → `RESULTS.md`)
+et va dans ce sens : gain faible en distribution, aucun sous transfert. Deux
+choses manquent encore pour que la clause « décroît quand on affine » soit
+mesurée et non postulée — le balayage en `dim`, et l'explication du pli
+`harris_tearing`, mort à tous les k :
 
 > Le gain apporté par l'information des voisins est réel mais petit, il
 > décroît quand on affine la grille, et il ne justifie pas le coût d'un

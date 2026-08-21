@@ -51,6 +51,24 @@ d'aucune campagne.
 
 ---
 
+## A bis — Ce qui vient d'entrer en A
+
+**La courbe de cône d'information, `dim = 8`.** Premier artefact
+(`t1b_cone_curve_N96_dim8.npz`, git `1dd3ce2`), déterministe — deux
+exécutions rendent les 19 clés sans écart. Elle passe en A parce qu'elle est
+reproductible par une commande, mesurée sur le code actuel, et entourée par
+`tests/study/test_t1b_cone_curve.py`.
+
+**Ce qui est exploitable** : la courbe elle-même, ses `n_distinct` (la
+saturation de D-88 est visible dans l'artefact), et le constat qualitatif —
+gain faible en distribution, aucun sous transfert.
+
+**Ce qui ne l'est pas, et reste en C** : la *moyenne* LOSO, tant que le pli
+`harris_tearing` rend 0,000 à tous les k sans explication ; et le +0,122 du
+k=3, dont le refit plafonné rend 0,392. Un pli dégénéré ne vote pas.
+
+---
+
 ## B — En attente de confirmation
 
 Correctement obtenus, mais **sur du code depuis corrigé**. Ils ne sont pas
