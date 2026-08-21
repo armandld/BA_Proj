@@ -377,18 +377,35 @@ class TestE_NoiseImmunity(unittest.TestCase):
         score_anom = AngleMapper.classical_score(fields_anom)
         r_anom = hm.compute_coefficients(sim, score_anom, fields_anom, 0.3)
 
-        # For v2, ZZ is normalized by domain average. With noise, every cell
-        # has roughly the same jump, so C ~ -W_ZZ everywhere. With the anomaly,
-        # the shear layer has much larger jumps than the quiet region.
-        # The MAX |C| at the anomaly should exceed the MAX |C| in noise.
-        noise_C_max = max(np.max(np.abs(r_noise['C_edges'][0])),
-                          np.max(np.abs(r_noise['C_edges'][1])))
-        anom_C_max = max(np.max(np.abs(r_anom['C_edges'][0])),
-                         np.max(np.abs(r_anom['C_edges'][1])))
+        # CHANGEMENT DE GRANDEUR, pas de seuil (regle VIGIL). Sous
+        # `norm="max"` — le defaut depuis le 21 aout 2026 — le PIC vaut
+        # `w_zz` sur TOUT champ non uniforme, par construction : bruit pur
+        # et anomalie franche rendent tous deux 2,000, et cette assertion
+        # comparait deux nombres identiques. Le pic n'est plus une mesure
+        # de force de signal.
+        #
+        # Le fait physique vise reste vrai et reste mesurable : une anomalie
+        # est CONCENTREE, le bruit est ETALE. On mesure donc la fraction du
+        # domaine qui depasse la moitie du pic — petite pour une anomalie,
+        # grande pour du bruit. C'est une grandeur de FORME, la seule qui
+        # survive a une normalisation par le maximum.
+        def etalement(r):
+            c = np.maximum(np.abs(r['C_edges'][0]), np.abs(r['C_edges'][1]))
+            return float(np.mean(c >= 0.5 * c.max()))
 
-        self.assertGreater(anom_C_max, noise_C_max,
-                           f"Anomaly ZZ max ({anom_C_max:.3f}) should exceed "
-                           f"noise ZZ max ({noise_C_max:.3f})")
+        noise_spread = etalement(r_noise)
+        anom_spread = etalement(r_anom)
+
+        self.assertLess(anom_spread, noise_spread,
+                        f"Anomaly ZZ spread ({anom_spread:.3f}) should be "
+                        f"tighter than noise spread ({noise_spread:.3f}) : "
+                        "une anomalie concentre le couplage, le bruit l'etale")
+
+        # Le champ qui SEPARE : sans lui, l'assertion ci-dessus passerait sur
+        # deux champs de bruit. Le bruit doit reellement etaler.
+        self.assertGreater(noise_spread, 0.2,
+                           f"le champ de bruit ne s'etale pas "
+                           f"({noise_spread:.3f}) : il ne separe rien")
 
 
 # ===================================================================

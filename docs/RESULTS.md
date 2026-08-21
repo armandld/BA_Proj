@@ -7734,6 +7734,23 @@ affirmé une sélectivité qu'il ne vérifiait pas.
 
 # La plaquette scindée : un coefficient par type de structure
 
+> ### ⚠️ Entrée SUPERSÉDÉE le 21 août — lire d'abord
+>
+> Les deux coefficients `K_vorticity` / `K_current` décrits ci-dessous **ont
+> été retirés du code**. Décision de USER : *« il ne faut pas faire
+> différentes portes ZZZZ (c'est coûteux et ça sert à rien) »* — deux familles
+> de termes ZZZZ demandent deux jeux de portes pour la même information.
+>
+> Le **problème** que cette entrée identifie reste entier, et s'est révélé
+> bien plus grave que mesuré ici. La **solution** a changé : au lieu de deux
+> termes, un seul, dont les deux magnitudes sont rendues adimensionnelles
+> **séparément avant** d'être sommées. Voir l'entrée suivante.
+>
+> Ce qui survit de celle-ci : le constat de non-sélectivité, le champ mixte,
+> le test de l'ensemble des clés, et la mesure `E_max` +15,9 % / +34,2 % qui
+> l'a motivé.
+
+
 Demande de USER, à la suite de l'entrée précédente : *« scinde le en deux
 coeffs mais checke bien ce que tu fais et actualise les tests »*. La mesure
 qui la motive est la ligne « `K_plaquettes` ne l'est pas » ci-dessus : un
@@ -7904,3 +7921,233 @@ sélectifs là où il y en avait un qui ne l'était pas — c'est une propriét�
 la **forme** des coefficients, mesurée sur des champs analytiques. Savoir si
 un hamiltonien qui les consomme décide mieux est une question de campagne, et
 **aucun résultat d'avant campagne ne peut y répondre**.
+
+---
+
+# La moitié du terme ZZZZ était numériquement morte sur 2 scénarios sur 4
+
+Demande de USER : *« sommer les deux grandeurs adimensionnelles séparément.
+Mais il ne faut pas faire différentes portes ZZZZ (c'est coûteux et ça sert à
+rien). Pour `norm` fais ce qui semble le plus juste. »*
+
+## Le défaut, mesuré sur le corpus avant d'être corrigé
+
+La plaquette valait `(|ω| + |J|) / (max|ω| + max|J|)` : deux magnitudes
+**brutes** sous un dénominateur **commun**. Le signal le plus fort y écrase
+l'autre en proportion de son amplitude. Sur les champs MHD du dépôt, cette
+proportion n'est pas une correction du second ordre.
+
+**Poids effectif de la vorticité dans la somme**, N=256, Re=400, 12
+instantanés par scénario (min – médiane – max) :
+
+| scénario | poids de \|ω\| | rapport max\|J\|/max\|ω\| | lecture |
+|---|---|---|---|
+| `harris_tearing` | 0,000 – **0,003** – 0,006 | **179** | la **vorticité** ne contribue pas |
+| `kelvin_helmholtz` | 0,975 – **0,993** – 1,000 | **84** | le **courant** ne contribue pas |
+| `mhd_rotor` | 0,193 – 0,391 – 1,000 | 1,7 | équilibré |
+| `orszag_tang` | 0,212 – 0,278 – 0,400 | 3,4 | le courant domine 3:1 |
+
+Sur **deux scénarios canoniques sur quatre**, l'une des deux structures que le
+terme prétend détecter est absente de son propre coefficient, sur toute la
+trajectoire. Ce n'est pas un bug : c'est la formule qui le dit. Un Harris
+tearing est une nappe de courant sans écoulement, un Kelvin–Helmholtz un
+cisaillement sans champ — chaque scénario est dominé par un type, et le
+dénominateur commun transforme ce fait physique en **effacement** de l'autre
+signal.
+
+## Ce qui est fait — un seul terme, une seule porte
+
+```python
+K_p = -w_ZZZZ * (|ω|/max|ω| + |J|/max|J|) / max(la somme)
+```
+
+Chaque magnitude est rendue **adimensionnelle par son propre maximum avant**
+la somme. Les deux structures pèsent alors 1/2 chacune quel que soit leur
+rapport d'amplitude, et diviser par le max de la somme ramène le pic à
+`w_ZZZZ` exactement.
+
+**Une seule famille ZZZZ, donc une seule porte.** Le scindement en deux
+coefficients (entre précédente) est retiré : il achetait la même séparation au
+prix d'un second jeu de portes.
+
+## Ce que ce choix affirme, et qui est discutable
+
+Que pour **décider où raffiner**, le type de structure compte et le rapport
+d'amplitude entre types ne compte pas. C'est une position, pas un théorème.
+
+Ce qui la rend défendable : l'amplitude n'est pas perdue, elle entre par les
+deux autres familles — le biais Z est accroché au score classique, le couplage
+ZZ à la magnitude du saut. La plaquette, elle, ne dit plus que **où la
+circulation est localement forte relativement à son propre type**, ce qui est
+l'instinct correct pour un indicateur de raffinement : une structure faible
+mais raide a besoin de résolution autant qu'une structure forte et lisse.
+
+## `norm` : le défaut bascule sur `max`
+
+La question posée était ouverte (*« fais ce qui semble le plus juste »*). Trois
+faits mesurés, tous dans le même sens, et aucun contre :
+
+1. Sous `legacy`, le poids relatif ZZ:ZZZZ dérive d'un **facteur 2,59** avec la
+   seule spikiness du champ (3,121 → 8,095). Sous `max` il vaut
+   `W_ZZ/W_ZZZZ = 2,000` partout.
+2. Sous `legacy`, `max|K|` vaut 0,74 à 0,99 selon le scénario — la famille ZZZZ
+   est silencieusement dévaluée jusqu'à 26 % sur `mhd_rotor`, parce que les
+   deux maxima sont pris en des points différents. Sous `max`, `max|K| = 1,000`
+   partout.
+3. Le défaut ci-dessus (une structure effacée sur 2 scénarios sur 4)
+   n'existe que sous `legacy`.
+
+**Rayon d'action, vérifié :** aucun fichier de `src/` ne construit
+`PhysicalMapperV2`. Le solveur V1 déployé reçoit son mappeur par injection et
+n'est **pas** concerné. Les quatre sites qui le construisent sont tous dans
+`study/` — `hamiltonian_coefficients.py`, `sanity_check.py`,
+`exact_diagonalisation.py`, `qaoa_inputs.py` — et **aucun ne passait `norm=`
+explicitement**. Le basculement change donc exactement le pipeline de la
+campagne à venir, ce qui est l'intention.
+
+`legacy` reste joignable et garde une seule raison d'être : **reproduire les
+artefacts gelés**, calculés avec. `test_la_formule_legacy_de_la_plaquette_est_inchangee`
+recalcule la formule historique indépendamment et rougit si quelqu'un
+« améliore » `legacy` aussi — le jour où plus aucun mode ne reproduit le passé,
+toute comparaison avant/après devient impossible.
+
+## Ce que le basculement a réveillé — trois faits, mesurés parce que des tests ont rougi
+
+Le basculement fait passer la suite de 5 rouges à 12. Décomposé : les **5
+rouges documentés** du dépôt (trio `a0e0e02` + paire D-132) sont toujours là,
+**5** viennent du changement, et **2** sont des tests intermittents qui
+n'ont rien à voir avec lui. Chacun des cinq a été instruit avant d'être
+traité.
+
+### 1. Le balayage plat de D-86 était un artefact de la normalisation
+
+D-86 : sur 52 configurations, **14 balayages `c_bias` plats** — écart max-min
+exactement nul, donc `argmax` rendait le bord gauche de la grille comme
+« optimum ». Rejoué sur le cas mesuré (`harris_tearing`, N=96, dim=4, 8
+instantanés, graine 0) dans les deux normalisations :
+
+| `norm` | `f1_span` (4 Re) | dégénérés | `c_bias*` |
+|---|---|---|---|
+| `legacy` | 0,0000 / 0,0000 / 0,0000 / 0,0000 | **4 / 4** | 0,100 (bord **gauche**) |
+| `max` | 0,5655 / 0,5583 / 0,5500 / 0,5583 | **0 / 4** | 75–100 (bord **droit**) |
+
+Sous `legacy`, le hamiltonien de champ moyen ne séparait **rien** sur cette
+configuration : F1 identiquement nul sur les 25 points de grille. Sous `max`,
+il sépare. **L'instrument avait perdu sa résolution**, et c'est la
+normalisation qui la lui retirait.
+
+### 2. …et l'optimum du balayage corrigé est **au bord droit** — D-86 en miroir
+
+`c_bias*` vaut 100,0 sur 3 Re sur 4, soit le sommet de `logspace(-1, 2)`. Un
+optimum au bord n'est pas un optimum, exactement comme le bord gauche ne
+l'était pas. Mesuré en élargissant à `logspace(-1, 5)` :
+
+    F1 sature à 0,6333 dès c_bias ~ 251 ; les six derniers points identiques
+
+L'optimum est donc la **limite biais seul** — les couplages n'apportent rien
+de positif — et il reste **sous la baseline classique (0,745)**. Épinglé, non
+corrigé : élargir la grille déplace tous les `c_bias*` publiés. Entrée
+`DEFAUTS.md`.
+
+### 3. La dégénérescence de D-45/D-47 à `dim = 2` tient — ma première lecture était fausse
+
+`test_the_ground_state_is_uniform_on_real_deployed_coefficients` est devenu
+rouge : sous `max`, l'état fondamental exact à `dim = 2` n'est plus uniforme.
+Lu vite, cela annonçait la fin de la dégénérescence qui vide la réfutation de
+H0.
+
+**Non.** Le champ de ce test est du **bruit gaussien**, pas un champ DNS — son
+nom désignait le chemin de code, pas les données. Remesuré sur 40 instantanés
+DNS réels (4 scénarios × 10, N=256, patch 4×4, `dim = 2`) :
+
+| `norm` | états fondamentaux uniformes | non uniformes |
+|---|---|---|
+| `legacy` | 39 / 40 (**97,5 %**) | 1 |
+| `max` | 36 / 40 (**90,0 %**) | 4 |
+
+La dégénérescence **bouge et ne tombe pas**. D-45/D-47 tient. Les deux taux
+sont désormais épinglés par un test `slow` qui rougit si l'un sort de sa
+fourchette — c'est-à-dire le jour où la conclusion sur H0 à `dim = 2` doit
+être réécrite.
+
+### Un troisième test intermittent, non documenté
+
+`tests/mapping/test_signal_contribution.py::test_C_ZZ` est rouge en suite
+complète et **vert 3 fois sur 3 en isolé**. Il construit son hamiltonien à la
+main et n'appelle jamais le mappeur : il ne peut pas être affecté par ce
+changement. C'est un troisième membre de la famille D-165, dans le même
+fichier que `test_K_ZZZZ` déjà documenté. Entrée `DEFAUTS.md`.
+
+### Deux tests dont la GRANDEUR a cessé de discriminer
+
+`test_noise_weaker_than_anomaly` comparait le **pic** de `|C|` entre un champ
+de bruit et un champ à anomalie. Sous `max` le pic vaut `w_zz = 2,000` sur les
+deux : l'assertion comparait deux nombres identiques. Règle VIGIL — *si la
+grandeur n'est pas discriminante, changer de grandeur, pas de seuil*. Le fait
+physique visé reste vrai et reste mesurable par une grandeur de **forme** :
+
+| statistique | bruit | anomalie | `legacy` | `max` |
+|---|---|---|---|---|
+| pic \|C\| | 4,098 / **2,000** | 32,000 / **2,000** | discrimine | **ne discrimine plus** |
+| fraction du domaine ≥ ½ pic | **0,684** | **0,125** | discrimine | discrimine |
+
+La nouvelle statistique rend **le même nombre dans les deux modes** — elle ne
+dépend plus du choix de normalisation.
+
+`test_legacy_est_le_defaut` a rougi comme prévu : c'est le garde qui exige
+qu'un basculement se décide. Renommé, il exige maintenant la même chose dans
+l'autre sens.
+
+## Ce que ça déplace
+
+| grandeur | `legacy` | `max` |
+|---|---|---|
+| `max\|K\|` harris / KH / rotor / OT | 0,9947 / 0,9902 / 0,7418 / 0,8494 | **1,0000** partout |
+| cellules changeant d'appartenance au top 5 % de la carte | — | 7,8 % / 4,5 % / 0,5 % / 1,6 % |
+
+Les artefacts `.npz` gelés ne bougent pas — ils ne sont pas recalculés — donc
+la table maîtresse reste à **180 / 176 / 4 / 0**. Mais le Hamiltonien du dépôt
+n'est plus celui qui les a produits : **toute campagne relancée produira des
+nombres différents**, et c'est le but.
+
+## Une erreur de conception de mes propres tests, trouvée en les faisant échouer
+
+Les premiers champs « mixtes » plaçaient le tourbillon et la nappe de courant
+**au même endroit**. Sur un tel champ, aucune structure ne peut en écraser une
+autre : les deux formules coïncident, et trois tests qui prétendaient mesurer
+l'écrasement mesuraient en fait `1,0000` des deux côtés. Les champs d'essai
+séparent désormais les deux structures (recouvrement **3,7e-07**), ce qui est
+aussi le cas physique honnête — dans un écoulement réel, le vortex est ici et
+la nappe est là.
+
+## Vérification
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q  # 25 passed, 1 skipped
+python -m pytest tests/mapping -q                                # 432 passed, 1 skipped
+python -m pytest tests/ -q -m "not slow"      # 6 failed, 3029 passed, 1 h 07
+python study/common/aggregate_master_table.py            # 180 / 176 / 4 / 0
+```
+
+**Les 6 rouges finaux** : les **5 documentés** du dépôt (trio `a0e0e02`, paire
+D-132), rejoués sur un `worktree` propre à `HEAD` lors de la passe précédente
+et rouges à l'identique, **plus un intermittent** —
+`test_optimiser_axis.py::…[L-BFGS-B]`, vert 3/3 en isolé et 2/2 sur son
+fichier, opérateur codé en dur, aucun lien avec le mappeur (D-187).
+
+La table maîtresse reste à **180 / 176 / 4 / 0** : les artefacts `.npz` ne
+sont pas recalculés, donc aucun nombre publié ne bouge — mais le Hamiltonien
+du dépôt n'est plus celui qui les a produits.
+
+| mutation de `src/Simulation/HamiltParams_v2.py` | effet |
+|---|---|
+| `max` revient au dénominateur commun (la formule d'avant) | 3 failed |
+| la vorticité n'est pas normalisée, le courant si | 2 failed |
+| `legacy` est « amélioré » lui aussi (plus de mode de reproduction) | 5 failed |
+| le pic de la somme n'est plus retiré (`max\|K\| ≠ w`) | 4 failed |
+
+Un test `@pytest.mark.slow` rejoue le fait sur les vrais artefacts DNS et
+rougit le jour où les scénarios du dépôt cessent d'être dominés par une seule
+structure — auquel cas la justification du changement tombe et il faut la
+réécrire, pas retoucher le seuil.

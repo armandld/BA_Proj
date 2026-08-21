@@ -91,10 +91,19 @@ propriété de la **forme choisie**, pas un défaut d'implémentation, et elle s
 dit dans cette section : l'hamiltonien détecte « il se passe quelque chose »
 localement, pas « quoi ».
 
-Deux coefficients scindés (`K_vorticity`, `K_current`) sont **disponibles et
-non branchés** — la forme étudiée reste celle de V1. Les brancher change
-l'objet d'étude et demande sa propre campagne ; c'est écrit ici pour que le
-choix soit visible, pas pour l'annoncer comme fait.
+Et un fait qui appartient au manuscrit, pas seulement au journal de bord :
+sous la normalisation historique, **la moitié du terme ZZZZ était
+numériquement morte sur deux scénarios canoniques sur quatre**. La plaquette
+sommait `|ω|` et `|J|` sous un dénominateur commun, si bien que le signal le
+plus faible disparaissait en proportion de son amplitude — rapport 179 sur
+`harris_tearing`, 84 sur `kelvin_helmholtz`. Chaque scénario est dominé par un
+type de structure, et le dénominateur commun transformait ce fait physique en
+effacement de l'autre. Corrigé en rendant les deux magnitudes adimensionnelles
+séparément avant la somme, **sans ajouter de porte**.
+
+Ce fait a sa place dans la section : il montre qu'un coefficient peut être
+*bien formé, borné, adimensionnel* et pourtant ne mesurer qu'une moitié de ce
+qu'il annonce — et que seule une mesure sur les champs réels le révèle.
 
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 

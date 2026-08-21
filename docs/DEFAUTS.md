@@ -1853,3 +1853,99 @@ découverte isolée, c'est un fait déjà écrit qui n'avait pas traversé jusqu
 `D-165`, où le contraire avait été affirmé sans le vérifier contre
 `RESULTS.md`. Rien de plus à corriger ici — seulement le lien, pour que la
 prochaine relecture de `state_vector` ne reparte pas de zéro.
+
+---
+
+## D-186 — le balayage `c_bias` corrigé rend son optimum **au bord droit** de la grille
+
+**Rapport seul. Rien n'est corrigé** — élargir la grille déplace tous les
+`c_bias*` publiés, ce qui est une décision de campagne, pas une retouche.
+
+**Où ça bloque.** D-86 avait établi que sur une courbe plate `argmax` rend le
+bord **gauche** de `np.logspace(-1, 2, 25)`. Le basculement du défaut sur
+`norm="max"` (21 août) rend la courbe informative — et elle est désormais
+**monotone croissante**, si bien que `argmax` rend le bord **droit** :
+
+    harris_tearing, N=96, dim=4, 8 instantanés, graine 0
+    Re= 400   c_bias* = 100,0   (= C_GRID[-1])
+    Re= 800   c_bias* =  75,0
+    Re=1200   c_bias* = 100,0   (= C_GRID[-1])
+    Re=1600   c_bias* = 100,0   (= C_GRID[-1])
+
+**Un optimum au bord n'est pas un optimum.** C'est le défaut de D-86, en
+miroir, et il touche potentiellement les 38 configurations que D-86 classait
+« informatives » — elles n'ont pas été rejouées sous le nouveau défaut.
+
+**Ce que la grille élargie montre** (`logspace(-1, 5, 31)`, même cas) :
+
+    F1 sature à 0,6333 dès c_bias ~ 251 ; les six derniers points identiques
+    baseline classique sur la même configuration : 0,745
+
+L'optimum est la **limite biais seul** : à mesure que `c_bias` croît, les
+couplages ZZ/ZZZZ sont écrasés par le biais Z, et c'est **là** que le
+hamiltonien décide le mieux. Autrement dit, sur cette configuration, les
+couplages n'apportent rien de positif — cohérent avec H0b (« mieux résoudre H
+dégrade la décision ») et avec les ablations nulles de T13, sans les
+remplacer : c'est **une** configuration.
+
+**Épinglé par** `test_loptimum_du_balayage_est_AU_BORD_de_la_grille_donc_illisible`.
+
+**Effet de bord observé, et corrigé.** `test_une_campagne_entierement_degeneree_leve`
+affirmait dans sa docstring : *« la campagne lève avant d'écrire, donc ce test
+ne touche pas `results/` »*. Cette garantie reposait entièrement sur la
+dégénérescence : dès que le balayage est devenu informatif sous `max`,
+`p10a.main()` est allé au bout et a **écrit `results/analytical_N96_dim4.npz`**
+pendant la suite de tests. Le fichier a été retiré, et le test force désormais
+`norm="legacy"`, ce qui restaure la garantie. **Une absence d'effet de bord
+qui dépend d'un résultat de calcul n'est pas une garantie** — c'est une
+coïncidence qui tient tant que le calcul ne change pas.
+
+**Ce qu'il faudrait pour clore.** Rejouer le balayage sur les 52
+configurations de D-86 avec une grille assez large pour contenir la
+saturation, et republier les `c_bias*`. C'est une campagne, pas un correctif.
+
+---
+
+## D-187 — les tests intermittents sont QUATRE, pas deux
+
+**Rapport seul.** Même famille, même remède à trancher, même fichier.
+
+`tests/mapping/test_signal_contribution.py::test_C_ZZ` — rouge en suite
+complète le 21 août, **vert 3 fois sur 3 en exécution isolée**. Il assertit
+`|moyenne| < 0,03` sur 20 tirages d'un bras QAOA échantillonné, exactement la
+structure de son voisin `test_K_ZZZZ` que D-165 documente déjà.
+
+**Ce n'est pas une régression du changement de normalisation** : le test
+construit son hamiltonien à la main (`realistic_hamilt()` rend des tableaux
+constants, puis le test écrase `C_edges` et `H_edges`) et **n'appelle jamais
+le mappeur**. Aucun chemin ne le relie à `PhysicalMapperV2`.
+
+### Un quatrième, trouvé le même jour
+
+`tests/quantum/test_optimiser_axis.py::test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]`
+— rouge une fois en suite complète, **vert 3/3 en isolé et 2/2 en exécutant
+son fichier entier**. Il compte les évaluations de L-BFGS-B sur un opérateur
+**codé en dur** (`SparsePauliOp.from_list([("ZZ", -5.0), ("ZI", -2.0)])`) :
+aucun mappeur, aucun coefficient de campagne. Le compte dépend du chemin
+d'optimisation, sensible à l'état du RNG global — donc à l'ordre des tests.
+
+### Ce que ça change au décompte
+
+D-165 annonçait deux intermittents ; ils sont **quatre** :
+
+| test | fichier | dépend du mappeur ? |
+|---|---|---|
+| `test_K_ZZZZ` | `tests/mapping/test_signal_contribution.py` | non (D-165) |
+| `test_C_ZZ` | `tests/mapping/test_signal_contribution.py` | non |
+| `test_the_ranking_is_nonetheless_visibly_perturbed` | `tests/quantum/test_qaoa_arm_is_sampled.py` | non (D-165) |
+| `test_..._spend_a_multiple_of_that_budget[L-BFGS-B]` | `tests/quantum/test_optimiser_axis.py` | non |
+
+**Aucun des quatre ne touche au mappeur** : ce n'est pas une conséquence du
+changement de normalisation, c'est un décompte qui n'était pas complet.
+
+Mesuré sur trois exécutions de la suite complète le 21 août : **0, puis 2,
+puis 1** des quatre sont rouges — trois tirages, trois décomptes. La ligne de résumé de la suite
+reste, comme D-165 le dit, inutilisable comme comparaison d'une passe à
+l'autre tant que ces quatre tests restent en l'état. Les trois options de
+D-165 s'appliquent telles quelles.
+

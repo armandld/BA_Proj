@@ -189,13 +189,45 @@ paraissait fausse.
 
 ## Ce qui n'est pas un résultat, et n'entre donc nulle part
 
-**La sélectivité des coefficients et la plaquette scindée** (RESULTS, 21 août)
-sont des propriétés de la **forme** des coefficients, mesurées sur des champs
-analytiques à réponse connue. Elles ne disent rien sur la qualité de la
-décision d'AMR : aucune n'est un résultat au sens de ce document, et aucune
-n'a de niveau A/B/C/D.
+**La sélectivité des coefficients** (RESULTS, 21 août) est une propriété de la
+**forme** des coefficients, mesurée sur des champs analytiques à réponse
+connue. Elle ne dit rien sur la qualité de la décision d'AMR : ce n'est pas un
+résultat au sens de ce document, et elle n'a pas de niveau A/B/C/D.
 
-Ce qu'elles autorisent : poser proprement la question « un hamiltonien qui
-distingue les types décide-t-il mieux ? ». **Cette question est ouverte, et
-seule une campagne peut y répondre** — les mesures d'avant campagne ne le
-peuvent pas, par construction.
+**Cas à part — le terme ZZZZ à moitié mort.** La mesure « la vorticité pèse
+0,003 sur `harris_tearing`, le courant 0,007 sur `kelvin_helmholtz` » est,
+elle, une mesure sur les **champs réels du corpus**, reproductible par une
+commande, et elle ne dépend d'aucun modèle entraîné. Elle décrit néanmoins un
+**défaut de l'instrument**, pas un résultat sur l'objet : elle dit ce que
+l'hamiltonien ne mesurait pas, pas ce que le QAOA sait faire.
+
+Sa conséquence est en revanche directe et lourde : **toute campagne relancée
+tourne sur un hamiltonien différent** de celui qui a produit les artefacts
+gelés. Les nombres publiés d'avant ne sont pas invalidés — ils décrivent
+fidèlement le Hamiltonien d'alors — mais ils ne sont plus **comparables** à ce
+qui sortira ensuite. Toute comparaison avant/après doit passer par
+`norm="legacy"`, seul mode qui reproduit le passé.
+
+**Un instrument qui avait perdu sa résolution.** Le fait le plus lourd du
+21 août n'est pas la formule : c'est que sous `legacy`, sur la configuration
+`harris_tearing` N=96 dim=4, le balayage `c_bias` rendait **F1 = 0 sur les 25
+points de grille**, aux quatre Re. Le hamiltonien de champ moyen n'y séparait
+rien. Sous `max`, `f1_span` vaut 0,55 à 0,57 et aucun balayage n'est dégénéré.
+
+Conséquence pour ce document : **les 14 balayages plats que D-86 recense
+mesuraient peut-être l'instrument, pas l'objet.** Aucun résultat n'est
+rétracté sur cette base — un seul cas a été rejoué — mais tout niveau qui
+s'appuie sur un balayage `c_bias` est désormais **suspendu** en attendant que
+les 52 configurations soient rejouées.
+
+**Et ce que le balayage corrigé montre, il faut aussi le dire :** F1 sature à
+**0,6333** dans la limite biais seul, contre **0,745** pour la baseline
+classique sur la même configuration. L'instrument retrouve sa résolution, et
+ce qu'il résout ne va pas dans le sens de Q-HAS. Une configuration ne fait pas
+un verdict — mais elle interdit de présenter le basculement comme une bonne
+nouvelle pour l'hypothèse.
+
+Ce que tout ceci autorise : poser proprement la question « un hamiltonien dont
+les deux structures pèsent également décide-t-il mieux ? ». **Cette question
+est ouverte, et seule une campagne peut y répondre** — les mesures d'avant
+campagne ne le peuvent pas, par construction.

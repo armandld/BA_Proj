@@ -12,6 +12,8 @@ Champs analytiques, réponse connue à la main :
     rotation solide   omega != 0, J = 0
     nappe de courant  omega = 0,  J != 0
     X-point           omega = 0,  J = 0, det(nabla B) < 0
+    mixte             omega != 0 ET J != 0, pics de rapport > 2
+    mixte_desequilibre  idem, mais |J| CENT fois |omega|
 
 Les deux normalisations sont exercées. Avant ce fichier, **aucun test
 n'exerçait `norm="max"` hors des invariances** : basculer le défaut aurait
@@ -20,15 +22,32 @@ laissé toute la réponse physique non vérifiée.
 Ce que les mesures établissent, et que ces tests épinglent :
 
 1. `K_xpoint` est **sélectif** — il ne répond qu'au det(nabla B) < 0.
-2. `K_plaquettes` **ne l'est pas** : il vaut `(|omega| + |J|)/norme`, donc un
-   vortex et une nappe de courant de magnitudes appariées rendent la **même**
-   valeur. Le terme capte « il se passe quelque chose de rotationnel OU
-   magnétique », pas un type.
+2. `K_plaquettes` **ne l'est pas**, dans les deux modes : c'est une somme
+   `|omega| + |J|`, donc un vortex et une nappe de courant appariés rendent
+   la **même** valeur. Le terme capte « il se passe quelque chose de
+   rotationnel OU magnétique », pas un type — et c'est assumé : distinguer
+   les deux demanderait deux familles de portes ZZZZ pour la même
+   information.
 3. `C_edges` ne l'est pas non plus : `sqrt(|dv|^2 + |dB|^2)` confond un saut
    hydrodynamique et un saut magnétique.
-4. `K_vorticity` et `K_current` — la plaquette **scindée** — SONT sélectifs,
-   chacun sur son signal, et rendent des réponses opposées sur la paire de
-   champs que la somme confond. `K_plaquettes` est laissé inchangé bit à bit.
+4. **Ce que `norm="max"` change à la plaquette, et qui est l'objet principal
+   de ce fichier.** `legacy` somme les magnitudes BRUTES sous un dénominateur
+   COMMUN : le signal le plus fort écrase l'autre en proportion de son
+   amplitude. `max` rend chaque magnitude adimensionnelle par son PROPRE
+   maximum avant de sommer, si bien que les deux structures pèsent 1/2
+   chacune quel que soit leur rapport d'amplitude.
+
+   Ce n'est pas un raffinement théorique. Mesuré sur les quatre scénarios
+   canoniques à N=256, poids effectif de la vorticité sous `legacy` :
+
+       harris_tearing     0,000 - 0,003 - 0,006   -> la VORTICITE est morte
+       kelvin_helmholtz   0,975 - 0,993 - 1,000   -> le COURANT est mort
+       mhd_rotor          0,193 - 0,391 - 1,000
+       orszag_tang        0,212 - 0,278 - 0,400
+
+   Sur **deux scénarios sur quatre**, l'une des deux structures que le terme
+   prétend détecter ne contribue pas.
+
 5. Sous `norm="max"`, le PIC vaut `w_zz` / `w_zzzz` sur **tout** champ non
    uniforme : la magnitude ne distingue plus rien et toute l'information de
    structure passe dans le MOTIF spatial.
@@ -36,12 +55,11 @@ Ce que les mesures établissent, et que ces tests épinglent :
 Sur le point 5, une version antérieure de ce fichier concluait à un
 « arbitrage » : `legacy` porterait dans son pic une information de structure
 que `max` retirerait. C'est **faux**, et la mesure le dit. Comme `max|K|`
-vaut 1 dans les deux modes, `max|C|` EST le poids de la famille ZZ contre la
-famille ZZZZ ; sous `legacy` il passe de 3,121 (rotation lisse) à 8,095
-(nappe raide), un facteur 2,59 sur l'équilibre de deux familles de termes,
-décidé par la forme du champ au lieu de la conception. Ce n'est pas une
-information, c'est un couplage parasite. Il n'y a donc pas d'arbitrage :
-`max` le retire, et les deux tests de la section 4 épinglent les deux côtés.
+vaut 1 sous `max`, `max|C|` EST le poids de la famille ZZ contre la famille
+ZZZZ ; sous `legacy` il passe de 3,121 (rotation lisse) à 8,095 (nappe
+raide), un facteur 2,59 sur l'équilibre de deux familles de termes, décidé
+par la forme du champ au lieu de la conception. Ce n'est pas une information,
+c'est un couplage parasite. Il n'y a donc pas d'arbitrage.
 
 Les points 2, 3 et 5 ne sont pas des défauts déclarés : ce sont des
 propriétés de conception, mesurées et épinglées pour qu'un changement les
@@ -68,8 +86,13 @@ def _grille():
     return np.meshgrid(x, x, indexing="ij")
 
 
+def _bosse(Y, centre, sigma=0.45):
+    """Structure localisée en `centre`, décroissante à 5 sigma du bord."""
+    return np.exp(-((Y - centre) ** 2) / (2 * sigma ** 2))
+
+
 def _champs():
-    """Quatre champs dont la réponse est connue analytiquement."""
+    """Champs dont la réponse est connue analytiquement."""
     X, Y = _grille()
     Z, U = np.zeros((N, N)), np.ones((N, N))
     return {
@@ -77,12 +100,20 @@ def _champs():
         "rotation":      dict(vx=-np.sin(Y), vy=np.sin(X), Bx=Z, By=Z),
         "nappe_courant": dict(vx=Z, vy=Z, Bx=np.tanh(np.sin(Y)), By=Z),
         "xpoint":        dict(vx=Z, vy=Z, Bx=np.sin(Y), By=np.sin(X)),
-        # MIXTE : omega != 0 ET J != 0, avec des pics DIFFERENTS (facteur ~4
-        # sur l'amplitude magnetique). C'est le seul champ du jeu qui peut
-        # separer une normalisation par signal d'une normalisation commune —
-        # sur un champ pur, les deux coincident exactement.
-        "mixte":         dict(vx=-np.sin(Y), vy=np.sin(X),
-                              Bx=0.25 * np.tanh(np.sin(Y)), By=Z),
+        # MIXTE : un tourbillon et une nappe de courant SPATIALEMENT
+        # SEPARES — le tourbillon en y = pi/2, la nappe en y = 3pi/2,
+        # recouvrement 3,7e-07. La separation est indispensable : sur un
+        # champ ou les deux structures culminent AU MEME POINT, aucune ne
+        # peut en ecraser une autre et les deux formules coincident. C'est
+        # l'erreur qu'une premiere version de ce fichier a commise.
+        # Amplitudes appariees : max|omega| = max|J| a 1e-3 pres.
+        "mixte":         dict(vx=-_bosse(Y, np.pi / 2), vy=Z,
+                              Bx=_bosse(Y, 3 * np.pi / 2), By=Z),
+        # MIXTE DESEQUILIBRE : meme geometrie, mais |J| exactement CENT fois
+        # |omega|. Reproduit en laboratoire ce que les champs MHD reels font
+        # (facteur 179 sur harris, 84 sur KH).
+        "mixte_desequilibre": dict(vx=-_bosse(Y, np.pi / 2), vy=Z,
+                                   Bx=100.0 * _bosse(Y, 3 * np.pi / 2), By=Z),
     }
 
 
@@ -91,16 +122,23 @@ def _coeffs(nom, norm, xpoint=True):
     champ["Jz"] = np.zeros((N, N))
     m = PhysicalMapperV2(dx=2 * np.pi / N, norm=norm)
     hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15,
-                                advanced_anomalies_enabled=xpoint,
-                                split_plaquette=True)
+                                advanced_anomalies_enabled=xpoint)
     Ch, Cv = hp["C_edges"]
     return {
         "C": max(float(np.max(np.abs(Ch))), float(np.max(np.abs(Cv)))),
         "K": float(np.max(np.abs(hp["K_plaquettes"]))),
-        "Kvort": float(np.max(np.abs(hp["K_vorticity"]))),
-        "Kcurr": float(np.max(np.abs(hp["K_current"]))),
         "Kxp": float(np.max(np.abs(hp.get("K_xpoint", np.zeros(1))))),
+        "K_carte": np.abs(np.asarray(hp["K_plaquettes"], dtype=float)),
     }
+
+
+def _pics_des_deux_signaux(nom):
+    """max|omega| et max|J| du champ, calculés par le même opérateur que
+    le mappeur — sinon on mesure l'écart entre deux stencils."""
+    from Simulation.grid import curl_z
+    c = _champs()[nom]
+    return (float(np.max(np.abs(curl_z(c["vx"], c["vy"], True)))),
+            float(np.max(np.abs(curl_z(c["Bx"], c["By"], True)))))
 
 
 # ------------------------------------------------------------------
@@ -109,8 +147,9 @@ def _coeffs(nom, norm, xpoint=True):
 @pytest.mark.parametrize("norm", NORMS)
 def test_un_champ_uniforme_neteint_les_trois_familles(norm):
     r = _coeffs("uniforme", norm)
-    for nom, v in r.items():
-        assert v == pytest.approx(0.0, abs=1e-12), f"{nom} = {v:.3e} sur un champ uniforme"
+    for nom in ("C", "K", "Kxp"):
+        assert r[nom] == pytest.approx(0.0, abs=1e-12), \
+            f"{nom} = {r[nom]:.3e} sur un champ uniforme"
 
 
 # ------------------------------------------------------------------
@@ -148,8 +187,7 @@ def test_kxpoint_est_muet_la_ou_le_determinant_est_POSITIF():
     kxp = np.abs(np.asarray(hp["K_xpoint"], dtype=float))
     det = m._compute_det_jacobian_B(champ["Bx"], champ["By"], 2 * np.pi / N)
 
-    positifs = det > 1e-9
-    negatifs = det < -1e-9
+    positifs, negatifs = det > 1e-9, det < -1e-9
     assert positifs.any() and negatifs.any(), (
         "le champ d'essai n'a pas les deux signes : il ne sépare rien")
     assert np.allclose(kxp[positifs], 0.0, atol=1e-12), (
@@ -160,16 +198,19 @@ def test_kxpoint_est_muet_la_ou_le_determinant_est_POSITIF():
 
 
 # ------------------------------------------------------------------
-#  3. K_plaquettes ne l'est PAS : |omega| + |J| confond les deux
+#  3. la plaquette ne distingue PAS un type — assumé, dans les deux modes
 # ------------------------------------------------------------------
 @pytest.mark.parametrize("norm", NORMS)
 def test_la_plaquette_ne_distingue_pas_un_vortex_dune_nappe(norm):
     """Propriété de CONCEPTION, épinglée pour qu'un changement crie.
 
-    `K_p = -w * (|omega_p| + |J_p|) / norme` somme les deux magnitudes : un
-    champ purement rotationnel et un champ purement magnétique, tous deux
-    normalisés par leur propre pic, rendent le même K. Le terme capte « il
-    se passe quelque chose », pas un type.
+    La plaquette est une SOMME : un champ purement rotationnel et un champ
+    purement magnétique, chacun normalisé, rendent le même K. Le terme capte
+    « il se passe quelque chose », pas un type.
+
+    Distinguer les deux demanderait **deux familles de portes ZZZZ** pour la
+    même information — décision de USER : trop cher pour ce que ça rapporte.
+    Ce test est donc un épinglage définitif, pas une lacune à combler.
     """
     k_rot = _coeffs("rotation", norm)["K"]
     k_nappe = _coeffs("nappe_courant", norm)["K"]
@@ -188,176 +229,157 @@ def test_le_couplage_zz_repond_a_tout_saut_sans_distinguer(norm):
 
 
 # ------------------------------------------------------------------
-#  3 bis. la plaquette SCINDEE, elle, est selective
+#  4. LE POINT PRINCIPAL : sous `max`, la structure faible n'est plus
+#     écrasée par la forte
 # ------------------------------------------------------------------
-@pytest.mark.parametrize("norm", NORMS)
-def test_k_vorticity_ne_repond_quau_rotationnel(norm):
-    """Ce que `K_plaquettes` ne sait pas faire, et pourquoi le scindement.
+def _contribution_de_la_vorticite(norm):
+    """Valeur de la plaquette là où omega culmine, RAPPORTEE à son pic.
 
-    Sur quelle entree ce test echoue : si `K_vorticity` se remettait a lire
-    `J_z`, il redeviendrait aveugle au type.
+    Sur `mixte_desequilibre`, |J| vaut ~100 fois |omega|. Si la formule
+    somme les magnitudes brutes sous un dénominateur commun, la vorticité
+    ne peut pas dépasser ~1/100 du pic. Si chaque signal est normalisé par
+    son propre maximum, elle atteint son plein poids.
     """
-    assert _coeffs("rotation", norm)["Kvort"] > 0.5
-    for muet in ("nappe_courant", "uniforme"):
-        v = _coeffs(muet, norm)["Kvort"]
-        assert v == pytest.approx(0.0, abs=1e-12), (
-            f"K_vorticity = {v:.3e} sur '{muet}', ou omega_z = 0")
+    from Simulation.grid import curl_z
+    c = _champs()["mixte_desequilibre"]
+    om = np.abs(curl_z(c["vx"], c["vy"], True))
+    carte = _coeffs("mixte_desequilibre", norm)["K_carte"]
+    ou = np.unravel_index(np.argmax(om), om.shape)
+    return float(carte[ou]) / float(carte.max())
 
 
-@pytest.mark.parametrize("norm", NORMS)
-def test_k_current_ne_repond_quau_courant(norm):
-    assert _coeffs("nappe_courant", norm)["Kcurr"] > 0.5
-    for muet in ("rotation", "uniforme"):
-        v = _coeffs(muet, norm)["Kcurr"]
-        assert v == pytest.approx(0.0, abs=1e-12), (
-            f"K_current = {v:.3e} sur '{muet}', ou J_z = 0")
+def test_sous_legacy_la_structure_faible_est_ecrasee_par_la_forte():
+    """Le défaut que `max` corrige, mesuré en laboratoire.
 
-
-@pytest.mark.parametrize("norm", NORMS)
-def test_les_deux_termes_scindes_separent_ce_que_la_somme_confond(norm):
-    """Le contraste, mis cote a cote — c'est l'objet du scindement.
-
-    Meme paire de champs : la somme rend la MEME valeur, les deux termes
-    scindes rendent des reponses opposees.
+    Sur quelle entrée ce test échoue : si `legacy` cessait de partager un
+    dénominateur entre les deux magnitudes — auquel cas il n'y aurait plus
+    rien à corriger et ce fichier n'aurait plus d'objet.
     """
-    rot, nappe = _coeffs("rotation", norm), _coeffs("nappe_courant", norm)
-    assert rot["K"] == pytest.approx(nappe["K"], rel=1e-9), (
-        "la somme ne confond plus les deux : le scindement perd son motif")
-    assert rot["Kvort"] > 0.5 and rot["Kcurr"] == pytest.approx(0.0, abs=1e-12)
-    assert nappe["Kcurr"] > 0.5 and nappe["Kvort"] == pytest.approx(0.0, abs=1e-12)
+    pic_om, pic_jz = _pics_des_deux_signaux("mixte_desequilibre")
+    assert pic_jz / pic_om > 50, (
+        f"le champ d'essai n'est plus déséquilibré (rapport {pic_jz/pic_om:.1f}) : "
+        "il ne peut plus montrer l'écrasement")
+    part = _contribution_de_la_vorticite("legacy")
+    assert part < 0.05, (
+        f"la vorticité atteint {part:.3f} du pic sous `legacy` alors que son "
+        "amplitude est 100 fois plus faible : l'écrasement a disparu")
 
 
-@pytest.mark.parametrize("norm", NORMS)
-def test_les_termes_scindes_sont_bornes_par_leur_poids(norm):
-    """Normalises par le max de LEUR signal dans les deux modes : le pic
-    vaut w_zzzz des qu'il y a du signal, sans dependre de `norm`."""
-    for champ, cle in (("rotation", "Kvort"), ("nappe_courant", "Kcurr")):
-        assert _coeffs(champ, norm)[cle] == pytest.approx(
-            PhysicalMapperV2.W_ZZZZ, rel=1e-9)
+def test_sous_max_la_structure_faible_pese_autant_que_la_forte():
+    """Ce que la modification achète — et l'objet de la demande de USER.
 
-
-@pytest.mark.parametrize("norm", NORMS)
-def test_chaque_terme_scinde_est_normalise_par_SON_signal(norm):
-    """Le champ MIXTE, sans lequel ce choix de conception n'est pas testable.
-
-    Les deux termes scindés divisent chacun par le max de son propre signal.
-    L'alternative — une normalisation COMMUNE, `max|omega| + max|J|`, celle
-    de `K_plaquettes` — réintroduirait exactement ce qu'on retire : le poids
-    de chaque famille dépendrait du pic de l'AUTRE, donc de la forme du
-    champ. Ici B est 4 fois plus faible que v ; sous normalisation commune
-    `K_vorticity` culminerait à ~0,8 et `K_current` à ~0,2 au lieu de 1 et 1.
-
-    Ce test a été écrit APRÈS avoir constaté que la mutation « normalisation
-    commune » survivait à tout le fichier : les quatre champs d'origine sont
-    PURS (omega = 0 ou J = 0), et sur un champ pur les deux normalisations
-    coïncident au bit près. Un test qui ne peut pas échouer est un défaut.
+    Sur quelle entrée ce test échoue : si `max` revenait à un dénominateur
+    commun, la vorticité retomberait à ~1/100 et ce test rougirait.
     """
-    r = _coeffs("mixte", norm)
-    assert r["Kvort"] == pytest.approx(PhysicalMapperV2.W_ZZZZ, rel=1e-9), (
-        f"K_vorticity culmine à {r['Kvort']:.4f} et non {PhysicalMapperV2.W_ZZZZ} "
-        "sur un champ où omega ET J sont actifs : la normalisation n'est plus "
-        "celle de son propre signal")
-    assert r["Kcurr"] == pytest.approx(PhysicalMapperV2.W_ZZZZ, rel=1e-9), (
-        f"K_current culmine à {r['Kcurr']:.4f} et non {PhysicalMapperV2.W_ZZZZ} "
-        "sur un champ mixte : même défaut, côté courant")
+    part = _contribution_de_la_vorticite("max")
+    assert part > 0.4, (
+        f"la vorticité n'atteint que {part:.3f} du pic sous `max` : les deux "
+        "magnitudes ne sont plus rendues adimensionnelles séparément")
 
 
-def test_le_champ_mixte_a_bien_les_deux_signaux_a_des_pics_differents():
-    """Le garde du garde : si le champ mixte cessait d'être mixte, ou si ses
-    deux pics devenaient égaux, le test ci-dessus redeviendrait incapable de
-    distinguer les deux normalisations sans que rien ne crie."""
+def test_les_deux_modes_different_bien_sur_ce_champ():
+    """Le garde du garde : les deux tests ci-dessus doivent porter sur des
+    valeurs RÉELLEMENT différentes, sinon ils ne mesurent qu'un seuil."""
+    l, m = (_contribution_de_la_vorticite(n) for n in ("legacy", "max"))
+    assert m > 10 * l, (
+        f"legacy {l:.4f} contre max {m:.4f} : les deux formules ne se "
+        "séparent plus sur ce champ")
+
+
+@pytest.mark.parametrize("norm", NORMS)
+def test_les_deux_signaux_contribuent_encore_sur_un_champ_equilibre(norm):
+    """L'autre côté : la correction ne doit pas ÉTEINDRE le cas déjà sain.
+
+    Sur un champ dont les deux pics sont du même ordre, les deux modes
+    doivent tous deux laisser la vorticité peser. Sans ce test, une formule
+    qui écraserait l'autre signal passerait les deux tests précédents.
+    """
     from Simulation.grid import curl_z
     c = _champs()["mixte"]
-    omega = curl_z(c["vx"], c["vy"], True)
-    jz = curl_z(c["Bx"], c["By"], True)
-    p_om, p_jz = float(np.max(np.abs(omega))), float(np.max(np.abs(jz)))
-    assert p_om > 1e-6 and p_jz > 1e-6, (
-        f"le champ mixte n'est plus mixte : max|omega|={p_om:.3e}, "
-        f"max|J|={p_jz:.3e}")
-    rapport = max(p_om, p_jz) / min(p_om, p_jz)
-    assert rapport > 2.0, (
-        f"pics trop proches (rapport {rapport:.2f}) : une normalisation "
-        "commune donnerait presque le même résultat, le test ne sépare plus")
+    carte = _coeffs("mixte", norm)["K_carte"]
+    for etiquette, signal in (("vorticité", curl_z(c["vx"], c["vy"], True)),
+                              ("courant", curl_z(c["Bx"], c["By"], True))):
+        ou = np.unravel_index(np.argmax(np.abs(signal)), signal.shape)
+        part = float(carte[ou]) / float(carte.max())
+        assert part > 0.8, (
+            f"la {etiquette} ne pèse que {part:.3f} du pic sur un champ "
+            "pourtant apparié : la correction a éteint le cas déjà sain")
+
+
+def test_sous_max_le_pic_de_la_plaquette_vaut_exactement_son_poids():
+    """L'invariance qui rend le terme comparable d'un `dim` à l'autre.
+
+    Elle survit au changement de formule : normaliser chaque signal PUIS
+    diviser la somme par son propre max laisse `max|K| == w_zzzz`.
+    """
+    for nom in ("rotation", "nappe_courant", "xpoint", "mixte",
+                "mixte_desequilibre"):
+        k = _coeffs(nom, "max")["K"]
+        assert k == pytest.approx(PhysicalMapperV2.W_ZZZZ, rel=1e-9), (
+            f"max|K| = {k:.6f} sur '{nom}', attendu {PhysicalMapperV2.W_ZZZZ}")
+
+
+def test_sous_legacy_le_pic_de_la_plaquette_reste_SOUS_son_poids():
+    """Le champ qui SÉPARE : `legacy` prend DEUX maxima en des points
+    possiblement différents, donc `max|K| < w_zzzz` dès qu'ils ne coïncident
+    pas — d'une quantité qui dépend du champ. Sans ce test, celui du dessus
+    passerait pour une propriété universelle du calcul."""
+    k = _coeffs("mixte", "legacy")["K"]
+    assert k < 0.95 * PhysicalMapperV2.W_ZZZZ, (
+        f"max|K| = {k:.4f} sous `legacy` : le mode ne sous-estime plus le "
+        "pic, les deux modes sont devenus indiscernables sur ce point")
 
 
 # ------------------------------------------------------------------
-#  3 ter. le scindement est OPT-IN, et voici pourquoi
+#  5. l'ENSEMBLE des clés rendues fait partie du contrat
 # ------------------------------------------------------------------
-#: L'ensemble EXACT des clés rendues par défaut, mesuré le 21 août 2026.
-#: Fermé : une clé de plus fait rougir ce fichier, et c'est le but.
-_CLES_PAR_DEFAUT = {"H_edges", "C_edges", "K_plaquettes",
-                    "threshold_amr", "w_z_frac"}
-
-
-def _emax_facon_call_vqa_shell(hp):
-    """Reproduit le calcul de `src/call_vqa_shell.py` : somme de |coeff| sur
-    TOUTES les clés tableau, sans liste blanche."""
-    total = 0.0
-    for v in hp.values():
-        for a in (v if isinstance(v, (tuple, list)) else (v,)):
-            if isinstance(a, np.ndarray):
-                total += float(np.sum(np.abs(a)))
-    return total
+#: Clés rendues sans le terme X-point, mesuré le 21 août 2026. Liste FERMÉE.
+_CLES_SANS_XPOINT = {"H_edges", "C_edges", "K_plaquettes",
+                     "threshold_amr", "w_z_frac"}
 
 
 @pytest.mark.parametrize("norm", NORMS)
-def test_par_defaut_lensemble_des_cles_rendues_est_inchange(norm):
-    """L'ENSEMBLE des clés fait partie du contrat, pas seulement les valeurs.
+def test_lensemble_des_cles_rendues_est_ferme(norm):
+    """Pourquoi les valeurs ne suffisent pas.
 
-    `src/call_vqa_shell.py` consomme le dictionnaire comme un TOUT : il somme
-    `|coeff|` sur toutes les clés tableau pour former `E_max`, sans liste
-    blanche. **Ajouter une clé est donc déjà un changement de comportement**,
-    même quand aucune valeur partagée ne bouge d'un bit.
+    `src/call_vqa_shell.py` ne consomme pas le dictionnaire clé par clé : il
+    somme `|coeff|` sur TOUTES les clés tableau, sans liste blanche, pour
+    former `E_max`. **Ajouter une clé est donc déjà un changement de
+    comportement**, même quand aucune valeur partagée ne bouge d'un bit —
+    mesuré à +15,9 % (`legacy`) et +34,2 % (`max`) pour deux clés de plus.
+    `RescaleArrays.py` itère lui aussi sur toutes les clés.
+
+    Ce test existe parce que ce défaut a été livré une fois, annoncé comme
+    son contraire sur la foi d'une comparaison bit à bit des seules valeurs
+    partagées.
     """
     champ = dict(_champs()["mixte"]); champ["Jz"] = np.zeros((N, N))
     m = PhysicalMapperV2(dx=2 * np.pi / N, norm=norm)
     hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15)
-    assert set(hp) == _CLES_PAR_DEFAUT, (
-        f"clés en trop : {sorted(set(hp) - _CLES_PAR_DEFAUT)}, "
-        f"manquantes : {sorted(_CLES_PAR_DEFAUT - set(hp))}. Tout ajout "
+    assert set(hp) == _CLES_SANS_XPOINT, (
+        f"clés en trop : {sorted(set(hp) - _CLES_SANS_XPOINT)}, "
+        f"manquantes : {sorted(_CLES_SANS_XPOINT - set(hp))}. Tout ajout "
         "déplace `E_max` chez tout consommateur qui somme sur les clés.")
 
+    hp_x = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15,
+                                  advanced_anomalies_enabled=True)
+    assert set(hp_x) == _CLES_SANS_XPOINT | {"K_xpoint"}, (
+        "le drapeau X-point n'ajoute plus exactement une clé")
 
-@pytest.mark.parametrize("norm", NORMS)
-def test_le_scindement_deplace_E_max_ce_qui_est_la_raison_du_opt_in(norm):
-    """Le champ qui SÉPARE — et la mesure qui justifie le défaut à False.
 
-    Sans ce test, `split_plaquette=False` passerait pour une précaution
-    décorative. Il chiffre ce que le drapeau évite : +15,9 % (`legacy`) et
-    +34,2 % (`max`) sur `E_max`, mesuré le 21 août 2026 sur un champ bruité.
+def test_la_formule_legacy_de_la_plaquette_est_inchangee():
+    """`legacy` doit rester la reproduction EXACTE du chemin historique —
+    c'est tout ce qui lui reste comme raison d'être. Recalcul indépendant.
 
-    Sur quelle entrée ce test échoue : si le scindement devenait le défaut,
-    ou si les deux termes cessaient de contribuer à la somme.
+    Sur quelle entrée ce test échoue : le jour où quelqu'un « améliore »
+    aussi `legacy`, auquel cas plus aucun mode ne reproduit les artefacts
+    gelés et toute comparaison avant/après devient impossible.
     """
+    from Simulation.grid import curl_z
     champ = dict(_champs()["mixte"]); champ["Jz"] = np.zeros((N, N))
-    m = PhysicalMapperV2(dx=2 * np.pi / N, norm=norm)
-    sans = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15)
-    avec = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15,
-                                  split_plaquette=True)
-
-    for cle in sans:
-        a, b = sans[cle], avec[cle]
-        if isinstance(a, tuple):
-            assert all(np.array_equal(p, q) for p, q in zip(a, b)), cle
-        elif isinstance(a, np.ndarray):
-            assert np.array_equal(a, b), f"{cle} bouge : le scindement n'est plus inerte"
-        else:
-            assert a == b, cle
-
-    e_sans, e_avec = _emax_facon_call_vqa_shell(sans), _emax_facon_call_vqa_shell(avec)
-    assert e_avec > 1.05 * e_sans, (
-        f"E_max {e_sans:.2f} -> {e_avec:.2f} : les deux termes scindés ne "
-        "pèsent plus dans la somme, ce test ne justifie plus le opt-in")
-
-
-def test_le_scindement_ne_touche_pas_les_cles_preexistantes():
-    """`K_plaquettes` doit rester ce qu'il etait — sinon des nombres publies
-    bougeraient. Recalcul independant de la formule d'origine."""
-    X, Y = _grille()
-    champ = dict(_champs()["xpoint"]); champ["Jz"] = np.zeros((N, N))
     m = PhysicalMapperV2(dx=2 * np.pi / N, norm="legacy")
     hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15)
-    from Simulation.grid import curl_z
+
     omega = curl_z(champ["vx"], champ["vy"], True)
     jz = curl_z(champ["Bx"], champ["By"], True)
     attendu = -PhysicalMapperV2.W_ZZZZ * (np.abs(omega) + np.abs(jz)) / (
@@ -366,7 +388,7 @@ def test_le_scindement_ne_touche_pas_les_cles_preexistantes():
 
 
 # ------------------------------------------------------------------
-#  4. ce que `norm="max"` change au SENS du nombre
+#  6. ce que `norm="max"` change au SENS du nombre
 # ------------------------------------------------------------------
 def test_sous_max_le_pic_est_constant_donc_ne_porte_aucune_structure():
     """Conséquence directe du changement demandé, à connaître.
@@ -375,20 +397,19 @@ def test_sous_max_le_pic_est_constant_donc_ne_porte_aucune_structure():
     uniforme : la magnitude cesse de distinguer quoi que ce soit, et toute
     l'information de structure passe dans le motif spatial.
     """
-    pics_C = {n: _coeffs(n, "max")["C"] for n in ("rotation", "nappe_courant", "xpoint")}
-    pics_K = {n: _coeffs(n, "max")["K"] for n in ("rotation", "nappe_courant", "xpoint")}
-    for pics, attendu, nom in ((pics_C, PhysicalMapperV2.W_ZZ, "max|C|"),
-                               (pics_K, PhysicalMapperV2.W_ZZZZ, "max|K|")):
-        for champ, v in pics.items():
-            assert v == pytest.approx(attendu, rel=1e-9), (
-                f"{nom} = {v:.4f} sur '{champ}', attendu {attendu}")
+    for champ in ("rotation", "nappe_courant", "xpoint"):
+        r = _coeffs(champ, "max")
+        assert r["C"] == pytest.approx(PhysicalMapperV2.W_ZZ, rel=1e-9), \
+            f"max|C| = {r['C']:.4f} sur '{champ}'"
+        assert r["K"] == pytest.approx(PhysicalMapperV2.W_ZZZZ, rel=1e-9), \
+            f"max|K| = {r['K']:.4f} sur '{champ}'"
 
 
 def test_sous_legacy_le_poids_relatif_des_familles_derive_avec_le_champ():
     """Le champ qui SÉPARE les deux normalisations — et le vrai enjeu.
 
     Sous `legacy`, `max|C|` est le rapport pic/moyenne des sauts. Comme
-    `max|K|` vaut 1 dans les deux modes, ce pic EST le poids de la famille ZZ
+    `max|K|` reste de l'ordre de 1, ce pic EST le poids de la famille ZZ
     relativement à la famille ZZZZ dans l'hamiltonien. Il dérive donc avec la
     seule « spikiness » de l'entrée :
 
@@ -399,13 +420,8 @@ def test_sous_legacy_le_poids_relatif_des_familles_derive_avec_le_champ():
     `max` : c'est l'équilibre de deux familles de termes décidé par la forme
     du champ au lieu de la conception. C'est la réponse à « où est
     l'arbitrage » : il n'y en a pas.
-
-    Sur quelle entrée ce test échoue : le jour où `legacy` cesse de diviser
-    par une moyenne, les deux modes deviennent indiscernables et le test
-    ci-dessus ne mesure plus rien.
     """
-    rot = _coeffs("rotation", "legacy")
-    nappe = _coeffs("nappe_courant", "legacy")
+    rot, nappe = _coeffs("rotation", "legacy"), _coeffs("nappe_courant", "legacy")
     r_rot, r_nappe = rot["C"] / rot["K"], nappe["C"] / nappe["K"]
     assert r_nappe > 1.5 * r_rot, (
         f"ZZ:ZZZZ nappe {r_nappe:.3f} vs rotation {r_rot:.3f} : `legacy` ne "
@@ -417,11 +433,10 @@ def test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception():
 
     Le rapport ZZ:ZZZZ vaut `W_ZZ / W_ZZZZ` sur TOUT champ non uniforme :
     l'équilibre des deux familles redevient un paramètre de conception, pas
-    une propriété de l'instantané. Ce test est l'argument pour `max` ; sans
-    lui, le passage à `max` ne serait justifié que par l'invariance en `dim`.
+    une propriété de l'instantané. Ce test est l'argument pour `max`.
     """
     attendu = PhysicalMapperV2.W_ZZ / PhysicalMapperV2.W_ZZZZ
-    for nom in ("rotation", "nappe_courant", "xpoint"):
+    for nom in ("rotation", "nappe_courant", "xpoint", "mixte"):
         r = _coeffs(nom, "max")
         assert r["C"] / r["K"] == pytest.approx(attendu, rel=1e-9), (
             f"ZZ:ZZZZ = {r['C'] / r['K']:.4f} sur '{nom}', attendu {attendu} "
@@ -429,7 +444,7 @@ def test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception():
 
 
 # ------------------------------------------------------------------
-#  5. la sélectivité ne dépend pas de l'échelle ni de la résolution
+#  7. la sélectivité ne dépend ni de l'échelle ni de la résolution
 # ------------------------------------------------------------------
 @pytest.mark.parametrize("norm", NORMS)
 def test_le_verdict_de_selectivite_survit_a_un_facteur_dechelle(norm):
@@ -445,3 +460,62 @@ def test_le_verdict_de_selectivite_survit_a_un_facteur_dechelle(norm):
         assert float(np.max(np.abs(hp["K_xpoint"]))) > 0.5, (
             f"K_xpoint s'éteint au facteur {facteur} : le coefficient n'est "
             "pas adimensionnel")
+
+
+def test_la_plaquette_max_est_invariante_a_lechelle_de_chaque_champ():
+    """Le corollaire de la normalisation séparée : multiplier B seul par 10
+    ne doit RIEN changer sous `max` — et changer beaucoup sous `legacy`."""
+    base = dict(_champs()["mixte"])
+    def carte(norm, facteur):
+        champ = dict(base); champ["Bx"] = base["Bx"] * facteur
+        champ["Jz"] = np.zeros((N, N))
+        m = PhysicalMapperV2(dx=2 * np.pi / N, norm=norm)
+        hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15)
+        return np.abs(np.asarray(hp["K_plaquettes"], dtype=float))
+
+    np.testing.assert_allclose(carte("max", 1.0), carte("max", 10.0), rtol=1e-9,
+                               err_msg="`max` n'est plus invariant a l'echelle "
+                                       "de B seul : la normalisation separee a saute")
+    a, b = carte("legacy", 1.0), carte("legacy", 10.0)
+    assert not np.allclose(a, b, rtol=1e-3), (
+        "`legacy` est devenu invariant lui aussi : les deux modes ne se "
+        "separent plus, ce test ne mesure plus rien")
+
+
+# ------------------------------------------------------------------
+#  8. le fait qui motive tout le changement, sur les VRAIS champs
+# ------------------------------------------------------------------
+@pytest.mark.slow
+def test_sur_les_champs_reels_legacy_eteint_une_structure_sur_deux_scenarios():
+    """Ce que la mesure de laboratoire prétend reproduire, sur le corpus.
+
+    Sur quelle entrée ce test échoue : le jour où les DNS du dépôt cessent
+    d'être dominés par une seule structure — auquel cas la justification du
+    changement de formule tombe et il faut la réécrire, pas retoucher le
+    seuil.
+    """
+    import glob
+    from Simulation.grid import curl_z
+    attendus = {"harris_tearing": "vorticite", "kelvin_helmholtz": "courant"}
+    vus = {}
+    for f in sorted(glob.glob(os.path.join(_RACINE, "results",
+                                           "dns_*_Re400_N256.npz"))):
+        nom = os.path.basename(f)[4:-16]
+        if nom not in attendus:
+            continue
+        d = np.load(f)
+        si = len(d["vx"]) // 2
+        om = curl_z(d["vx"][si].astype(float), d["vy"][si].astype(float), True)
+        jz = curl_z(d["Bx"][si].astype(float), d["By"][si].astype(float), True)
+        a, b = float(np.max(np.abs(om))), float(np.max(np.abs(jz)))
+        vus[nom] = a / (a + b)
+
+    if len(vus) < 2:
+        pytest.skip("artefacts DNS N=256 absents")
+
+    assert vus["harris_tearing"] < 0.05, (
+        f"harris : la vorticité pèse {vus['harris_tearing']:.4f} sous `legacy`, "
+        "elle n'est plus écrasée — la justification du changement a bougé")
+    assert vus["kelvin_helmholtz"] > 0.95, (
+        f"kh : le courant pèse {1 - vus['kelvin_helmholtz']:.4f}, il n'est plus "
+        "écrasé — même remarque")

@@ -3910,6 +3910,86 @@ sous cet angle : c'est la file suivante.
 
 ---
 
+## Passe du 21 août (suite) — les champs d'essai, deuxième trou de la même famille
+
+La passe précédente a ajouté un champ MIXTE aux tests de mapping, parce que
+quatre champs PURS ne pouvaient pas distinguer deux normalisations. Le champ
+mixte ajouté avait lui-même un défaut, et il a fallu trois tests rouges pour
+le voir : **le tourbillon et la nappe de courant y culminaient au MÊME
+POINT.**
+
+Sur un tel champ, aucune structure ne peut en écraser une autre — la question
+même que le test posait n'a pas de sens. Les trois tests censés mesurer
+l'écrasement mesuraient `1,0000` des deux côtés, et auraient « prouvé » qu'il
+n'y a pas d'écrasement alors que sur les vrais champs il atteint un facteur
+179.
+
+**Ce que ça ajoute à la leçon de la passe précédente.** Il ne suffit pas
+qu'un champ d'essai excite plusieurs modes : il faut qu'il les excite **là où
+la formule les fait interagir**. Une somme sous dénominateur commun ne se
+distingue d'une somme de quantités normalisées que si les deux signaux ont
+des supports **disjoints** ou des amplitudes très différentes. Le champ
+d'essai doit reproduire la géométrie du phénomène, pas seulement sa liste
+d'ingrédients.
+
+Les champs mixtes séparent désormais les deux structures (recouvrement
+3,7e-07), ce qui est aussi le cas physique honnête : dans un écoulement réel
+le vortex est ici et la nappe est là.
+
+**Un garde ajouté au corpus lui-même** :
+`test_sur_les_champs_reels_legacy_eteint_une_structure_sur_deux_scenarios`
+(marqué `slow`) rejoue le fait sur les artefacts DNS N=256. Il rougit le jour
+où les scénarios du dépôt cessent d'être dominés par une seule structure —
+c'est-à-dire le jour où la justification du changement de formule tombe.
+
+### Ce que le basculement du défaut a fait apparaître comme non couvert
+
+Six tests ont rougi au basculement de `norm` sur `max`. Aucun n'était un
+faux positif ; chacun désignait quelque chose que personne ne gardait :
+
+| test | ce qu'il a révélé |
+|---|---|
+| `test_legacy_est_le_defaut` | le garde a fonctionné — un défaut se décide |
+| `test_noise_weaker_than_anomaly` | la **grandeur** (le pic) avait cessé de discriminer |
+| `test_the_ground_state_is_uniform...` | son champ est du **bruit**, pas un DNS, malgré son nom |
+| `test_le_cas_mesure_sur_les_vraies_donnees` (×2) | la platitude de D-86 était propre à `legacy` |
+
+**Le trou de couverture commun : rien ne mesurait ces faits PAR
+NORMALISATION.** Chacun était épinglé une fois, sous le défaut du jour, comme
+s'il s'agissait d'une propriété du calcul. Les quatre sont désormais mesurés
+dans les deux modes, avec le champ ou le mode qui les sépare.
+
+Un helper `_balayage_harris(norm)` force la normalisation par
+`__init__.__defaults__` et **vérifie que le forçage a pris** — sans ce garde,
+un changement de signature ferait mesurer deux fois le même mode en silence.
+Mutation vérifiée : forçage rendu no-op → 1 failed.
+
+Deux tests `slow` ont été ajoutés, tous deux sur les **vrais** artefacts DNS,
+là où les mesures de laboratoire ne suffisaient pas :
+`test_sur_les_vrais_champs_la_degenerescence_de_dim2_TIENT` (40 instantanés)
+et `test_sur_les_champs_reels_legacy_eteint_une_structure_sur_deux_scenarios`.
+
+### Ce qui n'est toujours pas couvert
+
+Les autres producteurs de dictionnaires consommés par agrégation sur les clés
+n'ont pas été passés en revue (file ouverte à la passe précédente). Et la
+question « les champs d'essai des AUTRES fichiers de `tests/` reproduisent-ils
+la géométrie de ce qu'ils testent, ou seulement ses ingrédients ? » n'a été
+posée que pour `tests/mapping/`.
+
+**La file la plus lourde, ouverte par cette passe** : combien d'autres faits
+du dépôt sont épinglés une seule fois, sous le défaut du jour, comme s'ils
+étaient des propriétés du calcul ? Quatre l'étaient dans les six tests qui ont
+rougi. La question se pose pour tout test qui construit un mappeur sans
+préciser `norm` — et, plus généralement, pour tout test qui lit un défaut au
+lieu de le nommer.
+
+Et : **les 52 configurations de D-86 n'ont pas été rejouées** sous le nouveau
+défaut. Une seule l'a été. Tout ce qui s'appuie sur un balayage `c_bias` est
+donc non couvert tant que la campagne n'a pas tourné (D-186).
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

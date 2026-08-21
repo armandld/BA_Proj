@@ -187,10 +187,33 @@ def test_max_est_strictement_plus_invariant_que_legacy():
 # ------------------------------------------------------------------
 #  3. le chemin historique n'a pas bouge
 # ------------------------------------------------------------------
-def test_legacy_est_le_defaut():
-    assert PhysicalMapperV2().norm == "legacy", (
+def test_max_est_le_defaut():
+    """Le defaut a bascule de `legacy` a `max` le 21 aout 2026 — DECIDE.
+
+    Ce garde a fait son travail : il a rougi au basculement, et le
+    basculement a du etre justifie avant d'etre accepte. Les trois faits
+    mesures qui l'ont emporte, tous dans le meme sens et aucun contre :
+
+      1. sous `legacy` le poids relatif ZZ:ZZZZ derive d'un facteur 2,59
+         avec la seule spikiness du champ ;
+      2. sous `legacy` max|K| vaut 0,74 a 0,99 selon le scenario, donc la
+         famille ZZZZ est silencieusement devaluee jusqu'a 26 % ;
+      3. sous `legacy` la moitie du terme ZZZZ est numeriquement morte sur
+         deux scenarios canoniques sur quatre (facteur 179 sur harris).
+
+    Il reste un garde : rebasculer se decide, ne se subit pas.
+    """
+    assert PhysicalMapperV2().norm == "max", (
         "changer le defaut est un changement de comportement scientifique : "
         "il se decide, il ne se subit pas")
+
+
+def test_legacy_reste_joignable_et_est_le_seul_mode_de_reproduction():
+    """`legacy` n'a plus qu'une raison d'etre : reproduire les artefacts
+    geles, qui ont ete calcules avec. Le jour ou il cesse d'etre joignable,
+    plus aucune comparaison avant/apres n'est possible."""
+    assert "legacy" in PhysicalMapperV2.NORMALISATIONS
+    assert PhysicalMapperV2(norm="legacy").norm == "legacy"
 
 
 def test_legacy_reproduit_la_formule_historique():

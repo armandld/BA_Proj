@@ -75,6 +75,30 @@ nombre au bit près, et la mutation survivait au fichier entier. La bonne
 question à un corpus d'essai n'est pas « couvre-t-il les cas ? » mais **« deux
 implémentations différentes peuvent-elles y rendre le même nombre ? »**.
 
+**Le même piège, une couche plus bas.** Le champ mixte ajouté pour corriger
+ce qui précède plaçait les deux structures **au même point**. Il excitait bien
+les deux modes — et ne séparait toujours rien, parce que deux formules ne
+divergent que là où elles font **interagir** les signaux. Un champ d'essai
+doit reproduire la **géométrie** du phénomène, pas seulement sa liste
+d'ingrédients. Coût : trois tests rouges pour s'en apercevoir, et ils étaient
+rouges dans le bon sens.
+
+**Mesurer sur le corpus AVANT de corriger.** Le vrai poids de ce défaut
+(facteur 179, une structure morte sur 2 scénarios sur 4) n'est apparu qu'en
+mesurant sur les DNS réels, pas sur les champs analytiques. La mesure de
+laboratoire dit *si* un mécanisme existe ; seule la mesure sur le corpus dit
+s'il **compte**.
+
+**Lire un test rouge trop vite, dans le sens qui m'arrange.**
+`test_the_ground_state_is_uniform_on_real_deployed_coefficients` est devenu
+rouge après un changement à moi, et j'y ai lu « la dégénérescence D-45/D-47
+est corrigée » — le résultat le plus spectaculaire possible. Le champ de ce
+test est du **bruit gaussien** ; son nom dit « real deployed coefficients »
+pour désigner le chemin de code, pas les données. Remesuré sur 40 instantanés
+DNS : 97,5 % → 90 % d'états uniformes. La dégénérescence bouge et ne tombe
+pas. **Un test rouge dit qu'une valeur a changé, jamais pourquoi ni combien
+ça compte** — et un nom de test n'est pas une garantie de portée.
+
 ## Ce qui marche
 
 - **Mesurer avant d'affirmer, y compris contre soi.** Le splitting de Strang

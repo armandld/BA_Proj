@@ -155,6 +155,30 @@ def _artefacts_presents(scenario, res, N, dim):
 
 @pytest.mark.skipif(not _artefacts_presents("harris_tearing", [400], 96, 4),
                     reason="artefacts DNS/patches harris_tearing N=96 absents")
+def _balayage_harris(norm, c_grid=None, re=400):
+    """Le balayage reel de D-86, dans la normalisation demandee."""
+    import Simulation.HamiltParams_v2 as HP2
+    from config import RESULTS_DIR
+    anciens = HP2.PhysicalMapperV2.__init__.__defaults__
+    HP2.PhysicalMapperV2.__init__.__defaults__ = tuple(
+        norm if d in ("legacy", "max") else d for d in anciens)
+    # Le garde du garde : si le forcage devenait un no-op — signature
+    # changee, defaut deplace — tous les tests de ce fichier passeraient en
+    # mesurant deux fois la MEME normalisation, sans que rien ne crie.
+    assert HP2.PhysicalMapperV2().norm == norm, (
+        f"le forcage de norm={norm!r} n'a pas pris : la signature de "
+        "PhysicalMapperV2.__init__ a change, ce fichier ne mesure plus rien")
+    try:
+        return p10a.analyse_snapshots(
+            os.path.join(RESULTS_DIR, f"dns_harris_tearing_Re{re}_N96.npz"),
+            os.path.join(RESULTS_DIR,
+                         "patches_harris_tearing_Re400_N96_dim4.npz"),
+            4, c_grid=C_GRID if c_grid is None else c_grid,
+            max_snaps=8, seed=0)
+    finally:
+        HP2.PhysicalMapperV2.__init__.__defaults__ = anciens
+
+
 def test_le_cas_mesure_sur_les_vraies_donnees():
     """Le balayage reel qui a revele D-86, rejoue de bout en bout.
 
@@ -162,13 +186,14 @@ def test_le_cas_mesure_sur_les_vraies_donnees():
     seul test du fichier qui traverse la construction du hamiltonien et la
     descente de champ moyen ; les autres portent sur ce qu'on en fait.
 
-    Sur la version d'avant D-86 il echoue sur `f1_span`, absent du resultat.
+    **La degenerescence est propre a `norm="legacy"`.** Mesure le 21 aout
+    2026, apres le basculement du defaut : sous `max`, les 4 Re rendent
+    `f1_span` = 0,550 a 0,566 et AUCUN n'est degenere. Le balayage plat de
+    D-86 etait donc, sur cette configuration, un artefact de la
+    normalisation historique — le hamiltonien de champ moyen n'y separait
+    rien parce que ses coefficients ne separaient rien.
     """
-    from config import RESULTS_DIR
-    r = p10a.analyse_snapshots(
-        os.path.join(RESULTS_DIR, "dns_harris_tearing_Re400_N96.npz"),
-        os.path.join(RESULTS_DIR, "patches_harris_tearing_Re400_N96_dim4.npz"),
-        4, c_grid=C_GRID, max_snaps=8, seed=0)
+    r = _balayage_harris("legacy")
 
     # la courbe ne separe rien : F1 identiquement nul sur les 25 points
     assert r["f1_span"] == 0.0
@@ -185,6 +210,56 @@ def test_le_cas_mesure_sur_les_vraies_donnees():
     assert r["classical_f1"] == pytest.approx(0.745, abs=5e-3)
 
 
+def test_sous_le_defaut_actuel_le_balayage_nest_plus_degenere():
+    """Le champ qui SEPARE : sans lui, le test ci-dessus laisserait croire
+    que la platitude est une propriete de la configuration.
+
+    Sur quelle entree ce test echoue : si `max` cessait de donner de la
+    resolution a ce balayage, la justification du basculement du defaut
+    perdrait son argument le plus fort.
+    """
+    r = _balayage_harris("max")
+    assert r["degenerate"] is False, "le balayage est redevenu plat sous `max`"
+    assert r["f1_span"] > 0.4, (
+        f"f1_span = {r['f1_span']:.4f} sous `max`, mesure 0,566")
+    # le hamiltonien mesure enfin quelque chose — et reste SOUS le classique
+    assert r["f1_grid"].max() < r["classical_f1"], (
+        "le hamiltonien de champ moyen depasse la baseline classique : "
+        "c'est un resultat, il se publie, il ne se glisse pas dans un test")
+
+
+def test_loptimum_du_balayage_est_AU_BORD_de_la_grille_donc_illisible():
+    """D-86 en MIROIR, trouve en corrigeant D-86.
+
+    Sous `max` la courbe monte de facon monotone et `argmax` rend le bord
+    DROIT de `logspace(-1, 2)` — 100,0 sur 3 Re sur 4. Un optimum au bord
+    n'est pas un optimum, exactement comme le bord gauche ne l'etait pas.
+
+    Mesure en elargissant a `logspace(-1, 5)` : F1 sature a 0,6333 des
+    `c_bias` ~ 251, et les six derniers points sont identiques. L'optimum
+    est donc la limite BIAIS SEUL — les couplages n'apportent rien de
+    positif — et il reste sous la baseline classique (0,745).
+
+    Ce test epingle le defaut, il ne le corrige pas : elargir la grille est
+    une decision qui change tous les `c_bias*` publies.
+    """
+    r = _balayage_harris("max")
+    assert np.isclose(r["c_bias_star"], C_GRID[-1]), (
+        f"c_bias* = {r['c_bias_star']:.4g} n'est plus au bord droit "
+        f"({C_GRID[-1]:.4g}) : la grille a change, remesurer")
+
+    large = np.logspace(-1.0, 5.0, 31)
+    rl = _balayage_harris("max", c_grid=large)
+    assert rl["f1_grid"].max() > r["f1_grid"].max(), (
+        "elargir la grille n'ameliore plus le F1 : le bord n'etait donc pas "
+        "contraignant, relire ce test")
+    assert np.allclose(rl["f1_grid"][-6:], rl["f1_grid"][-1]), (
+        "F1 ne sature plus en haut de grille : la limite biais-seul a bouge")
+    assert rl["f1_grid"].max() < rl["classical_f1"], (
+        "meme a la saturation le hamiltonien depasse le classique — resultat "
+        "majeur, a publier et non a epingler ici")
+
+
 @pytest.mark.skipif(not _artefacts_presents("harris_tearing",
                                             [400, 800, 1200, 1600], 96, 4),
                     reason="artefacts DNS/patches harris_tearing N=96 absents")
@@ -193,14 +268,28 @@ def test_une_campagne_entierement_degeneree_leve(monkeypatch):
     le BALAYAGE qui n'a rien mesure. L'artefact s'ecrivait quand meme, avec
     `c_bias* = 0,1` sur chaque ligne.
 
-    harris_tearing a dim=4, N=96 est le cas mesure : 4 Re sur 4 degeneres.
+    harris_tearing a dim=4, N=96 est le cas mesure : 4 Re sur 4 degeneres
+    SOUS `norm="legacy"`, que ce test force explicitement. Sous le defaut
+    actuel (`max`) les 4 Re sont informatifs et la campagne n'a plus a lever :
+    la garde reste necessaire, le cas qui la declenche a change.
+
     La campagne leve avant d'ecrire, donc ce test ne touche pas `results/`.
     """
+    import Simulation.HamiltParams_v2 as HP2
+    anciens = HP2.PhysicalMapperV2.__init__.__defaults__
+    HP2.PhysicalMapperV2.__init__.__defaults__ = tuple(
+        "legacy" if d in ("legacy", "max") else d for d in anciens)
+    assert HP2.PhysicalMapperV2().norm == "legacy", (
+        "le forcage de norm='legacy' n'a pas pris : ce test ne mesure plus "
+        "le cas degenere qu'il pretend mesurer")
     monkeypatch.setattr(sys, "argv", [
         "h2b_analytical_solution", "--scenario", "harris_tearing",
         "--dim", "4", "--N", "96", "--max-snaps", "8", "--seed", "0"])
-    with pytest.raises(RuntimeError, match="balayage vide"):
-        p10a.main()
+    try:
+        with pytest.raises(RuntimeError, match="balayage vide"):
+            p10a.main()
+    finally:
+        HP2.PhysicalMapperV2.__init__.__defaults__ = anciens
 
 
 def test_le_module_expose_bien_la_tolerance_et_pas_un_nombre_magique():

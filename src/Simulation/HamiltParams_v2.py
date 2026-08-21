@@ -14,28 +14,36 @@ Architecture:
   ZZZZ (circulation plaquette):
     K_p = -w_ZZZZ * (|omega_z,p| + |J_z,p|) / (|omega_z|_max + |J_z|_max + eps)
 
-  ZZZZ scindee, un terme par TYPE de structure :
-    K_vort = -w_ZZZZ * |omega_z| / max|omega_z|
-    K_curr = -w_ZZZZ * |J_z|     / max|J_z|
+  ZZZZ sous `norm="max"` — les deux magnitudes rendues adimensionnelles
+  SEPAREMENT, puis sommees en UN SEUL terme :
+    K_p = -w_ZZZZ * (|omega_z|/max|omega_z| + |J_z|/max|J_z|) / max(somme)
 
-    `K_plaquettes` somme |omega| et |J| : un vortex pur et une nappe de
-    courant pure y rendent EXACTEMENT la meme valeur, donc le terme capte
-    « il se passe quelque chose », pas un type. Les deux termes ci-dessus
-    separent les deux, chacun normalise par le max de SON signal — dans les
-    deux modes, y compris `legacy`, car les normaliser par une moyenne
-    reintroduirait le couplage entre spikiness du champ et poids des
-    familles.
+    POURQUOI. La forme `legacy` divise la somme des magnitudes BRUTES par un
+    denominateur COMMUN. Le signal le plus fort y ecrase l'autre en
+    proportion de son amplitude — et sur les champs MHD du depot, cette
+    proportion n'a rien d'anecdotique. Mesure a N=256, 12 instantanes par
+    scenario, poids effectif de la vorticite dans la somme :
 
-    OPT-IN : `split_plaquette=True`. Hors du defaut a dessein. Le
-    dictionnaire rendu est consomme comme un TOUT par `call_vqa_shell.py`,
-    qui somme |coeff| sur toutes les cles tableau pour former `E_max` :
-    deux cles de plus le deplacent de +15,9 % (`legacy`) / +34,2 % (`max`)
-    alors qu'aucune valeur partagee ne bouge. Verifier l'egalite cle par
-    cle ne suffit donc PAS a prouver qu'un consommateur ne bouge pas ;
-    c'est l'ENSEMBLE des cles qui fait partie du contrat.
+      harris_tearing     0,000 - 0,003 - 0,006   -> la VORTICITE est morte
+      kelvin_helmholtz   0,975 - 0,993 - 1,000   -> le COURANT est mort
+      mhd_rotor          0,193 - 0,391 - 1,000
+      orszag_tang        0,212 - 0,278 - 0,400
 
-    `K_plaquettes` reste inchange bit a bit dans les deux modes, et le
-    circuit ne lit pas encore les deux termes scindes.
+    Sur DEUX scenarios canoniques sur quatre, l'une des deux structures que
+    le terme pretend detecter ne contribue pas — un facteur 179 (harris) et
+    84 (KH) entre les deux maxima. Normaliser chaque signal par SON propre
+    maximum donne a chaque structure le meme poids, quel que soit son
+    rapport d'amplitude.
+
+    CE QUE CE CHOIX AFFIRME, et qui est discutable : que pour DECIDER OU
+    RAFFINER, le type de structure compte et le rapport d'amplitude entre
+    types ne compte pas. L'amplitude n'est pas perdue pour autant — elle
+    entre par le biais Z (accroche au score classique) et par le couplage ZZ
+    (magnitude du saut). La plaquette, elle, ne fait plus que dire ou la
+    circulation est localement forte RELATIVEMENT A SON PROPRE type.
+
+    UN SEUL TERME, une seule porte ZZZZ : scinder en deux familles couterait
+    des portes pour la meme information.
 
   ZZZZ X-point (optional):
     K_xp = -w_ZZZZ * max(0, -det(nabla B)) / (|det(nabla B)|_max + eps)
@@ -137,14 +145,23 @@ class PhysicalMapperV2:
     C_BIAS = 0.1     # Z bias scale: fraction of median(|C|,|K|). Default.
     EPS = 1e-10       # division-by-zero guard
 
-    #: Normalisations disponibles. `legacy` = le chemin historique (moyenne
-    #: pour ZZ, somme des deux maxima pour ZZZZ, mediane pour le biais).
-    #: `max` = tout normalise par le max de son propre signal, biais accroche
-    #: au max des couplages.
+    #: Normalisations disponibles.
+    #:
+    #: `max` (DEFAUT) — tout est normalise par le max de son propre signal :
+    #: ZZ par le max des sauts, chacune des deux magnitudes de la plaquette
+    #: par SON maximum avant la somme, le biais accroche au max des
+    #: couplages. Les coefficients sont alors adimensionnels et l'equilibre
+    #: entre familles est un parametre de conception.
+    #:
+    #: `legacy` — le chemin historique, conserve pour une seule raison :
+    #: REPRODUIRE les artefacts geles, qui ont ete calcules avec. Moyenne
+    #: pour ZZ, denominateur COMMUN pour les deux magnitudes de la plaquette,
+    #: mediane pour le biais. Ne pas l'ameliorer : le jour ou il cesse de
+    #: reproduire le passe, plus rien ne le fait.
     NORMALISATIONS = ("legacy", "max")
 
     def __init__(self, dx=1.0, c_bias=None, w_zz=None, w_zzzz=None,
-                 fixed_curl=True, norm="legacy"):
+                 fixed_curl=True, norm="max"):
         """
         Parameters
         ----------
@@ -178,8 +195,7 @@ class PhysicalMapperV2:
 
     def compute_coefficients(self, sim, score, fields, threshold_amr,
                              advanced_anomalies_enabled=False,
-                             dx_override=None, split_plaquette=False,
-                             **kwargs):
+                             dx_override=None, **kwargs):
         """
         Compute Hamiltonian coefficients (Z + ZZ + ZZZZ).
 
@@ -203,26 +219,17 @@ class PhysicalMapperV2:
             Whether to compute X-point reconnection terms.
         dx_override : float, optional
             Effective cell size for downsampled fields.
-        split_plaquette : bool, default False
-            Ajoute `K_vorticity` et `K_current`, la plaquette SCINDEE par
-            type de structure. **Hors du defaut a dessein** : le dictionnaire
-            rendu est consomme comme un TOUT par `src/call_vqa_shell.py`, qui
-            somme `|coeff|` sur toutes les cles tableau pour former `E_max`.
-            Deux cles de plus deplacent donc `E_max` de +15,9 % (`legacy`) et
-            +34,2 % (`max`) — mesure — sans que la moindre valeur partagee
-            change. Le circuit ne lit pas encore les deux termes ; les rendre
-            par defaut serait un changement de comportement de `src/` fait
-            « au passage ».
 
         Returns
         -------
         dict with 'H_edges', 'C_edges', 'K_plaquettes', ['K_xpoint'],
              'threshold_amr', 'w_z_frac'
 
-             Plus 'K_vorticity' et 'K_current' SI ET SEULEMENT SI
-             `split_plaquette=True`. Par defaut l'ensemble des cles rendues
-             est exactement celui d'avant le scindement — voir le parametre
-             ci-dessus pour pourquoi c'est le contrat, et pas un detail.
+             L'ENSEMBLE des cles fait partie du contrat, pas seulement les
+             valeurs : `src/call_vqa_shell.py` somme |coeff| sur TOUTES les
+             cles tableau pour former `E_max`, sans liste blanche. Ajouter
+             une cle y deplace `E_max` (mesure : +15,9 % a +34,2 % pour deux
+             cles) sans qu'aucune valeur partagee ne bouge.
         """
         dx = dx_override if dx_override is not None else self.dx
 
@@ -278,48 +285,31 @@ class PhysicalMapperV2:
         # discrete current density: J_z = dBy/dx - dBx/dy
         Jz_curl = curl_z(Bx, By, self.fixed_curl)
 
-        # Normalisation de la plaquette.
+        # Normalisation de la plaquette — c'est ici que les deux modes
+        # different le plus, et pas seulement par un denominateur.
         #
-        # `legacy` divise par max|omega| + max|J|, DEUX maxima pris en des
-        # points possiblement differents : max|K| < w_zzzz des que les deux
-        # extrema ne coincident pas, d'une quantite qui depend du champ.
-        # `max` divise par le max de la SOMME, donc max|K| == w_zzzz
-        # exactement — c'est ce qui rend le terme comparable d'un `dim` a
-        # l'autre.
-        signal_plaq = np.abs(omega_z) + np.abs(Jz_curl)
+        # `legacy` somme les magnitudes BRUTES puis divise par un
+        # denominateur COMMUN (max|omega| + max|J|). Le signal le plus fort
+        # y ecrase l'autre en proportion de son amplitude, et sur les champs
+        # MHD du depot ce rapport atteint 179 : voir l'en-tete du module.
+        #
+        # `max` rend chaque signal ADIMENSIONNEL par son propre maximum
+        # AVANT de sommer. Les deux structures pesent alors 1/2 chacune quel
+        # que soit leur rapport d'amplitude, et le max de la somme ramene le
+        # pic a w_zzzz exactement — un seul terme ZZZZ, une seule porte.
         if self.norm == "max":
+            pic_om = float(np.max(np.abs(omega_z)))
+            pic_jz = float(np.max(np.abs(Jz_curl)))
+            signal_plaq = (
+                np.abs(omega_z) / (pic_om if pic_om > self.EPS else 1.0)
+                + np.abs(Jz_curl) / (pic_jz if pic_jz > self.EPS else 1.0))
             pic_plaq = float(np.max(signal_plaq))
             norm_plaq = pic_plaq if pic_plaq > self.EPS else 1.0
         else:
+            signal_plaq = np.abs(omega_z) + np.abs(Jz_curl)
             norm_plaq = np.max(np.abs(omega_z)) + np.max(np.abs(Jz_curl)) + self.EPS
 
         K_plaquettes = -self.w_zzzz * signal_plaq / norm_plaq
-
-        # ── Plaquette SCINDEE : un terme par type de structure ────────────
-        # `K_plaquettes` somme |omega| et |J|, si bien qu'un vortex pur et
-        # une nappe de courant pure rendent EXACTEMENT la meme valeur : le
-        # terme capte « il se passe quelque chose », pas un type.
-        #
-        # Les deux termes ci-dessous separent les deux. Chacun est normalise
-        # par le max de SON PROPRE signal — dans les deux modes, y compris
-        # `legacy` : les normaliser par une moyenne reintroduirait le
-        # couplage entre la spikiness du champ et le poids des familles,
-        # qui est precisement ce qu'on retire.
-        #
-        # `K_plaquettes` est laisse INCHANGE bit a bit. Les deux termes
-        # scindes sont OPT-IN (`split_plaquette=True`) : le dict rendu est
-        # consomme comme un TOUT par `call_vqa_shell.py` (somme de |coeff|
-        # sur toutes les cles -> `E_max`), si bien qu'AJOUTER une cle est
-        # deja un changement de comportement, meme quand aucune valeur
-        # partagee ne bouge.
-        def _selectif(signal):
-            pic = float(np.max(np.abs(signal)))
-            return -self.w_zzzz * np.abs(signal) / (pic if pic > self.EPS else 1.0)
-
-        split_terms = {}
-        if split_plaquette:
-            split_terms["K_vorticity"] = _selectif(omega_z)
-            split_terms["K_current"] = _selectif(Jz_curl)
 
         # ==============================================================
         #  3. Z (activity bias)
@@ -359,7 +349,6 @@ class PhysicalMapperV2:
             "H_edges": (H_horiz, H_vert),
             "C_edges": (C_horiz, C_vert),
             "K_plaquettes": K_plaquettes,
-            **split_terms,
             "threshold_amr": threshold_amr,
             "w_z_frac": self.c_bias,
         }
