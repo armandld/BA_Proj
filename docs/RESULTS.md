@@ -7446,3 +7446,87 @@ nombre calculé sur la famille gelée N = 256 / N = 64.
 
 Aucun des deux n'est corrigé ici : le premier touche un test de gel, le
 second un écrivain d'artefacts publiés — les deux demandent une décision.
+
+---
+
+# `dim` n'a de sens que relativement à `N` — et la limite est dure
+
+Question de USER : *« la dim ne marche que si le N est adapté, n'est-ce pas ? »*
+Oui, et la contrainte n'est pas affaire de goût.
+
+## Le mécanisme
+
+Le label de la phase 2 est l'écart-type **intra-patch** : `patch_l2_errors`
+remplace chaque patch par sa moyenne, puis mesure l'écart du champ fin à
+cette moyenne. Un patch de `p × p` cellules estime donc cet écart-type sur
+`p²` échantillons — et **à `p = 1` il vaut identiquement zéro**, puisqu'une
+cellule ne dévie pas de sa propre moyenne.
+
+Le seuil étant un percentile de valeurs toutes nulles vaut 0, et
+`is_hard = (l2 >= 0)` marque alors **100 % des patches comme durs**. Tout F1
+mesuré dessus vaut celui du prédicteur constant.
+
+| N | dim | patch `p` | `p²` | état |
+|---|---|---|---|---|
+| 96 | 8 | 12 | 144 | ok |
+| 96 | 16 | 6 | 36 | **marginal** |
+| 96 | 32 | 3 | 9 | bruit |
+| 256 | 16 | 16 | 256 | ok |
+| 64 | 64 | 1 | 1 | **vide** |
+
+**Règle** : `dim ≤ N/8` pour rester confortable (`p ≥ 8`, soit ≥ 64 points).
+Conséquence directe sur la courbe de cône : son point `dim = 16` a été pris à
+N = 96, donc `p = 6` — **marginal**. Le couple sain pour `dim = 16` est
+N = 256.
+
+## Le corpus, mesuré
+
+**4 artefacts au label identiquement nul**, tous `*_N64_dim64` :
+
+```
+patches_{harris_tearing,kelvin_helmholtz,mhd_rotor,orszag_tang}_Re400_N64_dim64.npz
+   l2_errors tout à zéro   seuil = 0,0e+00   is_hard = 100 % de positifs
+```
+
+## Pourquoi ce n'est pas une entrée `DEFAUTS.md`
+
+Par la règle d'arrêt : un défaut n'y entre que s'il porte une lecture publiée
+ou empêche la campagne de mesurer ce qu'elle prétend. Mesuré :
+
+- **aucun script** de `study/`, `figures/` ou `scripts/` ne nomme `dim=64` ;
+- la table maîtresse ne cite que `dim2`, `dim4`, `dim8`.
+
+Personne ne les consomme. Ils sont donc notés ici et traités après la
+campagne, comme la règle le prévoit.
+
+## Ce qui est gardé
+
+`tests/study/test_t28_t29_labels_and_ci.py` gardait déjà le **consommateur**
+— le relabelliseur lève `SystemExit` sur un seuil dégénéré — et son propre
+message notait que le producteur, lui, *« ne crie pas »*. Ce trou est
+maintenant couvert côté producteur :
+
+`tests/study/test_label_degenere_quand_le_patch_est_trop_petit.py`, **10
+tests** :
+
+- le mécanisme est **calculé**, pas supposé (`p = 1` → label nul), avec le
+  champ qui **sépare** (`p = 2` → label non nul, sinon le test passerait sur
+  un champ uniforme sans rien prouver) ;
+- la liste des quatre dégénérés est **fermée** : un cinquième fait rougir ;
+- une exemption **périmée** crie aussi (si l'un guérit, l'entrée doit sortir) ;
+- et la tolérance est conditionnée : le jour où un script nomme `dim=64`,
+  elle tombe.
+
+**Vérifié par mutation** :
+
+| mutation | effet |
+|---|---|
+| un cinquième artefact dégénéré entre dans le corpus | 1 failed |
+| un script se met à nommer `dim=64` | 1 failed |
+| le plancher de balayage ne lève plus rien | 1 failed |
+
+La troisième a demandé une correction de ma part : la première version du
+plancher **ne pouvait pas échouer** — baisser un seuil déjà satisfait ne fait
+rien tomber. Le balayage prend désormais son répertoire en paramètre, et un
+test lui donne un dossier vide pour vérifier que le plancher se déclenche.
+Un plancher qu'on ne peut pas faire tomber n'est pas un garde.
