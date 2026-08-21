@@ -82,6 +82,20 @@ de H0b et de H3 :
   partitionnent un unique scalaire, ils ne sont pas deux détecteurs
   indépendants.
 
+Un troisième, mesuré depuis, qui appartient à la même section : **aucun des
+deux couplages ne désigne un type d'instabilité.** La plaquette vaut
+`(|ω| + |J|)/norme` — un vortex pur et une nappe de courant pure y rendent la
+même valeur — et le couplage ZZ fait entrer un saut hydrodynamique et un saut
+magnétique dans la même racine. Seul `K_xpoint` est sélectif. C'est une
+propriété de la **forme choisie**, pas un défaut d'implémentation, et elle se
+dit dans cette section : l'hamiltonien détecte « il se passe quelque chose »
+localement, pas « quoi ».
+
+Deux coefficients scindés (`K_vorticity`, `K_current`) sont **disponibles et
+non branchés** — la forme étudiée reste celle de V1. Les brancher change
+l'objet d'étude et demande sa propre campagne ; c'est écrit ici pour que le
+choix soit visible, pas pour l'annoncer comme fait.
+
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 
 Features locales contre features en cône, le protocole d'entraînement, et le

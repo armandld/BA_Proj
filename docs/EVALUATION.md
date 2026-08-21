@@ -174,3 +174,28 @@ paraissait fausse.
    toute la suite parce que les configurations rapides utilisent
    `max_depth = 1`, profondeur à laquelle le chemin borné n'est jamais
    emprunté. Un test qui ne descend pas là où le code vit ne le teste pas.
+
+7. **La vérification porte-t-elle sur le bon objet ?** Une vérification
+   juste, correctement exécutée, peut mesurer autre chose que ce qu'on
+   croit. La plaquette scindée a été annoncée « sans changement de
+   comportement » sur la foi d'une comparaison bit à bit des **valeurs**
+   des clés partagées — vraie, reproductible, et sans rapport avec la
+   question, puisque `call_vqa_shell.py` agrège sur l'**ensemble** des clés
+   et voyait donc son `E_max` bouger de +15,9 % à +34,2 %. Avant de conclure
+   « rien ne bouge », demander : *qu'est-ce qui, chez le consommateur réel,
+   pourrait bouger sans que ma mesure le voie ?*
+
+---
+
+## Ce qui n'est pas un résultat, et n'entre donc nulle part
+
+**La sélectivité des coefficients et la plaquette scindée** (RESULTS, 21 août)
+sont des propriétés de la **forme** des coefficients, mesurées sur des champs
+analytiques à réponse connue. Elles ne disent rien sur la qualité de la
+décision d'AMR : aucune n'est un résultat au sens de ce document, et aucune
+n'a de niveau A/B/C/D.
+
+Ce qu'elles autorisent : poser proprement la question « un hamiltonien qui
+distingue les types décide-t-il mieux ? ». **Cette question est ouverte, et
+seule une campagne peut y répondre** — les mesures d'avant campagne ne le
+peuvent pas, par construction.

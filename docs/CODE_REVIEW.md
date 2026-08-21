@@ -60,6 +60,21 @@ reproductible ; aucun seuil n'était le bon.
 **Corriger un gel documenté.** Une décision antérieure, écrite dans le
 fichier, que je n'avais pas lue. C'est un test qui me l'a rappelée.
 
+**Muter sans vider `__pycache__`.** Une mutation qui remplace un identifiant
+par un autre de **même longueur en octets** (`Jz_curl` → `omega_z`) laisse la
+clé d'invalidation du `.pyc` — `(mtime, size)` — inchangée si l'écriture tombe
+dans la même seconde : Python recharge l'**ancien** module et la campagne
+rapporte « mutation tuée » sur du code jamais exécuté. C'est le pire des
+faux positifs, puisqu'il certifie qu'un test mord exactement là où il ne mord
+pas. `find . -name __pycache__ -exec rm -rf {} +` entre chaque variante.
+
+**Croire qu'un jeu de champs analytiques couvre parce qu'il est varié.**
+Quatre champs, quatre structures différentes — et tous **purs** (un seul
+signal actif à la fois). Deux normalisations distinctes y rendaient le même
+nombre au bit près, et la mutation survivait au fichier entier. La bonne
+question à un corpus d'essai n'est pas « couvre-t-il les cas ? » mais **« deux
+implémentations différentes peuvent-elles y rendre le même nombre ? »**.
+
 ## Ce qui marche
 
 - **Mesurer avant d'affirmer, y compris contre soi.** Le splitting de Strang

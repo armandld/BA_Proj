@@ -7677,13 +7677,34 @@ Sous `max`, `max|C| = w_ZZ` et `max|K| = w_ZZZZ` sur **tout** champ non
 uniforme. Par construction, **la magnitude ne distingue plus rien** : toute
 l'information de structure passe dans le motif spatial.
 
-Sous `legacy`, le pic varie (nappe raide 8,09 contre rotation lisse 3,12 —
-c'est le rapport pic/moyenne, une mesure d'intermittence) et porte donc une
-information de structure — au prix de la dépendance en `dim`.
+Sous `legacy`, le pic varie : nappe raide 8,09 contre rotation lisse 3,12.
 
-**Le choix est donc un arbitrage, pas une amélioration pure** : `max` achète
-l'invariance en `dim` en retirant au pic tout contenu structurel. Les deux
-faits sont épinglés, chacun par son test, avec le champ qui les sépare.
+> ### ⚠️ Rétractation, publiée le même jour
+>
+> Cette section concluait que **« le choix est un arbitrage, pas une
+> amélioration pure »** — `legacy` porterait dans son pic une information de
+> structure que `max` retirerait. **C'est retiré**, et c'est la mesure
+> ci-dessus qui le dit, mal lue la première fois.
+>
+> `max|K|` vaut 1 dans les **deux** modes. Le pic `max|C|` n'est donc pas une
+> grandeur libre : c'est le **poids de la famille ZZ relativement à la famille
+> ZZZZ** dans l'hamiltonien. Sous `legacy` il passe de **3,121** (rotation
+> lisse) à **8,095** (nappe raide) — un facteur **2,59** sur l'équilibre de
+> deux familles de termes, décidé par la spikiness de l'instantané au lieu de
+> la conception. Sous `max` il vaut `W_ZZ / W_ZZZZ = 2,000` sur les trois
+> champs non uniformes.
+>
+> Ce n'est pas une information, c'est un **couplage parasite**. Il n'y a donc
+> pas d'arbitrage : `max` le retire. La question de USER — *« pour norm je ne
+> comprends pas le dilemme »* — n'avait pas de réponse parce qu'il n'y en a
+> pas.
+>
+> Les deux côtés sont désormais épinglés :
+> `test_sous_legacy_le_poids_relatif_des_familles_derive_avec_le_champ` et
+> `test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception`.
+> Le test qui portait la lecture retirée s'appelait
+> `test_sous_legacy_le_pic_varie_donc_il_porte_une_structure` : il mesurait le
+> bon nombre sous un mauvais nom.
 
 ## Vérification
 
@@ -7697,6 +7718,9 @@ python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q   # 13 pa
 | ZZ ignore la partie magnétique du saut | 4 failed |
 | le mode `max` cesse de borner le pic | 2 failed |
 | `K_xpoint` : `max(0,−det)` → `\|det\|` | 1 failed |
+| **le scindement redevient le défaut** (le défaut corrigé ci-dessus) | 4 failed |
+| le drapeau est ignoré, les clés sont toujours là | 4 failed |
+| le drapeau est ignoré, les clés n'y sont jamais | 23 failed |
 | `K_xpoint` : signe inversé (X-point ↔ O-point) | 1 failed |
 
 **Un trou de mon propre fait, corrigé en le mutant.** La première version du
@@ -7705,3 +7729,178 @@ test de sélectivité X-point ne regardait qu'un **maximum sur tout le champ** :
 vert. Le test compare désormais **point par point**, et exige que `K_xpoint`
 soit exactement nul là où det > 0. Sans cette correction, le fichier aurait
 affirmé une sélectivité qu'il ne vérifiait pas.
+
+---
+
+# La plaquette scindée : un coefficient par type de structure
+
+Demande de USER, à la suite de l'entrée précédente : *« scinde le en deux
+coeffs mais checke bien ce que tu fais et actualise les tests »*. La mesure
+qui la motive est la ligne « `K_plaquettes` ne l'est pas » ci-dessus : un
+vortex pur et une nappe de courant pure rendent **exactement la même valeur**
+(1,000 contre 1,000), donc le terme capte « il se passe quelque chose », pas
+un type d'instabilité.
+
+## Ce qui est ajouté
+
+```python
+K_vort = -w_ZZZZ * |omega_z| / max|omega_z|
+K_curr = -w_ZZZZ * |J_z|     / max|J_z|
+```
+
+Deux clés, rendues **sur demande seulement** — `split_plaquette=True`.
+Adimensionnelles, bornées par `w_ZZZZ`, invariantes en `dx`, en amplitude et
+en mode de normalisation.
+
+**`K_plaquettes` n'est pas touché**, et par défaut **l'ensemble des clés
+rendues est celui de `HEAD`**. Vérifié contre `HEAD`, module chargé par chemin
+explicite, sur un champ mixte bruité, dans les quatre configurations :
+
+```
+norm=legacy xpoint=False  défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=legacy xpoint=True   défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=max    xpoint=False  défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=max    xpoint=True   défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+                          opt-in: ajoute ['K_current', 'K_vorticity']
+```
+
+## ⚠️ Pourquoi opt-in : un changement de comportement que j'ai failli livrer
+
+La première version de cette entrée annonçait *« deux clés nouvelles dans le
+dictionnaire rendu »* et concluait : *« aucun nombre publié ne bouge […] c'est
+une mise à disposition, pas un changement de comportement »*. **C'était
+faux**, et la vérification bit à bit ne pouvait pas le voir : elle compare les
+**valeurs des clés partagées**.
+
+`src/call_vqa_shell.py` ne consomme pas le dictionnaire clé par clé. Il
+**somme `|coeff|` sur toutes les clés tableau**, sans liste blanche, pour
+former `E_max` :
+
+```python
+for key, value in hamilt_params.items():
+    ...
+    E_max += np.sum(np.abs(value))
+```
+
+Deux clés de plus déplacent donc `E_max`, mesuré sur un champ bruité N=24 :
+
+| mode | `E_max` sans | avec | écart |
+|---|---|---|---|
+| `legacy` | 2 639,02 | 3 059,70 | **+15,9 %** |
+| `max` | 1 231,33 | 1 652,01 | **+34,2 %** |
+
+`src/Simulation/RescaleArrays.py` itère lui aussi sur toutes les clés
+(`for key, value in hamilt_params.items()`) et aurait max-poolé les deux
+tableaux à chaque descente AMR.
+
+**La leçon, générale : l'ENSEMBLE des clés fait partie du contrat.** Prouver
+que chaque valeur partagée est identique au bit près ne prouve pas qu'un
+consommateur ne bouge pas, dès lors qu'un consommateur agrège sur les clés.
+C'est exactement le « changement de comportement scientifique fait au
+passage » que `CLAUDE.md` interdit sur `src/`, et je l'avais écrit comme son
+contraire.
+
+Corrigé par le drapeau, et **gardé** par
+`test_par_defaut_lensemble_des_cles_rendues_est_inchange` (liste fermée des
+5 clés par défaut) et
+`test_le_scindement_deplace_E_max_ce_qui_est_la_raison_du_opt_in`, qui
+rejoue le calcul de `call_vqa_shell` et chiffre ce que le défaut évite.
+Remettre le scindement par défaut fait rougir 4 tests.
+
+Le circuit ne lit toujours pas les deux termes : les brancher est une
+décision de conception distincte, qui demandera sa propre campagne.
+
+## La sélectivité, mesurée
+
+`dim = 32`, champs analytiques, `split_plaquette=True`, pics des
+coefficients :
+
+| champ | `K_plaquettes` | `K_vorticity` | `K_current` |
+|---|---|---|---|
+| uniforme | 0 | 0 | 0 |
+| rotation solide (ω≠0, J=0) | **1,000** | **1,000** | 0,000 |
+| nappe de courant (ω=0, J≠0) | **1,000** | 0,000 | **1,000** |
+
+La ligne à lire est la colonne de gauche : elle ne bouge pas entre les deux
+structures, les deux autres s'inversent. C'est le scindement.
+
+## Pourquoi chacun divise par le max de SON signal
+
+L'alternative naturelle serait de garder la normalisation commune de
+`K_plaquettes` (`max|ω| + max|J|`). Elle réintroduirait exactement ce que le
+mode `max` retire : le poids de chaque terme dépendrait du pic de **l'autre**,
+donc de la forme du champ. Sur un champ où B est 4 fois plus faible que v,
+`K_vorticity` culminerait à ~0,8 et `K_current` à ~0,2 au lieu de 1 et 1.
+
+C'est vrai dans les **deux** modes, `legacy` compris : le scindement n'hérite
+pas du défaut qu'on est en train de retirer ailleurs.
+
+## Un test qui ne pouvait pas échouer, trouvé en le mutant
+
+La mutation « les deux termes scindés partagent une normalisation commune »
+**survivait à tout le fichier** — 23 passed sur 23, aucune rougeur. Les
+quatre champs d'essai d'alors sont
+**purs** (ω = 0 **ou** J = 0), et sur un champ pur les deux normalisations
+coïncident au bit près : `max|ω| + 0 = max|ω|`. Le jeu de champs ne pouvait
+pas voir la différence.
+
+Un cinquième champ, **mixte** (ω et J tous deux actifs, pics dans un rapport
+> 2), a été ajouté, plus le garde qui vérifie qu'il reste mixte. La mutation
+meurt maintenant, ainsi que sa variante « max de la somme ».
+
+**Le nombre publié dans une note antérieure pour cette mutation — « 2 failed »
+— était faux**, mesuré avec un `__pycache__` périmé : la mutation remplaçait
+`Jz_curl` par `omega_z`, deux identifiants de **même longueur en octets**, si
+bien que la clé `(mtime, size)` du `.pyc` ne changeait pas et que Python
+rechargeait l'ancien module. Toutes les mutations ci-dessous sont remesurées
+caches vidés.
+
+## Vérification
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q   # 30 passed
+python -m pytest tests/mapping -q                                        # 436 passed
+python -m pytest tests/ -q -m "not slow"          # 5 failed, 3032 passed, 1 h 02
+python study/common/aggregate_master_table.py                            # 180 / 176 / 4 / 0
+```
+
+**Les 5 rouges sont ceux du dépôt, pas les miens.** Vérifié en rejouant les
+cinq sur un `git worktree` propre à `HEAD` : ils échouent à l'identique. Ils
+correspondent exactement à la liste documentée — le trio `a0e0e02` (`K_xpoint`
+désormais consommé par `build_ising_terms`, en attente du rejeu de phase 4,
+T13 et T26) et la paire D-132. Les deux tests intermittents de D-165 sont
+passés ce tour-ci, ce qui est précisément ce que D-165 annonce : *« un
+décompte pris sur une exécution ne dit pas combien de tests sont rouges ; il
+dit combien l'étaient ce jour-là. »*
+
+| test rouge | origine | mien ? |
+|---|---|---|
+| `test_xpoint_term_absent_from_study.py::test_build_ising_terms_ignores_xpoint` | trio `a0e0e02` | non |
+| `test_xpoint_term_absent_from_study.py::test_ablation_zeroes_a_key_nothing_reads` | trio `a0e0e02` | non |
+| `test_t13_control_is_not_vacuous.py::test_removed_max_separates_a_real_ablation_from_an_empty_one` | trio `a0e0e02` | non |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | paire D-132 | non |
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | paire D-132 | non |
+
+| mutation de `src/Simulation/HamiltParams_v2.py` | effet |
+|---|---|
+| `K_current` lit `omega_z` au lieu de `J_z` | 6 failed |
+| `K_vorticity` lit `J_z` au lieu de `omega_z` | 6 failed |
+| les deux termes scindés partagent une normalisation commune | 2 failed |
+| … normalisés par le max de la **somme** (celle de la plaquette) | 2 failed |
+| `K_plaquettes` change de formule (×0,5) | 5 failed |
+| la plaquette devient sélective (`\|ω\|` seul) | 8 failed |
+| `legacy` divise par le max (les deux modes se confondent) | 2 failed |
+| `max` cesse de borner ZZ | 2 failed |
+| `K_xpoint` : `max(0,−det)` → `\|det\|` | 1 failed |
+| **le scindement redevient le défaut** (le défaut corrigé ci-dessus) | 4 failed |
+| le drapeau est ignoré, les clés sont toujours là | 4 failed |
+| le drapeau est ignoré, les clés n'y sont jamais | 23 failed |
+
+## Ce que ça ne dit pas
+
+Que le scindement **améliore** quoi que ce soit. Il rend deux coefficients
+sélectifs là où il y en avait un qui ne l'était pas — c'est une propriété de
+la **forme** des coefficients, mesurée sur des champs analytiques. Savoir si
+un hamiltonien qui les consomme décide mieux est une question de campagne, et
+**aucun résultat d'avant campagne ne peut y répondre**.

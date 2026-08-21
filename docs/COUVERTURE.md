@@ -3829,6 +3829,87 @@ il ne décide ni n'exécute de physique, il découpe des tableaux.
 
 ---
 
+## Passe du 21 août — le JEU DE CHAMPS des tests de mapping, audité comme un tout
+
+Les tests de `tests/mapping/` sont mesurés sur quatre champs analytiques —
+`uniforme`, `rotation`, `nappe_courant`, `xpoint`. Cette passe ne relit pas un
+module de `src/` : elle relit **le corpus d'entrée des tests**, qui décide de
+ce que ces tests peuvent voir.
+
+**Le trou, trouvé par mutation.** Les quatre champs sont **purs** : chacun a
+`omega = 0` **ou** `J = 0`. Aucun n'active les deux. Conséquence : pour tout
+coefficient qui combine les deux signaux, une normalisation **par signal**
+(`max|omega|`, `max|J|`) et une normalisation **commune**
+(`max|omega| + max|J|`) donnent **le même résultat au bit près**, puisque le
+terme absent vaut zéro. La mutation « normalisation commune » sur les deux
+termes scindés survivait donc au fichier entier — 23 passed sur 23.
+
+**Corrigé** par l'ajout d'un cinquième champ, `mixte` (omega et J tous deux
+actifs, pics dans un rapport > 2), plus
+`test_le_champ_mixte_a_bien_les_deux_signaux_a_des_pics_differents`, qui
+vérifie que le champ **reste** mixte : sans ce garde, quelqu'un pourrait
+égaliser les deux pics et redonner au test la cécité qu'on vient de lui
+retirer, sans que rien ne crie.
+
+**La leçon, généralisable au reste du dépôt.** Un jeu de champs d'essai est
+un instrument de mesure, et un instrument qui n'excite qu'un mode à la fois
+ne peut pas voir un couplage entre modes. La question à poser à tout corpus
+de test analytique n'est pas « couvre-t-il les cas simples ? » mais **« deux
+implémentations différentes peuvent-elles y rendre le même nombre ? »**.
+Seule la mutation répond ; la lecture ne suffit pas — j'ai relu ce fichier
+avant de le muter et je n'ai rien vu.
+
+**Un piège d'outillage, à connaître.** La première mesure de cette mutation
+annonçait « 2 failed » : elle était fausse. La mutation remplaçait `Jz_curl`
+par `omega_z`, deux identifiants de **même longueur en octets**, si bien que
+la clé d'invalidation du `.pyc` — `(mtime, size)` — pouvait ne pas changer et
+que Python rechargeait l'**ancien** module. Toute campagne de mutation doit
+vider `__pycache__` entre les variantes :
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+```
+
+Sans quoi une mutation peut être rapportée morte alors qu'elle n'a jamais
+été exécutée — le pire des deux mondes, puisque le rapport dit « le test
+mord » précisément là où il ne mord pas.
+
+### Le second trou de la même passe — l'ENSEMBLE des clés n'était gardé nulle part
+
+`PhysicalMapperV2.compute_coefficients` rend un dictionnaire. Tous les tests
+du dépôt vérifient des **valeurs** : `hp["K_plaquettes"]` vaut ceci,
+`max|C|` vaut cela. **Aucun ne vérifiait quelles clés sont rendues.**
+
+Ce n'est pas une omission cosmétique : deux consommateurs de `src/` agrègent
+sur les clés sans liste blanche —
+
+| fichier | ce qu'il fait de toutes les clés |
+|---|---|
+| `src/call_vqa_shell.py` | `E_max += Σ\|coeff\|` sur toute clé tableau ; sert aussi à `max_coeff` |
+| `src/Simulation/RescaleArrays.py` | max-poole toute clé tableau à chaque descente AMR |
+
+— si bien qu'**ajouter une clé est déjà un changement de comportement**,
+même quand aucune valeur partagée ne bouge d'un bit. Mesuré : deux clés de
+plus déplacent `E_max` de +15,9 % (`legacy`) et +34,2 % (`max`).
+
+J'ai livré ce défaut dans une première version de la plaquette scindée, en
+l'annonçant explicitement comme *« pas un changement de comportement »*, sur
+la foi d'une vérification bit à bit qui — correctement exécutée — ne
+regardait que les valeurs partagées. **Une vérification juste sur le mauvais
+objet.**
+
+Gardé désormais par `test_par_defaut_lensemble_des_cles_rendues_est_inchange`
+(liste fermée des 5 clés) et
+`test_le_scindement_deplace_E_max_ce_qui_est_la_raison_du_opt_in`, qui rejoue
+le calcul de `call_vqa_shell` sur le dict rendu.
+
+**À généraliser.** Tout producteur de dictionnaire consommé par agrégation
+sur les clés a besoin d'un test de l'ensemble des clés, pas seulement des
+valeurs. Les autres producteurs du dépôt n'ont pas encore été passés en revue
+sous cet angle : c'est la file suivante.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste
