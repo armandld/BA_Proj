@@ -297,14 +297,47 @@ class PhysicalMapperV2:
         # AVANT de sommer. Les deux structures pesent alors 1/2 chacune quel
         # que soit leur rapport d'amplitude, et le max de la somme ramene le
         # pic a w_zzzz exactement — un seul terme ZZZZ, une seule porte.
+        # Le troisieme type de structure de la MEME plaquette : le point X.
+        # Calcule ICI, et non plus a la fin, parce que sous `max` il entre
+        # dans la normalisation COMMUNE de la famille ZZZZ (voir plus bas).
+        xpoint_signal = None
+        if advanced_anomalies_enabled:
+            det_J_B = self._compute_det_jacobian_B(Bx, By, dx)
+            xpoint_signal = np.maximum(0.0, -det_J_B)
+
+        def _adim(signal):
+            """Rend `signal` adimensionnel par SON PROPRE maximum.
+
+            Garde MULTIPLICATIF : sous le seuil, on rend le signal tel quel
+            (donc negligeable), on ne decale pas l'echelle.
+            """
+            pic = float(np.max(np.abs(signal)))
+            return np.abs(signal) / (pic if pic > self.EPS else 1.0)
+
         if self.norm == "max":
-            pic_om = float(np.max(np.abs(omega_z)))
-            pic_jz = float(np.max(np.abs(Jz_curl)))
-            signal_plaq = (
-                np.abs(omega_z) / (pic_om if pic_om > self.EPS else 1.0)
-                + np.abs(Jz_curl) / (pic_jz if pic_jz > self.EPS else 1.0))
-            pic_plaq = float(np.max(signal_plaq))
-            norm_plaq = pic_plaq if pic_plaq > self.EPS else 1.0
+            # TROIS types de structure sur la meme plaquette — vorticite,
+            # courant, point X — chacun rendu adimensionnel par son propre
+            # maximum, PUIS sommes, PUIS la somme ramenee a w_zzzz.
+            #
+            # La normalisation est COMMUNE aux trois parce que les trois
+            # termes atterrissent sur les MEMES quatre qubits
+            # (`cost_hamiltonian.py` : deux `("ZZZZ", ...)` que
+            # `SparsePauliOp` additionne). Les normaliser separement ferait
+            # atteindre a la famille jusqu'a 2*w_zzzz et rendrait le rapport
+            # ZZ:ZZZZ dependant du champ — mesure a un facteur 1,94 avant
+            # cette correction, voir D-190.
+            #
+            # `K_xpoint` reste une CLE DISTINCTE, et ce n'est pas cosmetique :
+            # `h3_term_ablation` met cette cle a zero pour ablater la famille,
+            # et la supprimer transformerait l'ablation en no-op silencieux.
+            # Les deux cles portent donc les deux MORCEAUX d'un meme signal
+            # normalise ensemble : leur somme vaut -w_zzzz au pic.
+            signal_plaq = _adim(omega_z) + _adim(Jz_curl)
+            signal_total = signal_plaq
+            if xpoint_signal is not None:
+                signal_total = signal_total + _adim(xpoint_signal)
+            pic_total = float(np.max(signal_total))
+            norm_plaq = pic_total if pic_total > self.EPS else 1.0
         else:
             signal_plaq = np.abs(omega_z) + np.abs(Jz_curl)
             norm_plaq = np.max(np.abs(omega_z)) + np.max(np.abs(Jz_curl)) + self.EPS
@@ -353,11 +386,20 @@ class PhysicalMapperV2:
             "w_z_frac": self.c_bias,
         }
 
-        if advanced_anomalies_enabled:
-            det_J_B = self._compute_det_jacobian_B(Bx, By, dx)
-            xpoint_signal = np.maximum(0.0, -det_J_B)
-            max_det = np.max(np.abs(det_J_B)) + self.EPS
-            K_xpoint = -self.w_zzzz * xpoint_signal / max_det
+        if xpoint_signal is not None:
+            if self.norm == "max":
+                # Meme denominateur que `K_plaquettes` : les deux cles sont
+                # les deux morceaux d'UN signal normalise ensemble, et leur
+                # somme vaut exactement -w_zzzz au pic.
+                K_xpoint = -self.w_zzzz * _adim(xpoint_signal) / norm_plaq
+            else:
+                # Chemin historique, INCHANGE : `max(0,-det)` divise par
+                # `max|det|` — deux signaux differents, garde additif. Son
+                # pic ne vaut donc pas w_zzzz (0,291 mesure sur
+                # kelvin_helmholtz). Ne pas "reparer" : `legacy` n'a plus
+                # qu'une raison d'etre, reproduire les artefacts geles.
+                max_det = np.max(np.abs(det_J_B)) + self.EPS
+                K_xpoint = -self.w_zzzz * xpoint_signal / max_det
             result["K_xpoint"] = K_xpoint
 
         return result

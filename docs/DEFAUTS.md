@@ -1906,7 +1906,7 @@ saturation, et republier les `c_bias*`. C'est une campagne, pas un correctif.
 
 ---
 
-## D-187 — les tests intermittents sont QUATRE, pas deux
+## D-187 — les tests intermittents sont CINQ, pas deux
 
 **Rapport seul.** Même famille, même remède à trancher, même fichier.
 
@@ -1931,7 +1931,7 @@ d'optimisation, sensible à l'état du RNG global — donc à l'ordre des tests.
 
 ### Ce que ça change au décompte
 
-D-165 annonçait deux intermittents ; ils sont **quatre** :
+D-165 annonçait deux intermittents ; ils sont **cinq** :
 
 | test | fichier | dépend du mappeur ? |
 |---|---|---|
@@ -1939,12 +1939,22 @@ D-165 annonçait deux intermittents ; ils sont **quatre** :
 | `test_C_ZZ` | `tests/mapping/test_signal_contribution.py` | non |
 | `test_the_ranking_is_nonetheless_visibly_perturbed` | `tests/quantum/test_qaoa_arm_is_sampled.py` | non (D-165) |
 | `test_..._spend_a_multiple_of_that_budget[L-BFGS-B]` | `tests/quantum/test_optimiser_axis.py` | non |
+| `test_the_ranking_survives_the_sampling` | `tests/quantum/test_qaoa_arm_is_sampled.py` | non |
 
 **Aucun des quatre ne touche au mappeur** : ce n'est pas une conséquence du
 changement de normalisation, c'est un décompte qui n'était pas complet.
 
-Mesuré sur trois exécutions de la suite complète le 21 août : **0, puis 2,
-puis 1** des quatre sont rouges — trois tirages, trois décomptes. La ligne de résumé de la suite
+Le cinquième, trouvé le 22 août, est le **jumeau** de celui que D-165
+documente, dans le même fichier : `test_the_ranking_survives_the_sampling`
+assertit que le classement du bras échantillonné **tient** (médiane de ρ sur
+15 paires), là où `test_the_ranking_is_nonetheless_visibly_perturbed` assertit
+qu'il **bouge**. Les deux mesurent la même grandeur stochastique dans des
+directions opposées, et les deux entrent et sortent du décompte selon le
+tirage. Vert 3/3 en isolé ; le fichier n'importe que `os`, `sys`, `numpy` et
+`pytest` — aucun mappeur.
+
+Mesuré sur cinq exécutions de la suite complète les 21 et 22 août : **0, 2, 1,
+0, puis 1** des cinq sont rouges — cinq tirages, cinq décomptes. La ligne de résumé de la suite
 reste, comme D-165 le dit, inutilisable comme comparaison d'une passe à
 l'autre tant que ces quatre tests restent en l'état. Les trois options de
 D-165 s'appliquent telles quelles.
@@ -2056,10 +2066,26 @@ donc pire que le défaut. Décision de conception : elle revient à USER.
 
 ---
 
-## D-190 — l'invariance ZZ:ZZZZ, argument principal du basculement, ne tient pas dans la configuration déployée
+## D-190 — l'invariance ZZ:ZZZZ ne tenait pas dans la configuration déployée — **CORRIGÉ**
 
-**Rapport seul. Rien n'est corrigé** — le remède change la définition du terme
-ZZZZ, ce qui se décide.
+**Corrigé le 22 août**, sur décision de USER : les trois types de structure de
+la plaquette sont désormais normalisés **ensemble**. Mesuré après correction,
+configuration déployée (`AdvAnomalies=True`), N=256 :
+
+| scénario | ZZZZ effectif | ZZ:ZZZZ avant | ZZ:ZZZZ après |
+|---|---|---|---|
+| `harris_tearing` | 1,000000 | 1,278 | **2,0000** |
+| `kelvin_helmholtz` | 1,000000 | 2,000 | **2,0000** |
+| `mhd_rotor` | 1,000000 | 1,130 | **2,0000** |
+| `orszag_tang` | 1,000000 | 1,029 | **2,0000** |
+
+`legacy` et le chemin `max` **sans** X-point sont inchangés **bit à bit** ; le
+jeu de clés est identique dans les quatre configurations. Ce qui suit est
+conservé comme diagnostic.
+
+---
+
+### L'état d'avant, et pourquoi rien ne le voyait
 
 **Où ça bloque.** `RESULTS.md` publiait, comme argument n°1 du basculement sur
 `norm="max"` : *« sous `max` le rapport ZZ:ZZZZ vaut `W_ZZ/W_ZZZZ = 2,000`
@@ -2120,9 +2146,49 @@ Ce que ça change et qui n'est pas neutre : le X-point cesse d'être un terme
 présentant les trois structures verrait chacune plafonnée à 1/3 au lieu de
 1/2 + 1. C'est une décision de conception physique, pas une retouche.
 
-**Alternative** : garder les deux termes séparés, corriger seulement la cause 1
-(normaliser `K_xpoint` par son propre max, garde multiplicatif), et **déclarer**
-que la famille ZZZZ pèse `2·w_zzzz`. L'invariance ZZ:ZZZZ resterait alors
-fausse, mais elle serait au moins **bornée et connue** (entre 1 et 2), au lieu
-de dépendre du champ.
+**Alternative** (écartée) : garder les deux termes séparés, corriger seulement
+la cause 1, et **déclarer** que la famille ZZZZ pèse `2·w_zzzz`. L'invariance
+resterait fausse, seulement bornée.
+
+### Ce qui a été fait
+
+`K_plaquettes` et `K_xpoint` restent **deux clés distinctes** — les supprimer
+transformerait l'ablation de `h3_term_ablation.py:75` en **no-op silencieux** —
+mais elles portent désormais les deux **morceaux d'un même signal normalisé
+ensemble** :
+
+    S      = ω̂ + Ĵ + X̂                  (trois magnitudes adimensionnelles)
+    K_plaq = -w_zzzz * (ω̂ + Ĵ) / max(S)
+    K_xp   = -w_zzzz * X̂       / max(S)
+
+Leur somme — ce que `SparsePauliOp` voit — vaut exactement `-w_zzzz` au pic.
+Le garde additif de `K_xpoint` disparaît sous `max` (il reste sous `legacy`).
+
+### Ce que ça change physiquement, et qui n'est pas neutre
+
+Le X-point cesse d'être un terme **additionnel** pour devenir un **tiers** du
+signal de plaquette. Sur les champs réels, le partage mesuré est
+`K_plaq` 0,60–1,00 et `K_xp` 0,43–0,51 : le X-point pèse désormais entre 30 %
+et 45 % de la famille, là où il pouvait auparavant la doubler.
+
+### Trois gardes, et le champ qu'il a fallu inventer
+
+Les champs analytiques du dépôt **ne pouvaient pas** voir ce défaut : sur
+`xpoint`, `J` et `det ∇B` culminent en des points **disjoints**, si bien que
+les deux termes atteignent 1 chacun sans que leur somme dépasse 1. Il a fallu
+`xpoint_superpose` (rotation et X-point au **même** point) : ZZZZ effectif
+**2,000 avant, 1,000 après**.
+
+- `test_les_deux_termes_ZZZZ_sont_normalises_ENSEMBLE` — avec un garde qui
+  vérifie que les deux composantes sont actives **là où** la somme culmine ;
+- `test_sur_le_champ_xpoint_SEUL_le_pliage_est_invisible` — documente la
+  cécité, pour qu'elle ne se réinstalle pas ;
+- `test_sur_les_champs_REELS_le_rapport_ZZ_ZZZZ_vaut_deux` (`slow`) — sur les
+  quatre DNS N=256, là où le défaut se voyait ;
+- `test_la_formule_legacy_du_xpoint_est_inchangee` — sans lui, la mutation
+  « `legacy` est amélioré lui aussi » survivait au fichier entier.
+
+Le test du rapport mesure désormais le **ZZZZ effectif** (`K_plaquettes +
+K_xpoint`) et non la plaquette seule : mesurer la plaquette seule est ce qui a
+laissé passer ce défaut.
 

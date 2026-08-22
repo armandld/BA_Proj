@@ -7997,8 +7997,9 @@ faits mesurés, tous dans le même sens, et aucun contre :
 
 1. Sous `legacy`, le poids relatif ZZ:ZZZZ dérive d'un **facteur 2,59** avec la
    seule spikiness du champ (3,121 → 8,095). Sous `max` il vaut
-   `W_ZZ/W_ZZZZ = 2,000` partout — **mais uniquement si le terme X-point est
-   désactivé. Voir la rétractation ci-dessous.**
+   `W_ZZ/W_ZZZZ = 2,000` partout. **Cette affirmation était fausse dans la
+   configuration déployée jusqu'au 22 août — voir la rétractation ci-dessous,
+   et sa correction.**
 2. Sous `legacy`, `max|K|` vaut 0,74 à 0,99 selon le scénario — la famille ZZZZ
    est silencieusement dévaluée jusqu'à 26 % sur `mhd_rotor`, parce que les
    deux maxima sont pris en des points différents. Sous `max`, `max|K| = 1,000`
@@ -8163,8 +8164,50 @@ calcule le rapport contre `max|K_plaquettes|` **seul**, jamais contre le ZZZZ
 effectif. Troisième instance de la même leçon : un champ analytique trop
 propre ne peut pas voir ce que les champs réels montrent.
 
-→ **D-190.** Rien n'est corrigé ici : le remède naturel change la définition
-du terme ZZZZ et se décide.
+### Corrigé le 22 août — les trois structures sont normalisées ensemble
+
+Décision de USER : plier le X-point dans la plaquette. Les trois types de
+structure de la **même** plaquette — vorticité, courant, point X — sont rendus
+adimensionnels chacun par son propre maximum, puis leur somme est ramenée à
+`w_zzzz` :
+
+```
+S      = ω̂ + Ĵ + X̂
+K_plaq = -w_ZZZZ · (ω̂ + Ĵ) / max(S)
+K_xp   = -w_ZZZZ ·  X̂       / max(S)
+```
+
+`K_xpoint` **reste une clé distincte** — la supprimer transformerait
+l'ablation de `h3_term_ablation.py` en no-op silencieux — mais les deux clés
+portent les deux morceaux d'un **même signal normalisé ensemble**. Leur somme,
+qui est ce que `SparsePauliOp` voit, vaut exactement `-w_zzzz` au pic.
+
+| scénario | ZZ:ZZZZ avant | ZZ:ZZZZ après |
+|---|---|---|
+| `harris_tearing` | 1,278 | **2,0000** |
+| `kelvin_helmholtz` | 2,000 | **2,0000** |
+| `mhd_rotor` | 1,130 | **2,0000** |
+| `orszag_tang` | 1,029 | **2,0000** |
+
+Vérifié contre le commit précédent, modules chargés par chemin explicite :
+`legacy` (X-point actif ou non) et `max` **sans** X-point sont inchangés **bit
+à bit** ; seules les deux clés ZZZZ bougent sous `max` + X-point, et le jeu de
+clés est identique dans les quatre configurations.
+
+**Ce que ça change physiquement, et qui n'est pas neutre.** Le X-point cesse
+d'être un terme *additionnel* pour devenir un *tiers* du signal de plaquette :
+sur les champs réels il pèse désormais 30–45 % de la famille, là où il pouvait
+la doubler.
+
+**Le champ qu'il a fallu inventer.** Les champs analytiques du dépôt ne
+pouvaient pas voir ce défaut — sur `xpoint`, `J` et `det ∇B` culminent en des
+points **disjoints**, donc les deux termes atteignent 1 chacun sans que leur
+somme dépasse 1. `xpoint_superpose` (rotation et X-point au même point) rend
+**2,000 avant, 1,000 après**. Quatre gardes l'épinglent, dont un sur les
+**vrais** DNS et un qui protège la formule `legacy` — sans ce dernier, la
+mutation « `legacy` est amélioré lui aussi » survivait au fichier entier.
+
+→ **D-190, corrigé.**
 
 ## Une erreur de conception de mes propres tests, trouvée en les faisant échouer
 
@@ -8416,7 +8459,7 @@ EOF
 
 python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 20 passed, 3 deselected
 python -m pytest tests/mapping -q                             # 437 passed, 1 skipped
-python -m pytest tests/ -q -m "not slow"    # 5 failed, 3061 passed, 45 min
+python -m pytest tests/ -q -m "not slow"    # 6 failed, 3063 passed, 58 min
 python study/common/aggregate_master_table.py        # 180 / 176 / 4 / 0
 python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow   # 3 passed
 python -m pytest tests/ -q -m "not slow"    # 5 failed, 3053 passed, 55 min

@@ -89,6 +89,20 @@ mesurant sur les DNS réels, pas sur les champs analytiques. La mesure de
 laboratoire dit *si* un mécanisme existe ; seule la mesure sur le corpus dit
 s'il **compte**.
 
+**Mesurer une famille par un seul de ses membres.** Le rapport ZZ:ZZZZ etait
+teste contre `max|K_plaquettes|` alors que le circuit voit `K_plaquettes +
+K_xpoint` sur les MEMES qubits. L'invariance publiee etait donc vraie du terme
+mesure et fausse de la famille — facteur 1,94 dans la configuration deployee.
+Quand deux coefficients atterrissent sur le meme operateur, la grandeur a
+asserter est leur SOMME.
+
+**Un jeu de champs ou les structures ne se superposent jamais.** Troisieme
+instance de la meme cecite : sur `xpoint`, `J` et `det(nabla B)` culminent en
+des points DISJOINTS, si bien qu'une normalisation commune et deux separees y
+donnent le meme resultat. Le defaut etait invisible PAR CONSTRUCTION. Un
+corpus d'essai doit contenir un champ ou les structures se CHEVAUCHENT, pas
+seulement un champ par structure.
+
 **Garder les pieces, pas l'assemblage.** Dans un module neuf, chaque
 fonction avait son test — et la mutation qui debranchait la logique CENTRALE
 (la sequence de pas gelee, sa raison d'etre) survivait au fichier entier.

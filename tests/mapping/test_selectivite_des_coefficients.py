@@ -114,6 +114,15 @@ def _champs():
         # (facteur 179 sur harris, 84 sur KH).
         "mixte_desequilibre": dict(vx=-_bosse(Y, np.pi / 2), vy=Z,
                                    Bx=100.0 * _bosse(Y, 3 * np.pi / 2), By=Z),
+        # X-POINT SUPERPOSE a une rotation : omega et det(nabla B) culminent
+        # AU MEME POINT (0,0). C'est le seul champ du jeu qui peut voir la
+        # normalisation COMMUNE de la famille ZZZZ — sur `xpoint` seul, J et
+        # X culminent en des points DISJOINTS, si bien que les deux termes
+        # atteignent 1 chacun sans que leur somme depasse 1, et le pliage y
+        # est invisible. Mesure : ZZZZ effectif 2,000 avant pliage, 1,000
+        # apres (D-190).
+        "xpoint_superpose": dict(vx=-np.sin(Y), vy=np.sin(X),
+                                 Bx=np.sin(Y), By=np.sin(X)),
     }
 
 
@@ -124,11 +133,19 @@ def _coeffs(nom, norm, xpoint=True):
     hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15,
                                 advanced_anomalies_enabled=xpoint)
     Ch, Cv = hp["C_edges"]
+    kpl = np.asarray(hp["K_plaquettes"], dtype=float)
+    kxp = np.asarray(hp.get("K_xpoint", np.zeros_like(kpl)), dtype=float)
     return {
         "C": max(float(np.max(np.abs(Ch))), float(np.max(np.abs(Cv)))),
-        "K": float(np.max(np.abs(hp["K_plaquettes"]))),
-        "Kxp": float(np.max(np.abs(hp.get("K_xpoint", np.zeros(1))))),
-        "K_carte": np.abs(np.asarray(hp["K_plaquettes"], dtype=float)),
+        "K": float(np.max(np.abs(kpl))),
+        "Kxp": float(np.max(np.abs(kxp))),
+        # ZZZZ EFFECTIF : `K_plaquettes` et `K_xpoint` sont deux termes
+        # ("ZZZZ", ...) poses sur les MEMES quatre qubits, que
+        # `SparsePauliOp` additionne. C'est cette somme que le circuit voit,
+        # et c'est donc elle qu'il faut mesurer — pas `K_plaquettes` seul.
+        # Mesurer la plaquette seule est ce qui a laisse passer D-190.
+        "K_eff": float(np.max(np.abs(kpl + kxp))),
+        "K_carte": np.abs(kpl),
     }
 
 
@@ -387,6 +404,31 @@ def test_la_formule_legacy_de_la_plaquette_est_inchangee():
     np.testing.assert_allclose(hp["K_plaquettes"], attendu, rtol=1e-12)
 
 
+def test_la_formule_legacy_du_xpoint_est_inchangee():
+    """`legacy` doit rester la reproduction EXACTE du chemin historique, pour
+    le X-point comme pour la plaquette. Recalcul indépendant.
+
+    Sur quelle entrée ce test échoue : le jour où quelqu'un « répare » aussi
+    `legacy` — auquel cas plus aucun mode ne reproduit les artefacts gelés.
+    Sans ce test, la mutation « legacy est amélioré lui aussi » survivait au
+    fichier entier.
+    """
+    champ = dict(_champs()["xpoint_superpose"]); champ["Jz"] = np.zeros((N, N))
+    dx = 2 * np.pi / N
+    m = PhysicalMapperV2(dx=dx, norm="legacy")
+    hp = m.compute_coefficients(None, np.full((N, N), 0.5), champ, 0.15,
+                                advanced_anomalies_enabled=True)
+
+    det = m._compute_det_jacobian_B(champ["Bx"], champ["By"], dx)
+    attendu = -PhysicalMapperV2.W_ZZZZ * np.maximum(0.0, -det) / (
+        np.max(np.abs(det)) + PhysicalMapperV2.EPS)
+    np.testing.assert_allclose(hp["K_xpoint"], attendu, rtol=1e-12)
+
+    # et le garde additif, propre a `legacy` : le pic ne vaut PAS w_zzzz
+    # des que les determinants positifs dominent en magnitude.
+    assert float(np.max(np.abs(hp["K_xpoint"]))) <= PhysicalMapperV2.W_ZZZZ
+
+
 # ------------------------------------------------------------------
 #  6. ce que `norm="max"` change au SENS du nombre
 # ------------------------------------------------------------------
@@ -436,11 +478,101 @@ def test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception():
     une propriété de l'instantané. Ce test est l'argument pour `max`.
     """
     attendu = PhysicalMapperV2.W_ZZ / PhysicalMapperV2.W_ZZZZ
-    for nom in ("rotation", "nappe_courant", "xpoint", "mixte"):
+    for nom in ("rotation", "nappe_courant", "xpoint", "mixte",
+                "xpoint_superpose"):
         r = _coeffs(nom, "max")
-        assert r["C"] / r["K"] == pytest.approx(attendu, rel=1e-9), (
-            f"ZZ:ZZZZ = {r['C'] / r['K']:.4f} sur '{nom}', attendu {attendu} "
-            "— `max` ne borne plus les deux familles au même endroit")
+        assert r["C"] / r["K_eff"] == pytest.approx(attendu, rel=1e-9), (
+            f"ZZ:ZZZZ = {r['C'] / r['K_eff']:.4f} sur '{nom}', attendu "
+            f"{attendu} — `max` ne borne plus les deux familles au même "
+            "endroit. NB : le rapport se mesure sur le ZZZZ EFFECTIF "
+            "(K_plaquettes + K_xpoint), pas sur la plaquette seule.")
+
+
+# ------------------------------------------------------------------
+#  6 bis. la famille ZZZZ est UNE famille bornée — D-190
+# ------------------------------------------------------------------
+def test_les_deux_termes_ZZZZ_sont_normalises_ENSEMBLE():
+    """`K_plaquettes` et `K_xpoint` sont deux termes `("ZZZZ", …)` posés sur
+    les MÊMES quatre qubits (`cost_hamiltonian.py`, lignes 416 et 431) :
+    `SparsePauliOp` les additionne. Ils doivent donc être normalisés par un
+    dénominateur COMMUN, sans quoi la famille atteint 2·w_zzzz.
+
+    Sur quelle entrée ce test échoue : si l'un des deux repassait à une
+    normalisation propre. Mesuré avant correction sur ce champ : ZZZZ
+    effectif = 2,000 ; après : 1,000.
+    """
+    champ = dict(_champs()["xpoint_superpose"]); champ["Jz"] = np.zeros((N, N))
+    hp = PhysicalMapperV2(dx=2 * np.pi / N, norm="max").compute_coefficients(
+        None, np.full((N, N), 0.5), champ, 0.15,
+        advanced_anomalies_enabled=True)
+    kpl = np.abs(np.asarray(hp["K_plaquettes"], dtype=float))
+    kxp = np.abs(np.asarray(hp["K_xpoint"], dtype=float))
+    somme = kpl + kxp
+
+    # Le champ SEPARE-t-il quelque chose ? Il faut que les deux composantes
+    # soient actives LA OU la somme culmine — sinon la normalisation commune
+    # et deux normalisations separees donnent le meme resultat, et le test
+    # ne mesure rien. C'est exactement le cas du champ `xpoint` seul.
+    ou = np.unravel_index(np.argmax(somme), somme.shape)
+    assert kpl[ou] > 0.1 and kxp[ou] > 0.1, (
+        f"au pic de la famille, K_plaquettes = {kpl[ou]:.4f} et K_xpoint = "
+        f"{kxp[ou]:.4f} : les deux termes ne se superposent plus, ce champ "
+        "ne teste plus la normalisation COMMUNE")
+
+    assert float(somme.max()) == pytest.approx(PhysicalMapperV2.W_ZZZZ,
+                                               rel=1e-9), (
+        f"ZZZZ effectif = {somme.max():.6f}, attendu {PhysicalMapperV2.W_ZZZZ} : "
+        "les deux termes ne partagent plus leur dénominateur")
+
+
+def test_sur_le_champ_xpoint_SEUL_le_pliage_est_invisible():
+    """Le champ qui explique pourquoi rien ne voyait D-190.
+
+    Sur `xpoint`, `J` et `det(nabla B)` culminent en des points DISJOINTS :
+    les deux termes atteignent 1 chacun sans que leur somme dépasse 1. Une
+    normalisation commune et deux normalisations séparées y donnent le même
+    résultat, et le défaut est invisible **par construction**. Il a fallu un
+    champ où les structures se superposent.
+    """
+    r = _coeffs("xpoint", "max")
+    assert r["K"] == pytest.approx(1.0, rel=1e-9)
+    assert r["Kxp"] == pytest.approx(1.0, rel=1e-9)
+    assert r["K_eff"] == pytest.approx(1.0, rel=1e-9), (
+        "les deux termes se superposent maintenant sur `xpoint` : ce champ "
+        "n'illustre plus la cécité qu'il documente")
+
+
+@pytest.mark.slow
+def test_sur_les_champs_REELS_le_rapport_ZZ_ZZZZ_vaut_deux():
+    """Là où le défaut se voyait — et la seule mesure qui compte.
+
+    Les champs analytiques ne l'exposaient pas ; les DNS oui. Mesuré avant
+    correction, configuration déployée (`AdvAnomalies=True`, D-33 : 6/6
+    scénarios) : le rapport allait de **1,029 à 2,000**, facteur 1,94. Après :
+    2,000 partout.
+    """
+    import glob
+    racine = os.path.join(_RACINE, "results")
+    fichiers = sorted(glob.glob(os.path.join(racine, "dns_*_Re400_N256.npz")))
+    if len(fichiers) < 4:
+        pytest.skip("artefacts DNS N=256 absents")
+
+    attendu = PhysicalMapperV2.W_ZZ / PhysicalMapperV2.W_ZZZZ
+    for chemin in fichiers:
+        d = np.load(chemin)
+        si = len(d["t"]) // 2
+        ch = {k: d[k][si].astype(float) for k in ("vx", "vy", "Bx", "By")}
+        n = ch["vx"].shape[0]
+        ch["Jz"] = np.zeros((n, n))
+        hp = PhysicalMapperV2(dx=2 * np.pi / n, norm="max").compute_coefficients(
+            None, np.full((n, n), 0.5), ch, 0.15,
+            advanced_anomalies_enabled=True)
+        c = max(float(np.max(np.abs(hp["C_edges"][0]))),
+                float(np.max(np.abs(hp["C_edges"][1]))))
+        zzzz = float(np.max(np.abs(hp["K_plaquettes"] + hp["K_xpoint"])))
+        assert c / zzzz == pytest.approx(attendu, rel=1e-9), (
+            f"{os.path.basename(chemin)} : ZZ:ZZZZ = {c / zzzz:.4f}, attendu "
+            f"{attendu}. Le couplage parasite de D-190 est revenu.")
 
 
 # ------------------------------------------------------------------
