@@ -7747,7 +7747,7 @@ affirmé une sélectivité qu'il ne vérifiait pas.
 > **séparément avant** d'être sommées. Voir l'entrée suivante.
 >
 > Ce qui survit de celle-ci : le constat de non-sélectivité, le champ mixte,
-> le test de l'ensemble des clés, et la mesure `E_max` +15,9 % / +34,2 % qui
+> le test de l'ensemble des clés, et la mesure `E_max` +15,9 % / +33,6 % qui
 > l'a motivé.
 
 
@@ -7805,6 +7805,14 @@ Deux clés de plus déplacent donc `E_max`, mesuré sur un champ bruité N=24 :
 |---|---|---|---|
 | `legacy` | 2 639,02 | 3 059,70 | **+15,9 %** |
 | `max` | 1 231,33 | 1 652,01 | **+34,2 %** |
+
+> Ces deux `E_max` sous `max` sont mesurés sur la **plaquette d'avant** le
+> changement de formule (dénominateur commun). Remesurés sur le code actuel :
+> 1 251,50 → 1 672,18, soit **+33,6 %**. La ligne de base a bougé avec la
+> formule ; la conclusion — l'ensemble des clés fait partie du contrat — ne
+> bouge pas. C'est le chiffre **+33,6 %** qui est cité ailleurs.
+
+
 
 `src/Simulation/RescaleArrays.py` itère lui aussi sur toutes les clés
 (`for key, value in hamilt_params.items()`) et aurait max-poolé les deux
@@ -8287,6 +8295,27 @@ abordable à la résolution de production — ce que le protocole demandait de
 vérifier avant de lancer (« report wall-clock … and project the full cost
 before launching N=256 »).
 
+## ⚠️ Deux corrections trouvées le lendemain, en relisant ce module
+
+**1. Le seuil était calculé par instantané.** `hard_patch_labels.py` aplatit
+`all_l2` **sur les instantanés** avant son percentile et rend **un scalaire**.
+Ce module le calculait **par instantané**, ce qui force exactement (100−p) %
+de patches durs dans *chaque* instantané : un instantané calme et un
+instantané turbulent auraient eu la même proportion de patches durs. Le module
+annonçait pourtant reproduire la phase 2.
+
+Corrigé (`seuil_global`) ; `d_threshold` est désormais un scalaire et
+`hard_fraction_par_instantane` est publiée à côté. **Les 8 artefacts ont été
+régénérés.** Les ρ et amplifications publiés ci-dessus ne dépendent pas du
+seuil et ne bougent pas.
+
+**2. Une mutation survivait au fichier entier.** « La variante adapte son
+propre pas » — c'est-à-dire le débranchement de la séquence gelée, la raison
+d'être du module — passait tous les tests. `sequence_de_pas` était testée
+isolément, `evolue` aussi, et le fait que les deux séquences diffèrent
+également ; **rien ne testait que `dynamic_patch_errors` emploie réellement la
+séquence gelée**. Les pièces étaient gardées, l'assemblage ne l'était pas.
+
 ## Déviations au protocole, assumées
 
 | point | protocole | ici | pourquoi |
@@ -8317,7 +8346,8 @@ for f in sorted(glob.glob("results/d_patches_*.npz")):
           f"amp={np.median(a[fini]):.2f}")
 EOF
 
-python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 16 passed, 3 deselected
+python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 20 passed, 3 deselected
+python -m pytest tests/mapping -q                             # 437 passed, 1 skipped
 python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow   # 3 passed
 python -m pytest tests/ -q -m "not slow"    # 5 failed, 3053 passed, 55 min
 ```

@@ -3890,7 +3890,7 @@ sur les clés sans liste blanche —
 
 — si bien qu'**ajouter une clé est déjà un changement de comportement**,
 même quand aucune valeur partagée ne bouge d'un bit. Mesuré : deux clés de
-plus déplacent `E_max` de +15,9 % (`legacy`) et +34,2 % (`max`).
+plus déplacent `E_max` de +15,9 % (`legacy`) et +33,6 % (`max`).
 
 J'ai livré ce défaut dans une première version de la plaquette scindée, en
 l'annonçant explicitement comme *« pas un changement de comportement »*, sur
@@ -4034,6 +4034,66 @@ Elle compte maintenant les fichiers réellement écrits par deux appels.
   définition de la phase 2, donc les deux labels sont comparables. Un vrai
   AMR ferait une restriction/prolongation d'ordre supérieur : l'écart entre
   les deux n'est pas mesuré.
+
+---
+
+## Passe du 22 août — relecture adversariale de tout ce qui a été touché la veille
+
+Six vérifications, dont deux ont trouvé quelque chose.
+
+| vérification | résultat |
+|---|---|
+| cas limites de la nouvelle plaquette (0, sous/sur `EPS`, ×1e6) | tous finis et bornés — **mais une marche à `EPS`** → D-189 |
+| le corpus entre-t-il dans la bande dangereuse ? | non : 480 instantanés balayés, 0 dans `(1e-10, 1e-6)` |
+| ai-je manqué un consommateur du défaut de `norm` ? | non : exactement 4 sites, aucune construction indirecte |
+| `spearman` maison contre scipy | écart max **3,3e-16** sur 200 tirages, dont 30 % avec ex aequo |
+| mutations du module dynamique | **une survivait** — voir ci-dessous |
+| chaque nombre publié, remesuré | conformes sauf **un**, périmé — voir ci-dessous |
+
+### Le trou : les pièces étaient gardées, l'assemblage ne l'était pas
+
+La mutation « la variante adapte son propre pas » survivait au fichier
+**entier** (16 passed). `sequence_de_pas` était testée isolément,
+`evolue` aussi, et le fait que référence et variante adapteraient des
+séquences différentes également — mais **rien ne testait que
+`dynamic_patch_errors` emploie réellement la séquence gelée**, qui est
+pourtant la raison d'être du module.
+
+`test_dynamic_patch_errors_emploie_REELLEMENT_la_sequence_gelee` recalcule
+`d` en laissant chaque variante adapter la sienne et exige que le module ne
+rende pas ce résultat-là. La mutation meurt.
+
+**La leçon, générale :** tester les fonctions une par une ne teste pas le
+chemin qui les enchaîne. Un module dont chaque pièce est gardée peut avoir sa
+logique centrale entièrement libre.
+
+### Une incohérence silencieuse avec la phase 2
+
+`hard_patch_labels.py` aplatit `all_l2` **sur les instantanés** avant son
+percentile et rend **un scalaire**. Mon module le calculait **par
+instantané**, ce qui force exactement (100−p) % de patches durs dans *chaque*
+instantané — un instantané calme et un instantané turbulent auraient eu la
+même proportion de patches durs, et la comparabilité avec le label statique
+serait tombée avec. Le module annonçait pourtant « mirroir de la phase 2 ».
+
+Corrigé (`seuil_global`), gardé par trois tests, et les 8 artefacts ont été
+**régénérés** : leur `d_threshold` était un tableau, il est maintenant un
+scalaire, et `hard_fraction_par_instantane` est publiée à côté.
+
+### Un nombre périmé, republié
+
+`E_max` sous `max` : **+34,2 % → +33,6 %**. Le nombre avait été mesuré
+**avant** le changement de formule de la plaquette, qui a déplacé la ligne de
+base (1 231,33 → 1 251,50). La conclusion ne bouge pas ; le nombre, si.
+Corrigé dans `src/`, le test, `COUVERTURE`, `EVALUATION` et `RESULTS` — la
+table historique de l'entrée supersédée le garde, annoté.
+
+### Nouveau fichier de garde
+
+`tests/mapping/test_plaquette_signal_negligeable.py` (5 tests, dont 2 `slow`)
+épingle la marche de D-189 dans les deux modes, balaye les 480 instantanés du
+corpus, vérifie que les pics nuls sont **exactement** nuls, et teste son
+propre plancher de balayage sur un répertoire vide.
 
 ---
 

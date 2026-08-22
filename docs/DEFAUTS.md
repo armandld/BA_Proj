@@ -1998,3 +1998,59 @@ d'acceptation par quelque chose qu'un label redondant échoue — par exemple
 `tests/study/test_dynamic_patch_labels.py::test_a_lhorizon_du_protocole_le_label_dynamique_est_une_redite_du_statique`
 et son champ séparateur `test_le_label_se_decolle_quand_on_allonge_lhorizon`.
 
+---
+
+## D-189 — sous `norm="max"`, `EPS` sert de seuil physique et promeut la poussière numérique
+
+**Rapport seul. Rien n'est corrigé** — le corpus n'entre pas dans la bande, et
+choisir un plancher physique est une décision de conception sur `src/`.
+
+**Défaut introduit le 21 août**, par la correction elle-même. La plaquette
+divise désormais chaque magnitude par **son propre** maximum, ce qui rend à la
+structure faible le poids que le dénominateur commun lui refusait (facteur 179
+sur `harris_tearing`). Mais la normalisation n'a aucune notion de « ce signal
+a-t-il un sens physique ? » : elle remet à l'échelle ce qu'elle trouve, et le
+seul garde est `EPS = 1e-10`, **un garde de division par zéro**.
+
+Mesuré, tourbillon et nappe à supports disjoints, valeur de la plaquette au
+pic de vorticité :
+
+| max\|ω\| | `norm="max"` | `norm="legacy"` |
+|---|---|---|
+| 0 (exact) | 0,000000 | 0,000000 |
+| 4,65e-15 (sous `EPS`) | 0,000000 | 0,000000 |
+| **4,65e-10 (sur `EPS`)** | **0,999998** | 0,000000 |
+| 4,65e-07 | 0,999998 | 0,000001 |
+| 4,65e-01 | 0,999998 | 0,500000 |
+
+**Une vorticité de 1e-9 pèse autant qu'une vorticité de 1.** C'est une marche,
+pas une dégradation continue, et elle tombe sur une constante qui n'a jamais
+été pensée comme un seuil physique.
+
+C'est le **revers exact de la correction** : ce qui protégeait `legacy` de la
+poussière numérique était précisément le dénominateur commun qui écrasait la
+structure faible. Les deux faits sont le même fait.
+
+**Pourquoi ça ne bloque pas.** Balayage des 24 artefacts DNS, instantané par
+instantané (480 instantanés) : **aucun** `max|ω|` ni `max|J|` ne tombe dans
+`(1e-10, 1e-6)`. Les valeurs sont soit **exactement** nulles — `v` ou `B`
+identiquement nul à t=0, ce qui est sûr — soit ≥ 4,9e-02. `harris_tearing`
+passe de 0 exact à 1,29e-04 en un instantané : quatre ordres au-dessus de la
+bande.
+
+**Ce qui est gardé** — `tests/mapping/test_plaquette_signal_negligeable.py` :
+
+- la marche est épinglée, dans les deux modes, avec le champ qui les sépare ;
+- le corpus est balayé et **un futur artefact dans la bande fait rougir la
+  suite** au lieu d'entrer en silence ;
+- un test vérifie que les pics nuls du corpus sont **exactement** nuls — c'est
+  ce qui rend la bande inatteignable, et un `1e-9` à la place d'un `0` ne le
+  serait pas ;
+- le plancher de balayage est lui-même testé sur un répertoire vide.
+
+**Ce qu'il faudrait pour clore.** Un plancher **relatif au champ, pas à
+l'autre signal** — par exemple `pic > k · eps_machine · max|v| / dx`, c'est-à-
+dire « au-dessus du niveau d'arrondi ». Un plancher relatif à l'autre signal
+réintroduirait le couplage entre familles que la correction retire, et serait
+donc pire que le défaut. Décision de conception : elle revient à USER.
+

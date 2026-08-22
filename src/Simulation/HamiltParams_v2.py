@@ -228,7 +228,7 @@ class PhysicalMapperV2:
              L'ENSEMBLE des cles fait partie du contrat, pas seulement les
              valeurs : `src/call_vqa_shell.py` somme |coeff| sur TOUTES les
              cles tableau pour former `E_max`, sans liste blanche. Ajouter
-             une cle y deplace `E_max` (mesure : +15,9 % a +34,2 % pour deux
+             une cle y deplace `E_max` (mesure : +15,9 % a +33,6 % pour deux
              cles) sans qu'aucune valeur partagee ne bouge.
         """
         dx = dx_override if dx_override is not None else self.dx

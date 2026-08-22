@@ -261,7 +261,6 @@ def analyse_snapshot(dns_path, snap_index, n_patches, delta_t=DELTA_T,
     e = patch_l2_errors(vx, vy, Bx, By, n_patches)
     scores = patch_classical_scores(vx, vy, Bx, By, n_patches, 2 * np.pi / N)
 
-    seuil = float(np.percentile(d, percentile))
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = np.where(d0 > 0, d / d0, np.nan)
 
@@ -270,10 +269,27 @@ def analyse_snapshot(dns_path, snap_index, n_patches, delta_t=DELTA_T,
         "n_patches": n_patches, "snap_index": int(snap_index),
         "t": float(z["t"][snap_index]),
     })
+    # PAS de seuil ici : il se calcule sur TOUS les instantanes a la fois,
+    # voir `seuil_global`. Un seuil par instantane forcerait exactement
+    # (100-p) % de patches durs dans CHAQUE instantane, ce qui n'est pas ce
+    # que fait la phase 2 et efface l'information « cet instantane est plus
+    # actif que celui-la ».
     return {"d_errors": d, "d0_errors": d0, "amplification": amp,
-            "l2_errors": e, "classical_scores": scores,
-            "d_threshold": seuil, "is_hard_dynamic": (d >= seuil).astype(int),
-            "meta": meta}
+            "l2_errors": e, "classical_scores": scores, "meta": meta}
+
+
+def seuil_global(d_empile, percentile=L2_PERCENTILE_HARD):
+    """UN seuil pour toute la serie, comme la phase 2.
+
+    `hard_patch_labels.py` aplatit `all_l2` sur les instantanes AVANT de
+    prendre son percentile, et rend un scalaire. Reproduire ce choix n'est
+    pas cosmetique : un seuil par instantane fixerait la prevalence a
+    (100-p) % dans chacun, si bien qu'un instantane calme et un instantane
+    turbulent auraient la MEME proportion de patches durs. La comparabilite
+    avec le label statique tomberait avec.
+    """
+    seuil = float(np.percentile(np.asarray(d_empile).ravel(), percentile))
+    return seuil, (np.asarray(d_empile) >= seuil).astype(int)
 
 
 def spearman(a, b):
@@ -377,16 +393,23 @@ def main():
         f"d_patches_{args.scenario}_Re{args.re}_N{args.N}"
         f"_dim{args.dim}_dt{args.delta_t:g}.npz")
     empile = lambda k: np.stack([r[k] for r in res])          # noqa: E731
+    d_tous = empile("d_errors")
+    seuil, dur = seuil_global(d_tous, args.percentile)
+    frac = dur.reshape(len(res), -1).mean(axis=1)
+    print(f"  seuil global (p{args.percentile:g}) = {seuil:.6f} ; "
+          f"fraction dure par instantane = "
+          f"[{frac.min():.3f}, {frac.max():.3f}]")
     np.savez_compressed(
         out,
         label_kind="dynamic",
-        d_errors=empile("d_errors"),
+        d_errors=d_tous,
         d0_errors=empile("d0_errors"),
         amplification=empile("amplification"),
         l2_errors=empile("l2_errors"),
         classical_scores=empile("classical_scores"),
-        is_hard_dynamic=empile("is_hard_dynamic"),
-        d_threshold=np.array([r["d_threshold"] for r in res]),
+        is_hard_dynamic=dur,
+        d_threshold=seuil,
+        hard_fraction_par_instantane=frac,
         t=np.array([r["meta"]["t"] for r in res]),
         snap_index=np.array(idx),
         n_substeps=np.array([r["meta"]["n_substeps"] for r in res]),

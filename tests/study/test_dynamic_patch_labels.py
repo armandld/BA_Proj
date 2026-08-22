@@ -28,8 +28,9 @@ for _p in [os.path.join(_RACINE, "src")] + [
         sys.path.insert(0, _p)
 
 from dynamic_patch_labels import (                           # noqa: E402
-    coarsen_one_patch, dynamic_patch_errors, evolue, sequence_de_pas,
-    spearman, analyse_snapshot, DELTA_T, MAX_SUBSTEPS)
+    _l2_relatif, coarsen_one_patch, dynamic_patch_errors, evolue,
+    sequence_de_pas, seuil_global, spearman, analyse_snapshot, DELTA_T,
+    MAX_SUBSTEPS)
 from hard_patch_labels import patch_l2_errors                # noqa: E402
 
 
@@ -216,6 +217,52 @@ def test_sur_les_vrais_champs_le_gel_change_la_sequence_sur_presque_tout_patch()
         "cesse d'etre necessaire, ce qui change la justification du module")
 
 
+def test_dynamic_patch_errors_emploie_REELLEMENT_la_sequence_gelee():
+    """Le CABLAGE, pas seulement les pieces.
+
+    `sequence_de_pas` et `evolue` sont testes isolement plus haut, et le fait
+    que reference et variante adapteraient des sequences DIFFERENTES l'est
+    aussi. Rien ne testait que `dynamic_patch_errors` emploie reellement la
+    sequence gelee : la mutation « la variante adapte son propre pas »
+    survivait au fichier ENTIER (16 passed). Les trois pieces etaient
+    gardees, leur assemblage ne l'etait pas.
+
+    On recalcule donc `d` en laissant chaque variante adapter SA sequence, et
+    on exige que le module ne rende pas ce resultat-la.
+    """
+    N, dim = 32, 4
+    p = N // dim
+    champs = list(_champ(N))
+    champs[0] = champs[0].copy()
+    champs[0][:p, :p] = 40.0 * np.linspace(-1, 1, p)[:, None]
+    champs = tuple(champs)
+    delta_t = 0.05
+
+    d, _, _ = dynamic_patch_errors(*champs, dim, Re=400, delta_t=delta_t)
+
+    rms = float(np.sqrt(np.mean(sum(c ** 2 for c in champs))))
+    pas_ref, ref = sequence_de_pas(N, 400, champs, delta_t)
+    d_adaptatif = np.zeros((dim, dim))
+    au_moins_une_sequence_differente = False
+    for pi in range(dim):
+        for pj in range(dim):
+            var = tuple(coarsen_one_patch(c, pi, pj, p) for c in champs)
+            pas_var, fin = sequence_de_pas(N, 400, var, delta_t)
+            if (len(pas_var) != len(pas_ref)
+                    or not np.allclose(pas_var, pas_ref, rtol=1e-12)):
+                au_moins_une_sequence_differente = True
+            d_adaptatif[pi, pj] = _l2_relatif(fin, ref, rms)
+
+    assert au_moins_une_sequence_differente, (
+        "aucune variante n'adapte une sequence differente sur ce champ : "
+        "le test ne peut rien separer, changer de champ")
+    assert not np.allclose(d, d_adaptatif, rtol=1e-9), (
+        "`dynamic_patch_errors` rend exactement le resultat qu'on obtient en "
+        "laissant chaque variante adapter son propre pas : la sequence n'est "
+        "plus gelee, et `d_i` compte un ecart de pas de temps comme de la "
+        "physique")
+
+
 def test_un_horizon_absurde_crie_au_lieu_de_tourner():
     """Un balayage qui ne finira jamais doit lever, pas ramer."""
     with pytest.raises(RuntimeError, match="sous-pas"):
@@ -289,6 +336,73 @@ def test_le_label_se_decolle_quand_on_allonge_lhorizon():
     assert court > long_ + 0.05, (
         f"rho court {court:+.4f} contre long {long_:+.4f} : allonger "
         "l'horizon ne decolle plus le label, la conclusion change")
+
+
+# ==================================================================
+#  3 bis. le seuil est GLOBAL, comme en phase 2
+# ==================================================================
+def test_le_seuil_est_pris_sur_TOUS_les_instantanes_a_la_fois():
+    """La phase 2 aplatit `all_l2` sur les instantanes AVANT son percentile
+    et rend UN scalaire (`hard_patch_labels.py`, `threshold_l2`). Reproduire
+    ce choix n'est pas cosmetique.
+
+    Sur quelle entree ce test echoue : si le seuil redevenait per-instantane,
+    la fraction dure vaudrait (100-p) % dans CHACUN, et un instantane calme
+    aurait autant de patches durs qu'un instantane turbulent.
+    """
+    calme = np.full((4, 4), 0.01)
+    calme[0, 0] = 0.02
+    agite = np.linspace(0.0, 1.0, 16).reshape(4, 4)
+    empile = np.stack([calme, agite])
+
+    seuil, dur = seuil_global(empile, percentile=75)
+    assert np.isscalar(seuil) or np.ndim(seuil) == 0, \
+        f"le seuil n'est pas un scalaire : {np.shape(seuil)}"
+    assert dur.shape == empile.shape
+
+    frac = dur.reshape(2, -1).mean(axis=1)
+    assert frac[0] < frac[1], (
+        f"fraction dure calme {frac[0]:.3f} >= agitee {frac[1]:.3f} : le "
+        "seuil est redevenu per-instantane, il efface l'ecart d'activite")
+    assert not np.isclose(frac[0], 0.25), (
+        f"l'instantane calme rend exactement {frac[0]:.3f} de patches durs — "
+        "c'est la signature d'un seuil per-instantane")
+
+    # la prevalence GLOBALE, elle, est bien celle du percentile
+    assert dur.mean() == pytest.approx(0.25, abs=0.05)
+
+
+def test_le_seuil_global_respecte_le_percentile_demande():
+    """Un percentile different doit donner une prevalence differente —
+    sinon le parametre ne sert a rien."""
+    rng = np.random.default_rng(0)
+    d = rng.random((5, 8, 8))
+    for p, attendu in ((60, 0.40), (75, 0.25), (90, 0.10)):
+        _, dur = seuil_global(d, percentile=p)
+        assert dur.mean() == pytest.approx(attendu, abs=0.02), \
+            f"p{p} rend {dur.mean():.3f} de patches durs, attendu {attendu}"
+
+
+def test_lartefact_porte_un_seuil_scalaire_et_les_fractions(tmp_path, monkeypatch):
+    """Le cablage : `main` doit ecrire le seuil GLOBAL, pas une liste."""
+    dns = os.path.join(_RACINE, "results", "dns_harris_tearing_Re400_N96.npz")
+    if not os.path.exists(dns):
+        pytest.skip("artefact DNS N=96 absent")
+    import dynamic_patch_labels as dpl
+    monkeypatch.setattr(dpl, "RESULTS_DIR", str(tmp_path))
+    os.symlink(dns, os.path.join(str(tmp_path), os.path.basename(dns)))
+    monkeypatch.setattr(sys, "argv", [
+        "dynamic_patch_labels", "--snaps", "3", "--dim", "4", "--N", "96",
+        "--delta-t", "0.01"])
+    dpl.main()
+
+    f = [x for x in os.listdir(str(tmp_path)) if x.startswith("d_patches_")][0]
+    z = np.load(os.path.join(str(tmp_path), f), allow_pickle=True)
+    assert z["d_threshold"].ndim == 0, (
+        f"d_threshold a la forme {z['d_threshold'].shape} : le seuil est "
+        "redevenu per-instantane")
+    assert "hard_fraction_par_instantane" in z.files
+    assert len(z["hard_fraction_par_instantane"]) == 3
 
 
 # ==================================================================

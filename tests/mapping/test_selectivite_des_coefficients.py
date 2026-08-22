@@ -346,7 +346,7 @@ def test_lensemble_des_cles_rendues_est_ferme(norm):
     somme `|coeff|` sur TOUTES les clés tableau, sans liste blanche, pour
     former `E_max`. **Ajouter une clé est donc déjà un changement de
     comportement**, même quand aucune valeur partagée ne bouge d'un bit —
-    mesuré à +15,9 % (`legacy`) et +34,2 % (`max`) pour deux clés de plus.
+    mesuré à +15,9 % (`legacy`) et +33,6 % (`max`) pour deux clés de plus.
     `RescaleArrays.py` itère lui aussi sur toutes les clés.
 
     Ce test existe parce que ce défaut a été livré une fois, annoncé comme

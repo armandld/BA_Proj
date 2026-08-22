@@ -181,7 +181,7 @@ paraissait fausse.
    comportement » sur la foi d'une comparaison bit à bit des **valeurs**
    des clés partagées — vraie, reproductible, et sans rapport avec la
    question, puisque `call_vqa_shell.py` agrège sur l'**ensemble** des clés
-   et voyait donc son `E_max` bouger de +15,9 % à +34,2 %. Avant de conclure
+   et voyait donc son `E_max` bouger de +15,9 % à +33,6 %. Avant de conclure
    « rien ne bouge », demander : *qu'est-ce qui, chez le consommateur réel,
    pourrait bouger sans que ma mesure le voie ?*
 

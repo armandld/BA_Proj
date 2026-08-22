@@ -89,6 +89,24 @@ mesurant sur les DNS réels, pas sur les champs analytiques. La mesure de
 laboratoire dit *si* un mécanisme existe ; seule la mesure sur le corpus dit
 s'il **compte**.
 
+**Garder les pieces, pas l'assemblage.** Dans un module neuf, chaque
+fonction avait son test — et la mutation qui debranchait la logique CENTRALE
+(la sequence de pas gelee, sa raison d'etre) survivait au fichier entier.
+Tester `f`, puis `g`, ne teste pas `g(f(x))`. Apres avoir teste les pieces,
+demander : **quelle mutation du chemin qui les enchaine passerait ?**
+
+**Reprendre un choix de convention sans le verifier chez le voisin.** Mon
+module calculait son seuil par instantane ; la phase 2, qu'il annoncait
+mirroir, le calcule sur toute la serie. Personne n'aurait vu la difference —
+les deux produisent un artefact bien forme avec la bonne prevalence globale.
+Quand un module dit « comme X », aller lire X.
+
+**Un nombre mesure avant un changement, publie apres.** `E_max` +34,2 % a ete
+mesure sur la plaquette d'avant sa reecriture, puis republie tel quel : la
+ligne de base avait bouge avec la formule. Tout nombre mesure AVANT une
+modification de `src/` est perime par elle, meme quand il n'en est pas
+l'objet.
+
 **Lire un test rouge trop vite, dans le sens qui m'arrange.**
 `test_the_ground_state_is_uniform_on_real_deployed_coefficients` est devenu
 rouge après un changement à moi, et j'y ai lu « la dégénérescence D-45/D-47
