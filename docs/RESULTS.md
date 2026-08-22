@@ -8306,8 +8306,28 @@ annonçait pourtant reproduire la phase 2.
 
 Corrigé (`seuil_global`) ; `d_threshold` est désormais un scalaire et
 `hard_fraction_par_instantane` est publiée à côté. **Les 8 artefacts ont été
-régénérés.** Les ρ et amplifications publiés ci-dessus ne dépendent pas du
-seuil et ne bougent pas.
+régénérés**, et les ρ publiés ci-dessus se relisent **à l'identique** dans les
+nouveaux (ils ne dépendent pas du seuil).
+
+Ce que la correction a réellement changé, mesuré artefact par artefact :
+
+| artefact | fraction dure (min – max) | labels différents |
+|---|---|---|
+| `harris_tearing` (les deux δt) | 0,250 – 0,250 | **0,0 %** |
+| `kelvin_helmholtz` (les deux δt) | 0,250 – 0,250 | **0,0 %** |
+| `mhd_rotor` δt=0,1 / δt=2,0 | 0,188 – 0,344 | 6,2 % / 5,6 % |
+| `orszag_tang` δt=0,1 | **0,000 – 0,500** | **16,2 %** |
+| `orszag_tang` δt=2,0 | 0,047 – 0,406 | 10,6 % |
+
+Sur les deux scénarios quiescents les deux conventions **coïncident** : leurs
+trajectoires sont assez auto-similaires pour que le percentile global et le
+percentile par instantané tombent au même endroit. Sur `orszag_tang`, **16 %
+des labels étaient faux** — et un instantané y a **zéro** patch dur sous le
+seuil global, là où la convention par instantané lui en imposait 25 %. C'est
+exactement l'information que le seuil par instantané détruit : « cet instantané
+est calme ».
+
+Encore une fois, c'est le scénario turbulent qui porte l'écart.
 
 **2. Une mutation survivait au fichier entier.** « La variante adapte son
 propre pas » — c'est-à-dire le débranchement de la séquence gelée, la raison
