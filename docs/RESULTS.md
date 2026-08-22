@@ -7001,6 +7001,28 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   dépend aujourd'hui. `tests/study/test_v4_modules.py:450-459` ne couvre
   que l'entrée déjà triée, donc ne l'aurait pas vu. Non corrigé ici : sans
   conséquence mesurée et hors campagne en cours, à traiter avec le lot.
+- **`HamiltParams.compute_coefficients` porte sa propre version de D-37,
+  une couche plus bas — piège armé, non déclenché.** La fonction accepte
+  `score.shape != field_shape` et redimensionne `score` par
+  `scipy.ndimage.zoom` avant de calculer la fenêtre d'incertitude ZZ
+  (`C_edges *= uncertainty_h/v`, correctement rendue à `field_shape`).
+  Mais `H_edges` est alloué via `N_field = score.shape[0]` **avant** ce
+  redimensionnement, et rempli plus tard avec le `score` **non
+  redimensionné** (`z_bias = alpha_z * (score − threshold_amr)`) : exactement
+  la forme de D-37 (le halo ajouté deux fois), sauf que cette fois c'est
+  `compute_coefficients` elle-même, pas son appelant, qui désaccorde les
+  deux grilles. Mesuré en le déclenchant à la main (`score` en `(6, 6)`
+  avec halo, `fields` en `(4, 4)`, `orszag_tang` N=64 après 40 pas) :
+  `H_edges` sort en **(6, 6)**, `C_edges`/`K_plaquettes` en **(4, 4)**.
+  **Non déclenché aujourd'hui** : les 7 sites d'appel du dépôt
+  (`refinement.py` — le seul chemin déployé — et les 6 sous `study/`)
+  construisent toujours `score` et `fields` à la même résolution ; côté
+  déployé, `tests/amr/test_patch_encoding_shapes.py::test_the_z_bias_and_the_couplings_share_one_grid`
+  le garantit déjà pour `refinement.py` depuis D-37. Épinglé —
+  `pytest tests/amr/test_patch_encoding_shapes.py -k D37_one_layer_deeper`
+  → **1 passed**. Non corrigé : `src/Simulation/HamiltParams.py` est gelé
+  pendant la campagne (`armandld/BA_Proj#2`, 17 août), et rien n'appelle
+  cette branche aujourd'hui.
 
 # D-47 — l'Hamiltonien v1 dégénère vers « raffiner partout » à résolution VQA
 

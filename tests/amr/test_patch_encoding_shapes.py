@@ -203,3 +203,61 @@ def test_the_vqa_scan_reaches_every_depth(flow, max_depth):
                 for p in patches)
     assert total == 64 * 64, (
         f"le pavage couvre {total} cellules sur {64 * 64} : trou ou recouvrement")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  4. `compute_coefficients` porte SA PROPRE version de D-37 — inerte
+#     aujourd'hui, jamais mesuree
+# ══════════════════════════════════════════════════════════════════
+
+def test_the_resize_branch_reproduces_D37_one_layer_deeper(flow):
+    """`HamiltParams.compute_coefficients` (src/Simulation/HamiltParams.py,
+    ~ligne 536) accepte `score.shape != field_shape` et resize `score` par
+    `scipy.ndimage.zoom` avant de calculer la fenetre d'incertitude — mais
+    `H_edges` est alloue via `N_field = score.shape[0]`, AVANT ce resize,
+    et rempli plus tard avec le `score` NON resize (`z_bias = alpha_z *
+    (score - threshold_amr)`). Le resize corrige `C_edges`/`K_plaquettes`
+    (bases sur les champs) mais pas `H_edges` (base sur le score) : c'est
+    exactement D-37 (`test_the_old_call_produced_two_incompatible_halves`
+    ci-dessus), une couche plus bas, a l'interieur meme de la fonction que
+    D-37 avait corrigee cote appelant.
+
+    INERTE AUJOURD'HUI, verifie ici et non dans `DEFAUTS.md` (regle
+    d'arret du fichier) : les 7 sites d'appel du depot (`refinement.py`,
+    et les 6 sous `study/`) construisent toujours `score` et `fields` a la
+    MEME resolution — `test_the_z_bias_and_the_couplings_share_one_grid`
+    ci-dessus le garantit deja pour `refinement.py`, le seul chemin
+    deploye. Ce test pique la seule autre garantie : SI ce garde-fou
+    sautait un jour (nouvel appelant, resolution du score decouplee de
+    celle des champs), la branche de secours de `compute_coefficients` ne
+    rattraperait rien — elle produirait un Hamiltonien dont `H_edges` et
+    `C_edges`/`K_plaquettes` decrivent deux grilles differentes, en
+    silence.
+    """
+    sim = flow
+    bounds, pad, t_dim = (0, 32, 0, 32), 1, TARGET_DIM
+    score = AngleMapper.classical_score(sim.get_fluxes())
+    local = get_periodic_patch(score, *bounds, pad)
+    mini_fields = _downsample_fields(sim.get_fluxes(), *bounds, t_dim, pad=pad)
+    # score au format AVEC halo (6, 6) ; les champs sont sans lui (4, 4) --
+    # exactement l'ecart d'avant D-37, mais fourni directement en entree
+    # de compute_coefficients plutot que rattrape en amont par l'appelant.
+    mismatched_score = _process_score(local, False, t_dim + 2 * pad)
+    assert mismatched_score.shape == (6, 6)
+    assert mini_fields["vx"].shape == (4, 4)
+
+    hp = _mapper(sim).compute_coefficients(
+        sim, mismatched_score, mini_fields, 0.15,
+        advanced_anomalies_enabled=True, dx_override=sim.grid.dx)
+
+    assert np.shape(hp["H_edges"][0]) == (6, 6), (
+        "H_edges suit le score non resize : si ce nombre bouge, le "
+        "resize interne a change de comportement, remesurer plutot que "
+        "de mettre a jour l'attendu en aveugle")
+    assert np.shape(hp["C_edges"][0]) == (4, 4)
+    assert np.shape(hp["K_plaquettes"]) == (4, 4)
+    assert np.shape(hp["H_edges"][0]) != np.shape(hp["C_edges"][0]), (
+        "H_edges et C_edges decrivent deux grilles differentes : "
+        "un Hamiltonien assemble a partir de ce retour lirait le coin "
+        "d'un patch pour l'un et un autre patch pour l'autre, comme D-37"
+    )
