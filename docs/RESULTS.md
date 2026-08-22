@@ -8318,8 +8318,14 @@ for f in sorted(glob.glob("results/d_patches_*.npz")):
 EOF
 
 python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 16 passed, 3 deselected
-python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow
+python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow   # 3 passed
+python -m pytest tests/ -q -m "not slow"    # 5 failed, 3053 passed, 55 min
 ```
+
+Les **5 rouges sont les 5 documentés du dépôt** (trio `a0e0e02`, paire
+D-132), rejoués sur un `worktree` propre à `HEAD` lors d'une passe
+antérieure. **Aucun intermittent ce tour-ci** — les quatre de D-165/D-187
+sont tous passés — et le module neuf ne casse rien.
 
 L'identité `d0 = e / dim` est vérifiée à `rtol=1e-12` pour dim ∈ {2, 4, 8} :
 elle teste le grossissement et la normalisation **sans passer par le
