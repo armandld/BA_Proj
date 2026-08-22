@@ -4029,6 +4029,18 @@ Et la réciproque, que D-51 illustre : un drapeau *présent* dans `tests/`
 peut n'atteindre aucun producteur. `advanced_anomalies_enabled` était cité
 partout, et mesuré sans effet.
 
+**File `scripts=0` (aucun lanceur ne les prend, priorité moindre) — 87
+drapeaux ouverts, deux premiers traités cette nuit (22 août), lecture
+complète des deux modules :**
+
+| module | drapeaux | statut |
+|---|---|---|
+| `study/h2b_prediction/h2b_variational_classifier.py` | `--skip-vqc`, `--skip-qke`, `--train-frac` | **traité — rien trouvé.** Deux drapeaux de pur contrôle de flux (aucune valeur numérique n'en dépend) ; `--train-frac` (défaut 0,7) est cohérent avec les autres scripts `h2b_*`. Aucun artefact `vqc_*.npz` n'existe (D-81 : phase 12 jamais lancée), donc rien de publié n'en dépend. Le verdict de `main()` compare `f1_q_best` à `max(f1_lr_pca, f1_gbt_pca)` **sans** inclure `f1_cls_sub` (la baseline classique brute) — lu, c'est fidèle à la docstring, qui promet une comparaison « on the same PCA features » pour isoler l'effet du circuit quantique ; pas un défaut |
+| `study/h1_solver/h1_curl_convention_gap.py` | `--quantile`, `--spinup`, `--stride` | **traité — rien trouvé.** Module déjà au centre de D-69/T31 (clos), relu en entier avec ces trois drapeaux en tête. `--quantile` fixe le seuil du label « patch dur », calculé une fois sur les champs bruts avant la comparaison legacy/fixed — donc sans effet sur l'écart mesuré, exactement ce que la docstring annonce, vérifié ligne à ligne. `--spinup`/`--stride` pilotent le pas de temps de la même trajectoire déterministe, appliqués identiquement aux deux conventions avant qu'elles ne divergent — aucun risque de comparer deux états différents. Indices de retour de `prepare_qaoa_inputs` (`out[tag][1]` = `hamilt_params`, `out[tag][2]` = score) vérifiés contre la signature documentée — corrects, pas la forme D-179 |
+
+Deux modules de plus « vérifiés et trouvés sains » pour éviter de les
+relire. 85 drapeaux `scripts=0` restent dans la file.
+
 ---
 
 ## Tenir ce document à jour
