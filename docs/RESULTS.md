@@ -7997,7 +7997,8 @@ faits mesurés, tous dans le même sens, et aucun contre :
 
 1. Sous `legacy`, le poids relatif ZZ:ZZZZ dérive d'un **facteur 2,59** avec la
    seule spikiness du champ (3,121 → 8,095). Sous `max` il vaut
-   `W_ZZ/W_ZZZZ = 2,000` partout.
+   `W_ZZ/W_ZZZZ = 2,000` partout — **mais uniquement si le terme X-point est
+   désactivé. Voir la rétractation ci-dessous.**
 2. Sous `legacy`, `max|K|` vaut 0,74 à 0,99 selon le scénario — la famille ZZZZ
    est silencieusement dévaluée jusqu'à 26 % sur `mhd_rotor`, parce que les
    deux maxima sont pris en des points différents. Sous `max`, `max|K| = 1,000`
@@ -8117,6 +8118,53 @@ Les artefacts `.npz` gelés ne bougent pas — ils ne sont pas recalculés — d
 la table maîtresse reste à **180 / 176 / 4 / 0**. Mais le Hamiltonien du dépôt
 n'est plus celui qui les a produits : **toute campagne relancée produira des
 nombres différents**, et c'est le but.
+
+## ⚠️ Rétractation, le 22 août : l'invariance ZZ:ZZZZ ne tient pas dans la configuration DÉPLOYÉE
+
+Ce qui précède affirme que sous `max` le rapport ZZ:ZZZZ vaut `W_ZZ/W_ZZZZ =
+2,000` partout, et en fait l'argument principal du basculement. **C'est vrai
+seulement avec `advanced_anomalies_enabled=False`.** D-33 enregistre que la
+campagne l'active sur **6 scénarios sur 6**.
+
+`K_plaquettes` et `K_xpoint` sont deux termes `("ZZZZ", …)` posés sur **les
+mêmes quatre qubits** (`cost_hamiltonian.py`, lignes 416 et 431) :
+`SparsePauliOp` les somme, et le coefficient ZZZZ effectif est leur somme.
+Mesuré, N=256, Re=400 :
+
+| scénario | max\|K_plaq\| | max\|K_xp\| | ZZZZ **effectif** | ZZ:ZZZZ déployé |
+|---|---|---|---|---|
+| `harris_tearing` | 1,0000 | 0,9945 | 1,5651 | **1,278** |
+| `kelvin_helmholtz` | 1,0000 | **0,2913** | 1,0000 | 2,000 |
+| `mhd_rotor` | 1,0000 | 1,0000 | 1,7694 | **1,130** |
+| `orszag_tang` | 1,0000 | 1,0000 | 1,9445 | **1,029** |
+
+Le rapport va de **1,029 à 2,000 — facteur 1,94**, soit le même ordre que le
+facteur 2,59 que le basculement était censé retirer. **Le couplage parasite
+n'a pas été éliminé : il entre par l'autre porte.**
+
+Deux causes distinctes, toutes deux réparables :
+
+1. **`K_xpoint` n'est pas normalisé par son propre signal.** Il divise
+   `max(0, −det ∇B)` par `max|det ∇B|` — deux signaux différents. Quand les
+   déterminants positifs dominent en magnitude, le terme n'atteint jamais son
+   normaliseur : **0,291 sur `kelvin_helmholtz`**. C'est exactement le défaut
+   « deux maxima en des points différents » corrigé dans la plaquette, resté
+   vivant ici. Son garde est aussi le seul encore **additif** (`+ EPS`), d'où
+   une adimensionalité à 1e-10 au lieu d'exacte.
+2. **Deux termes ZZZZ sur la même plaquette s'additionnent**, donc la famille
+   peut atteindre `2·w_zzzz`.
+
+**Pourquoi les tests n'ont rien vu.** `test_kxpoint_ne_repond_quau_xpoint`
+exige `Kxp > 0,5` sur le champ analytique `xpoint`, qui rend **1,000** : son
+`det` est symétrique, donc `max(0,−det)` atteint `max|det|` par construction
+et le défaut de normalisation y est **invisible**. Et
+`test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception`
+calcule le rapport contre `max|K_plaquettes|` **seul**, jamais contre le ZZZZ
+effectif. Troisième instance de la même leçon : un champ analytique trop
+propre ne peut pas voir ce que les champs réels montrent.
+
+→ **D-190.** Rien n'est corrigé ici : le remède naturel change la définition
+du terme ZZZZ et se décide.
 
 ## Une erreur de conception de mes propres tests, trouvée en les faisant échouer
 

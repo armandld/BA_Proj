@@ -2054,3 +2054,75 @@ dire « au-dessus du niveau d'arrondi ». Un plancher relatif à l'autre signal
 réintroduirait le couplage entre familles que la correction retire, et serait
 donc pire que le défaut. Décision de conception : elle revient à USER.
 
+---
+
+## D-190 — l'invariance ZZ:ZZZZ, argument principal du basculement, ne tient pas dans la configuration déployée
+
+**Rapport seul. Rien n'est corrigé** — le remède change la définition du terme
+ZZZZ, ce qui se décide.
+
+**Où ça bloque.** `RESULTS.md` publiait, comme argument n°1 du basculement sur
+`norm="max"` : *« sous `max` le rapport ZZ:ZZZZ vaut `W_ZZ/W_ZZZZ = 2,000`
+partout »*. C'est vrai avec `advanced_anomalies_enabled=False`. **D-33
+enregistre que la campagne l'active sur 6 scénarios sur 6.**
+
+`K_plaquettes` et `K_xpoint` sont deux termes `("ZZZZ", …)` sur **les mêmes
+quatre qubits** (`src/VQA/cost_hamiltonian.py:416` et `:431`) ; `SparsePauliOp`
+les somme. Mesuré, N=256, Re=400, instantané médian :
+
+| scénario | max\|K_xp\| | ZZZZ effectif | ZZ:ZZZZ déployé |
+|---|---|---|---|
+| `harris_tearing` | 0,9945 | 1,5651 | **1,278** |
+| `kelvin_helmholtz` | **0,2913** | 1,0000 | 2,000 |
+| `mhd_rotor` | 1,0000 | 1,7694 | **1,130** |
+| `orszag_tang` | 1,0000 | 1,9445 | **1,029** |
+
+**Facteur 1,94** sur le rapport — l'ordre de grandeur exact du facteur 2,59 que
+le basculement retirait à `legacy`. Le couplage parasite n'a pas été éliminé,
+il a changé de porte d'entrée.
+
+### Deux causes, séparables
+
+1. **`K_xpoint` n'est pas normalisé par son propre signal.** Il divise
+   `max(0, −det ∇B)` par `max|det ∇B|`. Quand les déterminants positifs
+   dominent en magnitude, le terme n'atteint jamais son normaliseur — 0,291 sur
+   `kelvin_helmholtz`. C'est le défaut « deux maxima en des points différents »,
+   corrigé dans la plaquette le 21 août et resté vivant ici. Son garde est
+   également le **seul encore additif** (`+ EPS` au dénominateur), d'où une
+   adimensionalité à 1e-10 au lieu d'exacte.
+2. **Deux termes ZZZZ sur la même plaquette s'additionnent**, donc la famille
+   atteint jusqu'à `2·w_zzzz` alors que ZZ est borné à `w_zz`.
+
+### Pourquoi rien ne l'a vu
+
+`test_kxpoint_ne_repond_quau_xpoint` exige `Kxp > 0,5` sur le champ analytique
+`xpoint`, qui rend **1,000** : son `det` est symétrique, donc `max(0,−det)`
+atteint `max|det|` **par construction**. Et
+`test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception`
+calcule le rapport contre `max|K_plaquettes|` seul, jamais contre le ZZZZ
+effectif. Troisième instance de la même leçon dans ce dépôt : un champ
+analytique trop propre ne peut pas voir ce que les champs réels montrent.
+
+### Le remède naturel, et pourquoi il se décide
+
+La plaquette rend déjà deux magnitudes adimensionnelles **séparément** puis
+borne leur somme. Le X-point est un **troisième type de structure sur la même
+plaquette**. La généralisation cohérente est de le plier dans la même somme :
+
+    X̂     = max(0, −det ∇B) / max( max(0, −det ∇B) )
+    K_ZZZZ = -w_zzzz * (ω̂ + Ĵ + X̂) / max(ω̂ + Ĵ + X̂)
+
+**Une seule famille ZZZZ, un seul poids, rapport exactement 2 partout**, et le
+même nombre de portes (les deux termes vivent déjà sur les mêmes qubits).
+
+Ce que ça change et qui n'est pas neutre : le X-point cesse d'être un terme
+**additionnel** pour devenir un **tiers** du signal de plaquette. Un champ
+présentant les trois structures verrait chacune plafonnée à 1/3 au lieu de
+1/2 + 1. C'est une décision de conception physique, pas une retouche.
+
+**Alternative** : garder les deux termes séparés, corriger seulement la cause 1
+(normaliser `K_xpoint` par son propre max, garde multiplicatif), et **déclarer**
+que la famille ZZZZ pèse `2·w_zzzz`. L'invariance ZZ:ZZZZ resterait alors
+fausse, mais elle serait au moins **bornée et connue** (entre 1 et 2), au lieu
+de dépendre du champ.
+
