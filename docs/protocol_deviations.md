@@ -104,14 +104,14 @@ is affected.
 | chemin | `study/v3/t6_dynamic_gt.py` | `study/pipeline/dynamic_patch_labels.py` | le dépôt a été réorganisé depuis la rédaction du protocole ; le `study/phase2_hard_patches.py` qu'il cite est aujourd'hui `study/pipeline/hard_patch_labels.py` |
 | résolution du pilote | N=128 | **N=96** | aucun artefact DNS N=128 n'existe dans le dépôt (N ∈ {64, 96, 256}) ; N=96 avec dim=8 respecte la contrainte `dim ≤ N/8` |
 | format de sortie | « mirrors the phase-2 format so phase-11 builders accept it as a **drop-in** label source » | clés explicites `d_errors` / `d0_errors` / `amplification` ; `l2_errors` contient le label **statique** | écrire le label dynamique sous la clé `l2_errors` produirait un artefact de la forme phase 2 dont une clé désigne autre chose que son nom — la classe de défaut que `CODE_REVIEW.md` retient comme la seule qui compte. Un consommateur qui veut le label dynamique le nomme. |
-| nom de fichier | non spécifié | `δt` inclus dans le nom | δt décide si le label dit quelque chose (ρ = 0,995 à 0,1, 0,714 à 2,0 sur OT) ; deux horizons partageant un nom s'écraseraient en silence |
+| nom de fichier | non spécifié | `δt` inclus dans le nom | δt décide si le label dit quelque chose (ρ = 0,982 à 0,1, 0,596 à 2,0 sur OT) ; deux horizons partageant un nom s'écraseraient en silence |
 
 ### Et un écart que la mesure impose au protocole, pas l'inverse
 
 Le protocole fixe `δt = one hybrid step (0.1)` et pose comme seul critère
 d'acceptation *« sanity check Spearman(d_i, e_i) > 0 reported »*.
 
-**Le critère est satisfait et ne contrôle rien** : à cet horizon ρ ≥ 0,990 sur
+**Le critère est satisfait et ne contrôle rien** : à cet horizon ρ ≥ 0,98 sur
 les quatre scénarios, c'est-à-dire que le label dynamique est une
 renumérotation monotone du label statique. Un contrôle qu'un label redondant
 passe haut la main n'est pas un contrôle.

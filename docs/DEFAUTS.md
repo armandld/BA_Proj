@@ -1965,9 +1965,9 @@ Mesuré (N=96, Re=400, `dim=8`, 3 instantanés par scénario) :
 | scénario | ρ(d, e) à δt=0,1 |
 |---|---|
 | `harris_tearing` | **+1,0000** |
-| `kelvin_helmholtz` | +0,996 |
-| `mhd_rotor` | +0,995 |
-| `orszag_tang` | +0,990 |
+| `kelvin_helmholtz` | +0,9970 |
+| `mhd_rotor` | +0,9917 |
+| `orszag_tang` | +0,9817 |
 
 Le critère est **satisfait** — et il ne contrôle rien : à cet horizon le label
 dynamique est une **renumérotation monotone** du label statique. Un contrôle
@@ -1992,7 +1992,7 @@ d'abord fixer son horizon sur `t_x`.
 `δt ≳ t_x`, donc dépendant de `dim` et du scénario), et remplacer le critère
 d'acceptation par quelque chose qu'un label redondant échoue — par exemple
 **la dispersion de l'amplification** `d_i/d0_i`, qui est nulle quand `d` redit
-`e` et vaut 1,41 / 2,03 (médiane / p90) sur `orszag_tang` à δt=2,0.
+`e` et vaut 1,38 / 2,06 (médiane / p90) sur `orszag_tang` à δt=2,0.
 
 **Épinglé par**
 `tests/study/test_dynamic_patch_labels.py::test_a_lhorizon_du_protocole_le_label_dynamique_est_une_redite_du_statique`

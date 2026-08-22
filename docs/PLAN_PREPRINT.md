@@ -116,14 +116,14 @@ sur trois scénarios sur quatre la tâche est quasi gratuite.
 La vérité terrain **dynamique** `d_i` du protocole §1.2 existe désormais, et
 sa mesure appartient au manuscrit :
 
-- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,990 sur les
+- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,98 sur les
   quatre scénarios** : le label dynamique est une renumérotation monotone du
   statique, et le contrôle d'acceptation du protocole (« Spearman > 0 ») le
   laisse passer ;
 - la raison est physique et se calcule : à cet horizon la perturbation
   parcourt **0,11 à 0,25** d'une largeur de patch — il n'y a rien à propager ;
-- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,714) — le seul
-  dont la perturbation **amplifie** (1,41×), et le seul où la tâche statique
+- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,596) — le seul
+  dont la perturbation **amplifie** (1,38×), et le seul où la tâche statique
   n'était pas déjà résolue.
 
 Ce que la section doit dire : **changer de label ne suffit pas à réparer la

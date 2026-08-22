@@ -8188,19 +8188,29 @@ grossi ne déplace pas — mais l'évolution, qui les déplace dès le premier p
 
 ## Le résultat : à l'horizon du protocole, `d` est une redite de `e`
 
-N=96, Re=400, `dim=8` (64 patches), 3 instantanés par scénario. ρ est le
-Spearman entre le label dynamique et le label statique ; l'amplification est
-`d_i / d0_i`, où `d0_i` est la perturbation **avant** toute évolution.
+N=96, Re=400, `dim=8` (64 patches), **5 instantanés** par scénario, relus
+**depuis les 8 artefacts committés**. ρ est le Spearman entre le label
+dynamique et le label statique ; l'amplification est `d_i / d0_i`, où `d0_i`
+est la perturbation **avant** toute évolution.
 
 | scénario | ρ(d,e) à δt=0,1 | ρ(d,e) à δt=2,0 | amplif. δt=2,0 (méd. / p90) |
 |---|---|---|---|
 | `harris_tearing` | **+1,0000** | **+1,0000** | 0,58 / 0,66 |
-| `kelvin_helmholtz` | +0,996 | +0,991 | 0,82 / 1,03 |
-| `mhd_rotor` | +0,995 | +0,985 | 0,61 / 1,49 |
-| `orszag_tang` | +0,990 | **+0,714** | **1,41 / 2,03** |
-| **moyenne** | **+0,9954** (min +0,9902) | +0,9230 (min +0,7143) | |
+| `kelvin_helmholtz` | +0,9970 | +0,9927 | 0,82 / 1,03 |
+| `mhd_rotor` | +0,9917 | +0,9297 | 0,58 / 1,43 |
+| `orszag_tang` | +0,9817 | **+0,5961** | **1,38 / 2,06** |
+| **moyenne** | **+0,9926** (min +0,9817) | +0,8796 (min +0,5961) | |
 
-**À `δt = 0,1` — la valeur que le protocole impose — ρ ≥ 0,990 sur les quatre
+> Une première version de cette table publiait des nombres pris sur **3**
+> instantanés choisis à la main (ρ = 0,714 pour OT à δt=2,0, moyenne 0,9954 à
+> δt=0,1). Ils sont remplacés par ceux que rendent les **artefacts
+> committés** — 5 instantanés répartis sur toute la trajectoire, relisibles
+> par une commande. L'écart est réel sur les deux scénarios les plus agités
+> (rotor 0,985 → 0,9297 ; OT 0,714 → 0,5961) et ne change pas la lecture : il
+> la renforce. Publier une mesure qu'aucun artefact ne reproduit est
+> exactement ce que la table maîtresse existe pour empêcher.
+
+**À `δt = 0,1` — la valeur que le protocole impose — ρ ≥ 0,98 sur les quatre
 scénarios.** Le label dynamique est une renumérotation monotone du label
 statique. Il ne répond donc **pas** au problème de spécification de tâche
 (H5) pour lequel il avait été demandé.
@@ -8237,9 +8247,9 @@ le label dit quelque chose.**
 
 ## Ce qui décolle, et où
 
-Un seul scénario sort du lot à δt=2,0 : **`orszag_tang`**, ρ = 0,714, et le
-seul dont la perturbation **amplifie** (1,41 médian, 2,03 au p90) au lieu de
-décroître. C'est aussi le seul scénario où le label statique n'était **pas**
+Un seul scénario sort du lot à δt=2,0 : **`orszag_tang`**, ρ = **0,596**, et
+le seul dont la perturbation **amplifie** (1,38 médian, 2,06 au p90) au lieu
+de décroître. C'est aussi le seul scénario où le label statique n'était **pas**
 quasi gratuit — AUC du score classique seul 0,592, contre 1,000 / 0,997 /
 0,948 pour les trois autres.
 
@@ -8289,8 +8299,24 @@ before launching N=256 »).
 ## Vérification
 
 ```bash
-python study/pipeline/dynamic_patch_labels.py --scenario orszag_tang \
-    --re 400 --N 96 --dim 8 --snaps 5 --delta-t 2.0
+# produire les 8 artefacts (4 scenarios x 2 horizons)
+for sc in harris_tearing kelvin_helmholtz mhd_rotor orszag_tang; do
+  for dt in 0.1 2.0; do
+    python study/pipeline/dynamic_patch_labels.py \
+        --scenario $sc --re 400 --N 96 --dim 8 --snaps 5 --delta-t $dt
+  done
+done
+
+# relire les nombres publies DEPUIS les artefacts
+python - <<'EOF'
+import glob, os, numpy as np
+for f in sorted(glob.glob("results/d_patches_*.npz")):
+    z = np.load(f, allow_pickle=True)
+    a = z["amplification"]; fini = np.isfinite(a)
+    print(f"{os.path.basename(f):52s} rho={z['rho_d_vs_e'].mean():+.4f} "
+          f"amp={np.median(a[fini]):.2f}")
+EOF
+
 python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 16 passed, 3 deselected
 python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow
 ```

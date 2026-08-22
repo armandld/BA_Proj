@@ -225,10 +225,11 @@ def test_un_horizon_absurde_crie_au_lieu_de_tourner():
 # ==================================================================
 #  3. le label dit-il autre chose que le label statique ?
 # ==================================================================
-#: Mesure du 21 aout 2026, N=96, Re=400, dim=4, 2 instantanes par scenario,
-#: moyenne sur les 4 scenarios canoniques. C'est le nombre qui condamne
-#: l'horizon du protocole.
-_RHO_ATTENDU = {0.1: 0.99, 2.0: 0.81}
+#: Relu DEPUIS les artefacts committes (N=96, Re=400, dim=8, 5 instantanes,
+#: moyenne sur les 4 scenarios). C'est le nombre qui condamne l'horizon du
+#: protocole — et il est celui que `results/d_patches_*.npz` rend, pas celui
+#: d'une exploration a la main.
+_RHO_ATTENDU = {0.1: 0.9926, 2.0: 0.8796}
 
 
 def test_spearman_rend_un_pour_une_transformation_monotone():

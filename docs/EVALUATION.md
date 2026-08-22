@@ -230,7 +230,7 @@ nouvelle pour l'hypothèse.
 **La vérité terrain dynamique, et ce qu'elle vaut.** `d_patches_*` existe
 désormais (4 scénarios × 2 horizons, N=96, dim=8). Le résultat est une mesure
 sur les champs réels, reproductible par une commande, et il est **négatif au
-sens utile** : à l'horizon du protocole, ρ(d, e) ≥ 0,990 — le label dynamique
+sens utile** : à l'horizon du protocole, ρ(d, e) ≥ 0,98 — le label dynamique
 ne répare pas H5. Cela ne se range dans aucun niveau A/B/C/D parce que ce
 n'est pas un résultat sur l'objet : c'est une mesure **sur le protocole
 lui-même**, qui invalide son critère d'acceptation (« Spearman > 0 ») et son
