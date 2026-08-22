@@ -48,6 +48,28 @@ def test_all_negative_deltas_still_report_robust():
     assert "SENSITIVE" not in msg
 
 
+def test_best_p_index_is_wrong_when_an_earlier_percentile_is_nan():
+    """Piege arme, non declenche (RESULTS.md, note hors chemin critique).
+
+    `deltas` filtre les valeurs finies avant `argmax`, mais l'index rendu
+    sert ensuite a indexer `rows_summary`, la liste NON filtree. Ici le
+    premier percentile (p=60) est degenere (delta NaN, LOSO indefini sur ce
+    pli) et le vrai maximum (+0.10) est a p=70 -- la fonction cite p=60.
+
+    Ce test epingle le comportement ACTUEL (faux), pas le comportement
+    voulu : `study/` est gele pendant la campagne (BA_Proj#2), rien n'est
+    corrige ici. A retourner en assertion positive (p=70) le jour ou
+    l'index est corrige.
+    """
+    deltas = [float("nan"), 0.10, 0.05]
+    percentiles = [60, 70, 75]
+    msg = interpretation_message(_rows(deltas, percentiles), percentiles)
+    assert "SENSITIVE" in msg
+    assert "+0.100" in msg
+    assert "p=60" in msg   # faux : le delta +0.10 cite est celui de p=70
+    assert "p=70" not in msg
+
+
 def test_real_artifact_delta_stays_robust_under_the_tightened_threshold():
     """Measured on results/dns_*_Re400_N256.npz + patches_*_dim4.npz
     (the only default-args config available), dim=4, seed=0:

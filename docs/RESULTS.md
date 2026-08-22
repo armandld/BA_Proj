@@ -7023,6 +7023,29 @@ campagne. Ne pas ouvrir d'entrée `DEFAUTS.md` pour ces objets.
   → **1 passed**. Non corrigé : `src/Simulation/HamiltParams.py` est gelé
   pendant la campagne (`armandld/BA_Proj#2`, 17 août), et rien n'appelle
   cette branche aujourd'hui.
+- **`label_percentile_sensitivity.interpretation_message` peut nommer le
+  mauvais percentile — piège armé, non déclenché.** `deltas` est filtré aux
+  valeurs finies (`if np.isfinite(r["delta"])`) avant `argmax`, mais l'index
+  rendu par `argmax` sert ensuite à indexer `rows_summary`, la liste NON
+  filtrée : dès qu'un percentile antérieur au meilleur porte un delta `NaN`
+  (LOSO dégénéré sur ce pli), l'index se décale et la fonction cite le
+  mauvais `p` dans son verdict « SENSITIVE ». Mesuré, cas construit pour
+  séparer (`deltas = [nan, 0.10, 0.05]`, `percentiles = [60, 70, 75]`) :
+  rendu **« at p=60 »**, alors que le delta positif (+0,10) est celui de
+  **p=70**. **Non déclenché aujourd'hui** : `results/percentile_sensitivity_N256_dim4.npz`,
+  le seul artefact publié, a ses six deltas finis et tous négatifs
+  (max **-0,154** à p=75, sous 0 — branche « ROBUST », qui ne construit
+  jamais cet index) — vérifié en le rechargeant. Les trois tests existants
+  de D-46 (`tests/study/test_percentile_sensitivity_interpretation.py`)
+  n'ont aucun delta `NaN`, donc aucun ne le couvre. Ne satisfait aucun des
+  deux critères de la règle d'arrêt de `DEFAUTS.md` (pas de lecture publiée
+  concernée, hors chemin de la réoptimisation D-22) : noté ici, pas ouvert
+  comme défaut. Non corrigé : `study/pipeline/label_percentile_sensitivity.py`
+  est sous le même gel de campagne que le reste de `study/`
+  (`armandld/BA_Proj#2`). Épinglé —
+  `pytest tests/study/test_percentile_sensitivity_interpretation.py -k best_p_index`
+  → **1 passed**, sur le comportement actuel (faux) ; à retourner en
+  assertion positive le jour où l'index est corrigé.
 
 # D-47 — l'Hamiltonien v1 dégénère vers « raffiner partout » à résolution VQA
 
