@@ -8368,6 +8368,8 @@ EOF
 
 python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 20 passed, 3 deselected
 python -m pytest tests/mapping -q                             # 437 passed, 1 skipped
+python -m pytest tests/ -q -m "not slow"    # 5 failed, 3061 passed, 45 min
+python study/common/aggregate_master_table.py        # 180 / 176 / 4 / 0
 python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow   # 3 passed
 python -m pytest tests/ -q -m "not slow"    # 5 failed, 3053 passed, 55 min
 ```
