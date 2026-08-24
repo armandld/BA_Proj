@@ -80,14 +80,18 @@ def call_vqa_shell(angles_tuple, hamilt_params, verbose, args, period_bound=True
     if E_max < 1e-10:
         E_max = 1.0
 
-    qc, cost_hamiltonian = mapping(data, hamilt_params, args.AdvAnomaliesEnable, period_bound, reps)
+    qc, cost_hamiltonian = mapping(
+        data, hamilt_params, period_bound=period_bound, reps=reps)
 
     # Transpile (skipped for state_vector when runtime is provided)
     if vqa_runtime is not None:
         qc = vqa_runtime.transpile(qc, verbose)
     else:
         from VQA.optimize import optimize
-        qc = optimize(qc, args.backend, args.opt_level, verbose)
+        qc = optimize(
+            qc, args.backend, args.opt_level, verbose,
+            seed=getattr(args, "seed", 0),
+        )
 
     probs_list, optimal_params = execute(
         qc, cost_hamiltonian, args.mode, args.backend,
@@ -95,6 +99,7 @@ def call_vqa_shell(angles_tuple, hamilt_params, verbose, args, period_bound=True
         vqa_runtime=vqa_runtime,
         method=args.method,
         warm_start_params=warm_start_params,
+        seed=getattr(args, "seed", 0),
     )
 
     probs_list = postprocess(probs_list, qc.num_qubits, verbose)

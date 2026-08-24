@@ -99,14 +99,15 @@ def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
     ans = RealAmplitudes(num_qubits=d_q, reps=reps_ansatz,
                          entanglement="linear")
 
-    try:
-        from qiskit_algorithms.optimizers import COBYLA
-    except ImportError:
-        from qiskit.algorithms.optimizers import COBYLA
+    from qiskit_machine_learning.optimizers import COBYLA
     opt = COBYLA(maxiter=maxiter)
 
+    rng = np.random.default_rng(seed)
+    initial_point = rng.uniform(-np.pi, np.pi, ans.num_parameters)
+
     vqc = VQC(feature_map=fm, ansatz=ans, optimizer=opt,
-              sampler=StatevectorSampler())
+              sampler=StatevectorSampler(seed=seed),
+              initial_point=initial_point)
 
     t0 = time.time()
     with warnings.catch_warnings():
@@ -123,7 +124,7 @@ def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
 
     p_va = _proba(Xva_s)
     p_tr = _proba(Xtr_s)
-    # D-81 : voir `run_qke` — seuil sur le TRAIN, comme les bras classiques.
+    # Select the decision threshold on training data only.
     grid = np.linspace(0.05, 0.95, 91)
     thr, _ = best_threshold_f1(p_tr, Ytr, grid=grid)
     f1 = float(f1_score(Yva, (p_va > thr).astype(int), zero_division=0))

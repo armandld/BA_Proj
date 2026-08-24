@@ -242,7 +242,7 @@ def test_real_dns_full_sweep_is_forty_over_forty():
 
 def test_saved_artifact_carries_the_flags(tmp_path):
     fake = [{
-        "ground_energy": -1.0, "gap": 0.5,
+        "ground_energy": -1.0, "gap": 0.5, "ground_degeneracy": 1,
         "marginals": np.ones(2 * DIM * DIM),
         "decisions_h": np.ones((DIM, DIM), dtype=bool),
         "decisions_v": np.ones((DIM, DIM), dtype=bool),
@@ -259,7 +259,7 @@ def test_saved_artifact_carries_the_flags(tmp_path):
     path = ed.save_results(fake, meta, outdir=str(tmp_path))
     d = np.load(path)
 
-    for key in ("degenerate_decision", "degenerate_classical",
+    for key in ("ground_degeneracy", "degenerate_decision", "degenerate_classical",
                 "f1_tie", "promising_informative"):
         assert key in d.files, f"{key} absent de l'artefact exact_diag_*"
     assert bool(d["promising"][0]) is True

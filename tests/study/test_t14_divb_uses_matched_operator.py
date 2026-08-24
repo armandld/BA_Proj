@@ -47,6 +47,14 @@ _T14_TOLERANCE = 1e-3
 _MACHINE_PRECISION = 1e-12
 
 
+def _spectral_divergence(Bx, By, dx):
+    N = Bx.shape[0]
+    k = np.fft.fftfreq(N, d=dx) * 2 * np.pi
+    KX, KY = np.meshgrid(k, k, indexing="ij")
+    return np.real(np.fft.ifft2(
+        1j * KX * np.fft.fft2(Bx) + 1j * KY * np.fft.fft2(By)))
+
+
 def _load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     m = importlib.util.module_from_spec(spec)
@@ -113,7 +121,6 @@ def test_the_matched_operator_annihilates_the_divergence_of_the_induction_rhs(
     """
     from Simulation.grid import PeriodicGrid
     from Simulation.solver import MHDSolver
-    from dns_validation import div_B
 
     N = 32
     dx = 2 * np.pi / N
@@ -128,7 +135,8 @@ def test_the_matched_operator_annihilates_the_divergence_of_the_induction_rhs(
 
     matched = float(np.max(np.abs(
         t14.div_B_matched(rhs_Bx, rhs_By, dx)))) / scale
-    spectral = float(np.max(np.abs(div_B(rhs_Bx, rhs_By, dx)))) / scale
+    spectral = float(np.max(np.abs(
+        _spectral_divergence(rhs_Bx, rhs_By, dx)))) / scale
 
     assert matched < 1e-12, (
         f"l'operateur de T14 n'annule pas div(rhs_B) : {matched:.3e}. Il "
@@ -151,7 +159,6 @@ def test_the_two_operators_still_disagree_by_orders_of_magnitude(trajectory):
     alors etre retranche.
     """
     from Simulation.solver import MHDSolver
-    from dns_validation import div_B
 
     assert MHDSolver.PROJECT_B is False, (
         "PROJECT_B est repasse a True : B redevient spectralement "
@@ -159,7 +166,7 @@ def test_the_two_operators_still_disagree_by_orders_of_magnitude(trajectory):
 
     rms_B = float(np.sqrt((trajectory["Bx"] ** 2
                            + trajectory["By"] ** 2).mean()))
-    spectral = float(np.max(np.abs(div_B(
+    spectral = float(np.max(np.abs(_spectral_divergence(
         trajectory["Bx"], trajectory["By"], trajectory["dx"])))) / rms_B
 
     assert spectral > _T14_TOLERANCE, (

@@ -2,11 +2,35 @@
 import numpy as np
 from scipy.optimize import minimize
 from qiskit_aer import AerSimulator
-from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator, SamplerV2 as Sampler
-from qiskit_ibm_runtime.fake_provider import FakeFez
+from qiskit_ibm_runtime import EstimatorV2 as Estimator, SamplerV2 as Sampler
 from qiskit.quantum_info import Statevector
 
-def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E_max, verbose, vqa_runtime=None, method="COBYLA", warm_start_params=None):
+
+SUPPORTED_BACKENDS = ("state_vector", "matrix_product_state", "aer")
+
+
+def _validated_seed(seed):
+    if isinstance(seed, (bool, np.bool_)) or not isinstance(
+            seed, (int, np.integer)):
+        raise TypeError("seed must be an integer")
+    seed = int(seed)
+    if not 0 <= seed <= 2**32 - 1:
+        raise ValueError("seed must be between 0 and 2**32 - 1")
+    return seed
+
+
+def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt,
+            eps, E_max, verbose, vqa_runtime=None, method="COBYLA",
+            warm_start_params=None, seed=0):
+
+    if mode != "simulator":
+        raise ValueError(
+            f"Unsupported mode: {mode!r}. Only 'simulator' is implemented.")
+    if backend_name not in SUPPORTED_BACKENDS:
+        raise ValueError(
+            f"Unsupported backend: {backend_name!r}. Expected one of "
+            f"{SUPPORTED_BACKENDS}.")
+    seed = _validated_seed(seed)
 
     if verbose:
         for pauli, coeff in cost_hamiltonian.to_list():
@@ -16,26 +40,37 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
 
     # 1. Resolve backend + primitives (reuse from runtime when available)
     if vqa_runtime is not None:
+        if vqa_runtime.mode != mode:
+            raise ValueError(
+                f"runtime mode {vqa_runtime.mode!r} does not match "
+                f"requested mode {mode!r}")
+        if vqa_runtime.backend_name != backend_name:
+            raise ValueError(
+                f"runtime backend {vqa_runtime.backend_name!r} does not "
+                f"match requested backend {backend_name!r}")
+        if vqa_runtime.seed != seed:
+            raise ValueError(
+                f"runtime seed {vqa_runtime.seed} does not match requested "
+                f"seed {seed}")
         estimator = vqa_runtime.estimator
         sampler = vqa_runtime.sampler
         backend = vqa_runtime._backend
     else:
-        # Fallback: create fresh primitives (legacy path)
         if backend_name == "aer":
-            backend = AerSimulator()
-        elif backend_name == "estimator":
-            backend = FakeFez()
+            backend = AerSimulator(seed_simulator=seed)
         elif backend_name == "state_vector":
-            backend = AerSimulator(method='statevector')
+            backend = AerSimulator(
+                method="statevector", seed_simulator=seed)
         elif backend_name == "matrix_product_state":
-            backend = AerSimulator(method='matrix_product_state')
-        else:
-            raise ValueError(f"Unsupported backend: {backend_name}")
+            backend = AerSimulator(
+                method="matrix_product_state", seed_simulator=seed)
 
         estimator = Estimator(mode=backend)
         estimator.options.default_shots = shots
+        estimator.options.simulator.seed_simulator = seed
         sampler = Sampler(mode=backend)
         sampler.options.default_shots = shots
+        sampler.options.simulator.seed_simulator = seed
 
     # 2. ISA Hamiltonian
     if qc.layout is not None:
@@ -43,12 +78,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
     else:
         isa_hamiltonian = cost_hamiltonian
 
-    # Safety: detect Hamiltonians whose coefficients are ALL zero.
-    # Qiskit's EstimatorV2 internally simplifies the SparsePauliOp, dropping
-    # zero-coefficient terms. If all terms are zero, the observable becomes
-    # empty and crashes with "Empty observable was detected."
-    # In this case, the patch is genuinely calm — skip COBYLA and return
-    # the θ-init marginals unchanged (no QAOA correction needed).
+        # A null Hamiltonian carries no QAOA correction; keep theta-init.
     _all_coeffs_zero = np.allclose(np.abs(isa_hamiltonian.coeffs), 0.0)
 
     if len(isa_hamiltonian) == 0 or _all_coeffs_zero:
@@ -56,15 +86,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             print(f"\n--- Null Hamiltonian detected (all coefficients zero). "
                   f"Skipping optimization — returning θ-init marginals. ---")
 
-        # θ-init EXACTEMENT : tous les angles a zero, mixer compris.
-        #
-        # Cette branche reprenait le warm start quand il existait. Or avec
-        # un Hamiltonien nul le terme de cout n'impose rien : seul le mixer
-        # agit, et il tourne l'etat sans qu'aucun cout ne le justifie.
-        # Mesure a 8 qubits, score classique 0.700, warm start
-        # beta = (0.35, 0.30) : marginales rendues 0.5535 au lieu de 0.700,
-        # soit 21 % de deplacement sur une decision que le commentaire
-        # ci-dessus annonce inchangee.
+        # Zero mixer and cost angles preserve the encoded marginal probabilities.
         optimal_params = np.zeros(2 * reps)
 
         optimized_circuit = qc.assign_parameters(optimal_params)
@@ -126,15 +148,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
                 options={'maxiter': K_opt},
             )
 
-            # `bounds` pour les methodes qui les honorent, `constraints`
-            # pour COBYLA qui n'accepte que celles-la.
-            #
-            # Powell etait range avec COBYLA : scipy avertissait
-            # « Method Powell cannot handle constraints » et
-            # « Unknown solver options: rhobeg », puis optimisait SANS
-            # borne sur le mixer. L'avertissement partait sur stderr d'un
-            # essai parmi des centaines. Powell accepte `bounds` : c'est
-            # par la qu'il faut passer.
+            # Powell/L-BFGS-B accept bounds; COBYLA needs inequalities.
             bounds_beta  = [(-beta_max, beta_max)] * reps
             bounds_gamma = [(0.0, 2.0 * np.pi)] * reps
 
@@ -160,12 +174,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
                                         'fun': lambda x, _i=i: x[_i] + beta_max})
                 common['constraints'] = constraints
             else:
-                # La borne sur beta n'est exprimable que par `bounds`
-                # (L-BFGS-B) ou par des contraintes (COBYLA, Powell). Tout
-                # autre optimiseur la perdrait EN SILENCE, et le commentaire
-                # ci-dessus dit ce que cela coute : le mixer part a beta=1,
-                # rabat P(|1>) a ~0.25, et supprime tout raffinement. On
-                # refuse plutot que de rendre un resultat qu'on sait faux.
+                # Refuse methods for which the mixer bound is not implemented.
                 raise ValueError(
                     f"methode d'optimisation '{method}' non supportee : la "
                     f"borne sur le mixer (|beta| <= {beta_max:.4f}) ne peut "
@@ -175,31 +184,7 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
             return common
 
         # 6. Optimization
-        #
-        # Le chemin `else` ouvre `Session(backend=backend)`. `backend` vient
-        # de `vqa_runtime._backend`, qui est TOUJOURS un simulateur — aucun
-        # chemin du depot ne resout un backend IBM reel. Et
-        # `Session(AerSimulator)` est ACCEPTE par qiskit-ibm-runtime : le
-        # run ne levait pas, il tournait sur simulateur en se declarant
-        # materiel. `VQARuntime` refuse desormais a la construction ; ce
-        # garde couvre le chemin herite ou `vqa_runtime is None`. Voir D-48.
-        if mode != "simulator":
-            raise ValueError(
-                f"mode={mode!r} non supporte : aucun backend materiel n'est "
-                "cable dans ce depot. Le chemin materiel ouvrirait une "
-                "Session sur un simulateur et rendrait des nombres presentes "
-                "comme materiels. Utiliser mode='simulator'.")
-
-        if mode == "simulator":
-            result = minimize(**_build_minimize_kwargs(estimator))
-        else:
-            with Session(backend=backend) as session:
-                hw_estimator = Estimator(mode=session)
-                hw_estimator.options.default_shots = shots
-                hw_estimator.options.dynamical_decoupling.enable = True
-                hw_estimator.options.twirling.enable_gates = True
-
-                result = minimize(**_build_minimize_kwargs(hw_estimator))
+        result = minimize(**_build_minimize_kwargs(estimator))
 
         if verbose:
             print(f"Optimization success: {result.success}")
@@ -230,15 +215,17 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt, eps, E
         # tous les appels de la campagne. L'ecrasement etait definitif :
         # apres un seul patch en MPS, chaque appel ulterieur tirait 8192
         # coups quel que soit `shots`. On restaure la valeur d'origine.
-        _prev_shots = sampler.options.default_shots
-        sampler.options.default_shots = mps_shots
-        pub = (optimized_circuit,)
-        job = sampler.run([pub])
-        pub_result = job.result()[0]
-        counts_bin = pub_result.data.meas.get_counts()
+        previous_shots = sampler.options.default_shots
+        try:
+            sampler.options.default_shots = mps_shots
+            pub = (optimized_circuit,)
+            job = sampler.run([pub])
+            pub_result = job.result()[0]
+            counts_bin = pub_result.data.meas.get_counts()
+        finally:
+            sampler.options.default_shots = previous_shots
         total_shots = sum(counts_bin.values())
         final_distribution = {key: val / total_shots for key, val in counts_bin.items()}
-        sampler.options.default_shots = _prev_shots
     else:
         if verbose:
             print("\n--- Final Sampling ---")

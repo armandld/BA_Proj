@@ -1,36 +1,16 @@
 #!/usr/bin/env python3
-"""
-Phase 13 - Cross-phase aggregation of results.
+"""Phase 13: descriptive cross-phase aggregation.
 
-Reads every relevant .npz produced by phases 1-12 and builds a single
-master table summarising the study. Saves a CSV + a human-readable
-text report that a paper / thesis can cite directly.
-
-Collected quantities (per (N, dim)):
-
-  | quantity                         | from                       |
-  |----------------------------------|----------------------------|
-  | classical AMR indicator F1 (val) | phase 11 upper_bound .npz  |
-  | mean-field ceiling F1            | phase 11                   |
-  | neighbourhood ceiling F1         | phase 11                   |
-  | LOSO classical F1 mean +/- std   | phase 11b                  |
-  | LOSO site F1 mean +/- std        | phase 11b                  |
-  | LOSO stencil F1 mean +/- std     | phase 11b                  |
-  | learned mean-field H F1 (val)    | phase 11c learned_h .npz   |
-  | QAOA F1 (joint)                  | phase 5 qaoa_eval .npz     |
-  | SA  F1 (joint)                   | phase 7 sa_baseline .npz   |
-  | VQC F1                           | phase 12 vqc .npz          |
-  | QKE F1                           | phase 12 vqc .npz          |
-  | training outcome (trained H F1)  | phase 10 train_*.npz       |
-
-The resulting report is the condensed "results table" of the paper.
+The report preserves each QAOA/SA protocol separately. A headline mean is
+computed only when every artifact has complete metadata and the same solver
+protocol; incompatible backends, budgets or ablations are never pooled.
 
 Output:
   results/SUMMARY_N{N}_dim{D}.csv
   results/SUMMARY_N{N}_dim{D}.txt
 
 Usage:
-  python study/aggregate_v2.py --dim 4
+  python study/common/aggregate_v2.py --dim 4
 """
 import argparse, csv, glob, os, sys
 import numpy as np
@@ -77,6 +57,55 @@ def fmt(v, prec=3):
     if isinstance(v, (float, np.floating)):
         return f"{v:.{prec}f}"
     return str(v)
+
+
+def _protocol_record(path, metric, protocol_fields):
+    """Summarise one stochastic-solver artifact and its protocol."""
+    z = _safe_load(path)
+    if z is None:
+        return None
+    values = _get(z, metric)
+    if values is None:
+        return None
+    values = np.asarray(values, dtype=float).reshape(-1)
+    values = values[np.isfinite(values)]
+    if not len(values):
+        return None
+
+    protocol = []
+    missing = []
+    for field in protocol_fields:
+        value = _get(z, field)
+        if value is None:
+            missing.append(field)
+        else:
+            protocol.append((field, value))
+    return {
+        "file": os.path.basename(path),
+        "mean_f1": float(np.mean(values)),
+        "n": int(len(values)),
+        "protocol": tuple(protocol) if not missing else None,
+        "missing_protocol_fields": tuple(missing),
+        "seed": _get(z, "seed"),
+    }
+
+
+def _compatible_weighted_mean(records):
+    """Pool artifact means only for one fully specified solver protocol."""
+    if not records or any(r["protocol"] is None for r in records):
+        return None
+    protocols = {r["protocol"] for r in records}
+    if len(protocols) != 1:
+        return None
+    total = sum(r["n"] for r in records)
+    return sum(r["mean_f1"] * r["n"] for r in records) / total
+
+
+def _protocol_label(record):
+    if record["protocol"] is None:
+        missing = ",".join(record["missing_protocol_fields"])
+        return f"incomplete metadata (missing {missing})"
+    return ", ".join(f"{key}={value}" for key, value in record["protocol"])
 
 
 def collect(N, dim):
@@ -141,12 +170,10 @@ def collect(N, dim):
         z10 = _safe_load(pth)
         if z10 is None:
             continue
-        # common keys (depends on trainer): theta_final, f1_val_final
-        f1 = _get(z10, "f1_val_best",
-                   default=_get(z10, "f1_val_final"))
-        thr = _get(z10, "theta_best",
-                    default=_get(z10, "theta_final"))
-        p10_f1[kind] = (f1, thr)
+        f1 = _get(z10, "best_f1_test")
+        c_bias = _get(z10, "best_c_bias")
+        threshold = _get(z10, "best_thr")
+        p10_f1[kind] = (f1, (c_bias, threshold))
     R["p10_trained"] = p10_f1
 
     # ---- phase 5 QAOA joint / per config ----
@@ -154,26 +181,26 @@ def collect(N, dim):
         RESULTS_DIR, f"qaoa_*_N{N}_dim{dim}*v2.npz")))
     qaoa_f1 = []
     for fp in qaoa_files:
-        z = _safe_load(fp)
-        f1 = _get(z, "qaoa_f1")
-        if f1 is not None:
-            qaoa_f1.append((os.path.basename(fp), f1))
+        record = _protocol_record(
+            fp, "qaoa_f1",
+            ("reps", "K_opt", "backend", "constant_initialisation",
+             "prune_eps", "zero_psi"))
+        if record is not None:
+            qaoa_f1.append(record)
     R["p5_qaoa"] = qaoa_f1
-    R["p5_qaoa_mean"] = (float(np.mean([f for _, f in qaoa_f1]))
-                         if qaoa_f1 else None)
+    R["p5_qaoa_mean"] = _compatible_weighted_mean(qaoa_f1)
 
     # ---- phase 7 SA joint / per config ----
     sa_files = sorted(glob.glob(os.path.join(
-        RESULTS_DIR, f"sa_baseline_*_N{N}_dim{dim}_v2.npz")))
+        RESULTS_DIR, f"sa_baseline_*_N{N}_dim{dim}*_v2.npz")))
     sa_f1 = []
     for fp in sa_files:
-        z = _safe_load(fp)
-        f1 = _get(z, "sa_f1")
-        if f1 is not None:
-            sa_f1.append((os.path.basename(fp), f1))
+        record = _protocol_record(
+            fp, "sa_f1", ("sweeps", "n_restarts", "classical_warm"))
+        if record is not None:
+            sa_f1.append(record)
     R["p7_sa"] = sa_f1
-    R["p7_sa_mean"] = (float(np.mean([f for _, f in sa_f1]))
-                       if sa_f1 else None)
+    R["p7_sa_mean"] = _compatible_weighted_mean(sa_f1)
 
     return R
 
@@ -186,7 +213,7 @@ def format_report(R, N, dim):
 
     # -- headline table --
     lines.append("")
-    lines.append("HEADLINE F1 (val split by snapshot)")
+    lines.append("DESCRIPTIVE F1 SUMMARY")
     lines.append("-" * 88)
     lines.append(f"  {'quantity':<48} {'F1':>8}  {'source':<20}")
     lines.append("  " + "-" * 82)
@@ -258,14 +285,15 @@ def format_report(R, N, dim):
 
     # -- phase 10 trained outcomes --
     lines.append("")
-    lines.append("PHASE 10 TRAINED (c_bias*, thr*) OUTCOMES")
+    lines.append("PHASE 10 RESCUE FIT: UNTOUCHED TEST OUTCOMES")
     lines.append("-" * 88)
     p10 = R.get("p10_trained", {})
     if p10:
-        lines.append(f"  {'mode':<30} {'F1_val':>8}  {'theta*':<32}")
+        lines.append(f"  {'mode':<30} {'F1_test':>8}  {'theta*':<32}")
         for k, (f, th) in p10.items():
             th_s = ("(c={:.2f}, thr={:.2f})".format(th[0], th[1])
-                    if th is not None and len(np.atleast_1d(th)) >= 2
+                    if (th is not None and len(np.atleast_1d(th)) >= 2
+                        and th[0] is not None and th[1] is not None)
                     else "--")
             lines.append(f"  {k:<30} {fmt(f):>8}  {th_s:<32}")
     else:
@@ -278,17 +306,27 @@ def format_report(R, N, dim):
     qaoa = R.get("p5_qaoa", [])
     sa   = R.get("p7_sa", [])
     if qaoa:
-        lines.append(f"  {'QAOA file':<60} {'F1':>8}")
-        for fp, f1 in qaoa:
-            lines.append(f"  {fp:<60} {fmt(f1):>8}")
+        lines.append(f"  {'QAOA file':<60} {'F1':>8} {'n':>5}")
+        for record in qaoa:
+            lines.append(
+                f"  {record['file']:<60} {fmt(record['mean_f1']):>8} "
+                f"{record['n']:>5}")
+            lines.append(f"    protocol: {_protocol_label(record)}")
     if sa:
-        lines.append(f"  {'SA   file':<60} {'F1':>8}")
-        for fp, f1 in sa:
-            lines.append(f"  {fp:<60} {fmt(f1):>8}")
+        lines.append(f"  {'SA   file':<60} {'F1':>8} {'n':>5}")
+        for record in sa:
+            lines.append(
+                f"  {record['file']:<60} {fmt(record['mean_f1']):>8} "
+                f"{record['n']:>5}")
+            lines.append(f"    protocol: {_protocol_label(record)}")
+    if qaoa and R.get("p5_qaoa_mean") is None:
+        lines.append("  QAOA headline omitted: protocols are incomplete or incompatible.")
+    if sa and R.get("p7_sa_mean") is None:
+        lines.append("  SA headline omitted: protocols are incomplete or incompatible.")
 
     # -- verdicts --
     lines.append("")
-    lines.append("KEY DELTAS AND VERDICTS")
+    lines.append("DESCRIPTIVE DELTAS")
     lines.append("-" * 88)
     d_site = R.get("p11_delta_site")
     d_sten = R.get("p11_delta_sten")
@@ -298,21 +336,15 @@ def format_report(R, N, dim):
                 f"  mean-field ceiling beats classical by {d_site:+.3f}")
             lines.append(
                 f"  stencil ceiling  beats mean-field by {d_sten:+.3f}")
-            if d_sten < 0.02:
-                lines.append(
-                    "  ==> Hamiltonian couplings (ZZ/ZZZZ) add NO "
-                    "measurable value. QAOA cannot outperform SA or a "
-                    "site-wise argmin on the optimal H.")
-        if d_site > 0.10:
-            lines.append(
-                "  ==> a learned bias Hamiltonian can IN PRINCIPLE "
-                "reach a much higher F1 than the classical indicator.")
     if (R.get("p11c_f1_val") is not None
             and R.get("p11c_f1_class_val") is not None):
         d = R["p11c_f1_val"] - R["p11c_f1_class_val"]
         lines.append(
             f"  learned mean-field H    F1 gain over classical = "
             f"{d:+.3f}   (phase 11c)")
+    lines.append(
+        "  These deltas are descriptive; claims require the registered "
+        "paired uncertainty and closed-loop analyses.")
 
     lines.append("=" * 88)
     return "\n".join(lines)
@@ -344,6 +376,14 @@ def main():
     args = p.parse_args()
 
     R = collect(args.N, args.dim)
+    has_data = any(
+        value is not None and not (
+            isinstance(value, (list, dict)) and len(value) == 0)
+        for value in R.values()
+    )
+    if not has_data:
+        raise SystemExit(
+            f"no study artifacts found for N={args.N}, dim={args.dim}")
     report = format_report(R, args.N, args.dim)
     print(report)
 

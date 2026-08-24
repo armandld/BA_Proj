@@ -73,9 +73,9 @@ SCENARIOS = ("init_kelvin_helmholtz", "init_orszag_tang",
 # Les deux sont rapportees separement. La premiere est lue du module pour
 # qu'elle ne puisse pas diverger de ce qui tourne reellement.
 def _deployed_params():
-    import qaoa_inputs as p5
-    return dict(sigma=float(p5.TRAINED_SIGMA),
-                threshold_amr=float(p5.TRAINED_THRESHOLD))
+    from config import TRAINED_SIGMA, TRAINED_THRESHOLD
+    return dict(sigma=float(TRAINED_SIGMA),
+                threshold_amr=float(TRAINED_THRESHOLD))
 
 
 PARAM_SETS = {
@@ -123,7 +123,8 @@ def probe(scenario, N, steps, param_sets=PARAM_SETS):
         return []
     def _coeffs(hm, score, thr):
         """Retourne (|C_horiz|, |C_vert|, max|K|) sans rien modifier."""
-        hp = hm.compute_coefficients(sim, score, fields, thr)
+        hp = hm.compute_coefficients(
+            sim, score, fields, thr, advanced_anomalies_enabled=True)
         c_h, c_v = hp["C_edges"]
         return (np.abs(np.asarray(c_h)), np.abs(np.asarray(c_v)),
                 float(np.max(np.abs(np.asarray(hp["K_plaquettes"])))))

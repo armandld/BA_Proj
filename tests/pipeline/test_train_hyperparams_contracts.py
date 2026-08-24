@@ -190,14 +190,15 @@ def test_no_scenario_is_counted_twice():
         assert len(keys) == len(set(keys)), f"{name} contient un doublon : {keys}"
 
 
-def test_the_isolated_set_is_the_four_isolated_scenarios():
+def test_the_protocol_exposes_eight_unique_loso_scenarios():
     """Le protocole repose sur des scenarios qui isolent UN type
     d'anomalie. Le JSON deploye le confirme : son bloc `per_scenario` de
     phase 1 liste ces quatre-la."""
     assert [k for k, _ in TH.SCENARIOS_ISOLATED] == \
-        ["kh", "vortex", "tearing", "coalescence"]
+        ["kh", "vortex", "tearing", "coalescence",
+         "double_tearing", "magnetic_twist"]
     assert [k for k, _ in TH.SCENARIOS_COMPLEX] == ["ot", "rotor"]
-    assert len(TH.SCENARIOS_ALL) == 6
+    assert len(TH.SCENARIOS_ALL) == 8
 
 
 def test_every_declared_scenario_is_used():
@@ -291,11 +292,12 @@ def _fake_pipeline_returning(values):
 
 
 def test_composite_loop_averages_the_sub_losses(monkeypatch):
-    monkeypatch.setattr(TH, "pipeline", _fake_pipeline_returning([0.2, 0.4, 0.6, 0.8]))
+    losses = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2]
+    monkeypatch.setattr(TH, "pipeline", _fake_pipeline_returning(losses))
     trial = _FakeTrial()
     traces = {k: (None, None) for k, _ in TH.SCENARIOS_ISOLATED}
     out = TH._composite_loop(trial, TH.SCENARIOS_ISOLATED, traces, {}, 0.4)
-    assert out == pytest.approx(0.5)
+    assert out == pytest.approx(0.7)
     assert trial.user_attrs["loss_kh"] == pytest.approx(0.2)
     assert trial.user_attrs["loss_coalescence"] == pytest.approx(0.8)
 
@@ -303,12 +305,14 @@ def test_composite_loop_averages_the_sub_losses(monkeypatch):
 def test_the_running_mean_is_reported_at_every_step(monkeypatch):
     """C'est ce qui rend le MedianPruner utilisable : une valeur
     comparable entre essais, a chaque step."""
-    monkeypatch.setattr(TH, "pipeline", _fake_pipeline_returning([0.2, 0.4, 0.6, 0.8]))
+    losses = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2]
+    monkeypatch.setattr(TH, "pipeline", _fake_pipeline_returning(losses))
     trial = _FakeTrial()
     traces = {k: (None, None) for k, _ in TH.SCENARIOS_ISOLATED}
     TH._composite_loop(trial, TH.SCENARIOS_ISOLATED, traces, {}, 0.4)
-    assert [s for s, _ in trial.reports] == [0, 1, 2, 3]
-    assert [round(v, 6) for _, v in trial.reports] == [0.2, 0.3, 0.4, 0.5]
+    assert [s for s, _ in trial.reports] == list(range(6))
+    assert [round(v, 6) for _, v in trial.reports] == \
+        [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 
 
 def test_pruning_stops_the_loop_before_the_remaining_scenarios(monkeypatch):
@@ -376,6 +380,25 @@ def test_a_nan_loss_becomes_the_same_finite_penalty(monkeypatch):
     assert loss == 10.0
 
 
+def test_an_incomplete_pipeline_result_cannot_be_selected(monkeypatch):
+    def incomplete(**kwargs):
+        return {
+            "combined": 0.001,
+            "phys_score": 0.001,
+            "patch_ratio": 0.01,
+            "completed": False,
+            "abort": {"kind": "numerical_divergence"},
+        }
+
+    monkeypatch.setattr(TH, "pipeline", incomplete)
+    trial = _FakeTrial()
+    loss = TH._run_one_scenario(
+        trial, "ot", TH.SCENARIO_OT, {"ot": (None, None)}, {}, 0.4)
+    assert loss == TH.DIVERGENCE_PENALTY
+    assert trial.user_attrs["completed_ot"] is False
+    assert trial.user_attrs["patch_ot"] == 1.0
+
+
 def test_the_objective_refuses_a_malformed_scenario_set_before_any_trial():
     """Le refus doit tomber a la CONSTRUCTION, pas au milieu du premier
     essai — c'est-a-dire apres le pre-calcul DNS."""
@@ -401,8 +424,7 @@ def test_n_workers_share_one_budget_they_do_not_multiply_it(tmp_path, monkeypatc
     etait calcule UNE fois. Huit workers demarrant ensemble lisaient tous
     « 0 fait » et faisaient la campagne entiere chacun."""
     storage = f"sqlite:///{tmp_path / 'budget.db'}"
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", storage)
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
     config = {"n_trials": 12, "study_name": "budget"}
 
@@ -417,8 +439,7 @@ def test_n_workers_share_one_budget_they_do_not_multiply_it(tmp_path, monkeypatc
 
 def test_worker_trials_caps_one_worker(tmp_path, monkeypatch):
     storage = f"sqlite:///{tmp_path / 'cap.db'}"
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", storage)
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
     monkeypatch.setattr(TH, "WORKER_TRIALS", 3)
     config = {"n_trials": 100, "study_name": "cap"}
 
@@ -429,8 +450,7 @@ def test_worker_trials_caps_one_worker(tmp_path, monkeypatch):
 
 def test_a_finished_phase_runs_nothing(tmp_path, monkeypatch):
     storage = f"sqlite:///{tmp_path / 'done.db'}"
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", storage)
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
     config = {"n_trials": 3, "study_name": "done"}
 
@@ -451,13 +471,37 @@ def test_trials_done_ignores_queued_seeds(tmp_path, monkeypatch):
     assert TH.trials_done(study) == 0
 
 
+def test_interrupted_trials_are_failed_and_retried_in_the_budget(
+        tmp_path, monkeypatch):
+    storage = f"sqlite:///{tmp_path / 'interrupted.db'}"
+    study = optuna.create_study(study_name="interrupted", storage=storage)
+    interrupted = study.ask()
+    assert interrupted.number == 0
+    assert TH.trials_done(study) == 1
+
+    assert TH.fail_interrupted_trials(study) == 1
+    assert study.trials[0].state == optuna.trial.TrialState.FAIL
+    assert TH.trials_done(study) == 0
+
+
+def test_prepare_phase1_binds_contract_and_queues_seed(tmp_path, monkeypatch):
+    storage = f"sqlite:///{tmp_path / 'prepare.db'}"
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
+    study, recovered = TH.prepare_phase1(7)
+    assert recovered == 0
+    assert study.user_attrs["campaign_contract_sha256"]
+    assert TH.trials_done(study) == 0
+    waiting = [trial for trial in study.trials
+               if trial.state == optuna.trial.TrialState.WAITING]
+    assert len(waiting) == len(TH.phase1_seeds())
+
+
 def test_the_sampler_seed_makes_a_phase_reproducible(tmp_path, monkeypatch):
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
 
     def run(tag, seed):
-        monkeypatch.setattr(TH, "OPTUNA_STORAGE",
-                            f"sqlite:///{tmp_path / (tag + '.db')}")
+        storage = f"sqlite:///{tmp_path / (tag + '.db')}"
+        monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
         drawn = []
 
         def objective(trial):
@@ -470,6 +514,33 @@ def test_the_sampler_seed_makes_a_phase_reproducible(tmp_path, monkeypatch):
 
     assert run("a", 1234) == run("b", 1234)
     assert run("c", 4321) != run("a2", 1234)
+
+
+def test_campaign_contract_refuses_a_changed_budget_on_resume(
+        tmp_path, monkeypatch):
+    storage = f"sqlite:///{tmp_path / 'contract.db'}"
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
+    monkeypatch.setattr(TH, "WORKER_TRIALS", None)
+    TH.run_phase(
+        "contract", {"n_trials": 1, "study_name": "contract"},
+        _count_objective([]), seed=4)
+    with pytest.raises(RuntimeError, match="contract mismatch"):
+        TH.run_phase(
+            "contract", {"n_trials": 2, "study_name": "contract"},
+            _count_objective([]), seed=4)
+
+
+def test_trials_record_worker_seed_and_contract(tmp_path, monkeypatch):
+    storage = f"sqlite:///{tmp_path / 'attrs.db'}"
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
+    monkeypatch.setattr(TH, "WORKER_TRIALS", None)
+    study = TH.run_phase(
+        "attrs", {"n_trials": 1, "study_name": "attrs"},
+        _count_objective([]), seed=17)
+    trial = study.trials[0]
+    assert trial.user_attrs["worker_seed"] == 17
+    assert trial.user_attrs["campaign_contract_sha256"] == \
+        study.user_attrs["campaign_contract_sha256"]
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -596,14 +667,9 @@ def test_every_phase_name_the_cli_accepts_is_routable():
         assert key in TH.PHASES
 
 
-def test_seed_comes_from_the_environment_when_not_on_the_command_line(monkeypatch):
-    monkeypatch.setenv("OPTUNA_SEED", "77")
-    import importlib
-    importlib.reload(TH)
-    assert TH.parse_args([]).seed == 77
-    monkeypatch.delenv("OPTUNA_SEED")
-    importlib.reload(TH)
+def test_seed_is_only_an_explicit_cli_argument():
     assert TH.parse_args([]).seed is None
+    assert TH.parse_args(["--seed", "77"]).seed == 77
 
 
 def test_the_phases_table_only_carries_keys_that_are_read():
@@ -616,8 +682,8 @@ def test_the_phases_table_only_carries_keys_that_are_read():
 
 def test_run_phase_reads_only_those_two_keys(tmp_path, monkeypatch):
     """Question 3 : consomme-t-elle ce que sa signature annonce ?"""
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", f"sqlite:///{tmp_path / 'min.db'}")
+    storage = f"sqlite:///{tmp_path / 'min.db'}"
+    monkeypatch.setattr(TH, "_get_storage", lambda _: storage)
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
     counter = []
     TH.run_phase("minimal", {"n_trials": 2, "study_name": "minimal"},
@@ -652,6 +718,7 @@ def cheap_phases(monkeypatch):
         calls["phases"].append({
             "name": phase_name,
             "study_name": phase_config["study_name"],
+            "n_trials": phase_config["n_trials"],
             "n_seeds": len(seed_params or []),
             "seed": seed,
         })
@@ -684,6 +751,12 @@ def test_the_first_phases_take_dns_traces_and_a_seed(runner, scenarios, cheap_ph
     assert cheap_phases["phases"][-1]["seed"] == 11
     assert cheap_phases["phases"][-1]["n_seeds"] > 0, "phase amorcee sans graine"
     assert study.best_value == pytest.approx(0.3)
+
+
+def test_phase1_trial_target_can_be_overridden(cheap_phases):
+    traces = {k: (None, None) for k, _ in TH.SCENARIOS_ISOLATED}
+    TH._run_phase1(traces, seed=11, n_trials=17)
+    assert cheap_phases["phases"][-1]["n_trials"] == 17
 
 
 @pytest.mark.parametrize("runner,expected_scenarios", [
@@ -733,6 +806,50 @@ def test_the_full_run_writes_its_json(cheap_phases, tmp_path, monkeypatch):
     saved = json.load(open(tmp_path / "best_hyperparams.json"))
     assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_9) | {"threshold_amr"}
     assert set(saved["deploy"]["classical"]) == set(PERIMETRE_9) | {"threshold_amr"}
+
+
+def test_phase1_cli_writes_an_explicit_candidate(
+        cheap_phases, tmp_path, monkeypatch):
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "_DIRS_READY", True)
+    path = tmp_path / "candidate.json"
+
+    TH.main(["--phase", "1", "--seed", "3", "--n-trials", "17",
+             "--result-path", str(path)])
+
+    saved = json.load(open(path))
+    assert saved["artifact"] == "phase_candidate"
+    assert saved["status"] == "partial"
+    assert saved["target_trials"] == 17
+    assert saved["study_name"] == "q_has_v2_phase1"
+    assert saved["result"]["best_params"] is not None
+    assert not list(tmp_path.glob(".candidate.json.*.tmp"))
+
+
+def test_phase_candidate_is_complete_only_when_no_trial_is_running(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "_DIRS_READY", True)
+    study = _study_with_one_trial("candidate")
+    path = tmp_path / "candidate.json"
+
+    TH.save_phase_candidate(
+        study, "phase1_composite", TH.SCENARIOS_ISOLATED,
+        target_trials=2, output_path=str(path))
+
+    saved = json.load(open(path))
+    assert saved["status"] == "complete"
+    assert saved["consumed_trials"] == 2
+    assert saved["concurrency_excess_trials"] == 0
+
+
+def test_phase1_budget_options_are_not_accepted_for_other_phases():
+    with pytest.raises(SystemExit):
+        TH.parse_args(["--phase", "2", "--n-trials", "10"])
+    with pytest.raises(SystemExit):
+        TH.parse_args(["--phase", "all", "--result-path", "x.json"])
+    with pytest.raises(SystemExit):
+        TH.parse_args(["--phase", "1", "--n-trials", "0"])
 
 
 def test_a_missing_seed_is_announced_not_silently_random(cheap_phases, capsys,

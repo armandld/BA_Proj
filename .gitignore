@@ -34,5 +34,10 @@ data/
 # conteneur.
 results/hyperparams/reoptimisation/
 results/hyperparams/reoptimisation_launch.log
+/results/campaigns/
 .coverage
-scripts/job_campagne_*.sh
+
+# Artefacts locaux de calcul. Les fichiers deja suivis restent versionnes;
+# les nouvelles sorties sont exportees explicitement apres validation.
+/logs/
+/study/results/

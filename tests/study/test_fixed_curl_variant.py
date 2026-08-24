@@ -1,255 +1,63 @@
-"""La variante `--fixed-curl` doit etre une variante, pas une correction.
+"""The deployed axis convention is the default; legacy is an ablation."""
 
-Le rotationnel et la divergence des mappeurs sont ecrits sous la convention
-indexing='xy' alors que `grid.py` declare indexing='ij'. Corriger le chemin
-par defaut invaliderait la campagne d'hyperparametres (une semaine de calcul
-Optuna, `results/hyperparams/PROVENANCE.md`), qui a regle ses valeurs sur le
-chemin historique. Le drapeau permet donc de MESURER l'ecart sans le
-supprimer.
-
-Ces tests verrouillent les trois proprietes qui rendent la mesure honnete :
-
-  1. sans le drapeau, la chaine d'entree du QAOA est bit-a-bit celle
-     d'avant ;
-  2. avec le drapeau, elle change reellement — un drapeau accepte puis
-     ignore serait indiscernable de son absence, et c'est exactement le
-     defaut que cette etude traque ;
-  3. l'artefact produit porte un nom distinct, donc les deux variantes ne
-     peuvent pas s'ecraser l'une l'autre.
-"""
-
-import os
+import inspect
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
-import pytest
 
 
+ROOT = Path(__file__).resolve().parents[2]
+COMMON = ROOT / "study" / "common"
+H0 = ROOT / "study" / "h0_selection"
+for path in (ROOT / "src", COMMON, H0):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-def _repo_root():
-    """Racine du depot : on remonte jusqu'au dossier qui contient `src/`.
-
-    Un calcul par `dirname` repete depend de la profondeur du fichier et
-    casse au premier deplacement — souvent en silence, en pointant vers un
-    chemin qui n'existe pas.
-    """
-    d = os.path.dirname(os.path.abspath(__file__))
-    while d != os.path.dirname(d):
-        if os.path.isdir(os.path.join(d, "src")):
-            return d
-        d = os.path.dirname(d)
-    raise RuntimeError("racine du depot introuvable depuis " + __file__)
+from h0_optimiser_equivalence import solver_panel  # noqa: E402
+from qaoa_inputs import prepare_qaoa_inputs  # noqa: E402
 
 
-_REPO_ROOT = _repo_root()
-for _p in [os.path.join(_REPO_ROOT, "src")] + [
-        os.path.join(_REPO_ROOT, "study", _d) for _d in (
-            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
-            "h3_representation", "h4_transfer", "closed_loop", "common")]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-N = 32
-DIM = 2
-RE = 400
-
-_PANEL = os.path.join(_REPO_ROOT, "study", "h0_selection",
-                      "h0_optimiser_equivalence.py")
+def _fields(N=16):
+    x = np.arange(N)[:, None] * 2 * np.pi / N
+    y = np.arange(N)[None, :] * 2 * np.pi / N
+    return (
+        -np.sin(y) + 0 * x,
+        np.sin(x) + 0 * y,
+        0.4 * np.cos(y) + 0 * x,
+        0.6 * np.cos(x) + 0 * y,
+    )
 
 
-@pytest.fixture(scope="module")
-def snapshot():
-    from Simulation.grid import PeriodicGrid
-    from Simulation.solver import MHDSolver
-
-    sim = MHDSolver(PeriodicGrid(N), dt=1e-3, Re=RE, Rm=RE)
-    sim.init_orszag_tang()
-    for _ in range(20):
-        sim.adapt_dt(cfl_target=0.4)
-        sim.step_full(record_stats=False)
-    prev = {k: np.array(v) for k, v in sim.get_fluxes().items()}
-    for _ in range(5):
-        sim.adapt_dt(cfl_target=0.4)
-        sim.step_full(record_stats=False)
-    return sim.get_fluxes(), prev
+def test_current_axis_convention_is_the_function_default():
+    assert inspect.signature(prepare_qaoa_inputs).parameters[
+        "fixed_curl"].default is True
+    assert inspect.signature(solver_panel).parameters[
+        "fixed_curl"].default is True
 
 
-def _inputs(cur, fixed_curl, prev=None, with_psi=False):
-    from qaoa_inputs import prepare_qaoa_inputs
-    return prepare_qaoa_inputs(
-        cur["vx"], cur["vy"], cur["Bx"], cur["By"], N, DIM, RE,
-        prev_fields=prev, with_psi=with_psi, fixed_curl=fixed_curl)
+def test_legacy_ablation_changes_the_encoded_problem():
+    fields = _fields()
+    current = prepare_qaoa_inputs(
+        *fields, 16, 2, 400, use_v2=False, fixed_curl=True)
+    legacy = prepare_qaoa_inputs(
+        *fields, 16, 2, 400, use_v2=False, fixed_curl=False)
+    score_gap = np.max(np.abs(current[2] - legacy[2]))
+    coefficient_gap = max(
+        np.max(np.abs(np.asarray(current[1][key])
+                      - np.asarray(legacy[1][key])))
+        for key in current[1]
+        if isinstance(current[1][key], np.ndarray)
+    )
+    assert score_gap > 1e-6
+    assert coefficient_gap > 1e-6
 
 
-def test_the_flag_defaults_to_off(snapshot):
-    """Le defaut doit rester le chemin historique."""
-    import inspect
-
-    from qaoa_inputs import prepare_qaoa_inputs
-    sig = inspect.signature(prepare_qaoa_inputs)
-    assert sig.parameters["fixed_curl"].default is False
-
-    cur, _prev = snapshot
-    a_in, a_hp, a_sc = _inputs(cur, fixed_curl=False)
-    b_in, b_hp, b_sc = prepare_qaoa_inputs(
-        cur["vx"], cur["vy"], cur["Bx"], cur["By"], N, DIM, RE)
-    np.testing.assert_array_equal(a_sc, b_sc)
-    for k in a_in:
-        np.testing.assert_array_equal(np.asarray(a_in[k]), np.asarray(b_in[k]))
-
-
-def test_the_flag_changes_the_classical_score(snapshot):
-    """Le score classique passe par la vorticite : il doit bouger."""
-    cur, _prev = snapshot
-    _a, _ahp, sc_off = _inputs(cur, fixed_curl=False)
-    _b, _bhp, sc_on = _inputs(cur, fixed_curl=True)
-    assert not np.array_equal(sc_off, sc_on)
-    assert np.max(np.abs(np.asarray(sc_off) - np.asarray(sc_on))) > 1e-3, (
-        "le drapeau ne deplace pratiquement pas le score : il ne branche rien")
-
-
-def test_the_flag_changes_the_hamiltonian_coefficients(snapshot):
-    """K_plaquettes est le canal ou entre le rotationnel."""
-    cur, _prev = snapshot
-    _a, hp_off, _ = _inputs(cur, fixed_curl=False)
-    _b, hp_on, _ = _inputs(cur, fixed_curl=True)
-    assert "K_plaquettes" in hp_off
-    k_off = np.asarray(hp_off["K_plaquettes"], dtype=float)
-    k_on = np.asarray(hp_on["K_plaquettes"], dtype=float)
-    assert k_off.shape == k_on.shape
-    assert not np.array_equal(k_off, k_on)
-
-
-def test_the_flag_reaches_theta_through_the_pipeline_encoder(snapshot):
-    """Les deux variantes se composent, et chacune touche ce qu'elle doit.
-
-    Avec --with-psi, les angles ne sont plus calcules ici mais delegues a
-    `refinement._prepare_vqa_input`. Il faut donc verifier que fixed_curl
-    traverse cette delegation : theta derive du score classique, qui passe
-    par la vorticite, donc theta doit bouger.
-
-    psi, lui, ne doit PAS bouger : il encode la derivee temporelle du flux
-    de contrainte, que `_compute_filtered_flux` forme a partir des sauts de
-    champ entre cellules voisines (compression, cisaillement, saut de Jz).
-    Aucun rotationnel n'y entre. Un psi qui changerait avec la convention
-    d'axes signalerait que le drapeau fuit dans un canal ou il n'a rien a
-    faire.
-    """
-    cur, prev = snapshot
-    off, _, _ = _inputs(cur, fixed_curl=False, prev=prev, with_psi=True)
-    on, _, _ = _inputs(cur, fixed_curl=True, prev=prev, with_psi=True)
-
-    th_off = np.asarray(off["theta_h"], dtype=float)
-    th_on = np.asarray(on["theta_h"], dtype=float)
-    assert not np.array_equal(th_off, th_on), (
-        "fixed_curl n'atteint pas l'encodeur du pipeline : theta est "
-        "identique dans les deux conventions")
-    assert np.max(np.abs(th_off - th_on)) > 1e-3
-
-    psi_off = np.asarray(off["psi_h"], dtype=float)
-    psi_on = np.asarray(on["psi_h"], dtype=float)
-    assert np.max(np.abs(psi_off)) > 1e-12, "psi doit etre non nul avec --with-psi"
-    np.testing.assert_array_equal(psi_off, psi_on)
-
-
-def test_the_stress_flux_really_is_curl_free(snapshot):
-    """Justifie l'invariance de psi ci-dessus au lieu de la postuler.
-
-    Si `compute_stress_flux` venait a dependre du rotationnel, le test
-    precedent deviendrait faux sans que rien ne le signale.
-    """
-    from Simulation.PhysToAngle import AngleMapper
-
-    cur, _prev = snapshot
-    mapper = AngleMapper()
-    phi = mapper.compute_stress_flux(cur)
-    # Le flux de contrainte ne lit que les champs, pas leur rotationnel :
-    # une rotation solide superposee ne doit rien changer aux SAUTS entre
-    # cellules... mais elle change les champs. On verifie donc directement
-    # que la source ne mentionne aucun operateur de rotationnel.
-    import inspect
-    src = inspect.getsource(AngleMapper.compute_stress_flux)
-    src += inspect.getsource(AngleMapper._compute_filtered_flux)
-    for token in ("curl_z", "forward_curl", "legacy_forward_curl"):
-        assert token not in src, (
-            f"compute_stress_flux utilise {token} : psi depend desormais de "
-            "la convention d'axes et le test d'invariance ci-dessus ment")
-    assert set(phi) >= {"phi_horizontal", "phi_vertical"}
-
-
-def test_the_flag_reaches_the_mapper_not_just_the_file_name(monkeypatch):
-    """D-130 : la propagation du drapeau mesuree, pas lue dans le source.
-
-    `test_the_panel_exposes_the_flag_and_suffixes_its_artefact` ci-dessous
-    cherche `fixed_curl=args.fixed_curl` dans le source du panel, sous le
-    message « le drapeau doit atteindre solver_panel, sinon il ne fait que
-    renommer le fichier de sortie ». Son objet est un COMPORTEMENT — le
-    drapeau doit traverser jusqu'au mappeur — que le texte ne fait
-    qu'indiquer. Mesure par mutation, les deux sens :
-
-    * **A'** — `solver_panel` passe `fixed_curl=False` a
-      `prepare_qaoa_inputs`, les TROIS chaines cherchees intactes : le
-      drapeau ne renomme plus que le fichier de sortie, et le fichier reste
-      **7 passed**. Faux vert, sur le defaut meme que le message annonce.
-    * **B** — reecriture EQUIVALENTE `fixed_curl=bool(args.fixed_curl)` au
-      site d'appel : **ROUGE**. Faux rouge sur un changement voulu.
-
-    L'entree qui SEPARE : espionner `prepare_qaoa_inputs`, la premiere
-    fonction de `solver_panel` a recevoir le drapeau. Un panel qui se
-    contente de suffixer son artefact ne l'y fait jamais parvenir.
-    Le sentinelle interrompt `solver_panel` juste apres, pour ne pas payer
-    la campagne QAOA que ce test n'a pas besoin de mesurer.
-    """
-    import importlib
-
-    import qaoa_inputs
-
-    panel = importlib.import_module("h0_optimiser_equivalence")
-
-    class _Stop(Exception):
-        pass
-
-    seen = {}
-
-    def spy(*a, **kw):
-        seen["fixed_curl"] = kw.get("fixed_curl", "ABSENT")
-        raise _Stop
-
-    monkeypatch.setattr(qaoa_inputs, "prepare_qaoa_inputs", spy)
-
-    z = np.zeros((8, 8))
-    for asked in (True, False):
-        seen.clear()
-        with pytest.raises(_Stop):
-            panel.solver_panel(z, z, z, z, N=8, dim=2, re=400,
-                               l2_errors=np.zeros(4), l2_threshold=0.0,
-                               fixed_curl=asked)
-        assert seen["fixed_curl"] == asked, (
-            f"solver_panel(fixed_curl={asked}) transmet "
-            f"{seen['fixed_curl']!r} au mappeur : le drapeau ne fait que "
-            "renommer le fichier de sortie")
-
-
-def test_the_panel_exposes_the_flag_and_suffixes_its_artefact():
-    """Sans suffixe distinct, les deux variantes s'ecrasent (defaut D9).
-
-    Ce test lit le SOURCE. Il est garde tel quel — il n'est pas faux — mais
-    il ne mesure PAS la propagation du drapeau : voir D-130 et
-    `test_the_flag_reaches_the_mapper_not_just_the_file_name` ci-dessus.
-    """
-    src = open(_PANEL, encoding="utf-8").read()
-    assert '"--fixed-curl", action="store_true"' in src
-    assert '+ ("_fixedcurl" if args.fixed_curl else "")' in src
-    assert "fixed_curl=args.fixed_curl" in src, (
-        "le drapeau doit atteindre solver_panel, sinon il ne fait que "
-        "renommer le fichier de sortie")
-
-
-def test_the_panel_accepts_the_flag_end_to_end(tmp_path):
-    """Le drapeau doit survivre a un vrai passage en ligne de commande."""
-    r = subprocess.run(
-        [sys.executable, _PANEL, "--help"],
-        capture_output=True, text=True, cwd=_REPO_ROOT, timeout=300)
-    assert r.returncode == 0, r.stderr[-2000:]
-    assert "--fixed-curl" in r.stdout
+def test_cli_names_only_the_legacy_ablation():
+    result = subprocess.run(
+        [sys.executable, str(H0 / "h0_optimiser_equivalence.py"), "--help"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    )
+    assert "--legacy-curl" in result.stdout
+    assert "--fixed-curl" not in result.stdout

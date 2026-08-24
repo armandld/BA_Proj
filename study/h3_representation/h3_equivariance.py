@@ -55,8 +55,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
-from ising_terms_and_annealing import build_ising_terms
-from h0_optimiser_equivalence import exhaustive_ground_state
+from ising_terms_and_annealing import build_ising_terms, exhaustive_ground_state
 
 # Groupe engendre par les reflexions d'axes et la rotation d'un quart de tour.
 # Pour chaque operation : (transformation du tableau, matrice 2x2 agissant sur
@@ -182,7 +181,7 @@ def decision_maps(vx, vy, Bx, By, N, dim, re, use_v2=True,
     recuit, ce que la tache 11 a par ailleurs valide a 8 qubits.
     """
     from qaoa_inputs import (
-        prepare_qaoa_inputs, run_qaoa_on_snapshot, classical_warm_start_params)
+        prepare_qaoa_inputs, run_qaoa_on_snapshot, constant_initial_params)
     from ising_terms_and_annealing import sa_multi_restart
     from config import V2_THRESHOLD, TRAINED_THRESHOLD
 
@@ -207,10 +206,10 @@ def decision_maps(vx, vy, Bx, By, N, dim, re, use_v2=True,
                            | refine[n_cells:].reshape(dim, dim))
 
     if run_qaoa:
-        ws = classical_warm_start_params(score, thr, reps)
+        ws = constant_initial_params(reps)
         _, dh, dv, _, _ = run_qaoa_on_snapshot(
             data_in, hp, dim, reps=reps, K_opt=k_opt, shots=shots,
-            backend_name="state_vector", warm_start_params=ws)
+            backend_name="state_vector", warm_start_params=ws, seed=seed)
         out["qaoa"] = np.asarray(dh | dv)
     return out
 

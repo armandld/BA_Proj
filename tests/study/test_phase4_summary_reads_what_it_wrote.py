@@ -151,7 +151,7 @@ def test_artifact_name_is_the_only_source_of_the_filename(tmp_path):
             "n_qubits": 2 * DIM * DIM,
             "snap_indices": np.array([0]), "suffix": "_v2"}
     fake = [{
-        "ground_energy": -1.0, "gap": 0.5,
+        "ground_energy": -1.0, "gap": 0.5, "ground_degeneracy": 1,
         "marginals": np.ones(2 * DIM * DIM),
         "decisions_h": np.ones((DIM, DIM), dtype=bool),
         "decisions_v": np.ones((DIM, DIM), dtype=bool),

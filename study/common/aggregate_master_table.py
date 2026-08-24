@@ -355,62 +355,41 @@ def rows_t18(d):
 
 
 def rows_t20(results_dir, folds):
-    """Variance d'execution du bras Q-HAS, par fold (defaut D11).
-
-    Les valeurs couvrent deux ordres de grandeur d'un fold a l'autre : la
-    tolerance est donc RELATIVE, sinon toutes les lignes passeraient.
-    Le determinisme du bras classique est le CONTROLE : s'il tombe, la
-    dispersion mesuree n'est plus attribuable au seul chemin QAOA.
-    """
-    # Valeurs de la passe VERIFIEE (avortements captures a l'execution et
-    # exclus). Les references precedentes venaient de la passe non protegee.
-    ref = {
-        "ot": dict(mean=0.10727, sd=0.01823, ratio=1.30),
-        "kh": dict(mean=0.00320, sd=0.00203, ratio=1.90),
-        "rotor": dict(mean=0.14725, sd=0.04062, ratio=2.74),
-        "tearing": dict(mean=0.00801, sd=0.00193, ratio=1.81),
-    }
-    out, n_det, n_seen = [], 0, 0
+    """Summarise the schema-2 physics-trajectory replicates."""
+    metrics = ("Q-HAS phys mean", "Q-HAS phys sd",
+               "mean matched phys delta", "paired trajectories")
+    out = []
     for f in folds:
         p = os.path.join(results_dir, f"t20_qhas_run_variance_{f}.json")
-        r = ref.get(f, {})
         if not os.path.exists(p):
-            for m in ("Q-HAS phys mean", "Q-HAS phys sd",
-                      "ratio vs matched (mean-based)"):
+            for m in metrics:
                 out.append(make_row(f"t20/{f}", m, None, None))
             continue
         d = json.load(open(p))
-        # EXCLURE les tirages avortes : une trajectoire tronquee n'est pas
-        # un point de mesure. Sans ce filtre la table republiait une moyenne
-        # contaminee — sur `rotor`, 0.3328 au lieu de 0.1473, parce que les
-        # deux tirages divergents y etaient moyennes avec les trois valides.
-        runs = [x for x in d["qhas_runs"] if x.get("completed", True)]
-        n_ab = len(d["qhas_runs"]) - len(runs)
-        if len(runs) < 2:
-            for m in ("Q-HAS phys mean", "Q-HAS phys sd",
-                      "ratio vs matched (mean-based)"):
+        if (d.get("schema") != 2
+                or d.get("replication_unit") != "trajectory"):
+            for m in metrics:
                 out.append(make_row(f"t20/{f}", m, None, None))
             continue
-        q = np.array([x["phys_score"] for x in runs], dtype=float)
-        mean, sd = float(np.mean(q)), float(np.std(q, ddof=1))
+        runs = [x for x in d["qhas_runs"] if x.get("completed")]
+        paired = [x for x in runs
+                  if x.get("budget_match", {}).get("converged")]
+        if len(runs) < 2 or not paired:
+            for m in metrics:
+                out.append(make_row(f"t20/{f}", m, None, None))
+            continue
+        q = np.asarray([x["phys_score"] for x in runs], dtype=float)
+        deltas = np.asarray(
+            [x["budget_match"]["delta_phys"] for x in paired], dtype=float)
         out += [
-            make_row(f"t20/{f}", "Q-HAS phys mean", mean, r.get("mean"),
-                     tol=max(1e-6, 0.03 * r.get("mean", 1.0))),
-            make_row(f"t20/{f}", "Q-HAS phys sd", sd, r.get("sd"),
-                     tol=max(1e-6, 0.05 * r.get("sd", 1.0))),
-            make_row(f"t20/{f}", "ratio vs matched (mean-based)",
-                     (mean / d["stored_classical_phys"]
-                      if d.get("stored_classical_phys") else None),
-                     r.get("ratio"),
-                     tol=max(1e-3, 0.03 * r.get("ratio", 1.0))),
+            make_row(f"t20/{f}", "Q-HAS phys mean", float(np.mean(q))),
+            make_row(f"t20/{f}", "Q-HAS phys sd",
+                     float(np.std(q, ddof=1))),
+            make_row(f"t20/{f}", "mean matched phys delta",
+                     float(np.mean(deltas))),
+            make_row(f"t20/{f}", "paired trajectories", len(paired),
+                     3.0, tol=0.5),
         ]
-        n_seen += 1
-        if d.get("classical_deterministic"):
-            n_det += 1
-    if n_seen:
-        # controle global : le bras classique doit etre deterministe partout
-        out.append(make_row("t20", "folds with deterministic classical arm",
-                            float(n_det), float(n_seen)))
     return out
 
 
@@ -476,47 +455,39 @@ def rows_t22(results_dir, folds):
 
 
 def rows_t23(results_dir, folds):
-    """Le decompte de tete, RECALCULE depuis les artefacts.
-
-    Il etait auparavant compose a la main dans RESULTS.md et personne ne
-    le verifiait — d'ou 19/20 la ou les artefacts disent 18/18 (colonnes
-    transposees sur `kh`, tirages avortes comptes au denominateur sur
-    `rotor`). Le nombre le plus cite de l'etude etait le seul a n'avoir
-    aucun controle de transcription. Il en a un maintenant.
-    """
+    """Recompute trajectory-level headline counts and confidence bounds."""
     from closed_loop_headline_counts import fold_counts, totals
-    ref_fold = {
-        "ot": (5, 5, 5), "kh": (5, 4, 4),
-        "rotor": (3, 2, 2), "tearing": (5, 5, 5),
-    }
-    ref_total = dict(n=18, less=18, cost=16, dom=16, ab=2, cab=0, crun=8)
     out, got = [], []
     for f in folds:
         r = fold_counts(results_dir, f)
         if r is None:
-            for m in ("less faithful", "costlier", "dominated"):
+            for m in ("paired trajectories", "classical lower error",
+                      "mean phys delta", "CI low", "CI high"):
                 out.append(make_row(f"t23/{f}", m, None, None))
             continue
         got.append(r)
-        rf = ref_fold.get(f, (None, None, None))
-        for m, v, rv in (("less faithful", r["less_faithful"], rf[0]),
-                         ("costlier", r["costlier"], rf[1]),
-                         ("dominated", r["dominated"], rf[2])):
-            out.append(make_row(f"t23/{f}", m, float(v),
-                                None if rv is None else float(rv), tol=0.5))
+        inference = r["inference"]
+        out += [
+            make_row(f"t23/{f}", "paired trajectories", r["n_paired"],
+                     3.0, tol=0.5),
+            make_row(f"t23/{f}", "classical lower error",
+                     r["classical_lower_error"]),
+            make_row(f"t23/{f}", "mean phys delta",
+                     inference["mean_delta_phys"]),
+            make_row(f"t23/{f}", "CI low", inference["ci_low"]),
+            make_row(f"t23/{f}", "CI high", inference["ci_high"]),
+        ]
     if got:
         t = totals(got)
-        for m, k, rk in (("total runs (completed)", "n_completed", "n"),
-                         ("total less faithful", "less_faithful", "less"),
-                         ("total costlier", "costlier", "cost"),
-                         ("total dominated", "dominated", "dom"),
-                         ("Q-HAS aborts at matched point", "n_aborted", "ab"),
-                         ("classical replays at matched point",
-                          "n_classical_runs", "crun"),
-                         ("classical aborts at matched point",
-                          "n_classical_aborted", "cab")):
-            out.append(make_row("t23", m, float(t[k]),
-                                float(ref_total[rk]), tol=0.5))
+        out += [
+            make_row("t23", "total paired trajectories", t["n_paired"],
+                     3.0 * len(folds), tol=0.5),
+            make_row("t23", "total Q-HAS lower error",
+                     t["qhas_lower_error"]),
+            make_row("t23", "total classical lower error",
+                     t["classical_lower_error"]),
+            make_row("t23", "mean phys delta", t["mean_delta_phys"]),
+        ]
     return out
 
 
@@ -664,20 +635,18 @@ def rows_t15c(results_dir, folds):
     # pas un controle, c'est un affichage.
     out = [
         make_row("t15c", "folds completed", float(pri["n_folds"]),
-                 4.0, tol=0.5),
+                 float(len(folds)), tol=0.5),
         make_row("t15c", "folds where Q-HAS better (combined)",
-                 float(pri["n_qhas_better"]), 2.0, tol=0.5),
+                 float(pri["n_qhas_better"])),
         make_row("t15c", "budget-matched folds",
-                 float(sec["n_folds"]), 4.0, tol=0.5),
+                 float(sec["n_folds"]), float(len(folds)), tol=0.5),
         make_row("t15c", "folds where Q-HAS Pareto-dominated "
-                 "at equal budget", float(sec["n_qhas_dominated"]),
-                 4.0, tol=0.5),
+                 "at equal budget", float(sec["n_qhas_dominated"])),
     ]
     if sec["n_folds"]:
         out.append(make_row("t15c", "mean delta phys at equal budget "
                             "(>0 = Q-HAS worse)",
-                            sec["mean_delta_phys_matched"], 0.0612,
-                            tol=0.001))
+                            sec["mean_delta_phys_matched"]))
     return out
 
 
@@ -685,8 +654,9 @@ def rows_t15c(results_dir, folds):
 # Collecte et sorties
 # -------------------------------------------------------------------
 
-def collect(results_dir, N=256, dim=2, folds=("ot", "kh", "rotor",
-                                              "tearing")):
+def collect(results_dir, N=256, dim=2, folds=None):
+    if folds is None:
+        folds = DEFAULT_FOLDS
     rows = []
     rows += rows_t11(load_npz(os.path.join(
         results_dir, f"h0_optimiser_equivalence_N{N}_dim{dim}.npz")))
@@ -747,6 +717,28 @@ def to_markdown(rows, git_hash):
     return "\n".join(lines) + "\n"
 
 
+from config import FOLD_KEYS
+
+DEFAULT_FOLDS = tuple(FOLD_KEYS)
+
+
+def output_paths(results_dir, N, dim, folds):
+    """Return canonical paths only for the canonical configuration."""
+    folds = tuple(folds)
+    canonical = N == 256 and dim == 2 and folds == DEFAULT_FOLDS
+    if canonical:
+        suffix = ""
+    else:
+        fold_tag = "-".join(folds)
+        suffix = f"_N{N}_dim{dim}_folds-{fold_tag}"
+    return {
+        "markdown": os.path.join(results_dir,
+                                 f"v4_master_table{suffix}.md"),
+        "csv": os.path.join(results_dir, f"v4_master_table{suffix}.csv"),
+        "npz": os.path.join(results_dir, f"v4_master{suffix}.npz"),
+    }
+
+
 def main():
     p = argparse.ArgumentParser(description="V4 Task 16: master table")
     from config import RESULTS_DIR
@@ -754,10 +746,12 @@ def main():
     p.add_argument("--N", type=int, default=256)
     p.add_argument("--dim", type=int, default=2)
     p.add_argument("--folds", nargs="+",
-                   default=["ot", "kh", "rotor", "tearing"])
+                   default=list(DEFAULT_FOLDS))
     p.add_argument("--strict", action="store_true",
-                   help="exit non-zero on any DIFF (MISSING is tolerated: "
-                        "the Level-3 campaign is incremental)")
+                   help="exit non-zero on any DIFF")
+    p.add_argument("--allow-missing", action="store_true",
+                   help="write an explicitly partial, configuration-scoped "
+                        "table instead of refusing MISSING rows")
     args = p.parse_args()
 
     gh = git_commit_hash()
@@ -770,8 +764,14 @@ def main():
     n_miss = sum(r["status"] == "MISSING" for r in rows)
     print(f"  rows: {len(rows)}  OK={n_ok}  DIFF={n_diff}  MISSING={n_miss}")
 
-    md_path = os.path.join(RESULTS_DIR, "v4_master_table.md")
-    csv_path = os.path.join(RESULTS_DIR, "v4_master_table.csv")
+    if n_miss and not args.allow_missing:
+        raise SystemExit(
+            f"refusing to write a master table with {n_miss} MISSING rows; "
+            "complete the campaign or pass --allow-missing")
+
+    paths = output_paths(RESULTS_DIR, args.N, args.dim, args.folds)
+    md_path = paths["markdown"]
+    csv_path = paths["csv"]
     open(md_path, "w").write(md)
     with open(csv_path, "w") as fh:
         fh.write(f"# git_hash={gh}\ntask,metric,value,reference,status\n")
@@ -781,7 +781,7 @@ def main():
             fh.write(f"{r['task']},{r['metric'].replace(',', ';')},"
                      f"{v},{ref},{r['status']}\n")
     np.savez_compressed(
-        os.path.join(RESULTS_DIR, "v4_master.npz"),
+        paths["npz"],
         task=np.array([r["task"] for r in rows]),
         metric=np.array([r["metric"] for r in rows]),
         value=np.array([np.nan if r["value"] is None else r["value"]
@@ -790,7 +790,8 @@ def main():
                             for r in rows]),
         status=np.array([r["status"] for r in rows]),
         git_hash=gh, cli_args=json.dumps(vars(args)))
-    print(f"  saved: v4_master_table.md / .csv / v4_master.npz")
+    print("  saved: " + " / ".join(os.path.basename(path)
+                                     for path in paths.values()))
 
     if args.strict and n_diff:
         sys.exit(1)

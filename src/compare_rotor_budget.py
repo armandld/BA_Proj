@@ -176,6 +176,7 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
         mode=argus.mode,
         shots=argus.shots,
         opt_level=argus.opt_level,
+        seed=getattr(argus, "seed", 0),
     )
 
     physics_state = sim.get_fluxes()
@@ -193,8 +194,6 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
     from Simulation.RescaleArrays import get_adaptive_flux, _process_score
 
     target_dim = n_blocks
-
-    from Simulation.utils import slice_hamiltonian_params
 
     local_h = Phi['phi_horizontal']
     local_v = Phi['phi_vertical']
@@ -367,6 +366,7 @@ def main():
     parser.add_argument("--backend", default="state_vector",
                         choices=["aer", "state_vector"])
     parser.add_argument("--shots", type=int, default=1024)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K-opt", type=int, default=50,
                         help="Max QAOA optimizer iterations")
     parser.add_argument("--verbose", action="store_true")
@@ -485,6 +485,7 @@ def main():
         AdvAnomaliesEnable=True,
         K_opt=args.K_opt,
         eps=1e-2,
+        seed=args.seed,
         eta=0.001,
         Bz_guide=0.1,
         c_s=1.0,

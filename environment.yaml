@@ -44,10 +44,6 @@ dependencies:
     # --- Common Qiskit Utilities ---
     - 'pylatexenc'             # Often needed for circuit drawing
 
-    # --- Database (distributed training) ---
-    - 'psycopg2-binary'       # PostgreSQL driver (Critical for Neon connection)
-    - 'sqlalchemy>=2.0.0'     # Required by Optuna for DB management
-    
     # --- Visualization & Analysis ---
     - 'optuna-dashboard'      # To view your results in a browser locally
     - 'plotly'

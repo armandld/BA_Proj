@@ -1,12 +1,4 @@
-# scripts/cost_hamiltonian.py
-
-import argparse
-import json
-import os
-import networkx as nx
-import matplotlib.pyplot as plt
 import numpy as np
-import random
 
 from qiskit.quantum_info import SparsePauliOp
 
@@ -41,11 +33,8 @@ def create_bounded_hamiltonian(
         hamilt_params, dim,
         theta_h_full, theta_v_full,
         psi_h_full, psi_v_full,
-        advanced_anomalies_enabled = False
     ):
-    """
-    Construit l'Hamiltonien MHD avec conditions aux limites ouvertes (Halo).
-    Optimisé pour éviter la concaténation de chaînes répétitive.
+    """Construit l'Hamiltonien MHD d'un patch avec un halo d'une cellule.
 
     Halo contraction — centered around the decision boundary:
     When a boundary ZZ term C·Z_i·Z_j has qubit j in the halo,
@@ -64,17 +53,7 @@ def create_bounded_hamiltonian(
     """
     sparse_list = []
 
-    # --- A0. Le coeur demande doit etre celui des tableaux fournis ---
-    #
-    # Toutes les lectures ci-dessous sont indexees par `dim` sur des tableaux
-    # supposes (dim+2, dim+2). Un tableau TROP GRAND ne declenche aucune
-    # erreur : la boucle lit simplement un sous-bloc du coin superieur gauche
-    # et rend un Hamiltonien parfaitement valide, calcule sur la mauvaise
-    # portion du patch. Rien en aval ne peut le detecter.
-    #
-    # Un tableau trop petit, lui, finit par lever un IndexError — mais
-    # seulement au premier bord atteint, donc apres avoir deja encode des
-    # termes. On refuse les deux cas d'emblee.
+    # Tous les coefficients et angles comprennent le coeur et son halo.
     expected = (dim + 2, dim + 2)
     _shapes = {
         'C_edges[0]': np.shape(hamilt_params['C_edges'][0]),
@@ -86,6 +65,8 @@ def create_bounded_hamiltonian(
     }
     if hamilt_params.get('K_plaquettes') is not None:
         _shapes['K_plaquettes'] = np.shape(hamilt_params['K_plaquettes'])
+    if hamilt_params.get('K_xpoint') is not None:
+        _shapes['K_xpoint'] = np.shape(hamilt_params['K_xpoint'])
     _bad = {k: v for k, v in _shapes.items() if tuple(v) != expected}
     if _bad:
         raise ValueError(
@@ -119,28 +100,8 @@ def create_bounded_hamiltonian(
     w_z_frac = hamilt_params.get('w_z_frac', 1.0)
     z_threshold = 1.0 - 2.0 * threshold_amr
 
-    # Valeurs <Z> brutes des liens du halo que les PLAQUETTES contractent.
-    #
-    # Une plaquette a quatre membres : Haut = H(i,j), Droite = V(i,j+1),
-    # Bas = H(i+1,j), Gauche = V(i,j). Sur la colonne de droite (j = dim-1)
-    # le membre manquant est un lien V ; sur la ligne du bas (i = dim-1)
-    # c'est un lien H. Le <Z> qui remplace un qubit manquant doit venir du
-    # theta de CE lien : theta_v_full pour un lien V, theta_h_full pour un
-    # lien H (init_qbits_state place theta_h sur les qubits idx_H et theta_v
-    # sur les qubits idx_V).
-    #
-    # Le code lisait ici z_halo_right_raw (issu de theta_h_full) pour le
-    # membre Droite, qui est un lien V, et z_halo_bottom_raw (issu de
-    # theta_v_full) pour le membre Bas, qui est un lien H : les deux familles
-    # etaient echangees. Les POSITIONS etaient bonnes, seul le tableau lu
-    # etait le mauvais -- defaut present depuis le premier commit (cf93ba3).
-    #
-    # Mesure (D-113, docs/RESULTS.md) : en deploiement theta_h et theta_v
-    # sont le MEME tableau (`refinement._prepare_vqa_input` passe `mini_score`
-    # deux fois, `PhysToAngle.map_to_angles` le documente), donc l'echange
-    # etait sans effet : 36 configurations aleatoires, operateur identique
-    # bit a bit avant/apres. Sur theta_h != theta_v il change le signe du
-    # terme (k = -0.5 rendu +0.5) et peut l'annuler entierement.
+    # Une plaquette utilise H(i,j), V(i,j+1), H(i+1,j), V(i,j).
+    # Les membres hors coeur sont contractes avec le bon type de lien.
     z_plaq_right_raw  = get_expected_Z(theta_v_full[1:-1, -1])
     z_plaq_bottom_raw = get_expected_Z(theta_h_full[-1, 1:-1])
 
@@ -285,34 +246,26 @@ def create_bounded_hamiltonian(
                         label = PAULI_Z[len(active_qubits)]
                         sparse_list.append((label, active_qubits, effective_k))
 
-            if advanced_anomalies_enabled:
-                # -----------------------------
-                # 3. X-POINT RECONNECTION (Plaquette ZZZZ)
-                # -----------------------------
-                # Same plaquette topology as K_plaquettes but with
-                # X-point reconnection coefficient (det(J_B) < 0).
-                # Sign convention is in HamiltParams (even-parity: K < 0)
-                if hamilt_params.get('K_xpoint') is not None:
-                    kx_val = hamilt_params['K_xpoint'][ci, cj]
-                    if abs(kx_val) > 1e-6:
-                        # Meme topologie que K_plaquettes, donc meme correction
-                        # de famille (D-113).
-                        candidates_xp = [
-                            (idx_H(i, j),   1.0),
-                            (idx_V(i, j+1), z_plaq_right_raw[i]),
-                            (idx_H(i+1, j), z_plaq_bottom_raw[j]),
-                            (idx_V(i, j),   1.0)
-                        ]
-                        active_qubits_xp = []
-                        effective_kx = kx_val
-                        for q_idx, halo_val in candidates_xp:
-                            if q_idx != -1:
-                                active_qubits_xp.append(q_idx)
-                            else:
-                                effective_kx *= halo_val
-                        if active_qubits_xp:
-                            label = PAULI_Z[len(active_qubits_xp)]
-                            sparse_list.append((label, active_qubits_xp, effective_kx))
+            # 3. X-point reconnection: second plaquette interaction.
+            if hamilt_params.get('K_xpoint') is not None:
+                kx_val = hamilt_params['K_xpoint'][ci, cj]
+                if abs(kx_val) > COEFF_MIN:
+                    candidates_xp = [
+                        (idx_H(i, j),   1.0),
+                        (idx_V(i, j+1), z_plaq_right_raw[i]),
+                        (idx_H(i+1, j), z_plaq_bottom_raw[j]),
+                        (idx_V(i, j),   1.0)
+                    ]
+                    active_qubits_xp = []
+                    effective_kx = kx_val
+                    for q_idx, halo_val in candidates_xp:
+                        if q_idx != -1:
+                            active_qubits_xp.append(q_idx)
+                        else:
+                            effective_kx *= halo_val
+                    if active_qubits_xp and abs(effective_kx) > COEFF_MIN:
+                        label = PAULI_Z[len(active_qubits_xp)]
+                        sparse_list.append((label, active_qubits_xp, effective_kx))
 
     # Aucun coefficient n'a survécu au seuil : on le dit au lieu d'injecter
     # un terme de remplissage que l'aval prendrait pour un vrai Hamiltonien.
@@ -333,30 +286,12 @@ def create_bounded_hamiltonian(
 
 
 
-def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = False) -> SparsePauliOp:
-    """
-    Construit l'Hamiltonien MHD sur une grille torique (Périodique).
-    Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
+def create_period_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
+    """Construit l'Hamiltonien MHD sur une grille torique.
 
-    D-59 — CORRIGÉ. À dim = 2 l'anneau périodique dégénère : le lien ZZ
-    (i,0)->(i,1) et (i,1)->(i,0 mod 2) relient la MÊME paire de qubits, et
-    les deux itérations ajoutaient chacune une entrée au lieu d'être
-    fusionnées. Les coefficients étant symétriques par construction
-    (`C_edges[0][i,0] == C_edges[0][i,1]` au bit près), le couplage shear
-    était appliqué DEUX FOIS : poids effectif ×2. `K_plaquettes` n'a pas ce
-    défaut — les 4 quadruplets à dim = 2 sont distincts deux à deux.
-
-    Les liens sont désormais dédupliqués par paire de qubits. À dim ≥ 3
-    aucune paire ne se répète, donc l'opérateur est INCHANGÉ bit à bit ; la
-    correction ne mord qu'à dim = 2.
-
-    Corrigé AVANT la campagne et non après, alors que l'impact mesuré est
-    nul aujourd'hui (0 décision changée sur 12) : c'est le biais Z qui
-    domine de 2 à 6,6× (D-47) et masque le doublement. La réoptimisation
-    rééquilibre précisément ces poids — si `w_z_frac` se resserre ou `σ`
-    s'élargit, le ZZ redevient actif et le facteur 2 devient réel, à
-    dim = 2 qui est la seule taille de toutes les campagnes publiées.
-    Corriger après coup obligerait à tout rejouer.
+    Une paire ZZ physique n'est émise qu'une fois, notamment pour l'anneau
+    dégénéré de taille 2. ``K_plaquettes`` et ``K_xpoint`` sont deux familles
+    ZZZZ indépendantes portées par la même topologie.
     """
     sparse_list = []
     
@@ -368,8 +303,7 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
     def idx_H(y, x): return (y % dim) * dim + (x % dim)
     def idx_V(y, x): return offset_v + (y % dim) * dim + (x % dim)
 
-    # D-59 : paires de qubits ZZ deja emises. La deduplication porte sur la
-    # PAIRE NON ORDONNEE — c'est elle qui identifie le lien physique.
+    # Une paire non ordonnée identifie un lien physique unique.
     _liens_zz_emis = set()
 
     def _lien_zz_neuf(a, b):
@@ -415,20 +349,17 @@ def create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled = F
                 ]
                 sparse_list.append(("ZZZZ", qubits_plaquette, k_val))
 
-            if advanced_anomalies_enabled:
-                # --- 3. X-POINT RECONNECTION (Plaquette ZZZZ) ---
-                # Same plaquette topology as K_plaquettes but with
-                # X-point reconnection coefficient (det(J_B) < 0).
-                if hamilt_params.get('K_xpoint') is not None:
-                    kx_val = hamilt_params['K_xpoint'][i, j]
-                    if abs(kx_val) > 1e-6:
-                        qubits_xp = [
-                            idx_H(i, j),
-                            idx_V(i, j+1),
-                            idx_H(i+1, j),
-                            idx_V(i, j)
-                        ]
-                        sparse_list.append(("ZZZZ", qubits_xp, kx_val))
+            # --- 3. X-POINT RECONNECTION (Plaquette ZZZZ) ---
+            if hamilt_params.get('K_xpoint') is not None:
+                kx_val = hamilt_params['K_xpoint'][i, j]
+                if abs(kx_val) > COEFF_MIN:
+                    qubits_xp = [
+                        idx_H(i, j),
+                        idx_V(i, j+1),
+                        idx_H(i+1, j),
+                        idx_V(i, j)
+                    ]
+                    sparse_list.append(("ZZZZ", qubits_xp, kx_val))
     # Aucun coefficient n'a survécu au seuil : on le dit au lieu d'injecter
     # un terme de remplissage que l'aval prendrait pour un vrai Hamiltonien.
     if not sparse_list:

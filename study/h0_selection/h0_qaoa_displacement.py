@@ -57,8 +57,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
-from ising_terms_and_annealing import build_ising_terms
-from h0_optimiser_equivalence import exhaustive_ground_state
+from ising_terms_and_annealing import build_ising_terms, exhaustive_ground_state
 
 
 # -------------------------------------------------------------------
@@ -202,7 +201,7 @@ def main():
     args = p.parse_args()
 
     from qaoa_inputs import (
-        prepare_qaoa_inputs, run_qaoa_on_snapshot, classical_warm_start_params)
+        prepare_qaoa_inputs, run_qaoa_on_snapshot, constant_initial_params)
 
     thr = V2_THRESHOLD if args.mapper == "v2" else TRAINED_THRESHOLD
     print("=" * 88)
@@ -236,12 +235,12 @@ def main():
                 m_gs = ground_state_marginals(gs)
                 uni = mask_uniformity(gs)
                 for reps in args.reps:
-                    ws = classical_warm_start_params(score, thr, reps)
+                    ws = constant_initial_params(reps)
                     t0 = time.time()
                     marg, dh, dv, _, _ = run_qaoa_on_snapshot(
                         data_in, hp, args.dim, reps=reps, K_opt=args.k_opt,
                         shots=args.shots, backend_name="state_vector",
-                        warm_start_params=ws)
+                        warm_start_params=ws, seed=args.seed)
                     d = variational_progress(m_theta, np.asarray(marg), m_gs)
                     dec = np.concatenate([dh.ravel(), dv.ravel()])
                     rows.append(dict(

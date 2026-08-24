@@ -1,112 +1,90 @@
-"""T23 — le decompte de tete doit etre CALCULE, et sur la bonne reference.
+"""Matched-budget headline counts are derived from paired runs only."""
 
-Le nombre le plus cite de l'etude etait ecrit a la main et ne se reproduisait
-pas depuis les artefacts. Ces tests pinnent les deux erreurs qui s'y etaient
-glissees, et la convention qui les evite.
-"""
 import json
-import os
-import sys
 
 import pytest
 
-
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-for _p in [os.path.join(_REPO_ROOT, "src")] + [
-        os.path.join(_REPO_ROOT, "study", _d) for _d in (
-            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
-            "h3_representation", "h4_transfer", "closed_loop", "common")]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-V4 = os.path.join(_REPO_ROOT, "study")
-RESULTS = os.path.join(_REPO_ROOT, "results")
-
-from closed_loop_headline_counts import fold_counts, matched_reference, totals
-
-FOLDS = ("ot", "kh", "rotor", "tearing")
+from closed_loop_headline_counts import fold_counts, totals
 
 
-def _have(fold):
-    return (os.path.exists(os.path.join(
-                RESULTS, f"t15b_budget_matched_{fold}.json"))
-            and os.path.exists(os.path.join(
-                RESULTS, f"t20_qhas_run_variance_{fold}.json")))
+def _run(delta, *, completed=True, converged=True):
+    return {
+        "completed": completed,
+        "qaoa_seed": 0,
+        "phys_score": 0.2,
+        "patch_ratio": 0.4,
+        "budget_match": ({
+            "converged": converged,
+            "delta_phys": delta,
+            "classical": {"phys_score": 0.2 - delta,
+                          "patch_ratio": 0.4},
+        } if completed else None),
+    }
 
 
-@pytest.mark.parametrize("fold", FOLDS)
-def test_aborted_draws_leave_the_denominator(fold):
-    """Un tirage avorte ne compte NI au numerateur NI au denominateur.
-
-    C'est l'erreur exacte du tableau publie : `rotor` avait 2 tirages
-    avortes et etait malgre tout rapporte sur 5, d'ou un total sur 20."""
-    if not _have(fold):
-        pytest.skip("artefacts absents")
-    r = fold_counts(RESULTS, fold)
-    t = json.load(open(os.path.join(
-        RESULTS, f"t20_qhas_run_variance_{fold}.json")))
-    n_ok = sum(1 for x in t["qhas_runs"] if x["completed"])
-    assert r["n_completed"] == n_ok
-    assert r["n_completed"] + r["n_aborted"] == r["n_runs"]
-    for k in ("less_faithful", "costlier", "dominated"):
-        assert r[k] <= r["n_completed"], (
-            f"{fold}: {k}={r[k]} depasse le nombre d'executions valides "
-            f"({r['n_completed']}) — des tirages avortes sont comptes")
+def _write(tmp_path, fold, runs, status="complete"):
+    for seed, run in enumerate(runs):
+        run.setdefault("physics_seed", seed)
+    payload = {
+        "schema": 2,
+        "replication_unit": "trajectory",
+        "status": status,
+        "qhas_runs": runs,
+        "parent_campaign_contract_sha256": "a" * 64,
+    }
+    (tmp_path / f"t20_qhas_run_variance_{fold}.json").write_text(
+        json.dumps(payload), encoding="utf-8")
 
 
-@pytest.mark.parametrize("fold", FOLDS)
-def test_dominated_is_the_conjunction_never_larger(fold):
-    """`domine` = les deux conditions a la fois, donc <= chacune.
-
-    Sur `kh` le tableau publie donnait moins-fidele 4/5 et plus-couteux 5/5
-    avec domine 4/5 : les deux colonnes etaient transposees. Cette borne
-    n'aurait pas suffi a l'attraper, mais elle rend impossible toute
-    transposition qui ferait depasser le minimum."""
-    if not _have(fold):
-        pytest.skip("artefacts absents")
-    r = fold_counts(RESULTS, fold)
-    assert r["dominated"] <= min(r["less_faithful"], r["costlier"])
-
-
-@pytest.mark.parametrize("fold", FOLDS)
-def test_reference_is_the_matched_point_not_the_t20_control(fold):
-    """La reference doit venir de T15b, pas du controle classique de T20.
-
-    Sur `ot` et `kh` ce controle a tourne au seuil REGLE et non au seuil
-    apparie (D14). Sur `ot` il rend phys = 0.4845 la ou le point apparie
-    vaut 0.0827 : prendre l'un pour l'autre inverse le sens du resultat sur
-    ce fold. Le test verifie l'origine des deux coordonnees."""
-    if not _have(fold):
-        pytest.skip("artefacts absents")
-    m = json.load(open(os.path.join(
-        RESULTS, f"t15b_budget_matched_{fold}.json")))["matched_classical"]
-    ref = matched_reference(RESULTS, fold)
-    assert ref == (float(m["phys_score"]), float(m["patch_ratio"]))
-    r = fold_counts(RESULTS, fold)
-    assert r["ref_phys"] == float(m["phys_score"])
-    assert r["ref_patch"] == float(m["patch_ratio"])
+def test_fold_counts_excludes_aborted_and_unmatched_runs(tmp_path):
+    _write(tmp_path, "ot", [
+        _run(-0.1), _run(0.2), _run(0.0),
+        _run(0.3, completed=False), _run(-0.2, converged=False),
+    ])
+    row = fold_counts(str(tmp_path), "ot")
+    assert row["n_runs"] == 5
+    assert row["n_completed"] == 4
+    assert row["n_aborted"] == 1
+    assert row["n_paired"] == 3
+    assert row["n_unmatched"] == 1
+    assert row["qhas_lower_error"] == 1
+    assert row["classical_lower_error"] == 1
+    assert row["ties"] == 1
 
 
-def test_totals_are_the_sum_of_the_folds():
-    rows = [r for r in (fold_counts(RESULTS, f) for f in FOLDS) if r]
-    if not rows:
-        pytest.skip("artefacts absents")
-    t = totals(rows)
-    for k in ("n_completed", "less_faithful", "costlier", "dominated"):
-        assert t[k] == sum(r[k] for r in rows)
-    assert t["dominated"] <= min(t["less_faithful"], t["costlier"])
+def test_obsolete_single_reference_schema_is_refused(tmp_path):
+    (tmp_path / "t20_qhas_run_variance_ot.json").write_text(
+        json.dumps({"qhas_runs": []}), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="obsolete schema"):
+        fold_counts(str(tmp_path), "ot")
 
 
-def test_published_counts_match_the_artifacts():
-    """Regression sur la valeur publiee apres correction : 18/18, 16/18, 16/18.
+def test_quantum_seed_must_be_fixed_across_physics_trajectories(tmp_path):
+    runs = [_run(-0.1), _run(0.2)]
+    runs[1]["qaoa_seed"] = 1
+    _write(tmp_path, "ot", runs)
+    with pytest.raises(RuntimeError, match="QAOA seed fixed"):
+        fold_counts(str(tmp_path), "ot")
 
-    Si ce test casse, c'est soit qu'un artefact a change, soit que le
-    decompte a re-derive — dans les deux cas RESULTS.md doit etre repris
-    en meme temps, jamais l'un sans l'autre."""
-    rows = [r for r in (fold_counts(RESULTS, f) for f in FOLDS) if r]
-    if len(rows) < 4:
-        pytest.skip("les quatre folds ne sont pas tous presents")
-    t = totals(rows)
-    assert (t["n_completed"], t["less_faithful"], t["costlier"],
-            t["dominated"]) == (18, 18, 16, 16)
+
+def test_fold_inference_uses_trajectory_bootstrap(tmp_path):
+    _write(tmp_path, "ot", [_run(0.1), _run(0.2), _run(0.3)])
+    row = fold_counts(str(tmp_path), "ot", n_boot=500, seed=7)
+    assert row["inference"]["n_trajectories"] == 3
+    assert row["inference"]["ci_low"] > 0
+    assert row["inference"]["classical_confirmed"]
+    assert row["inference"]["sign_flip_p"] == pytest.approx(0.25)
+
+
+def test_totals_weight_the_mean_by_paired_run_count():
+    rows = [
+        {"n_runs": 2, "n_completed": 2, "n_aborted": 0,
+         "n_paired": 2, "n_unmatched": 0, "qhas_lower_error": 2,
+         "classical_lower_error": 0, "ties": 0, "mean_delta_phys": -0.1},
+        {"n_runs": 1, "n_completed": 1, "n_aborted": 0,
+         "n_paired": 1, "n_unmatched": 0, "qhas_lower_error": 0,
+         "classical_lower_error": 1, "ties": 0, "mean_delta_phys": 0.2},
+    ]
+    result = totals(rows)
+    assert result["n_paired"] == 3
+    assert result["mean_delta_phys"] == pytest.approx(0.0)

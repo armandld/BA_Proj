@@ -1,33 +1,9 @@
 #!/usr/bin/env python3
-"""
-V3 Task 10 - Agregation : table maitresse v3 (protocole v3, section 5.4).
+"""Aggregate the current V3 task artifacts into a master table.
 
-ARCHIVE, PAS UN GARDE-FOU DE NON-REGRESSION (D-49). Les `ref` codes en dur
-ci-dessous ne sont PAS les nombres publies dans le `docs/RESULTS.md` actuel
-(0 occurrence mesuree : `grep` de chacune des ~48 valeurs contre le fichier
-en date du 2026-08-13 ne renvoie rien). Ce sont les nombres de
-`docs/archive/RESULTS_V3.md` / `docs/archive/v3_master_table_ca7f815.md`,
-que `docs/archive/README.md` declare lui-meme obsoletes : « obtenus sur du
-code dont on sait maintenant qu'il calculait autre chose que ce qu'il
-annoncait [...] Ne rien en citer. » Un statut OK ici veut donc dire
-« coincide avec le baseline pre-audit », PAS « coincide avec l'etat actuel
-publie » — et un DIFF n'est pas une regression, il peut etre exactement
-l'effet attendu des corrections D-6 a D-47 sur le pipeline dont ces chiffres
-dependent.
-
-De plus, aucun des 9 scripts generateurs que `scripts/run_study_v3.sh`
-invoque (t1_feature_selection.py, t1b_cone_curve.py, t4_blocked_split.py,
-t5_v1_psi_loso.py, t6_dynamic_gt.py, t7_horizon.py, t9_prop2_check.py,
-phase11_upper_bound.py, phase11b_loso.py) n'existe plus dans ce depot : la
-regeneration que ce module pretend verifier est structurellement impossible
-aujourd'hui, au-dela de `upper_bound_loso_*` (seul artefact encore present).
-Voir DEFAUTS.md D-49 pour la mesure complete et la question ouverte
-(archiver ce module, ou reconstruire ses generateurs).
-
-Lit les sorties .npz des taches 0-9 dans `results/` et produit la table
-(CSV + markdown) contenant chaque chiffre du protocole v3, avec pour
-chaque ligne la valeur de reference du **baseline V3 archive** et un statut
-OK / DIFF / MISSING contre ce baseline.
+The ``reference`` column is an archived, pre-audit baseline retained for
+context only. ``DIFF`` therefore does not mean regression. Current campaign
+validation refuses missing inputs; comparison to the archive is opt-in.
 
 Sorties :
   results/v3_master_table.csv
@@ -36,8 +12,8 @@ Sorties :
 
 Usage :
   python study/common/aggregate_v3.py --N 256 --dim 4
-  python study/common/aggregate_v3.py --strict   # code retour != 0 si
-                                                  # DIFF ou MISSING
+  python study/common/aggregate_v3.py --strict
+  python study/common/aggregate_v3.py --check-archive
 """
 import argparse, json, os, sys
 import numpy as np
@@ -93,30 +69,6 @@ def missing_rows(task, metrics):
 # -------------------------------------------------------------------
 # Extracteurs par tache (prennent des dicts -> testables)
 # -------------------------------------------------------------------
-
-def rows_task0(ub, loso):
-    out = []
-    if ub is None:
-        out += missing_rows("task0", ["random classical F1",
-                                      "random mean-field ceiling F1"])
-    else:
-        out.append(make_row("task0", "random classical F1",
-                            ub["f1_class_val"], 0.475))
-        out.append(make_row("task0", "random mean-field ceiling F1",
-                            ub["f1_site_best"], 0.980))
-    if loso is None:
-        out += missing_rows("task0", ["LOSO classical F1",
-                                      "LOSO site GBT F1",
-                                      "LOSO stencil GBT F1"])
-    else:
-        out.append(make_row("task0", "LOSO classical F1",
-                            loso["f1_class_mean"], 0.434))
-        out.append(make_row("task0", "LOSO site GBT F1",
-                            loso["f1_site_mean"], 0.189))
-        out.append(make_row("task0", "LOSO stencil GBT F1",
-                            loso["f1_sten_mean"], 0.215))
-    return out
-
 
 def rows_t1(d):
     metrics = ["LOSO classical mean F1", "LOSO B5 score-only mean F1",
@@ -209,9 +161,9 @@ def rows_t5(d):
 
 def rows_t6(d):
     if d is None:
-        return missing_rows("t6", ["pilot Spearman(d_i, e_i)"])
-    rho = spearman(d["d_computed"].ravel(), d["e_static"].ravel())
-    return [make_row("t6", "pilot Spearman(d_i, e_i)", rho, 0.989)]
+        return missing_rows("t6", ["dynamic-label Spearman(d_i, e_i)"])
+    rho = spearman(d["d_errors"].ravel(), d["l2_errors"].ravel())
+    return [make_row("t6", "dynamic-label Spearman(d_i, e_i)", rho)]
 
 
 def rows_t7(d):
@@ -266,17 +218,35 @@ def rows_t9(d):
     return out
 
 
+def rows_t29(d, dim):
+    """Trajectory-bootstrap LOSO deltas for the requested patch grid."""
+    metrics = ("mean stencil-site delta", "CI-positive folds",
+               "CI-negative folds", "non-degenerate folds")
+    if d is None:
+        return missing_rows("t29", metrics)
+    mask = np.asarray(d["dim"], dtype=int) == dim
+    if not mask.any():
+        return missing_rows("t29", metrics)
+    delta = np.asarray(d["delta"], dtype=float)[mask]
+    low = np.asarray(d["ci_low"], dtype=float)[mask]
+    high = np.asarray(d["ci_high"], dtype=float)[mask]
+    constant = np.asarray(d["constant_compared"]).astype(str)[mask]
+    valid = constant == ""
+    return [
+        make_row("t29", metrics[0], float(np.mean(delta[valid]))
+                 if valid.any() else None),
+        make_row("t29", metrics[1], float(np.sum(valid & (low > 0)))),
+        make_row("t29", metrics[2], float(np.sum(valid & (high < 0)))),
+        make_row("t29", metrics[3], float(np.sum(valid))),
+    ]
+
+
 # -------------------------------------------------------------------
 # Collecte + sorties
 # -------------------------------------------------------------------
 
 def collect(results_dir, N, dim):
     rows = []
-    rows += rows_task0(
-        load_npz(os.path.join(results_dir,
-                              f"upper_bound_N{N}_dim{dim}.npz")),
-        load_npz(os.path.join(results_dir,
-                              f"upper_bound_loso_N{N}_dim{dim}.npz")))
     rows += rows_t1(load_npz(os.path.join(
         results_dir, f"t1_feature_selection_N{N}_dim{dim}.npz")))
     rows += rows_t1b(load_npz(os.path.join(
@@ -287,11 +257,13 @@ def collect(results_dir, N, dim):
         results_dir, f"t5_v1_psi_loso_N{N}_dim{dim}.npz")))
     rows += rows_t6(load_npz(os.path.join(
         results_dir,
-        f"d_patches_orszag_tang_Re400_N128_dim{dim}.npz")))
+        f"d_patches_orszag_tang_Re400_N{N}_dim{dim}_tx1.npz")))
     rows += rows_t7(load_npz(os.path.join(
         results_dir, f"t7_horizon_N{N}_dim{dim}.npz")))
     rows += rows_t9(load_npz(os.path.join(results_dir,
                                           f"t9_prop2_N{N}.npz")))
+    rows += rows_t29(load_npz(os.path.join(
+        results_dir, f"t29_loso_delta_ci_N{N}_perscenario.npz")), dim)
     return rows
 
 
@@ -301,12 +273,9 @@ def to_markdown(rows, git_hash):
              f"Generated by `study/common/aggregate_v3.py` at commit "
              f"`{git_hash[:12]}`.",
              "",
-             "**`reference` is the archived, pre-audit V3 baseline "
-             "(`docs/archive/RESULTS_V3.md`), not the current "
-             "`docs/RESULTS.md`** -- see D-49 in `docs/DEFAUTS.md`. OK "
-             "means \"matches the pre-audit baseline\"; DIFF is not "
-             "necessarily a regression, and most generator scripts this "
-             "table depends on no longer exist in this repo.",
+             "**`reference` is the archived, pre-audit V3 baseline, not a "
+             "current acceptance threshold.** OK/DIFF only describes that "
+             "historical comparison.",
              "",
              "| task | metric | value | reference (archived V3 baseline) | status |",
              "|---|---|---|---|---|"]
@@ -329,6 +298,16 @@ def to_csv(rows, git_hash, cli):
     return "\n".join(lines) + "\n"
 
 
+def output_paths(results_dir, N, dim, default_N=256, default_dim=4):
+    suffix = "" if (N, dim) == (default_N, default_dim) else f"_N{N}_dim{dim}"
+    return {
+        "markdown": os.path.join(results_dir,
+                                 f"v3_master_table{suffix}.md"),
+        "csv": os.path.join(results_dir, f"v3_master_table{suffix}.csv"),
+        "npz": os.path.join(results_dir, f"v3_master{suffix or f'_N{N}'}.npz"),
+    }
+
+
 def main():
     p = argparse.ArgumentParser(
         description="V3 Task 10: master table aggregation (§5.4)")
@@ -337,7 +316,11 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", type=int, default=4)
     p.add_argument("--strict", action="store_true",
-                   help="exit non-zero on any DIFF or MISSING row")
+                   help="exit non-zero on any MISSING row")
+    p.add_argument("--check-archive", action="store_true",
+                   help="also exit non-zero on differences from the archive")
+    p.add_argument("--allow-missing", action="store_true",
+                   help="write a partial, configuration-scoped table")
     p.add_argument("--seed", type=int, default=0,
                    help="enregistre (agregation deterministe)")
     args = p.parse_args()
@@ -353,12 +336,18 @@ def main():
     print(f"  rows: {len(rows)}  OK={n_ok}  DIFF={n_diff}  "
           f"MISSING={n_miss}")
 
-    md_path = os.path.join(RESULTS_DIR, "v3_master_table.md")
-    csv_path = os.path.join(RESULTS_DIR, "v3_master_table.csv")
+    if n_miss and not args.allow_missing:
+        raise SystemExit(
+            f"refusing to write a master table with {n_miss} MISSING rows; "
+            "complete the campaign or pass --allow-missing")
+
+    paths = output_paths(RESULTS_DIR, args.N, args.dim, DNS_N, 4)
+    md_path = paths["markdown"]
+    csv_path = paths["csv"]
     open(md_path, "w").write(md)
     open(csv_path, "w").write(to_csv(rows, gh, vars(args)))
     np.savez_compressed(
-        os.path.join(RESULTS_DIR, f"v3_master_N{args.N}.npz"),
+        paths["npz"],
         task=np.array([r["task"] for r in rows]),
         metric=np.array([r["metric"] for r in rows]),
         value=np.array([np.nan if r["value"] is None else r["value"]
@@ -369,9 +358,11 @@ def main():
         seed=args.seed, git_hash=gh, cli_args=json.dumps(vars(args)),
     )
     print(f"  saved: {os.path.basename(md_path)}, "
-          f"{os.path.basename(csv_path)}, v3_master_N{args.N}.npz")
+          f"{os.path.basename(csv_path)}, {os.path.basename(paths['npz'])}")
 
-    if args.strict and (n_diff or n_miss):
+    if args.strict and n_miss:
+        sys.exit(1)
+    if args.check_archive and n_diff:
         sys.exit(1)
     print("\nV3 Task 10 complete.")
 

@@ -147,21 +147,7 @@ def test_the_study_constants_are_the_best_quantum_trial():
         "au meilleur : l'etude n'evalue pas V1 a son meilleur reglage")
 
 
-def test_the_frozen_constants_match_the_training_script():
-    """Ce que `study/` croit gele doit l'etre reellement en amont.
-
-    Remesure du 12 aout (D-29 a D-36). La version precedente cherchait
-    la chaine `HyperParams["gamma_hydro"] = 2.0` dans le source du script
-    d'entrainement. Elle n'y est plus, et c'est VOULU : `gamma_hydro`,
-    `gamma_mag` et `kappa` sont entres dans l'espace de recherche a huit
-    parametres, decision de USER pour la reoptimisation.
-
-    Le test ne cherche donc plus une chaine — il interroge le module.
-    - `threshold_amr` reste FIXE en amont : `study/` peut continuer de
-      s'y adosser ;
-    - les trois autres sont desormais EXPLORES : `study/` les gele de son
-      cote via `FROZEN_DEFAULTS`, et ce gel doit rester explicite.
-    """
+def test_closed_loop_searches_the_current_hamiltonian_parameters():
     import config
     import train_hyperparams as T
 
@@ -174,18 +160,8 @@ def test_the_frozen_constants_match_the_training_script():
             f"dans FIXED_PARAMS et ce test doit etre remesure")
         assert name not in T.FIXED_PARAMS
 
-    #  Les valeurs V1 que `study/` continue d'imposer. Elles vivent
-    #  maintenant dans la campagne d'etude, pas dans le script
-    #  d'entrainement -- et les bornes doivent les contenir, sinon
-    #  l'etude tourne sur un reglage hors du domaine explore.
-    from closed_loop_campaign import FROZEN_DEFAULTS
-    assert FROZEN_DEFAULTS == {"gamma_hydro": 2.0, "gamma_mag": 0.5,
-                               "kappa": 10.0}
-    for name, value in FROZEN_DEFAULTS.items():
-        lo, hi, _ = T.SEARCH_SPACE[name]
-        assert lo <= value <= hi, (
-            f"{name}={value} est hors des bornes explorees [{lo}, {hi}]")
-
+    # The built-in study configuration remains a reproducibility reference;
+    # the closed-loop campaign must not freeze these values.
     assert config.TRAINED_GAMMA_HYDRO == 2.0
     assert config.TRAINED_GAMMA_MAG == 0.5
     assert config.TRAINED_KAPPA == 10.0
@@ -274,19 +250,8 @@ def test_the_closed_loop_covers_every_key_the_pipeline_reads():
     de l'etude.
     """
     import train_hyperparams as T
-    from closed_loop_campaign import FROZEN_DEFAULTS
 
-    camp = open(_CAMPAIGN, encoding="utf-8").read()
-    assert "FROZEN_DEFAULTS = dict(gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0)" in camp
-    #  Le seuil etait ecrit en dur (`best.setdefault("threshold_amr",
-    #  0.14959824837662078)`). Il vient desormais de `T`, une seule
-    #  definition pour les deux -- une constante recopiee finit toujours
-    #  par diverger de son original.
-    assert 'best.setdefault("threshold_amr", T.CLASSICAL_BEST_THRESHOLD)' in camp
-
-    provided = set(FROZEN_DEFAULTS) | {"threshold_amr"}
-    #  ce que l'objectif propose reellement a Optuna
-    provided |= set(T.search_space())
+    provided = set(T.search_space()) | {"threshold_amr"}
     missing = _live_pipeline_keys() - provided
     assert not missing, (
         f"la campagne ne fournit pas {sorted(missing)} ; ces cles seraient "
@@ -294,85 +259,42 @@ def test_the_closed_loop_covers_every_key_the_pipeline_reads():
         "l'etude")
 
 
-def test_the_frozen_defaults_and_the_threshold_come_from_one_definition():
-    """D-131 : la definition unique mesuree, pas lue dans le texte du source.
-
-    `test_the_closed_loop_covers_every_key_the_pipeline_reads` ci-dessus
-    cherche deux lignes dans le source de `closed_loop_campaign.py` :
-    `FROZEN_DEFAULTS = dict(gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0)` et
-    `best.setdefault("threshold_amr", T.CLASSICAL_BEST_THRESHOLD)`. La
-    seconde garde un COMPORTEMENT, que son propre commentaire enonce : « une
-    constante recopiee finit toujours par diverger de son original ». Mesure
-    par mutation, les deux sens :
-
-    * **A'** — le `setdefault` reecrit sur le litteral `0.14959824837662078`,
-      la ligne cherchee laissee EN CODE MORT sous `if False:` : le seuil
-      redevient une copie, et le fichier reste **12 passed**. Faux vert,
-      sur la divergence meme que le commentaire annonce empecher.
-    * **B** — `FROZEN_DEFAULTS` reecrit en litteral EQUIVALENT
-      `{"gamma_hydro": 2.0, ...}`, dict identique : **ROUGE**. Faux rouge.
-
-    L'entree qui SEPARE : `train_params_excluding` recoit `T` en ARGUMENT.
-    On lui passe donc un faux `T` dont `CLASSICAL_BEST_THRESHOLD` porte une
-    valeur sentinelle qui n'existe nulle part dans le depot. Un seuil
-    recopie rendrait 0.1495982..., pas la sentinelle.
-    """
-    from closed_loop_campaign import FROZEN_DEFAULTS, train_params_excluding
-
-    #  La valeur, pas son ecriture : robuste a une reecriture equivalente.
-    assert FROZEN_DEFAULTS == {"gamma_hydro": 2.0, "gamma_mag": 0.5,
-                               "kappa": 10.0}
-
-    SENTINEL = 0.4242424242424242
+def test_closed_loop_requests_a_fold_specific_threshold_search():
+    from closed_loop_campaign import train_params_excluding
 
     class _FakeT:
         LAMBDA_COST_SOFT = 0.0
-        CLASSICAL_BEST_THRESHOLD = SENTINEL
+        CLASSICAL_THRESHOLD_RANGE = (0.8, 0.9)
 
-        def __init__(self, tune_threshold):
-            self._tune = tune_threshold
-            self.seen_frozen = None
+        def __init__(self):
+            self.seen_tune_threshold = None
 
         def make_composite_objective(self, dns_traces, train_list,
-                                     frozen_params=None, lambda_cost=None):
-            self.seen_frozen = frozen_params
+                                     lambda_cost=None,
+                                     tune_threshold=False):
+            self.seen_tune_threshold = tune_threshold
 
             def obj(trial):
                 x = trial.suggest_float("beta", 0.0, 1.0)
-                if self._tune:
-                    trial.suggest_float("threshold_amr", 0.8, 0.9)
+                threshold = trial.suggest_float("threshold_amr", 0.8, 0.9)
+                trial.set_user_attr(
+                    "hyperparams_resolved",
+                    {"beta": x, "threshold_amr": threshold})
                 return x
 
             return obj
 
-    #  (a) l'objectif ne regle PAS le seuil : il doit venir de T.
-    T_fake = _FakeT(tune_threshold=False)
+    T_fake = _FakeT()
     best, _val, _n = train_params_excluding(
         T_fake, dns_traces=None, train_list=None, n_trials=1, seed=0)
-    assert best["threshold_amr"] == SENTINEL, (
-        f"le seuil rendu est {best['threshold_amr']!r} et non la sentinelle "
-        "de T : la campagne travaille sur une constante RECOPIEE, qui "
-        "divergera de son original")
-    #  Les geles traversent aussi, et par valeur.
-    for k, v in FROZEN_DEFAULTS.items():
-        assert best[k] == v
-    assert T_fake.seen_frozen == FROZEN_DEFAULTS
-
-    #  (b) `setdefault`, pas `update` : un seuil REGLE ne doit pas etre
-    #  ecrase par celui de T -- sinon la campagne jetterait son propre
-    #  reglage sans rien dire.
-    T_tuned = _FakeT(tune_threshold=True)
-    best2, _v2, _n2 = train_params_excluding(
-        T_tuned, dns_traces=None, train_list=None, n_trials=1, seed=0)
-    assert best2["threshold_amr"] != SENTINEL, (
-        "le seuil regle par l'essai a ete ecrase par celui de T")
-    assert 0.8 <= best2["threshold_amr"] <= 0.9
+    assert T_fake.seen_tune_threshold is True
+    assert 0.8 <= best["threshold_amr"] <= 0.9
 
 
 def test_the_pipeline_still_merges_the_json_underneath():
-    """Le piege existe toujours : on le documente au lieu de l'oublier."""
+    """Explicit trial parameters override the selected deployment artifact."""
     src = open(_PIPELINE, encoding="utf-8").read()
-    assert "_defaults = load_hyperparams()" in src
+    assert "_defaults = load_hyperparams(path=hyperparams_path)" in src
     assert "hp = {**_defaults, **(hyperparams or {})}" in src
 
 
@@ -431,6 +353,58 @@ def test_the_real_file_still_loads_for_both_arms():
     for arm in ("quantum", "classical"):
         p = load_hyperparams(method=arm)
         assert isinstance(p, dict) and p
+
+
+def _campaign_candidate(status="complete"):
+    params = {
+        "beta": 1.0, "w_z_frac": 2.0, "sigma": 0.1,
+        "beta_curl": 0.2, "beta_xpoint": 0.3,
+        "gamma_hydro": 1.1, "gamma_mag": 1.2, "kappa": 3.0,
+        "relative_percentile": 90.0, "threshold_amr": 0.15,
+    }
+    return {
+        "artifact": "phase_candidate",
+        "status": status,
+        "campaign_contract_sha256": "a" * 64,
+        "campaign_contract": "{}",
+        "result": {"best_params": params},
+    }
+
+
+def test_completed_campaign_candidate_is_a_loadable_parameter_source(tmp_path):
+    from hyperparams_loader import load_hyperparams
+
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(_campaign_candidate()), encoding="utf-8")
+    params = load_hyperparams(path=str(path))
+    assert params["sigma"] == 0.1
+    assert len(params) == 10
+
+
+def test_partial_or_uncontracted_candidate_is_refused(tmp_path):
+    from hyperparams_loader import load_hyperparams
+
+    path = tmp_path / "candidate.json"
+    path.write_text(
+        json.dumps(_campaign_candidate(status="partial")), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="not complete"):
+        load_hyperparams(path=str(path))
+
+    uncontracted = _campaign_candidate()
+    uncontracted.pop("campaign_contract_sha256")
+    path.write_text(json.dumps(uncontracted), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="campaign contract"):
+        load_hyperparams(path=str(path))
+
+
+def test_environment_selects_the_campaign_artifact(tmp_path, monkeypatch):
+    from hyperparams_loader import load_hyperparams, resolve_hyperparams_path
+
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(_campaign_candidate()), encoding="utf-8")
+    monkeypatch.setenv("QHAS_HYPERPARAMS_PATH", str(path))
+    assert resolve_hyperparams_path() == str(path)
+    assert load_hyperparams()["w_z_frac"] == 2.0
 
 
 # ── 5. Le bloc « par scenario » n'est pas ce que son nom dit ─────────

@@ -83,7 +83,7 @@ def run_qaoa(hp, theta_h, theta_v, psi_h, psi_v, reps=2, K_opt=200):
         "psi_h": psi_h.tolist() if isinstance(psi_h, np.ndarray) else psi_h,
         "psi_v": psi_v.tolist() if isinstance(psi_v, np.ndarray) else psi_v,
     }
-    qc, cost_ham = mapping(data, hp, False, period_bound=True, reps=reps)
+    qc, cost_ham = mapping(data, hp, period_bound=True, reps=reps)
 
     E_max = 0
     for key, value in hp.items():

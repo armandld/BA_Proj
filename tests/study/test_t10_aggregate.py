@@ -2,8 +2,8 @@
 
 Les extracteurs prennent des dicts (charges depuis les .npz) : on les
 teste avec des donnees synthetiques + le comportement MISSING/DIFF.
-La reproduction des valeurs reelles est le critere d'acceptation
-(execution de run_study_v3.sh sur les vraies donnees, --strict).
+La campagne courante exige des entrees completes ; les references archivees
+restent une comparaison informative.
 """
 import os
 import sys
@@ -123,18 +123,9 @@ def test_outputs_render_and_missing_marker():
     assert "tX,b,,,MISSING" in csv
 
 
-def test_markdown_header_does_not_claim_live_results_md():
-    """D-49 : le header genere doit dire que `reference` est le baseline V3
-    ARCHIVE (docs/archive/RESULTS_V3.md), pas le docs/RESULTS.md courant --
-    aucune des refs codees en dur (0.434, 0.980, 0.475, 0.189, 0.215, ...)
-    n'y figure (mesure : 41/44 valeurs distinctes du fichier absentes de
-    docs/RESULTS.md, les 3 restantes -- 0.000, 0.008, 0.25 -- generiques).
-    Avant la correction, le header revendiquait explicitement l'inverse :
-    « single source of truth » / « reference (RESULTS.md) », ce qui aurait
-    fait lire un DIFF contre le baseline archive comme une regression."""
+def test_markdown_header_labels_the_reference_as_archived_context():
     md = to_markdown([make_row("tX", "a", 0.5, 0.5)], "abcdef123456")
     assert "archiv" in md.lower()
-    assert "D-49" in md
     assert "single source of truth" not in md
     assert "reference (RESULTS.md)" not in md
     assert "study/v3/aggregate_v3.py" not in md

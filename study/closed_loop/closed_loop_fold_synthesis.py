@@ -49,13 +49,10 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 from h2b_feature_selection import git_commit_hash
 from stats_confirmatory import holm_correction, tost_equivalence
 
-ALL_FOLDS = ("ot", "kh", "rotor", "tearing")
-
 # Marge d'equivalence pre-enregistree : 5% du `combined` classique moyen.
 TOST_MARGIN_FRAC = 0.05
 
-# Regle de comptage pre-enregistree : un bras doit gagner sur au moins
-# 3 folds sur 4 pour que la difference soit declaree consistante.
+# Retained for compatibility with the original four-fold diagnostic.
 WIN_RULE_MIN = 3
 
 
@@ -129,6 +126,7 @@ def primary_analysis(records, margin_frac=TOST_MARGIN_FRAC):
     c = np.array([r["classical"]["combined"] for r in records], dtype=float)
     d = q - c
     n = len(d)
+    win_rule_min = int(np.ceil(0.75 * n))
 
     # marge d'equivalence par la formule pre-enregistree
     margin = float(margin_frac * np.mean(c))
@@ -142,13 +140,13 @@ def primary_analysis(records, margin_frac=TOST_MARGIN_FRAC):
         "mean_delta": float(np.mean(d)),
         "n_qhas_better": int(np.sum(d < 0)),
         "n_classical_better": int(np.sum(d > 0)),
-        "win_rule_min": WIN_RULE_MIN,
+        "win_rule_min": win_rule_min,
         "margin": margin,
         "margin_frac": margin_frac,
     }
-    out["qhas_wins_rule"] = bool(out["n_qhas_better"] >= WIN_RULE_MIN)
+    out["qhas_wins_rule"] = bool(out["n_qhas_better"] >= win_rule_min)
     out["classical_wins_rule"] = bool(
-        out["n_classical_better"] >= WIN_RULE_MIN)
+        out["n_classical_better"] >= win_rule_min)
 
     if n >= 2:
         from scipy import stats
@@ -239,10 +237,11 @@ def format_table(records, primary, secondary):
         L.append("- **validity unaudited**: run `t19_arm_divergence_audit.py`"
                  " — an aborted arm is indistinguishable from a completed one"
                  " in the stored output")
-    L.append(f"- folds usable: {primary['n_folds']}/4 — "
+    L.append(f"- folds usable: {primary['n_folds']}/{len(records)} — "
              f"Q-HAS better on {primary['n_qhas_better']}, "
              f"classical better on {primary['n_classical_better']} "
-             f"(pre-registered rule: >= {WIN_RULE_MIN}/4)")
+             f"(diagnostic rule: >= {primary['win_rule_min']}/"
+             f"{primary['n_folds']})")
     if primary.get("tost"):
         t = primary["tost"]
         L.append(f"- TOST margin (5% of mean classical combined) = "
@@ -284,8 +283,8 @@ def format_table(records, primary, secondary):
 def main():
     p = argparse.ArgumentParser(
         description="V4: cross-fold synthesis of the Level-3 closed loop")
-    from config import RESULTS_DIR
-    p.add_argument("--folds", nargs="+", default=list(ALL_FOLDS))
+    from config import FOLD_KEYS, RESULTS_DIR
+    p.add_argument("--folds", nargs="+", default=list(FOLD_KEYS))
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--results-dir", default=None)
     args = p.parse_args()

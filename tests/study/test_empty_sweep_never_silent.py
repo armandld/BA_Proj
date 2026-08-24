@@ -80,7 +80,7 @@ def test_the_guard_actually_bites_on_a_real_module():
         capture_output=True, text=True, cwd=_REPO_ROOT, timeout=600)
     assert r.returncode != 0, (
         "le balayage vide est redevenu silencieux : code de sortie 0")
-    assert "balayage vide" in (r.stderr + r.stdout)
+    assert "incomplete trajectory panel" in (r.stderr + r.stdout)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -109,22 +109,6 @@ def test_the_guard_actually_bites_on_a_real_module():
 #: Modules exemptes, avec leur raison. Une exemption sans raison ecrite se
 #: fait etendre par erreur.
 _EXEMPTIONS = {
-    "study/common/aggregate_master_table.py": (
-        "D-158 — RAPPORT SEUL, en attente de decision. Sur une "
-        "configuration qui ne correspond a rien (`--N 7 --dim 99`) il sort "
-        "avec le code 0 ET REECRIT les artefacts publies : 180 -> 161 "
-        "lignes, OK 176 -> 113, MISSING 0 -> 48, 136 lignes supprimees de "
-        "`results/v4_master_table.csv`. Le lancer ici detruirait la table de "
-        "non-regression du depot ; c'est pourquoi il n'est pas lance."),
-    "study/common/aggregate_v3.py": (
-        "D-158, meme forme : `--N 7 --dim 99` sort 0 et ecrit "
-        "`results/v3_master_table.csv/.md` et `v3_master_N7.npz`. Non lance "
-        "ici pour la meme raison — la mesure est dans `RESULTS.md`."),
-    "study/common/aggregate_v2.py": (
-        "D-158, meme forme, en moins grave : `--N 7 --dim 99` sort 0 mais "
-        "ecrit `SUMMARY_N7_dim99.csv` — le nom porte la configuration, donc "
-        "il n'ecrase rien de publie. Non lance ici par symetrie avec ses "
-        "deux jumeaux, et parce que le verdict lui revient aussi."),
     "study/closed_loop/closed_loop_status.py": (
         "Sort 0 sur `--folds no_such_fold` en imprimant "
         "`no_such_fold [---] no-trials-yet`. C'est un rapporteur d'ETAT : "
@@ -339,12 +323,11 @@ def test_the_detector_itself_can_fail():
     que ce soit (le piege du balayage vide, dans le fichier cense le
     detecter).
 
-    D-167 : le plancher a 40 ne detectait plus rien -- 66 modules mesures
-    a `1bee385` (18 aout 2026), meme quantite qu'en face dans
-    `tests/study/test_empty_sweep_guard_shapes.py`."""
-    assert len(STUDY_FILES) >= 66, (
-        f"{len(STUDY_FILES)} modules de study/ collectes ; 66 mesures a "
-        "`1bee385` (18 aout 2026) : le balayage du detecteur a retreci")
+    Le plancher suit les modules courants ; l'ancien generateur dynamique
+    duplique a ete retire au profit de `pipeline/dynamic_patch_labels.py`."""
+    assert len(STUDY_FILES) >= 65, (
+        f"{len(STUDY_FILES)} modules de study/ collectes ; 65 attendus : "
+        "le balayage du detecteur a retreci")
 
     import tempfile
     src = "def main():\n    rows = []\n    if not rows:\n        print('x')\n        return\n"

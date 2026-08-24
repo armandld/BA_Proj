@@ -57,6 +57,7 @@ from stats import paired_delta_bootstrap
 # dans phase11e_v1h_loso.py) — divergence journalisee dans main()
 from config import TRAINED_BETA as BETA_TRIAL4          # 9.94
 from config import TRAINED_THRESHOLD as THR_TRIAL4      # 0.1496
+from config import V2_THRESHOLD
 BETA_TRIAL85 = 0.5495366256460598
 THR_TRIAL85 = 0.304445558422031
 
@@ -143,7 +144,7 @@ def _gather(by_scene, dim, max_snaps):
     out = {}
     for sc, rows in by_scene.items():
         out[sc] = {}
-        for re, dns_path, patches_path in rows:
+        for re, physics_seed, dns_path, patches_path in rows:
             dns = np.load(dns_path)
             patches = np.load(patches_path)
             vx_all = dns["vx"].astype(np.float64)
@@ -169,7 +170,7 @@ def _gather(by_scene, dim, max_snaps):
                 # champ de score fin par variante
                 _, _, v2_full = build_patch_hamiltonian(
                     vx, vy, Bx, By, N, dim, re,
-                    threshold_amr=0.15, use_v2=True, c_bias=1.0)
+                    threshold_amr=V2_THRESHOLD, use_v2=True)
                 fields = {"v2-classical": v2_full,
                           "v1-classical (no psi)": cls}
                 if phi_prev is None:
@@ -204,7 +205,7 @@ def _gather(by_scene, dim, max_snaps):
                     y=(l2_all[si] >= l2_thr).ravel().astype(int),
                     scores=scores,
                 ))
-            out[sc][re] = cfg_snaps
+            out[sc][(re, physics_seed)] = cfg_snaps
     return out
 
 
@@ -212,7 +213,10 @@ def main():
     p = argparse.ArgumentParser(
         description="V3 Task 5: fixed phase-11E rerun (signed psi, "
                     "trial-4 params, dual aggregation, traj bootstrap)")
-    from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+    from config import (
+        DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+    )
+    from data_catalog import labelled_trajectory_paths
     from h2b_ceiling_random_split import best_threshold_f1
 
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
@@ -220,6 +224,8 @@ def main():
     p.add_argument("--dim", type=int, default=4)
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--n-boot", type=int, default=1000)
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
@@ -236,26 +242,11 @@ def main():
           f"beta={BETA_TRIAL85:.4f}, thr={THR_TRIAL85:.4f}")
     print()
 
-    by_scene = {}
-    for sc in args.scenario:
-        rows = []
-        for re in args.re:
-            dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
-            pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
-            if os.path.exists(dp) and os.path.exists(pp):
-                rows.append((re, dp, pp))
-        if rows:
-            by_scene[sc] = rows
+    by_scene = labelled_trajectory_paths(
+        RESULTS_DIR, args.scenario, args.re, args.N, args.dim,
+        args.phys_seed)
     if len(by_scene) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
-        raise RuntimeError(
-            "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
-            f"d'entree, {len(by_scene)} trouve(s) ({sorted(by_scene)}). Le script "
-            "sortait ici avec le code 0 et sans artefact (D-75).")
+        raise RuntimeError("the psi LOSO requires at least two scenarios")
 
     print("  building per-snapshot score variants...")
     t0 = time.time()
@@ -268,8 +259,8 @@ def main():
         """Concatene y ou un score (variant, agg) sur des scenarios."""
         chunks = []
         for sc in scs:
-            for re in sorted(data[sc]):
-                for d in data[sc][re]:
+            for config in sorted(data[sc]):
+                for d in data[sc][config]:
                     chunks.append(d["y"] if key == "y" else d["scores"][key])
         return np.concatenate(chunks)
 
@@ -292,12 +283,14 @@ def main():
                         grid=np.linspace(Str.min(), Str.max(), 201))
                 f1_fold.setdefault((v, a), {})[held] = float(f1_score(
                     Yva, (Sva > thr).astype(int), zero_division=0))
-                for re in sorted(data[held]):
+                for re, physics_seed in sorted(data[held]):
                     y_t = np.concatenate(
-                        [d["y"] for d in data[held][re]])
+                        [d["y"] for d in data[held][(re, physics_seed)]])
                     s_t = np.concatenate(
-                        [d["scores"][(v, a)] for d in data[held][re]])
-                    f1_traj.setdefault((v, a), {})[(held, re)] = float(
+                        [d["scores"][(v, a)]
+                         for d in data[held][(re, physics_seed)]])
+                    f1_traj.setdefault((v, a), {})[
+                        (held, re, physics_seed)] = float(
                         f1_score(y_t, (s_t > thr).astype(int),
                                  zero_division=0))
 
@@ -333,7 +326,10 @@ def main():
           f"{m['max']:>10.3f}")
 
     # ---- bootstrap trajectoire (Task 3) : delta vs v1-classique ----
-    traj_keys = [(sc, re) for sc in scenarios for re in sorted(data[sc])]
+    traj_keys = [
+        (sc, re, physics_seed) for sc in scenarios
+        for re, physics_seed in sorted(data[sc])
+    ]
     traj_ids = np.arange(len(traj_keys))
     print(f"\n  [trajectory bootstrap, n_traj={len(traj_keys)}, "
           f"B={args.n_boot}]  delta = F1(variant) - F1(v1-classical), "
@@ -375,7 +371,9 @@ def main():
         aggs=np.array(AGGS),
         f1_fold=np.array([[[f1_fold[(v, a)][sc] for sc in scenarios]
                            for a in AGGS] for v in VARIANTS]),
-        traj_keys=np.array([f"{sc}|Re{re}" for sc, re in traj_keys]),
+        traj_keys=np.array([
+            f"{sc}|Re{re}|seed{physics_seed}"
+            for sc, re, physics_seed in traj_keys]),
         f1_traj=np.array([[[f1_traj[(v, a)][k] for k in traj_keys]
                            for a in AGGS] for v in VARIANTS]),
         boot_variant=np.array([f"{v}|{a}" for v, a, _ in boot_rows]),

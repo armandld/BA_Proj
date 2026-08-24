@@ -3,7 +3,8 @@
 Hyperparameter Analysis for Q-HAS Training
 ===========================================
 
-Loads an Optuna study from SQLite and generates diagnostic plots:
+Loads an Optuna study from the campaign journal (or a legacy SQLite file) and
+generates diagnostic plots:
 
   Section 1 — Optuna built-ins:
       parameter importance (fANOVA), contour, slice, parallel coords, history
@@ -19,8 +20,7 @@ Loads an Optuna study from SQLite and generates diagnostic plots:
       field-importance correlation heatmap
 
 Usage:
-    python analyze_hyperparams.py --db-path ../Train_results/q_has_phase1.db --study-name q_has_phase1
-    python analyze_hyperparams.py --db-path ../Train_results/q_has_phase3.db --study-name q_has_phase3
+    python analyze_hyperparams.py --journal-path ../results/hyperparams/reoptimisation/journal/q_has_v2_phase1.log --study-name q_has_v2_phase1
 """
 
 import argparse
@@ -28,7 +28,7 @@ import os
 import sys
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")           # non-interactive backend (safe on servers / Colab)
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 import optuna
@@ -50,9 +50,7 @@ from optuna.visualization.matplotlib import (
 #  Helpers
 # ─────────────────────────────────────────────────────────
 
-def load_study(db_path, study_name):
-    storage_url = f"sqlite:///{db_path}"
-    study = optuna.load_study(study_name=study_name, storage=storage_url)
+def _loaded(study, study_name):
     completed = [
         t for t in study.trials
         if t.state == optuna.trial.TrialState.COMPLETE
@@ -62,6 +60,22 @@ def load_study(db_path, study_name):
     print(f"Loaded study '{study_name}': "
           f"{len(study.trials)} total, {len(completed)} completed (finite)")
     return study, completed
+
+
+def load_study(db_path, study_name):
+    """Load a legacy SQLite study."""
+    return _loaded(optuna.load_study(
+        study_name=study_name, storage=f"sqlite:///{db_path}"), study_name)
+
+
+def load_journal(journal_path, study_name):
+    """Load the journal produced by the rented-machine campaign."""
+    from optuna.storages.journal import (JournalFileBackend,
+                                         JournalFileOpenLock)
+    storage = optuna.storages.JournalStorage(JournalFileBackend(
+        journal_path, lock_obj=JournalFileOpenLock(journal_path)))
+    return _loaded(
+        optuna.load_study(study_name=study_name, storage=storage), study_name)
 
 
 def get_param_names(completed):
@@ -942,8 +956,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--db-path", required=True,
-                        help="Path to Optuna SQLite database (.db file)")
+    storage = parser.add_mutually_exclusive_group(required=True)
+    storage.add_argument("--journal-path",
+                         help="Path to the Optuna campaign journal")
+    storage.add_argument("--db-path",
+                         help="Path to a legacy Optuna SQLite database")
     parser.add_argument("--study-name", required=True,
                         help="Optuna study name inside the database")
     parser.add_argument("--output-dir", default=None,
@@ -954,8 +971,9 @@ def main():
     args = parser.parse_args()
 
     if args.output_dir is None:
+        storage_path = args.journal_path or args.db_path
         args.output_dir = os.path.join(
-            os.path.dirname(args.db_path),
+            os.path.dirname(storage_path),
             f"analysis_{args.study_name}",
         )
     os.makedirs(args.output_dir, exist_ok=True)
@@ -964,26 +982,13 @@ def main():
     if args.show:
         matplotlib.use("TkAgg")
 
-    # D-50 : le `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
-    # code 1.
-    #
-    # Avant, deux gestionnaires enveloppaient tout le corps de `main` --
-    # chargement, resume, et les treize fonctions de trace :
-    #
-    #   except KeyError    -> « Skipping X: Study does not exist on Neon yet »
-    #   except Exception   -> « Error loading study: ... » puis `return`
-    #
-    # Mesure sur une base locale inexistante : le message accusait **Neon**,
-    # une base distante qui n'intervient pas, et le script rendait **0**.
-    # Pire, un `KeyError` leve par n'importe laquelle des treize figures --
-    # une cle d'attribut absente, un scenario manquant -- etait annonce
-    # comme une etude introuvable. Le diagnostic imprime designait la
-    # mauvaise cause dans les deux branches.
+    storage_path = args.journal_path or args.db_path
     try:
-        study, completed = load_study(args.db_path, args.study_name)
+        loader = load_journal if args.journal_path else load_study
+        study, completed = loader(storage_path, args.study_name)
     except Exception as e:
         print(f"[ERREUR] chargement de '{args.study_name}' depuis "
-              f"{args.db_path} : {e}", file=sys.stderr)
+              f"{storage_path} : {e}", file=sys.stderr)
         sys.exit(1)
 
     param_names = get_param_names(completed)

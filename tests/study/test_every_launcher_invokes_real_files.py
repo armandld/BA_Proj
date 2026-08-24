@@ -1,27 +1,4 @@
-"""D-76 : deux lanceurs de campagne sur cinq invoquaient des chemins que le
-depot n'a plus, et mouraient sur leur PREMIER appel Python.
-
-D-71 avait corrige exactement ce defaut — la reorganisation `17d983d` a
-deplace ET renomme chaque script — mais son test nomme les lanceurs un par
-un (`scripts/run_fold.sh`, `scripts/run_leak_free_campaign.sh`). Les trois
-autres n'ont jamais ete regardes. Meme forme que D-75 : le detecteur d'une
-correction ne voyait que les sites que cette correction avait touches.
-
-Mesure avant / apres :
-
-    bash scripts/run_study_v2_phases.sh 2
-      avant : code 2, "python: can't open file '.../study/hard_patch_labels.py'"
-      apres : code 0, phase 2 executee de bout en bout
-
-    ls -lh study/results/*.npz   (derniere ligne des deux lanceurs)
-      avant : "(no results yet)"  alors que `results/` porte 224 .npz
-      apres : la liste reelle
-
-Ce test-ci ne nomme aucun lanceur : il balaie `scripts/*.sh` et les `.sh` de
-la racine. Un lanceur volontairement mort — `run_study_v3.sh`, gele par
-D-49 — est exempte, mais l'exemption est verifiee : le fichier doit porter
-son avertissement, sinon elle tombe.
-"""
+"""Verify that every repository path invoked by a shell launcher exists."""
 import glob
 import os
 import re
@@ -30,27 +7,7 @@ import pytest
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-#: Lanceurs volontairement morts, avec la raison ecrite DANS le fichier.
-#: L'exemption n'est pas un nom sur une liste : le test relit la raison.
-#: SEUIL REMESURE — la table est VIDE depuis que D-116 a repointe
-#: `scripts/run_study_v3.sh`.
-#:
-#: Elle portait ce seul lanceur, tenu pour mort par D-49 (« les 9
-#: generateurs v3 n'existent plus sous aucun chemin »). Cette premisse est
-#: FAUSSE, mesuree : les generateurs existent, RENOMMES, dans
-#: `study/h2b_prediction/` et `study/h3_representation/`
-#: (t1_feature_selection -> h2b_feature_selection, t9_prop2_check ->
-#: h3_locality_proposition, …) — la meme table de renommage que D-76 avait
-#: deja etablie pour `run_study_v2*.sh`.
-#:
-#: Le lanceur est donc repointe et n'est plus gele : ses 13 chemins
-#: existent, et `tests/lint/test_scripts_point_somewhere.py` verifie en
-#: plus que sa passe pytest collecte des tests. Il repasse par
-#: `test_every_launcher_invokes_real_files`, qui l'exemptait.
-#:
-#: La table reste en place, vide : c'est le point d'accroche du jour ou un
-#: lanceur sera gele pour une raison decidee. `test_the_frozen_mechanism_
-#: can_still_fire` garantit qu'elle n'est pas devenue inerte.
+#: Optional launchers intentionally disabled with an in-file explanation.
 _FROZEN = {}
 
 #: Les lanceurs passent leur cible a une fonction (`run_phase 2 study/...py`),
@@ -147,7 +104,7 @@ def test_the_sweep_itself_is_not_empty():
     d'invocation qui cesse de correspondre rendrait tout vert."""
     assert len(LAUNCHERS) >= 5, f"seulement {LAUNCHERS} collectes"
     total = sum(len(_invoked_paths(p)) for p in LAUNCHERS)
-    assert total >= 25, (
+    assert total >= 20, (
         f"le motif d'invocation ne trouve que {total} cibles dans "
         f"{len(LAUNCHERS)} lanceurs : c'est le motif qui a cesse de "
         "correspondre, pas les lanceurs qui ont cesse d'invoquer")

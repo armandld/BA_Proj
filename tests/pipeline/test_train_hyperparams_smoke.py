@@ -41,7 +41,7 @@ def _tiny(config, key):
 
 @pytest.fixture(scope="module")
 def tiny_campaign():
-    """Les 6 scenarios, DNS pre-calculee, en miniature."""
+    """Les 8 scenarios, DNS pre-calculee, en miniature."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         scenarios = tuple((k, _tiny(c, k)) for k, c in TH.SCENARIOS_ALL)
@@ -50,7 +50,7 @@ def tiny_campaign():
 
 
 def test_every_scenario_runs_through_the_real_pipeline(tiny_campaign):
-    """Les six scenarios s'initialisent, se simulent et rendent une perte
+    """Les huit scenarios s'initialisent, se simulent et rendent une perte
     finie. C'est la garantie minimale avant de louer des coeurs."""
     scenarios, traces = tiny_campaign
     objective = TH.make_composite_objective(traces, scenarios)
@@ -104,10 +104,9 @@ def test_a_full_phase_writes_a_database_and_a_deployable_json(
     a la taille de grille pres.
     """
     scenarios, traces = tiny_campaign
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", f"sqlite:///{tmp_path / 'smoke.db'}")
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
     monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "JOURNAL_DIR", str(tmp_path))
     monkeypatch.setattr(TH, "_DIRS_READY", True)
 
     config = {"n_trials": 3, "study_name": "smoke_phase"}
@@ -118,7 +117,7 @@ def test_a_full_phase_writes_a_database_and_a_deployable_json(
                              seed_params=TH.phase1_seeds(), seed=7)
 
     assert TH.trials_done(study) == 3
-    assert (tmp_path / "smoke.db").exists()
+    assert (tmp_path / "smoke_phase.log").exists()
 
     path = TH._save_results(study, study, study, filename="deploy.json")
     saved = json.load(open(path))
@@ -136,9 +135,10 @@ def test_the_first_seed_is_the_one_the_frozen_campaign_used(
     ignore en silence une cle qui ne correspond a aucune distribution :
     une graine ignoree ressemble a une graine appliquee."""
     scenarios, traces = tiny_campaign
-    monkeypatch.setattr(TH, "DISTRIBUTED", True)
-    monkeypatch.setattr(TH, "OPTUNA_STORAGE", f"sqlite:///{tmp_path / 'seed.db'}")
     monkeypatch.setattr(TH, "WORKER_TRIALS", None)
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setattr(TH, "_DIRS_READY", True)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

@@ -104,9 +104,9 @@ def test_deployed_params_are_read_from_the_pipeline_not_hardcoded():
     """Les deux sigma « entraines » sont distincts (0.023 en boucle
     ouverte, 0.1888 pour le fold Level-3). Le jeu deploye doit etre LU du
     module qui tourne, sinon il derive silencieusement."""
-    import qaoa_inputs as p5
+    import config
     dep = PARAM_SETS["deployed_openloop"]
-    assert dep["sigma"] == pytest.approx(float(p5.TRAINED_SIGMA))
+    assert dep["sigma"] == pytest.approx(float(config.TRAINED_SIGMA))
     assert dep["threshold_amr"] == pytest.approx(float(p5.TRAINED_THRESHOLD))
     # et il ne doit pas etre confondu avec celui de la boucle fermee
     assert dep["sigma"] != PARAM_SETS["level3_trained"]["sigma"]

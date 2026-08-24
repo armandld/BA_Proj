@@ -46,9 +46,6 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 import provenance
 
 RESULTS_DIR = os.path.join(_REPO_ROOT, "results")
-FOLDS = ("ot", "kh", "rotor", "tearing")
-
-
 def frontier(results_dir, fold):
     """(patch, phys) tries de la trace de bissection classique de T15b."""
     p = os.path.join(results_dir, f"t15b_budget_matched_{fold}.json")
@@ -139,7 +136,8 @@ def analyse(results_dir, fold):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--folds", nargs="+", default=list(FOLDS))
+    from config import FOLD_KEYS
+    p.add_argument("--folds", nargs="+", default=list(FOLD_KEYS))
     p.add_argument("--seed", type=int, default=0,
                    help="sans effet : relit des artefacts, ne simule rien")
     args = p.parse_args()

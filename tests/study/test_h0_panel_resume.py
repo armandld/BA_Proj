@@ -69,7 +69,7 @@ class _Args:
 def _args(**kw):
     a = _Args()
     base = dict(N=96, dim=3, re=[400], scenario=["orszag_tang"],
-                with_psi=True, fixed_curl=False, zero_psi=False,
+                legacy_curl=False, zero_psi=False,
                 no_exact=False, backend="state_vector", scale_kopt=True,
                 mapper="v2", qaoa_reps=[1, 3, 6], n_snaps=6, sweeps=500,
                 restarts=5, shots=4096, k_opt=60, no_qaoa=False, seed=0,
@@ -164,8 +164,8 @@ def test_resume_round_trips(panel, tmp_path):
 
 
 @pytest.mark.parametrize("changed", [
-    {"seed": 7}, {"dim": 4}, {"N": 128}, {"with_psi": False},
-    {"fixed_curl": True}, {"zero_psi": True}, {"qaoa_reps": [1]},
+    {"seed": 7}, {"dim": 4}, {"N": 128},
+    {"legacy_curl": True}, {"zero_psi": True}, {"qaoa_reps": [1]},
     {"scale_kopt": False}, {"mapper": "v1"}, {"shots": 1024},
     {"backend": "matrix_product_state"}, {"no_exact": True},
 ])

@@ -51,9 +51,6 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from h2b_feature_selection import git_commit_hash
 
-FOLDS = ("ot", "kh", "rotor", "tearing")
-
-
 def ratio_sd(mu_u, sd_u, mu_c, sd_c):
     """Ecart-type du rapport mu_u/mu_c par propagation au premier ordre.
 
@@ -181,8 +178,8 @@ def analyse(rec):
 def main():
     p = argparse.ArgumentParser(
         description="V4 T22c: transfer test summary across folds")
-    from config import RESULTS_DIR
-    p.add_argument("--folds", nargs="+", default=list(FOLDS))
+    from config import FOLD_KEYS, RESULTS_DIR
+    p.add_argument("--folds", nargs="+", default=list(FOLD_KEYS))
     p.add_argument("--mode", default="unseen-ic")
     args = p.parse_args()
 

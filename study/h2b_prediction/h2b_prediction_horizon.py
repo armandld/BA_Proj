@@ -16,9 +16,9 @@ Features a t (grille dim x dim) :
   Toutes les paires utilisent t >= 1 (psi et D9 exigent t-1), pour une
   comparabilite stricte entre jeux de features.
 
-Cibles : e_i(t+h) continu + y_i(t+h) = 1{e > P75} ; et d_i(t+h)
-(verite terrain dynamique de Task 6) quand des fichiers d_patches_*
-existent (paires restreintes aux snapshots calcules, computed_mask).
+Cibles : e_i(t+h) continu + y_i(t+h) = 1{e > P75}. La verite terrain
+dynamique de la tache 6 porte son propre horizon physique et son propre
+diagnostic ; elle n'est pas substituee silencieusement a ``e_i`` ici.
 
 Modele : GBT de phase 11 entraine sur y(t+h) ; sa probabilite sert de
 score de classement pour CE(b) / Spearman contre la cible CONTINUE.
@@ -59,6 +59,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
+from config import V2_THRESHOLD
 from metrics import captured_error_at_budget, degeneracy_flag
 from stats import paired_delta_bootstrap
 from h2b_feature_selection import git_commit_hash
@@ -149,7 +150,7 @@ def finite_diff_features(F9_seq):
 # -------------------------------------------------------------------
 
 def _gather(by_scene, dim, max_snaps, beta4):
-    """{(sc, re): dict de sequences temporelles} :
+    """{(scenario, Re, physics_seed): temporal sequences}:
     F9 (T,16,9), D9, PSI4 (T,16), PSIV2, E (T,16), Y, S_avg, S_max,
     FEATS2D (T,dim,dim,9) pour les stencils k-hop."""
     from Simulation.PhysToAngle import AngleMapper
@@ -161,7 +162,7 @@ def _gather(by_scene, dim, max_snaps, beta4):
     am = AngleMapper()
     out = {}
     for sc, rows in by_scene.items():
-        for re, dns_path, patches_path in rows:
+        for re, physics_seed, dns_path, patches_path in rows:
             dns = np.load(dns_path)
             patches = np.load(patches_path)
             vx_all = dns["vx"].astype(np.float64)
@@ -186,7 +187,7 @@ def _gather(by_scene, dim, max_snaps, beta4):
                     vx, vy, Bx, By, N, dim, re)
                 _, _, full_score = build_patch_hamiltonian(
                     vx, vy, Bx, By, N, dim, re,
-                    threshold_amr=0.15, use_v2=True, c_bias=1.0)
+                    threshold_amr=V2_THRESHOLD, use_v2=True)
                 phi = am.compute_stress_flux(v1_state(vx, vy, Bx, By))
                 if phi_prev is None:
                     p4 = np.zeros((dim, dim))
@@ -218,7 +219,7 @@ def _gather(by_scene, dim, max_snaps, beta4):
                        S_avg=np.array(Sa), S_max=np.array(Sx),
                        PSI4=np.array(P4), PSIV2=np.array(PV2))
             seq["D9"] = finite_diff_features(seq["F9"])
-            out[(sc, re)] = seq
+            out[(sc, re, physics_seed)] = seq
     return out
 
 
@@ -249,7 +250,7 @@ def method_features(seq, t, name):
 # -------------------------------------------------------------------
 
 def _assemble(data, items, name, target="E"):
-    """items = [((sc, re), (t, th)), ...] -> X, y(t+h), listes par
+    """items = [((scenario, Re, seed), (t, th)), ...] -> X, y(t+h),
     snapshot (cible continue, y_t, y_th, score brut, tag config)."""
     X, Y = [], []
     per_snap = []
@@ -348,8 +349,11 @@ def common_traj_values(ra, rb, cfgs):
 def main():
     p = argparse.ArgumentParser(
         description="V3 Task 7: predictive dataset, Level 2")
-    from config import (RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N,
-                        TRAINED_BETA)
+    from config import (
+        DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+        TRAINED_BETA,
+    )
+    from data_catalog import labelled_trajectory_paths
     from h2b_ceiling_random_split import make_model, fit_eval, best_threshold_f1
 
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
@@ -357,6 +361,8 @@ def main():
     p.add_argument("--dim", type=int, default=4)
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--train-frac", type=float, default=0.6)
     p.add_argument("--n-boot", type=int, default=1000)
     p.add_argument("--seed", type=int, default=0)
@@ -370,33 +376,18 @@ def main():
     print("=" * 88)
     print()
 
-    by_scene = {}
-    for sc in args.scenario:
-        rows = []
-        for re in args.re:
-            dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
-            pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
-            if os.path.exists(dp) and os.path.exists(pp):
-                rows.append((re, dp, pp))
-        if rows:
-            by_scene[sc] = rows
+    by_scene = labelled_trajectory_paths(
+        RESULTS_DIR, args.scenario, args.re, args.N, args.dim,
+        args.phys_seed)
     if len(by_scene) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
-        raise RuntimeError(
-            "balayage vide : l'horizon predictif exige au moins 2 scenarios avec "
-            f"artefacts d'entree, {len(by_scene)} trouve(s) ({sorted(by_scene)}). "
-            "Le script sortait ici avec le code 0 et sans artefact (D-75).")
+        raise RuntimeError("the predictive LOSO requires at least two scenarios")
 
     print("  building per-config temporal sequences...")
     t0 = time.time()
     data = _gather(by_scene, args.dim, args.max_snaps, TRAINED_BETA)
     print(f"  done in {time.time() - t0:.1f}s")
     cfgs = list(data.keys())
-    scenarios = list(dict.fromkeys(sc for sc, _ in cfgs))
+    scenarios = list(dict.fromkeys(config[0] for config in cfgs))
 
     def loso_items(h, held):
         tr, va = [], []
@@ -538,22 +529,6 @@ def main():
                                  else r["f1"])
                 print(f"  {k:>3} " + " ".join(f"{c:>7.3f}"
                                               for c in cells))
-
-    # ---- cible d_i (Task 6) si disponible ----
-    d_found = []
-    for (sc, re) in cfgs:
-        dpath = os.path.join(
-            RESULTS_DIR, f"d_patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
-        if os.path.exists(dpath):
-            d_found.append((sc, re, dpath))
-    if d_found:
-        print(f"\n  [d_i target: {len(d_found)} d_patches files found "
-              "— evaluating e-trained rankings against d(t+h) is left "
-              "to the full Task-6 campaign aggregation]")
-    else:
-        print("\n  [d_i target: no d_patches files at this N/dim — "
-              "e-target only (per section 8.4, no new simulation "
-              "needed for the e-variant)]")
 
     # ---- sauvegarde ----
     out = os.path.join(RESULTS_DIR,

@@ -140,10 +140,13 @@ def _out_name(**kw):
     return os.path.basename(_panel()._output_path(args))
 
 
-_BASE = dict(N=96, dim=3, with_psi=False, fixed_curl=False, zero_psi=False,
+_BASE = dict(N=96, dim=3, legacy_curl=False, zero_psi=False,
              no_exact=False, backend="state_vector", scale_kopt=False,
              mapper="v2")
-_ALL = ["orszag_tang", "kelvin_helmholtz", "mhd_rotor", "harris_tearing"]
+_ALL = [
+    "orszag_tang", "harris_tearing", "kelvin_helmholtz", "mhd_rotor",
+    "lamb_oseen", "island_coalescence", "double_tearing", "magnetic_twist",
+]
 
 
 def test_a_full_sweep_keeps_the_historical_name():
@@ -182,6 +185,6 @@ def test_a_partial_sweep_is_distinct_from_the_full_one():
 def test_the_scenario_tag_composes_with_the_other_flags():
     """Le suffixe de scenario ne doit pas manger les autres variantes."""
     kw = dict(_BASE)
-    kw.update(with_psi=True, scale_kopt=True)
+    kw.update(legacy_curl=True, scale_kopt=True)
     name = _out_name(scenario=["mhd_rotor"], **kw)
-    assert "mhd_rotor" in name and "_withpsi" in name and "_scalekopt" in name
+    assert "mhd_rotor" in name and "_legacycurl" in name and "_scalekopt" in name

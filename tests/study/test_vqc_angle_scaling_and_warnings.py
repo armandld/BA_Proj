@@ -40,7 +40,7 @@ RIGOUREUSEMENT IDENTIQUES, `seed=0` compris : **F1 0,653 puis 0,639,
 son `seed` (`SVC(random_state=seed)`, verifie par lecture). `run_vqc`
 declare un parametre `seed` dans sa signature et ne le lit JAMAIS dans son
 corps (verifie par `grep` sur le corps de la fonction) -- meme forme que
-D-48 (`classical_warm_start_params`, arguments morts). C'est pour cette
+L'initialisation QAOA fixe est exposée comme telle, sans arguments morts. C'est pour cette
 raison, PAS pour le clip lui-meme, que l'observation (b) ne peut pas
 recevoir de verdict numerique fiable : le bruit d'un VQC non graine
 depasse largement l'effet du clip qu'on cherchait a mesurer.
@@ -176,15 +176,8 @@ def _real_dataset_for_vqc(n_train=200, n_val=100):
 
 
 @pytest.mark.slow
-def test_run_vqc_ignores_its_own_seed_argument():
-    """Question 3 de VIGIL.md : `run_vqc` consomme-t-il ce que sa
-    signature annonce ? Deux appels REELS (pas une reimplementation),
-    arguments RIGOUREUSEMENT identiques, `seed=0` les deux fois : le F1,
-    l'AUC et les probabilites individuelles different quand meme.
-    `run_qke`, la fonction soeur, honore le sien
-    (`SVC(random_state=seed)`). Mesure a 778255d : F1 0,653 puis 0,639,
-    ecart max sur une probabilite individuelle 0,487 (la moitie de
-    l'intervalle [0,1]) -- pas du bruit de mesure, une graine morte."""
+def test_run_vqc_honours_its_seed_argument():
+    """A repeated seeded VQC fit must be reproducible."""
     import h2b_variational_classifier as hvc
 
     Ptr, Ytr, Pva, Yva = _real_dataset_for_vqc()
@@ -194,13 +187,5 @@ def test_run_vqc_ignores_its_own_seed_argument():
     r2 = hvc.run_vqc(Ptr, Ytr, Pva, Yva, d_q=4, reps_fm=2, reps_ansatz=2,
                       maxiter=40, seed=0)
 
-    max_diff = float(np.max(np.abs(r1["p_va"] - r2["p_va"])))
-    assert max_diff > 0.05, (
-        "run_vqc(seed=0) appele deux fois de suite rend maintenant des "
-        f"predictions quasi identiques (ecart max {max_diff:.4f}) -- si "
-        "`seed` est desormais consomme (ansatz initial_point graine, "
-        "algorithm_globals.random_seed, ...), le defaut semble corrige : "
-        "REMESURER et deplacer cette note vers docs/RESULTS.md avant de "
-        "considerer ce test comme un faux negatif")
-    assert r1["f1"] != r2["f1"] or max_diff > 0.05, (
-        "les deux appels rendent maintenant le meme F1 -- remesurer")
+    np.testing.assert_allclose(r1["p_va"], r2["p_va"], atol=0.0, rtol=0.0)
+    assert r1["f1"] == r2["f1"]

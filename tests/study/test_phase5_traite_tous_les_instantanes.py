@@ -78,6 +78,7 @@ def artefacts(tmp_path):
     ed = tmp_path / "ed.npz"
     np.savez(ed,
              promising=np.array(_PROMISING),
+             ground_degeneracy=np.ones(_N_SNAP, dtype=int),
              snap_indices=np.arange(_N_SNAP),
              decisions_h=np.zeros((_N_SNAP, _DIM, _DIM), dtype=bool),
              decisions_v=np.zeros((_N_SNAP, _DIM, _DIM), dtype=bool),
@@ -95,7 +96,8 @@ def traces(monkeypatch):
     """
     vus = {"prepare": 0, "qaoa": 0, "comparaisons": 0}
 
-    def faux_prepare(vx, vy, Bx, By, N, n_patches, Re, use_v2=False):
+    def faux_prepare(vx, vy, Bx, By, N, n_patches, Re, use_v2=False,
+                     **kwargs):
         vus["prepare"] += 1
         return {"score_grid": np.zeros((n_patches, n_patches))}, {}, \
             np.zeros((n_patches, n_patches))
@@ -158,9 +160,7 @@ def test_le_diagnostic_est_imprime_avec_son_compte(artefacts, traces, capsys):
         f"sans garder la MESURE perd le seul chiffre qui dira, après la "
         f"réoptimisation, que `promising` est redevenu informatif.\n"
         f"sortie :\n{sortie}")
-    assert "D-47" in sortie, (
-        "le compte est imprimé sans dire qu'il ne filtre plus : un lecteur "
-        "de journal croira que des instantanés ont été écartés")
+    assert "diagnostic" in sortie
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -185,7 +185,7 @@ def test_le_banc_rougit_si_un_instantane_est_ecarte(artefacts, traces,
         if "promising" in brut:
             garder = np.flatnonzero(brut["promising"])
             for cle in ("snap_indices", "decisions_h", "decisions_v",
-                        "gt_refine"):
+                        "gt_refine", "ground_degeneracy"):
                 brut[cle] = brut[cle][garder]
             brut["promising"] = brut["promising"][garder]
         return brut

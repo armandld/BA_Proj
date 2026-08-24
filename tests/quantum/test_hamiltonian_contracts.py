@@ -67,8 +67,9 @@ def _angles(theta_h=None, theta_v=None):
 
 def _build(params, angles=None, dim=DIM, adv=False):
     th, tv, ph, pv = angles if angles is not None else _angles()
-    return create_bounded_hamiltonian(params, dim, th, tv, ph, pv,
-                                      advanced_anomalies_enabled=adv)
+    if not adv:
+        params = {k: v for k, v in params.items() if k != "K_xpoint"}
+    return create_bounded_hamiltonian(params, dim, th, tv, ph, pv)
 
 
 def _terms(op):

@@ -23,9 +23,8 @@ Topologie (miroir exact de VQA/cost_hamiltonian.create_period_hamiltonian) :
   - ZZZZ : K_plaquettes[i,j] sur [H(i,j), V(i,j+1), H(i+1,j), V(i,j)] ;
     K_xpoint (si present et non nul) sur la meme plaquette.
 
-Parametres des mappers (provenance Task 5) : V2 = sans parametre
-(c_bias=1.0, thr=0.15, comme extract_features_2d) ; V1 = TRAINED_* de
-study/config.py (essai Optuna #4).
+The V2 calculation uses the same a-priori constants as phases 3--8. The V1
+calculation uses the deployed constants from ``study/pipeline/config.py``.
 
 Sortie : results/t9_prop2_N{N}.npz ; une table par dim.
 Usage :
@@ -46,7 +45,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
-from dns_extension import seeded_dns_path
+from data_catalog import dns_trajectory_paths
 
 MAPPERS = ("v1", "v2")
 
@@ -113,25 +112,18 @@ def mean_field_state(hamilt_params, dim):
 # -------------------------------------------------------------------
 
 def build_params(vx, vy, Bx, By, N, dim, re, mapper):
-    """Hamiltonien V1 (TRAINED_*, essai #4) ou V2 (sans parametre)."""
+    """Build the deployed V1 or a-priori V2 Hamiltonian."""
     from exact_diagonalisation import build_patch_hamiltonian
-    from config import (TRAINED_THRESHOLD, TRAINED_SIGMA,
-                        TRAINED_BETA_CURL, TRAINED_BETA_XPOINT,
-                        TRAINED_W_Z_FRAC, TRAINED_GAMMA_HYDRO,
-                        TRAINED_GAMMA_MAG, TRAINED_KAPPA)
+    from config import TRAINED_THRESHOLD, V2_THRESHOLD, trained_mapper_params
     if mapper == "v2":
         hp, _, _ = build_patch_hamiltonian(
             vx, vy, Bx, By, N, dim, re,
-            threshold_amr=0.15, use_v2=True, c_bias=1.0)
+            threshold_amr=V2_THRESHOLD, use_v2=True)
     else:
         hp, _, _ = build_patch_hamiltonian(
             vx, vy, Bx, By, N, dim, re,
             threshold_amr=TRAINED_THRESHOLD, use_v2=False,
-            sigma=TRAINED_SIGMA, beta_curl=TRAINED_BETA_CURL,
-            beta_xpoint=TRAINED_BETA_XPOINT,
-            w_z_frac=TRAINED_W_Z_FRAC,
-            gamma_hydro=TRAINED_GAMMA_HYDRO,
-            gamma_mag=TRAINED_GAMMA_MAG, kappa=TRAINED_KAPPA)
+            **trained_mapper_params())
     return hp
 
 
@@ -139,15 +131,17 @@ def main():
     p = argparse.ArgumentParser(
         description="V3 Task 9: Proposition-2 strict mean-field "
                     "condition checker")
-    from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
-    from dns_extension import EXTRA_SCENARIOS
+    from config import (
+        DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+    )
 
-    all_scenarios = SCENARIOS + EXTRA_SCENARIOS
+    all_scenarios = list(SCENARIOS)
     p.add_argument("--scenario", nargs="+", default=all_scenarios)
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--dim", nargs="+", type=int, default=[2, 4])
-    p.add_argument("--phys-seed", nargs="+", type=int, default=[0])
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--max-snaps", type=int, default=30)
     p.add_argument("--seed", type=int, default=0,
                    help="enregistre (pipeline deterministe)")
@@ -158,57 +152,44 @@ def main():
           "sum 2|C| + sum 4|K| < |h| per site")
     print(f"  N={args.N}  dims={args.dim}  phys-seeds={args.phys_seed}  "
           f"max-snaps/cfg={args.max_snaps}")
-    print("  mappers: v1 = TRAINED_* (Optuna trial #4), "
-          "v2 = parameter-free (c_bias=1.0, thr=0.15)")
+    print("  mappers: deployed v1 and a-priori v2 constants")
     print("=" * 88)
     print()
 
+    panel = dns_trajectory_paths(
+        RESULTS_DIR, args.scenario, args.re, args.N, args.phys_seed)
     rows = []  # dict(scenario, re, seed, dim, mapper, frac, n_sites)
     t0 = time.time()
-    for sc in args.scenario:
-        for re in args.re:
-            for seed in args.phys_seed:
-                dp = seeded_dns_path(RESULTS_DIR, sc, re, args.N, seed)
-                if not os.path.exists(dp):
-                    print(f"  SKIP {sc} Re={re} seed={seed}: no DNS")
-                    continue
-                dns = np.load(dp)
-                vx_a = dns["vx"].astype(np.float64)
-                vy_a = dns["vy"].astype(np.float64)
-                Bx_a = dns["Bx"].astype(np.float64)
-                By_a = dns["By"].astype(np.float64)
-                n_snaps = len(vx_a)
-                step = max(1, n_snaps // args.max_snaps)
-                idx = list(range(0, n_snaps, step))[:args.max_snaps]
+    for sc, trajectories in panel.items():
+        for re, seed, dp in trajectories:
+            dns = np.load(dp)
+            vx_a = dns["vx"].astype(np.float64)
+            vy_a = dns["vy"].astype(np.float64)
+            Bx_a = dns["Bx"].astype(np.float64)
+            By_a = dns["By"].astype(np.float64)
+            n_snaps = len(vx_a)
+            step = max(1, n_snaps // args.max_snaps)
+            idx = list(range(0, n_snaps, step))[:args.max_snaps]
 
-                for dim in args.dim:
-                    fracs = {m: [] for m in MAPPERS}
-                    for si in idx:
-                        for m in MAPPERS:
-                            hp = build_params(
-                                vx_a[si], vy_a[si], Bx_a[si], By_a[si],
-                                args.N, dim, re, m)
-                            _, _, sat = per_site_condition(hp, dim)
-                            fracs[m].append(sat.mean())
+            for dim in args.dim:
+                fracs = {m: [] for m in MAPPERS}
+                for si in idx:
                     for m in MAPPERS:
-                        rows.append(dict(
-                            scenario=sc, re=re, seed=seed, dim=dim,
-                            mapper=m,
-                            frac=float(np.mean(fracs[m])),
-                            n_snaps=len(idx),
-                            n_sites=2 * dim * dim))
+                        hp = build_params(
+                            vx_a[si], vy_a[si], Bx_a[si], By_a[si],
+                            args.N, dim, re, m)
+                        _, _, sat = per_site_condition(hp, dim)
+                        fracs[m].append(sat.mean())
+                for m in MAPPERS:
+                    rows.append(dict(
+                        scenario=sc, re=re, seed=seed, dim=dim,
+                        mapper=m, frac=float(np.mean(fracs[m])),
+                        n_snaps=len(idx), n_sites=2 * dim * dim))
     print(f"  built {len(rows)} (config, dim, mapper) entries "
           f"in {time.time() - t0:.1f}s\n")
     if not rows:
-        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
-        # la campagne precedente. Une campagne qui n'avait rien mesure etait
-        # indiscernable d'une campagne reussie. Onze autres modules de
-        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
         raise RuntimeError(
-            "balayage vide : aucune verifications de la Proposition 2 n'a d'artefact d'entree pour les "
-            "arguments donnes. Le script sortait ici avec le code 0 et sans "
-            "artefact, donc sans se distinguer d'une campagne reussie.")
+            "empty sweep: no Proposition-2 input artifact was found")
 
     # ---- tables par dim ----
     for dim in args.dim:

@@ -66,9 +66,10 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 import provenance
-from ising_terms_and_annealing import build_ising_terms, spins_to_decisions
+from ising_terms_and_annealing import (
+    build_ising_terms, exhaustive_ground_state, spins_to_decisions,
+)
 from h0_optimiser_equivalence import (classical_init_spins,
-                                    exhaustive_ground_state,
                                     greedy_local_search)
 from h0_qaoa_displacement import mask_uniformity
 from h0_optimiser_equivalence import f1_from_masks

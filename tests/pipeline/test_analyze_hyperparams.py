@@ -59,6 +59,22 @@ def _lance(args):
                           capture_output=True, text=True, timeout=1800)
 
 
+def test_loads_the_rented_campaign_journal(analyze, tmp_path):
+    optuna = pytest.importorskip("optuna")
+    from optuna.storages.journal import (JournalFileBackend,
+                                         JournalFileOpenLock)
+    path = tmp_path / "campaign.log"
+    storage = optuna.storages.JournalStorage(JournalFileBackend(
+        str(path), lock_obj=JournalFileOpenLock(str(path))))
+    study = optuna.create_study(study_name="journal", storage=storage)
+    study.optimize(lambda trial: trial.suggest_float("x", 0.0, 1.0),
+                   n_trials=2)
+
+    loaded, completed = analyze.load_journal(str(path), "journal")
+    assert loaded.study_name == "journal"
+    assert len(completed) == 2
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  `_detect_scenario_keys` — n'annoncer que ce qui existe
 # ══════════════════════════════════════════════════════════════════════

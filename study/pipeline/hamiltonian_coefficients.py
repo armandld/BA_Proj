@@ -34,9 +34,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 from config import (
     RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, VQA_DIMS,
-    TRAINED_SIGMA, TRAINED_BETA_CURL, TRAINED_BETA_XPOINT,
-    TRAINED_W_Z_FRAC, TRAINED_THRESHOLD, TRAINED_GAMMA_HYDRO,
-    TRAINED_GAMMA_MAG, TRAINED_KAPPA,
+    TRAINED_SIGMA, TRAINED_THRESHOLD, trained_mapper_params,
     V2_THRESHOLD,
 )
 from Simulation.grid import PeriodicGrid
@@ -51,11 +49,12 @@ def compute_patch_coefficients(vx, vy, Bx, By, N, n_patches,
                                sigma=None, beta_curl=None, beta_xpoint=None,
                                w_z_frac=None,
                                gamma_hydro=None, gamma_mag=None, kappa=None,
+                               relative_percentile=None,
                                use_v2=False):
     """
     Compute Hamiltonian coefficients for each patch.
 
-    If use_v2=True, uses the parameter-free PhysicalMapperV2.
+    If use_v2=True, uses the a-priori PhysicalMapperV2 constants.
     Otherwise uses the trained PhysicalMapper (v1).
 
     Returns dict with:
@@ -79,6 +78,7 @@ def compute_patch_coefficients(vx, vy, Bx, By, N, n_patches,
             kappa=kappa, sigma=sigma,
             beta_curl=beta_curl, beta_xpoint=beta_xpoint,
             w_z_frac=w_z_frac,
+            relative_percentile=relative_percentile,
         )
 
     # full-resolution coefficients
@@ -94,6 +94,7 @@ def compute_patch_coefficients(vx, vy, Bx, By, N, n_patches,
     full_score = AngleMapper.classical_score(physics_state)
     coeffs = mapper.compute_coefficients(
         sim, full_score, fields, threshold_amr,
+        advanced_anomalies_enabled=True,
         verbose=False,
     )
 
@@ -248,16 +249,12 @@ def analyze_one(dns_path, patches_path, n_patches,
                     use_v2=True,
                 )
             else:
+                mapper_params = trained_mapper_params()
+                mapper_params["sigma"] = sigma
                 coeffs = compute_patch_coefficients(
                     vx, vy, Bx, By, N, n_patches, Re,
                     threshold_amr=threshold_amr,
-                    sigma=sigma,
-                    beta_curl=TRAINED_BETA_CURL,
-                    beta_xpoint=TRAINED_BETA_XPOINT,
-                    w_z_frac=TRAINED_W_Z_FRAC,
-                    gamma_hydro=TRAINED_GAMMA_HYDRO,
-                    gamma_mag=TRAINED_GAMMA_MAG,
-                    kappa=TRAINED_KAPPA,
+                    **mapper_params,
                 )
             all_E.append(coeffs["E_patch"])
             all_C.append(coeffs["C_patch"])
@@ -375,7 +372,7 @@ def main():
     parser.add_argument("--dim", type=int, default=4)
     parser.add_argument("--N", type=int, default=DNS_N)
     parser.add_argument("--v2", action="store_true",
-                        help="Use parameter-free v2 Hamiltonian")
+                        help="Use the a-priori v2 Hamiltonian")
     args = parser.parse_args()
 
     version = "v2" if args.v2 else "v1"

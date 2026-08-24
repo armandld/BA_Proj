@@ -205,16 +205,6 @@ def test_no_launcher_of_the_repository_pins_the_optimiser():
         "plus ce qui tourne, remesurer D-119")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "D-119 — dette declaree, non corrigee. `train_hyperparams.create_argus` "
-    "code method='COBYLA' en dur ; `src/pipeline.py` deploie `--method` avec "
-    "pour defaut 'L-BFGS-B', qu'aucun lanceur ne surcharge. Les neuf "
-    "hyperparametres geles ont donc ete selectionnes sous un optimiseur et "
-    "sont deployes sous un autre, qui ne consomme pas le meme budget au meme "
-    "K_opt. Present depuis cf93ba3. Ce que cela deplace sur la DECISION n'est "
-    "pas mesurable a la dispersion du bras QAOA (ecart 0,0867 contre un bruit "
-    "intra-methode de 0,200-0,240) : trancher demande une campagne. Aligner "
-    "le defaut, ou reentrainer, est pour USER."))
 def test_training_and_deployment_agree_on_the_optimiser():
     """Ce que les deux chemins PROMETTENT : optimiser la meme chose.
 

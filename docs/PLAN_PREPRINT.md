@@ -1,232 +1,67 @@
-# Plan du preprint
+# Plan du préprint
 
-Structure mère du manuscrit. **On ne s'étale ni sur les défauts ni sur les
-résultats** : on dit ce qu'on a, et on renvoie.
+## Titre de travail
 
-| fichier | contenu |
-|---|---|
-| **`PLAN_PREPRINT.md`** (ce fichier) | la structure |
-| `DEFAUTS.md` | les défauts, ce qui les a révélés, comment les retester |
-| `RESULTS.md` | les résultats, comment ils ont été obtenus, comment les réobtenir |
+**Can local QAOA decisions improve adaptive mesh refinement in 2-D MHD? A
+leak-free, budget-matched evaluation**
 
----
+Le titre définitif dépend du résultat confirmatoire. Ne pas annoncer un
+avantage, un échec ou une équivalence avant l’agrégation stricte.
 
-## 1. Histoire
+## 1. Question
 
-D'où vient l'idée, et pourquoi elle est séduisante : mapper les instabilités
-d'une grille MHD dans un hamiltonien d'Ising, et laisser un solveur quantique
-arbitrer le raffinement.
+Présenter l’AMR comme une décision structurée locale et expliquer pourquoi un
+Hamiltonien d’Ising pourrait représenter les interactions entre patches. La
+question n’est pas de montrer que QAOA optimise un Hamiltonien, mais que cette
+optimisation améliore l’erreur physique à coût de raffinement égal.
 
-## 2. Objectif
+## 2. Méthodes
 
-Décider si un critère de raffinement fondé sur un Ising quantique résolu par
-QAOA local, avec un léger cône d'information sur les voisins, a une valeur
-au-delà de la baseline classique.
+- solveur MHD FD4/RK4 et huit conditions initiales ;
+- score classique et mapping physique–Ising ;
+- circuit QAOA, optimisation et règle de décision ;
+- panel 8 scénarios × 4 Re × 5 graines ;
+- labels, splits bloqués et LOSO ;
+- comparaison fermée et appariement du budget ;
+- bootstrap hiérarchique et correction de Holm.
 
-L'attente qui motive cette famille d'approches : le quantique traite mieux
-les problèmes combinatoires — ici l'interaction entre voisins — donc ajouter
-cette information devrait rendre l'AMR plus performante, tout en restant
-calculable sur matériel quantique (ce travail n'utilise que des simulations).
+## 3. Validation du banc
 
-Si aucun avantage n'est trouvé, déterminer **ce qui échoue** : la sélection,
-la représentation, la forme du modèle, la spécification de la tâche, ou le
-fait même de faire du ML.
+Rapporter convergence du solveur, divergence magnétique, énergie, contrôles KH
+et Orszag–Tang, exactitude de l’opérateur Ising et dégénérescence. Séparer les
+diagnostics des critères d’exclusion.
 
-**Préalable.** Cette question ne peut être posée qu'à un modèle dont on sait
-qu'il calcule ce que sa documentation annonce. Établir cela a occupé une part
-substantielle du travail, n'était pas prévu, et constitue une contribution à
-part entière. → `DEFAUTS.md`
+## 4. Résultats
 
-## 3. Mise en place des hypothèses
+1. fuite du split aléatoire par rapport au split bloqué ;
+2. transfert LOSO du score, du modèle site et du stencil ;
+3. structure, localité et ablations du Hamiltonien ;
+4. capacité du solveur QAOA à atteindre l’objectif ;
+5. résultat fermé Q-HAS contre classique à budget égal ;
+6. hétérogénéité par scénario et coût de calcul.
 
-**H0 — l'échec vient de la sélection.** Qualité de l'optimisation
-variationnelle à profondeur p.
-- **H0a** — l'optimiseur atteint-il l'optimum de son propre hamiltonien ?
-- **H0b** — mieux l'atteindre améliore-t-il la tâche ?
+## 5. Discussion
 
-**H1 — les défauts d'autre origine (solveur, numérique) sont secondaires.**
+Si Q-HAS gagne : borner l’affirmation au panel et distinguer gain du mapping,
+gain de l’optimiseur et coût de simulation. S’il perd : distinguer échec de la
+représentation, de l’optimisation et de la spécification des labels. Si le
+résultat est inconclusif : publier les bornes et la puissance obtenue sans
+transformer l’absence de preuve en équivalence.
 
-**H2 — l'échec vient de la forme du modèle.**
-- **QH2a** — existe-t-il un modèle restrictif *autre* que V1 qui batte la
-  baseline ?
-- **H2b** — le modèle est-il simplement trop restrictif ?
+## Figures minimales
 
-**H3 — l'information des voisins.**
-- **H3a** — le cône apporte-t-il un gain en distribution ?
-- **H3b** — en apporte-t-il un sous transfert ?
+1. schéma du pipeline et des unités de réplication ;
+2. fuite : split aléatoire contre split bloqué/LOSO ;
+3. courbe du cône de voisinage ;
+4. deltas physiques appariés avec IC95 par fold ;
+5. synthèse globale et coût de raffinement.
 
-**H4 — l'échec vient de ce qu'on fait du ML, quantique ou non.**
+## Tableaux minimaux
 
-**H5 — l'échec vient de la spécification de la tâche.** Objectif
-d'entraînement, label, score de référence.
+- panel physique et contrôles DNS ;
+- paramètres, budgets et versions ;
+- résultats par fold ;
+- ablations et limites.
 
-## 4. Comment V1 marche — et pourquoi ça, intuitivement
-
-L'instinct de départ : les instabilités MHD ont une **structure locale
-d'interaction**, donc elles se prêtent à un hamiltonien de spins sur les
-arêtes de la grille.
-
-- l'encodage : score classique → θ, flux de contrainte → ψ ;
-- les trois termes — biais Z, couplage ZZ de gradient, plaquette ZZZZ de
-  circulation — et ce que chacun est censé détecter ;
-- les portes physiques qui les modulent (Reynolds, Okubo-Weiss, activité
-  magnétique) ;
-- la forme volontairement restreinte, et pourquoi elle l'est.
-
-Deux faits structurels à énoncer ici, parce qu'ils conditionnent la lecture
-de H0b et de H3 :
-
-- la couche de coût est **diagonale** — seul le mixeur déplace une
-  probabilité de mesure, et il est borné ;
-- les portes `g_strain` et `g_rot` somment à **1 exactement** — ZZ et ZZZZ
-  partitionnent un unique scalaire, ils ne sont pas deux détecteurs
-  indépendants.
-
-Un troisième, mesuré depuis, qui appartient à la même section : **aucun des
-deux couplages ne désigne un type d'instabilité.** La plaquette vaut
-`(|ω| + |J|)/norme` — un vortex pur et une nappe de courant pure y rendent la
-même valeur — et le couplage ZZ fait entrer un saut hydrodynamique et un saut
-magnétique dans la même racine. Seul `K_xpoint` est sélectif. C'est une
-propriété de la **forme choisie**, pas un défaut d'implémentation, et elle se
-dit dans cette section : l'hamiltonien détecte « il se passe quelque chose »
-localement, pas « quoi ».
-
-Et un fait qui appartient au manuscrit, pas seulement au journal de bord :
-sous la normalisation historique, **la moitié du terme ZZZZ était
-numériquement morte sur deux scénarios canoniques sur quatre**. La plaquette
-sommait `|ω|` et `|J|` sous un dénominateur commun, si bien que le signal le
-plus faible disparaissait en proportion de son amplitude — rapport 179 sur
-`harris_tearing`, 84 sur `kelvin_helmholtz`. Chaque scénario est dominé par un
-type de structure, et le dénominateur commun transformait ce fait physique en
-effacement de l'autre. Corrigé en rendant les deux magnitudes adimensionnelles
-séparément avant la somme, **sans ajouter de porte**.
-
-Ce fait a sa place dans la section : il montre qu'un coefficient peut être
-*bien formé, borné, adimensionnel* et pourtant ne mesurer qu'une moitié de ce
-qu'il annonce — et que seule une mesure sur les champs réels le révèle.
-
-### La spécification de la tâche — H5, et ce qu'une vérité terrain dynamique en dit
-
-Le label de la phase 2, `e_i`, est l'écart intra-patch à la moyenne : une
-mesure de non-lissité, instantanée et confinée au patch. Ce n'est pas ce que
-l'AMR cherche à contrôler, et l'AUC du score classique seul contre `e_i` —
-**1,000** (harris), **0,997** (KH), **0,948** (rotor), 0,592 (OT) — dit que
-sur trois scénarios sur quatre la tâche est quasi gratuite.
-
-La vérité terrain **dynamique** `d_i` du protocole §1.2 existe désormais, et
-sa mesure appartient au manuscrit :
-
-- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,98 sur les
-  quatre scénarios** : le label dynamique est une renumérotation monotone du
-  statique, et le contrôle d'acceptation du protocole (« Spearman > 0 ») le
-  laisse passer ;
-- la raison est physique et se calcule : à cet horizon la perturbation
-  parcourt **0,11 à 0,25** d'une largeur de patch — il n'y a rien à propager ;
-- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,596) — le seul
-  dont la perturbation **amplifie** (1,38×), et le seul où la tâche statique
-  n'était pas déjà résolue.
-
-Ce que la section doit dire : **changer de label ne suffit pas à réparer la
-spécification de la tâche.** Là où la tâche était triviale, elle le reste ;
-elle ne cesse de l'être que là où l'écoulement est turbulent. C'est une
-contrainte sur ce que ce corpus peut établir, et elle se dit avant les
-résultats, pas après.
-
-## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
-
-Features locales contre features en cône, le protocole d'entraînement, et le
-rôle de témoin qu'il joue vis-à-vis de V1.
-
-## 6. Étude des deux modèles
-
-**L'approche.** Comment on étudie un modèle qu'on soupçonne :
-
-- **auditer les contrats, pas les valeurs** — pourquoi une fonction existe,
-  ce qu'elle promet, ce qu'elle consomme, et si deux chemins censés
-  coïncider coïncident encore ;
-- **un test doit pouvoir échouer** — pas de seuil calibré sur la mesure du
-  jour, un balayage vide doit crier ;
-- **toute conclusion porte un intervalle** — bootstrap par trajectoire, bloc
-  = instantané ; refus de conclure quand l'intervalle contient zéro ;
-- **un prédicteur constant ne vote pas** ;
-- **le split aléatoire ne mesure pas le transfert** — il ne vaut que comme
-  plafond, et l'argument devient *a fortiori* ;
-- **chaque nombre publié se recalcule depuis son artefact.**
-
-**Les graphes qui en résultent.** → `RESULTS.md`
-
-## 7. Discussion — affirmation, réfutation, ce qui reste ouvert
-
-Verdict par hypothèse, avec sa portée. Certaines restent ouvertes ; on le
-dit.
-
-Ce qui doit être mis en avant : **H0b ferme l'approche plus directement que
-H3**. Le pari de départ est que le quantique optimise mieux le combinatoire ;
-H0b montre que mieux optimiser n'améliore pas la tâche. C'est la valeur de
-l'optimisation qui est attaquée — précisément ce qu'on paierait en qubits.
-
-Sur H3, l'énoncé **doit être réécrit** : la courbe de cône a maintenant deux
-artefacts (`dim = 8` et `dim = 16`, → `RESULTS.md`) et ils vont **contre** la
-formulation ci-dessous.
-
-- Le cône **n'est pas plat** : écarts par saut +0,123 / −0,076 / +0,100 à
-  `dim = 16`, contre un seuil de retrait pré-enregistré de 0,01.
-- Hors pli dégénéré, à la seule taille où les quatre k sont des voisinages,
-  un saut fait passer de 0,429 à 0,593 et le cône **dépasse** le classique.
-- Le gain **croît** de `dim = 8` à `dim = 16` — la clause « décroît quand on
-  affine » est contredite par les deux seuls points mesurés.
-
-Ce qui borne cette lecture : `harris_tearing` rend 0,000 à tous les k, et la
-conclusion change de signe selon qu'on compte ce pli ou non. Rien n'est
-tranché tant qu'il n'est pas expliqué.
-
-**Conséquence de structure** : la fermeture ne peut pas reposer sur H3. Elle
-repose sur **H0b**, qui n'en dépend pas. L'ancienne formulation, conservée
-ici pour mémoire et à ne plus citer telle quelle :
-
-> Le gain apporté par l'information des voisins est réel mais petit, il
-> décroît quand on affine la grille, et il ne justifie pas le coût d'un
-> dispositif quantique.
-
-Les limites qui bornent ces conclusions — un seul solveur, quatre scénarios,
-8 qubits en déploiement, baseline partagée par les deux bras, non-déterminisme
-du bras QAOA, chute d'ordre du solveur commune aux deux bras — sont énoncées
-ici, chiffrées dans `RESULTS.md`.
-
-## 8. Conclusion
-
-Ce que le travail tranche, ce qu'il laisse ouvert, et les questions qu'il
-formule pour la suite.
-
-## 9. Bibliographie
-
----
-
-## Appendice A — état du chantier
-
-*Transitoire, disparaîtra du manuscrit.*
-
-Les campagnes n'ont pas été relancées depuis les corrections. Ordre contraint,
-chaque étape conditionnant la suivante :
-
-1. **Réoptimisation.** Les hyperparamètres déployés ne correspondent à aucune
-   base du dépôt, et trois d'entre eux n'ont jamais été échantillonnés →
-   `DEFAUTS.md`, D-22.
-2. **Relance des campagnes** sur le code corrigé.
-3. **Republication ou justification** des 16 lignes de la table maître qui ne
-   se recalculent plus.
-4. **Ajout du témoin « mixeur seul »** aux campagnes H0b — sans lui, l'apport
-   de l'hamiltonien n'est pas séparable d'une rotation de mixeur.
-
-**Une conclusion est désormais invalidée, pas seulement en attente.** À toute
-profondeur de raffinement supérieure à la première, le biais Z de
-l'hamiltonien et ses couplages décrivaient deux grilles différentes : le biais
-d'un patch venait du quart haut-gauche de ce patch (D-37, écart 41 % du plus
-grand coefficient, présent depuis le premier commit). À `max_depth = 4`,
-réglage de toutes les campagnes, trois niveaux sur quatre passaient par là.
-
-Le bras classique n'est pas touché — il ne construit aucun hamiltonien. La
-comparaison des deux bras était donc biaisée dans un sens connu.
-
-Le reste est **en attente de confirmation** sur le code corrigé, ce qui n'est
-pas la même chose qu'invalidé → `EVALUATION.md`.
+Chaque nombre du texte doit pointer vers une clé d’artefact et une commande de
+reproduction.

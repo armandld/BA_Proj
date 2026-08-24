@@ -1,73 +1,14 @@
-"""
-train_hyperparams — Multi-Scenario Progressive Training
-=========================================================
+"""Optimisation progressive des hyperparamètres Q-HAS.
 
-Rationale:
-----------
-Orszag-Tang generates ALL anomaly classes simultaneously (shear, vortex,
-current sheets, reconnection).  When anomalies coexist spatially, the optimizer
-cannot decouple their contributions — there is a degeneracy in parameter space.
+La perte composite couvre six scénarios isolés, puis deux scénarios complexes,
+puis les huit scénarios. Le contrôle classique suit les mêmes partitions et
+n'optimise que ``threshold_amr``. Les neuf paramètres quantiques sont déclarés
+dans :data:`SEARCH_SPACE`; le seuil classique gelé est dans
+:data:`FIXED_PARAMS`.
 
-v10 Hamiltonian architecture (Adaptive Z + Decoupled f × g × ThrContrast):
---------------------------------------------------------------------------
-Z-terms REINTRODUCED with adaptive weight: alpha_z = w_z_frac × median(|C|,|K|).
-θ initialization encodes P(|1⟩) = classical_score.
-Z bias breaks ground-state degeneracy; ZZ/ZZZZ encode spatial correlations.
-
-Hamiltonian terms (sign convention: all ≤ 0, ferromagnetic/even-parity):
-- Z (bias):      alpha_z × (score − threshold_amr), adaptive weight from median coupling
-- ZZ (gradient): −2 × g_strain(Q_OW) × √((f_hydro(Re)×ThrContrast(Δv))² + ...)
-- ZZZZ (circ):   −1 × √((g_rot(Q)×f_hydro(Re)×ThrContrast(ωz))² + ...)
-- ZZZZ (xpoint): −f_Rm × ThrContrast(max(0, −det(J_B)))  [reconnection X-points]
-
-Threshold-relative contrast (replaces Michelson):
-  ThrContrast(val, val_crit, β) = β × max(0, val/val_crit − 1)
-Survives in spatially uniform regimes (Michelson killed the signal).
-
-Sensitivity is SPLIT by term type:
-- sigma:    largeur de la fenetre gaussienne du couplage ZZ autour de
-            `threshold_amr` — remplace l'ancien β_grad
-- β_curl:  plaquette ZZZZ (vorticity, current density — curl-like quantities)
-- β_xpoint: X-point ZZZZ (reconnection — very sparse, localized at X-points)
-
-Espace de recherche — 9 parametres, un seul, identique aux trois phases
-----------------------------------------------------------------------
-    beta, w_z_frac, sigma, beta_curl, beta_xpoint,
-    gamma_hydro, gamma_mag, kappa, relative_percentile
-
-`relative_percentile` est le neuvieme, ajoute apres la correction du
-dimensionnement des coefficients : le critere de maille est ABSOLU et
-croit en 1/dx^2, si bien qu'a la resolution d'entrainement N=256 aucune
-cellule ne l'atteignait et les termes a quatre corps etaient nuls sur les
-QUATRE scenarios. Le critere relatif `min(absolu, percentile)` les
-ranime ; son percentile etait la derniere constante en dur du chemin de
-decision, et rien ne justifiait de la fixer a la main.
-
-`threshold_amr` n'en fait PAS partie : il est gele a la valeur du meilleur
-essai de l'etude classique, pour que la comparaison porte sur ce que le
-quantique ajoute et non sur un seuil different. `SEARCH_SPACE` et
-`FIXED_PARAMS` le declarent, `search_space()` le rend interrogeable AVANT
-de lancer une campagne d'une semaine.
-
-Training phases:
-----------------
-    Phase 1  : perte composite sur les 4 scenarios isoles
-               (KH, Lamb-Oseen, Harris, coalescence d'ilots).
-    Phase 2  : perte composite sur les 2 scenarios complexes (OT, rotor),
-               amorcee par les meilleurs essais de la phase 1.
-    Phase 3  : perte composite sur les 6, amorcee par la phase 2.
-
-    Classical Phase 1 / 2 / 3 : memes jeux de scenarios, AMR classique,
-               `threshold_amr` seul entraine (pas de circuit — ~100x plus
-               rapide). Miroir exact des phases QAOA, pour que la
-               comparaison porte sur la meme perte et le meme budget.
-
-Ce que ce module N'a PAS
-------------------------
-Il n'y a pas de « phase 1b », pas de `beta_michelson`, pas de
-`split_michelson`. `beta_michelson` etait propose a Optuna par la phase 1
-alors que `pipeline.py` ne le lit nulle part : la phase optimisait un
-parametre sans effet. Voir docs/RESULTS.md, D-31.
+Le Hamiltonien combine un biais Z adaptatif, un couplage ZZ et des plaquettes
+ZZZZ de circulation et de point X. Tous les termes utilisent la convention de
+signe ferromagnétique (coefficients non positifs).
 """
 
 import argparse
@@ -75,10 +16,11 @@ import optuna
 import os
 import json
 import csv
+import hashlib
 import subprocess
 import sys
 import itertools
-import shutil
+import tempfile
 import numpy as np
 from pipeline import DIVERGENCE_PENALTY, pipeline
 from types import SimpleNamespace
@@ -101,64 +43,38 @@ VQA_N_TRAINING = 2
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 
-# ── DISTRIBUTED TRAINING ─────────────────────────────────────
-OPTUNA_STORAGE = os.environ.get("OPTUNA_STORAGE", None)
-OPTUNA_JOURNAL = os.environ.get("OPTUNA_JOURNAL", None)
-WORKER_PHASE   = os.environ.get("WORKER_PHASE", None)
+# One rented machine, one local journal shared by all worker processes.
+CAMPAIGN_DIR = os.path.abspath(os.environ.get(
+    "QHAS_CAMPAIGN_DIR",
+    os.path.join(project_root, "results", "hyperparams", "reoptimisation"),
+))
+JOURNAL_DIR = os.path.abspath(os.environ.get(
+    "QHAS_JOURNAL_DIR", os.path.join(CAMPAIGN_DIR, "journal")))
 WORKER_TRIALS  = os.environ.get("WORKER_TRIALS", None)
 if WORKER_TRIALS is not None:
     WORKER_TRIALS = int(WORKER_TRIALS)
 
-DISTRIBUTED = OPTUNA_STORAGE is not None
-JOURNAL_DIR = OPTUNA_JOURNAL
-
-
 def announce_environment():
     """Ce que le worker a compris de son environnement. Appelee par `main`."""
-    if DISTRIBUTED:
-        print(f"[DISTRIBUTED MODE] Storage: {OPTUNA_STORAGE.split('@')[-1]}")
-    elif JOURNAL_DIR is not None:
-        os.makedirs(JOURNAL_DIR, exist_ok=True)
-        print(f"[DISTRIBUTED MODE] Journal storage: {JOURNAL_DIR}")
-    else:
-        print(f"[LOCAL MODE] SQLite dans {data_dir}")
-    if WORKER_PHASE:
-        print(f"[DISTRIBUTED MODE] Worker phase: {WORKER_PHASE}")
+    os.makedirs(JOURNAL_DIR, exist_ok=True)
+    print(f"[RENTED MACHINE] Shared Optuna journal: {JOURNAL_DIR}")
     if WORKER_TRIALS:
-        print(f"[DISTRIBUTED MODE] Max trials per worker: {WORKER_TRIALS}")
+        print(f"[RENTED MACHINE] Max trials per worker: {WORKER_TRIALS}")
 
-# --- DETECTION AUTOMATIQUE DE L'ENVIRONNEMENT ---
-IN_COLAB = 'google.colab' in sys.modules
-
-#: Ou vivent les bases Optuna et le JSON final. Les repertoires ne sont PAS
-#: crees a l'import : importer ce module ne doit rien ecrire sur le disque
-#: ni rien afficher. Un import qui a des effets de bord ne peut pas etre
-#: teste, et sur les coeurs loues il s'execute une fois par worker.
-drive_dir = os.path.join(project_root, "Train_results") if IN_COLAB else None
-local_dir = "/content/Train_results_local" if IN_COLAB else None
-data_dir = local_dir if IN_COLAB else os.path.join(project_root, "Train_results")
+#: Emplacement des journaux Optuna et du JSON final. Aucun répertoire n'est
+#: créé à l'import.
+data_dir = CAMPAIGN_DIR
 
 _DIRS_READY = False
 
 
 def ensure_dirs():
-    """Cree `data_dir` (et rapatrie les .db du Drive sous Colab). Idempotent.
-
-    Appelee par `_get_storage` et `_save_results` — c'est-a-dire au premier
-    ecrit reel, jamais a l'import.
-    """
+    """Create local campaign and journal directories once."""
     global _DIRS_READY
     if _DIRS_READY:
         return data_dir
-    if IN_COLAB:
-        os.makedirs(drive_dir, exist_ok=True)
-        os.makedirs(local_dir, exist_ok=True)
-        for file in os.listdir(drive_dir):
-            if file.endswith(".db"):
-                shutil.copy2(os.path.join(drive_dir, file),
-                             os.path.join(local_dir, file))
-    else:
-        os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(JOURNAL_DIR, exist_ok=True)
     _DIRS_READY = True
     return data_dir
 
@@ -173,19 +89,14 @@ def _git(*argv):
 
 
 def provenance():
-    """Hash du commit, proprete de l'arbre, et arguments effectifs.
-
-    CLAUDE.md exige le hash du commit et les arguments CLI dans chaque
-    sortie. `dirty` vrai signifie qu'AUCUN hash ne decrit exactement ce qui
-    a tourne — il faut le dire plutot que de laisser deviner.
-    """
+    """Return the commit, worktree state, CLI and campaign environment."""
     return {
         "git_commit": _git("rev-parse", "HEAD") or "unknown",
         "git_dirty": bool(_git("status", "--porcelain")),
         "argv": list(sys.argv),
         "env": {k: os.environ.get(k) for k in
-                ("OPTUNA_STORAGE", "OPTUNA_JOURNAL", "WORKER_PHASE",
-                 "WORKER_TRIALS", "OPTUNA_SEED")},
+                ("QHAS_CAMPAIGN_DIR", "QHAS_JOURNAL_DIR",
+                 "WORKER_TRIALS")},
     }
 
 
@@ -240,6 +151,36 @@ SCENARIO_TEARING = {
     "AdvAnomaliesEnable": True,
 }
 
+SCENARIO_DOUBLE_TEARING = {
+    "scenario": "double_tearing",
+    "N": N_TRAINING,
+    "max_depth_override": MAX_DEPTH_TRAINING,
+    "T_MAX": 1.2,
+    "T_START": 0.3,
+    "DT": 1e-3,
+    "HYBRID_DT": 0.10,
+    "K_opt": 30,
+    "Re": 800,
+    "Rm": 800,
+    "shots": 256,
+    "AdvAnomaliesEnable": True,
+}
+
+SCENARIO_MAGNETIC_TWIST = {
+    "scenario": "magnetic_twist",
+    "N": N_TRAINING,
+    "max_depth_override": MAX_DEPTH_TRAINING,
+    "T_MAX": 1.2,
+    "T_START": 0.3,
+    "DT": 1e-3,
+    "HYBRID_DT": 0.10,
+    "K_opt": 30,
+    "Re": 800,
+    "Rm": 800,
+    "shots": 256,
+    "AdvAnomaliesEnable": True,
+}
+
 # ── Island Coalescence: merging magnetic islands ──
 # Two chains of magnetic islands separated by X-points.
 # The perturbation drives island merging via reconnection.
@@ -277,11 +218,7 @@ SCENARIO_OT = {
     "Re": 800,
     "Rm": 800,
     "shots": 256,
-    # Etait ABSENT — `create_argus` repliait alors sur False, et Orszag-Tang
-    # etait le seul scenario a tourner sans anomalies avancees. Le terme
-    # ZZZZ de point X n'existe pas sans elles : la phase 2 entrainait donc
-    # `beta_xpoint` sur un jeu ou l'un des deux scenarios ne pouvait pas
-    # l'exprimer. `create_argus` LEVE desormais si la cle manque.
+    # Required for the X-point term.
     "AdvAnomaliesEnable": True,
 }
 
@@ -308,19 +245,8 @@ SCENARIO_ROTOR = {
 #  PHASE DEFINITIONS
 # ============================================================
 #
-# Une entree de phase ne porte que ce qui est REELLEMENT lu : le nom de
-# l'etude Optuna et le nombre d'essais vise. Les entrees portaient aussi
-# `train_hamiltonian`, `classical_only`, `split_michelson`, `N`, `T_MAX`,
-# `DT`, `HYBRID_DT`, `K_opt`, `Re`, `Rm`, `shots`, `AdvAnomaliesEnable` —
-# aucune n'etait jamais relue. `classical_only: True` en particulier ne
-# rendait pas la phase classique : c'est l'objectif construit par
-# `_run_classical_phase*` qui le fait. Une constante deguisee en reglage
-# est le motif d'erreur le plus couteux de ce depot ; ces cles sont
-# supprimees plutot que documentees.
-#
-# La physique de chaque scenario vit dans SCENARIO_* et nulle part
-# ailleurs : c'est ce dictionnaire-la que `create_argus` et l'objectif
-# lisent.
+# Chaque phase ne déclare que son étude et son budget. La configuration
+# physique reste dans les dictionnaires ``SCENARIO_*``.
 
 PHASES = {
     "phase1_composite":  {"n_trials": 600, "study_name": "q_has_v2_phase1"},
@@ -345,14 +271,7 @@ REQUIRED_SCENARIO_KEYS = (
 
 
 def create_argus(scenario_config):
-    """Build the argus namespace for a given scenario config.
-
-    LEVE si une cle manque, `AdvAnomaliesEnable` comprise. Elle etait lue
-    avec `.get(..., False)` : Orszag-Tang, seul scenario a ne pas la
-    porter, tournait donc sans anomalies avancees — donc sans terme de
-    point X — sans que rien ne le signale. Un repli silencieux sur une
-    valeur valide est exactement ce qu'on ne veut pas ici.
-    """
+    """Build solver arguments from a complete scenario configuration."""
     missing = [k for k in REQUIRED_SCENARIO_KEYS if k not in scenario_config]
     if missing:
         raise KeyError(
@@ -368,6 +287,7 @@ def create_argus(scenario_config):
         AdvAnomaliesEnable=scenario_config["AdvAnomaliesEnable"],
         K_opt=scenario_config["K_opt"],
         eps=1e-2,
+        seed=0,
         eta=0.001,
         Bz_guide=0.1,
         c_s=1.0,
@@ -377,57 +297,42 @@ def create_argus(scenario_config):
 
 
 def _get_storage(phase_config):
-    """Return the Optuna storage backend for this phase."""
-    if DISTRIBUTED:
-        # Un pooler Postgres distant ferme les connexions SSL inactives
-        # au bout de quelques minutes.
-        # Each trial can take 10-20 min of computation, so the DB connection
-        # goes stale.  pool_pre_ping=True makes SQLAlchemy test the connection
-        # before each use and reconnect if needed.  pool_recycle=300 proactively
-        # refreshes connections older than 5 min.
-        return optuna.storages.RDBStorage(
-            url=OPTUNA_STORAGE,
-            engine_kwargs={
-                "pool_pre_ping": True,
-                "pool_recycle": 300,
-            },
-        )
-    if JOURNAL_DIR is not None:
-        journal_path = os.path.join(JOURNAL_DIR, f"{phase_config['study_name']}.log")
-        # D-136 : `JournalFileBackend` et `JournalFileOpenLock` ont quitte
-        # `optuna.storages` pour `optuna.storages.journal` en Optuna 4.0.
-        # A la racine, `JournalFileBackend` n'existe PLUS (verifie sur 4.9) :
-        # ce mode levait `AttributeError` des la premiere lecture de la base.
-        #
-        # C'est le mode prevu pour un systeme de fichiers PARTAGE (NFS), donc
-        # celui qu'on choisirait pour paralleliser sur plusieurs machines
-        # louees. Il aurait echoue au lancement, sur des coeurs factures.
-        #
-        # Repli sur l'ancien chemin pour rester compatible avec Optuna < 4.
-        try:
-            from optuna.storages.journal import (JournalFileBackend,
-                                                 JournalFileOpenLock)
-        except ImportError:                       # Optuna < 4.0
-            JournalFileBackend = optuna.storages.JournalFileBackend
-            JournalFileOpenLock = optuna.storages.JournalFileOpenLock
-        lock = JournalFileOpenLock(journal_path)
-        return optuna.storages.JournalStorage(
-            JournalFileBackend(journal_path, lock_obj=lock)
-        )
-    db_path = os.path.join(ensure_dirs(), f"{phase_config['study_name']}.db")
-    return f"sqlite:///{db_path}"
+    """Return the journal shared by the local worker processes."""
+    ensure_dirs()
+    from optuna.storages.journal import (JournalFileBackend,
+                                         JournalFileOpenLock)
+    journal_path = os.path.join(
+        JOURNAL_DIR, f"{phase_config['study_name']}.log")
+    return optuna.storages.JournalStorage(
+        JournalFileBackend(
+            journal_path, lock_obj=JournalFileOpenLock(journal_path)))
+
+
+_BUDGET_EXCESS_ATTR = "budget_guard_excess"
+
+
+def _trial_consumes_budget(trial):
+    return (trial.state not in (optuna.trial.TrialState.WAITING,
+                                optuna.trial.TrialState.FAIL)
+            and not trial.user_attrs.get(_BUDGET_EXCESS_ATTR, False))
 
 
 def trials_done(study):
-    """Essais qui consomment le budget : termines, elagues, ou echoues.
+    """Essais qui consomment le budget : en cours, termines ou elagues.
 
     Un essai WAITING est une graine en file d'attente, pas un essai fait.
     Un essai RUNNING est en cours chez un autre worker : il compte, sinon
     N workers demarrant ensemble liraient tous « 0 fait » et lanceraient
     chacun la campagne entiere.
+
+    Un essai FAIL ne consomme pas le budget : la campagne s'arrete sur une
+    exception normale, et un essai interrompu est marque FAIL lors de la
+    reprise afin que sa place soit recalculee.
+
+    Les essais créés lors d'une course entre workers mais arrêtés avant
+    l'objectif coûteux par le garde de budget ne sont pas comptés.
     """
-    return len([t for t in study.trials
-                if t.state != optuna.trial.TrialState.WAITING])
+    return sum(_trial_consumes_budget(t) for t in study.trials)
 
 
 def make_pruner():
@@ -441,49 +346,115 @@ def make_pruner():
     )
 
 
-def run_phase(phase_name, phase_config, objective_fn, seed_params=None,
-              seed=None):
-    """Run one training phase with Optuna MedianPruner.
+def _campaign_contract(phase_name, phase_config, objective_fn):
+    contract = {
+        "schema": 1,
+        "git_commit": _git("rev-parse", "HEAD") or "unknown",
+        "phase": phase_name,
+        "study_name": phase_config["study_name"],
+        "target_trials": int(phase_config["n_trials"]),
+        "objective": getattr(objective_fn, "_qhas_contract", None),
+    }
+    encoded = json.dumps(contract, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return encoded, digest
 
-    Budget partage entre workers
-    ----------------------------
-    L'ancienne version calculait `remaining = n_trials - deja_faits` UNE
-    fois, puis demandait ce nombre a `study.optimize`. Huit workers loues
-    demarrant ensemble lisaient tous « 0 fait » et faisaient 600 essais
-    chacun : 4 800 au lieu de 600, huit fois le cout annonce.
 
-    Ici la boucle relit le compte a chaque essai et s'arrete des que la
-    cible est atteinte, quel que soit le nombre de workers. Le cout est
-    une lecture de la base par essai, contre 10 a 20 minutes de calcul.
-
-    `WORKER_TRIALS` reste un plafond PAR worker (utile pour un temps de
-    location borne) ; il ne remplace pas la cible globale.
-    """
-    storage = _get_storage(phase_config)
-
+def _open_phase_study(phase_name, phase_config, objective_fn, seed=None):
+    """Open a study and bind it to the exact campaign contract."""
     sampler = optuna.samplers.TPESampler(seed=seed) if seed is not None else None
     study = optuna.create_study(
         study_name=phase_config["study_name"],
-        storage=storage,
+        storage=_get_storage(phase_config),
         load_if_exists=True,
         direction="minimize",
         pruner=make_pruner(),
         sampler=sampler,
     )
+    contract_json, contract_hash = _campaign_contract(
+        phase_name, phase_config, objective_fn)
+    previous_hash = study.user_attrs.get("campaign_contract_sha256")
+    if previous_hash is None:
+        if study.trials:
+            raise RuntimeError(
+                f"study {study.study_name!r} already contains trials but has "
+                "no campaign contract; refusing to mix an unverified run")
+        study.set_user_attr("campaign_contract", contract_json)
+        study.set_user_attr("campaign_contract_sha256", contract_hash)
+    elif previous_hash != contract_hash:
+        raise RuntimeError(
+            f"campaign contract mismatch for study {study.study_name!r}: "
+            f"stored={previous_hash}, requested={contract_hash}. Use a new "
+            "campaign directory or resume the original commit and protocol")
+    return study, contract_hash
+
+
+def fail_interrupted_trials(study):
+    """Mark trials left RUNNING by a stopped process as retryable failures.
+
+    This must only be called before the worker pool starts.
+    """
+    running = [trial for trial in study.get_trials(deepcopy=False)
+               if trial.state == optuna.trial.TrialState.RUNNING]
+    for trial in running:
+        study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
+    return len(running)
+
+
+def prepare_phase1(target_trials):
+    """Create/validate phase 1, recover interruptions, and queue its seed."""
+    config = dict(PHASES["phase1_composite"])
+    config["n_trials"] = int(target_trials)
+    placeholders = {key: (None, None) for key, _ in SCENARIOS_ISOLATED}
+    objective = make_composite_objective(placeholders, SCENARIOS_ISOLATED)
+    study, _ = _open_phase_study(
+        "phase1_composite", config, objective, seed=0)
+    recovered = fail_interrupted_trials(study)
+    if trials_done(study) == 0 and not any(
+            trial.state == optuna.trial.TrialState.WAITING
+            for trial in study.get_trials(deepcopy=False)):
+        for params in phase1_seeds():
+            study.enqueue_trial(params, skip_if_exists=True)
+    return study, recovered
+
+
+def run_phase(phase_name, phase_config, objective_fn, seed_params=None,
+              seed=None):
+    """Run one phase against a global multi-process trial budget.
+
+    The budget is reread before every trial. `WORKER_TRIALS` is only a
+    per-process ceiling; it never changes the global target.
+    """
+    study, contract_hash = _open_phase_study(
+        phase_name, phase_config, objective_fn, seed=seed)
 
     if seed_params is not None and trials_done(study) == 0:
         for params in seed_params:
             study.enqueue_trial(params, skip_if_exists=True)
 
-    db_path = (os.path.join(data_dir, f"{phase_config['study_name']}.db")
-               if not DISTRIBUTED else None)
-
-    def callback_save(study, trial):
-        if IN_COLAB and not DISTRIBUTED and trial.number % 10 == 0:
-            shutil.copy2(db_path,
-                         os.path.join(drive_dir, f"{phase_config['study_name']}.db"))
-
     target_trials = phase_config["n_trials"]
+
+    def budgeted_objective(trial):
+        # L'allocation du numéro d'essai par le backend est atomique. En cas
+        # de course à la dernière place, seul le plus petit numéro restant
+        # exécute l'objectif; les autres sont élagués avant tout calcul MHD.
+        eligible = sorted(
+            (t for t in study.get_trials(deepcopy=False)
+             if _trial_consumes_budget(t)),
+            key=lambda t: t.number,
+        )
+        slot = next(i for i, t in enumerate(eligible, start=1)
+                    if t.number == trial.number)
+        trial.set_user_attr("campaign_budget_slot", slot)
+        trial.set_user_attr("worker_seed", seed)
+        trial.set_user_attr("campaign_contract_sha256", contract_hash)
+        if slot > target_trials:
+            trial.set_user_attr(_BUDGET_EXCESS_ATTR, True)
+            raise optuna.TrialPruned(
+                f"essai excedentaire cree par concurrence (slot {slot}, "
+                f"cible {target_trials})")
+        return objective_fn(trial)
+
     done_at_start = trials_done(study)
     print(f"Phase '{phase_name}' : {done_at_start}/{target_trials} essais deja "
           f"dans la base"
@@ -495,7 +466,7 @@ def run_phase(phase_name, phase_config, objective_fn, seed_params=None,
         if WORKER_TRIALS is not None and by_this_worker >= WORKER_TRIALS:
             print(f"Plafond du worker atteint ({WORKER_TRIALS} essais).")
             break
-        study.optimize(objective_fn, n_trials=1, callbacks=[callback_save])
+        study.optimize(budgeted_objective, n_trials=1)
         by_this_worker += 1
 
     print(f"Phase '{phase_name}' : {trials_done(study)}/{target_trials} essais "
@@ -514,25 +485,7 @@ def extract_top_params(study, top_k=10):
 
 
 def extract_top_params_from_rescore(phase_prefix, lambdas, top_k=2):
-    """
-    Extract top-k parameter sets from rescore CSV files across multiple lambdas.
-
-    Reads Train_results/rescore_{phase_prefix}_lambda{X}/trials_lambda{X}.csv
-    for each lambda value and returns the top-k trials per lambda.
-
-    Parameters
-    ----------
-    phase_prefix : str
-        e.g. "q_has_v2_phase1" or "q_has_v2_phase1b" or "classic_v2_phase1"
-    lambdas : list of float
-        Lambda values to read from, e.g. [0.10, 0.15, 0.20, 0.25, 0.30, 0.40]
-    top_k : int
-        Number of top trials to extract per lambda (default 2)
-
-    Returns
-    -------
-    list of dict : parameter dictionaries (deduplicated by trial number)
-    """
+    """Read the best distinct parameter sets from rescore CSV files."""
     seen_trials = set()
     results = []
 
@@ -574,31 +527,11 @@ def extract_top_params_from_rescore(phase_prefix, lambdas, top_k=2):
     return results
 
 
-# `SPLIT_BETA_STRATEGIES` et `expand_split_beta_seeds` vivaient ici. Code
-# mort : aucun appelant. La fonction mutait de surcroit son argument
-# (`params.pop`), et son repli `params.pop(k, params.get(k, 0.5))`
-# n'atteignait jamais le `get` puisque le `pop` avait deja retire la cle.
-# Supprimes plutot que reparees : il n'y a plus de phase 1b a amorcer.
-
-
 # ============================================================
 #  COMPOSITE MULTI-SCENARIO OBJECTIVE (QAOA)
 # ============================================================
 
-# ══════════════════════════════════════════════════════════════════════
-#  L'espace de recherche, declare — pas devine en relisant la base
-# ══════════════════════════════════════════════════════════════════════
-#
-# Les bornes etaient ecrites en dur a l'interieur de l'objectif, sous la
-# forme `if "x" not in frozen: HyperParams["x"] = <constante>`, qui fait
-# passer une constante pour un parametre conditionnel. Quatre valeurs
-# etaient dans ce cas ; la campagne gelee croyait explorer neuf
-# parametres et en explorait cinq. C'est l'origine de D-22 : trois des
-# valeurs deployees n'ont jamais ete echantillonnees par personne.
-#
-# Ici les bornes sont des donnees. `search_space()` les rend lisibles
-# AVANT de louer des coeurs pour une semaine, et un test verifie que ce
-# qu'Optuna a reellement propose coincide avec cette declaration.
+# L'espace de recherche est une donnée inspectable avant la campagne.
 
 #: Meilleur essai de l'etude classique gelee (#42, perte 0.2148).
 CLASSICAL_BEST_THRESHOLD = 0.14959824837662078
@@ -654,27 +587,14 @@ FIXED_PARAMS = {
 
 
 def search_space(names_only=True):
-    """Les parametres que `make_composite_objective` proposera reellement.
-
-    Une campagne qui croit optimiser `kappa` doit pouvoir le verifier
-    avant de lancer, plutot que le decouvrir en relisant la base a
-    posteriori.
-    """
+    """Return the parameters proposed by ``make_composite_objective``."""
     if names_only:
         return tuple(SEARCH_SPACE)
     return dict(SEARCH_SPACE)
 
 
-def suggest_hyperparams(trial, frozen=None):
-    """Propose les parametres de `SEARCH_SPACE` a Optuna et renvoie le
-    dictionnaire COMPLET.
-
-    Complet veut dire : parametres explores + parametres fixes + parametres
-    geles par l'appelant. C'est ce dictionnaire-la, et non
-    `trial.params`, qui decrit le run — `trial.params` ne contient que ce
-    qui a ete echantillonne, ce qui est exactement pourquoi le JSON
-    deploye a perdu `sigma` et invente `gamma_hydro`.
-    """
+def suggest_hyperparams(trial, frozen=None, tune_threshold=False):
+    """Return sampled, fixed and caller-frozen parameters as one mapping."""
     frozen = frozen or {}
     hp = {}
     for name, (lo, hi, log) in SEARCH_SPACE.items():
@@ -682,8 +602,12 @@ def suggest_hyperparams(trial, frozen=None):
             continue
         hp[name] = trial.suggest_float(name, lo, hi, log=log)
     for name, value in FIXED_PARAMS.items():
-        if name not in frozen:
+        if name not in frozen and not (tune_threshold
+                                       and name == "threshold_amr"):
             hp[name] = value
+    if tune_threshold and "threshold_amr" not in frozen:
+        lo, hi = CLASSICAL_THRESHOLD_RANGE
+        hp["threshold_amr"] = trial.suggest_float("threshold_amr", lo, hi)
     hp.update(frozen)
     return hp
 
@@ -724,6 +648,13 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
         trial.set_user_attr(f"patch_{scenario_key}", 1.0)
         return DIVERGENCE_PENALTY
 
+    if isinstance(result, dict) and result.get("completed") is False:
+        trial.set_user_attr(f"completed_{scenario_key}", False)
+        trial.set_user_attr(f"abort_{scenario_key}", result.get("abort"))
+        trial.set_user_attr(f"phys_{scenario_key}", DIVERGENCE_PENALTY)
+        trial.set_user_attr(f"patch_{scenario_key}", 1.0)
+        return DIVERGENCE_PENALTY
+
     combined = result['combined'] if isinstance(result, dict) else result
     if np.isnan(combined) or np.isinf(combined):
         combined = DIVERGENCE_PENALTY
@@ -733,9 +664,7 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
         trial.set_user_attr(f"patch_{scenario_key}", float(result.get('patch_ratio', 0)))
         for field, err in result.get('field_errors', {}).items():
             trial.set_user_attr(f"error_{field}_{scenario_key}", float(err))
-        # D-22 / D-35 : d'ou vient sigma, essai par essai. Un artefact ne
-        # doit jamais laisser croire qu'une valeur vient de l'entrainement
-        # alors qu'elle vient d'un repli.
+        # Record whether sigma was trained or supplied by a fallback.
         if result.get('sigma_source') is not None:
             trial.set_user_attr(f"sigma_source_{scenario_key}",
                                 result['sigma_source'])
@@ -744,19 +673,7 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
 
 def _composite_loop(trial, scenario_list, dns_traces, hyperparams,
                     lambda_cost, classical_only=False):
-    """Moyenne des sous-pertes, avec elagage progressif.
-
-    La moyenne COURANTE est rapportee apres chaque scenario, a `step` egal
-    a l'indice du scenario. C'est ce qui rend le MedianPruner actif :
-    l'ancienne version ne rapportait qu'une fois, au step 0, et
-    `n_warmup_steps=2` fait que `should_prune()` y renvoie toujours False.
-    Le pruner etait donc decoratif — verifie, 1e9 au step 0 apres 40
-    essais ne declenche rien.
-
-    Pour que les steps soient comparables entre essais, l'ordre des
-    scenarios doit etre le meme d'un essai a l'autre : c'est l'ordre de
-    `scenario_list`, un tuple fixe.
-    """
+    """Average scenario losses and report each fixed-order partial mean."""
     sub_losses = {}
     total = 0.0
     for i, (scenario_key, scenario_config) in enumerate(scenario_list):
@@ -778,7 +695,8 @@ def _composite_loop(trial, scenario_list, dns_traces, hyperparams,
 
 def make_composite_objective(dns_traces, scenario_list,
                              frozen_params=None,
-                             lambda_cost=LAMBDA_COST_SOFT):
+                             lambda_cost=LAMBDA_COST_SOFT,
+                             tune_threshold=False):
     """
     Composite loss across a set of scenarios (QAOA method).
 
@@ -800,7 +718,8 @@ def make_composite_objective(dns_traces, scenario_list,
     _assert_scenarios_wellformed(scenario_list, dns_traces)
 
     def objective(trial):
-        hyperparams = suggest_hyperparams(trial, frozen)
+        hyperparams = suggest_hyperparams(
+            trial, frozen, tune_threshold=tune_threshold)
         # Le dictionnaire complet est attache a l'essai : c'est la seule
         # trace qui permette de redeployer un essai sans le reconstruire
         # a la main. `trial.params` ne porte que l'echantillonne.
@@ -808,6 +727,27 @@ def make_composite_objective(dns_traces, scenario_list,
         return _composite_loop(trial, scenario_list, dns_traces, hyperparams,
                                lambda_cost)
 
+    objective._qhas_contract = {
+        "kind": "qaoa_composite",
+        "lambda_cost": float(lambda_cost),
+        "scenarios": [
+            {"key": key, "config": dict(config)}
+            for key, config in scenario_list
+        ],
+        "frozen_params": dict(frozen),
+        "search_space": {
+            key: {"low": low, "high": high, "log": log_scale}
+            for key, (low, high, log_scale) in SEARCH_SPACE.items()
+        },
+        "fixed_params": ({k: v for k, v in FIXED_PARAMS.items()
+                          if not (tune_threshold and k == "threshold_amr")}),
+        "tune_threshold": bool(tune_threshold),
+    }
+    if tune_threshold:
+        lo, hi = CLASSICAL_THRESHOLD_RANGE
+        objective._qhas_contract["search_space"]["threshold_amr"] = {
+            "low": lo, "high": hi, "log": False,
+        }
     return objective
 
 
@@ -839,6 +779,15 @@ def make_classical_composite_objective(dns_traces, scenario_list,
         return _composite_loop(trial, scenario_list, dns_traces, hyperparams,
                                lambda_cost, classical_only=True)
 
+    objective._qhas_contract = {
+        "kind": "classical_composite",
+        "lambda_cost": float(lambda_cost),
+        "scenarios": [
+            {"key": key, "config": dict(config)}
+            for key, config in scenario_list
+        ],
+        "threshold_range": list(CLASSICAL_THRESHOLD_RANGE),
+    }
     return objective
 
 
@@ -852,37 +801,15 @@ CLASSICAL_THRESHOLD_RANGE = (0.05, 0.8)
 #  ORCHESTRATION
 # ============================================================
 #
-# `make_phase3_objective` vivait ici : 64 lignes, aucun appelant. Elle
-# reimplementait l'objectif sur Orszag-Tang SEUL, alors que la phase 3
-# est definie comme la validation sur les 6 scenarios — et elle portait sa
-# propre copie non nommee des quatre constantes (0.14959..., 2.0, 0.5,
-# 10.0). Deux definitions du meme objectif, dont une morte : supprimee.
-
-
-# Les quatre scenarios ISOLES : un type d'anomalie chacun. C'est tout
-# l'argument du protocole — Orszag-Tang les melange, donc l'optimiseur ne
-# peut pas y decoupler leurs contributions.
-#
-# La liste contenait `ot` et `rotor` a la place de `vortex` et
-# `coalescence`. Trois consequences, toutes silencieuses :
-#   - les deux scenarios complexes etaient dans le jeu « isole », qui
-#     n'isolait donc plus rien ;
-#   - `SCENARIO_VORTEX` et `SCENARIO_COALESCENCE` etaient definis et
-#     jamais utilises ;
-#   - `SCENARIOS_ALL = ISOLATED + COMPLEX` valait six entrees pour quatre
-#     scenarios distincts : `ot` et `rotor` etaient simules DEUX fois par
-#     essai, comptes deux fois dans la somme, et divises par six. La
-#     phase 3 les ponderait donc double, pour le double du cout.
-#
-# Le JSON deploye tranche : son bloc `per_scenario` de la phase 1 liste
-# kelvin_helmholtz, lamb_oseen_vortex, harris_tearing, island_coalescence.
-# C'est la liste ci-dessous qui a produit la campagne gelee ; la version
-# precedente etait une regression.
+# Six scénarios isolent les structures ciblées; OT et le rotor combinent
+# plusieurs mécanismes. Chaque scénario apparaît exactement une fois.
 SCENARIOS_ISOLATED = (
     ("kh",          SCENARIO_KH),
     ("vortex",      SCENARIO_VORTEX),
     ("tearing",     SCENARIO_TEARING),
     ("coalescence", SCENARIO_COALESCENCE),
+    ("double_tearing", SCENARIO_DOUBLE_TEARING),
+    ("magnetic_twist", SCENARIO_MAGNETIC_TWIST),
 )
 
 SCENARIOS_COMPLEX = (
@@ -979,8 +906,8 @@ def phase1_seeds():
             for values in itertools.product(*(PHASE1_SEED_GRID[n] for n in names))]
 
 
-def _run_phase1(dns_traces, seed=None):
-    """Phase 1 : perte composite sur les 4 scenarios isoles.
+def _run_phase1(dns_traces, seed=None, n_trials=None):
+    """Phase 1 : perte composite sur les 6 scenarios isoles.
 
     Le nombre de parametres n'est pas ecrit ici : il vaut
     `len(SEARCH_SPACE)`, et la ligne « Training: » ci-dessous
@@ -988,14 +915,17 @@ def _run_phase1(dns_traces, seed=None):
     desynchronisee au premier ajout — elle l'avait deja fait.
     """
     print("=" * 60)
-    print("PHASE 1: Composite Training (4 scenarios isoles)")
+    print("PHASE 1: Composite Training (6 scenarios isoles)")
     print(f"  Training: {', '.join(search_space())}")
     print(f"  Fixed:    {FIXED_PARAMS}")
     print(f"  Scenarios: {', '.join(k for k, _ in SCENARIOS_ISOLATED)}")
     print("=" * 60)
 
     objective = make_composite_objective(dns_traces, SCENARIOS_ISOLATED)
-    study = run_phase("phase1_composite", PHASES["phase1_composite"],
+    phase_config = dict(PHASES["phase1_composite"])
+    if n_trials is not None:
+        phase_config["n_trials"] = n_trials
+    study = run_phase("phase1_composite", phase_config,
                       objective, seed_params=phase1_seeds(), seed=seed)
     _report_best(study, "Phase 1", SCENARIOS_ISOLATED)
     return study
@@ -1042,13 +972,13 @@ def _run_phase2(study_p1, seed=None):
 
 
 def _run_phase3(study_p2, seed=None):
-    """Phase 3 : les 6 scenarios distincts, amorcee par la phase 2."""
+    """Phase 3 : les 8 scenarios distincts, amorcee par la phase 2."""
     print("\n" + "=" * 60)
-    print("PHASE 3: Composite Training sur les 6 scenarios")
+    print("PHASE 3: Composite Training sur les 8 scenarios")
     print(f"  Scenarios: {', '.join(k for k, _ in SCENARIOS_ALL)}")
     print("=" * 60)
 
-    dns_traces_all = _precompute_dns_for(SCENARIOS_ALL, label="6 scenarios")
+    dns_traces_all = _precompute_dns_for(SCENARIOS_ALL, label="8 scenarios")
     seed_params = _seeds_for("q_has_v2_phase2", study_p2, 15, "PHASE 3")
 
     objective = make_composite_objective(dns_traces_all, SCENARIOS_ALL)
@@ -1064,9 +994,9 @@ def _classical_grid_seeds(n=20):
 
 
 def _run_classical_phase1(dns_traces, seed=None):
-    """Classique 1 : `threshold_amr` sur les 4 scenarios isoles."""
+    """Classique 1 : `threshold_amr` sur les 6 scenarios isoles."""
     print("\n" + "=" * 60)
-    print("CLASSICAL PHASE 1 (*): threshold_amr, 4 scenarios isoles")
+    print("CLASSICAL PHASE 1 (*): threshold_amr, 6 scenarios isoles")
     print("=" * 60)
 
     objective = make_classical_composite_objective(dns_traces, SCENARIOS_ISOLATED)
@@ -1097,13 +1027,13 @@ def _run_classical_phase2(study_c1, seed=None):
 
 
 def _run_classical_phase3(study_c2, seed=None):
-    """Classique 3 : `threshold_amr` sur les 6 scenarios."""
+    """Classique 3 : `threshold_amr` sur les 8 scenarios."""
     print("\n" + "=" * 60)
-    print("CLASSICAL PHASE 3 (***): threshold_amr, 6 scenarios")
+    print("CLASSICAL PHASE 3 (***): threshold_amr, 8 scenarios")
     print("=" * 60)
 
     dns_traces_all = _precompute_dns_for(SCENARIOS_ALL,
-                                         label="6 scenarios (classique)")
+                                         label="8 scenarios (classique)")
     seeds = _seeds_for("classical_v2_phase2", study_c2, 15, "CLASSICAL PHASE 3")
     if not seeds:
         seeds = _classical_grid_seeds(15)
@@ -1120,20 +1050,7 @@ def _run_classical_phase3(study_c2, seed=None):
 # ============================================================
 
 def deployable_params(study):
-    """Le jeu COMPLET d'hyperparametres du meilleur essai.
-
-    `study.best_params` ne contient que ce qu'Optuna a echantillonne. Un
-    JSON construit a partir de lui perd les parametres fixes et se
-    retrouve complete au deploiement par des replis — c'est le mecanisme
-    exact de D-22 : `sigma` disparu, `gamma_hydro` / `gamma_mag` /
-    `kappa` presents dans le fichier deploye sans qu'aucune base ne les
-    ait jamais echantillonnes.
-
-    L'essai porte le dictionnaire resolu en attribut ; on le relit. S'il
-    manque (essai d'une ancienne campagne), on le reconstruit et on le
-    signale, plutot que de renvoyer un dictionnaire incomplet qui
-    ressemble a un complet.
-    """
+    """Return the best trial's complete sampled and fixed parameter set."""
     resolved = study.best_trial.user_attrs.get("hyperparams_resolved")
     if resolved is not None:
         return dict(resolved), "trial_user_attr"
@@ -1165,6 +1082,68 @@ def _phase_block(study, scenario_list):
             for key, _ in scenario_list
         },
     }
+
+
+def _atomic_write_json(path, payload):
+    """Write a JSON artifact atomically, including on shared storage."""
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=4)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def save_phase_candidate(study, phase_key, scenario_list, target_trials,
+                         output_path):
+    """Export the current best trial without presenting it as deployable.
+
+    A candidate is marked complete only after the global budget is consumed
+    and no trial remains WAITING or RUNNING. Multiple workers may call this
+    function; the file replacement is atomic.
+    """
+    trials = study.get_trials(deepcopy=False)
+    counts = {
+        state.name.lower(): sum(t.state == state for t in trials)
+        for state in optuna.trial.TrialState
+    }
+    consumed = sum(_trial_consumes_budget(t) for t in trials)
+    excess = sum(t.user_attrs.get(_BUDGET_EXCESS_ATTR, False) for t in trials)
+    active = [t for t in trials if _trial_consumes_budget(t)]
+    complete = (consumed >= target_trials
+                and not any(t.state == optuna.trial.TrialState.RUNNING
+                            for t in active)
+                and counts.get("waiting", 0) == 0
+                and counts.get("complete", 0) > 0)
+    payload = {
+        "artifact": "phase_candidate",
+        "status": "complete" if complete else "partial",
+        "phase": phase_key,
+        "study_name": study.study_name,
+        "target_trials": target_trials,
+        "consumed_trials": consumed,
+        "concurrency_excess_trials": excess,
+        "trial_states": counts,
+        "campaign_contract_sha256": study.user_attrs.get(
+            "campaign_contract_sha256"),
+        "campaign_contract": study.user_attrs.get("campaign_contract"),
+        "provenance": provenance(),
+        "search_space": {k: {"low": lo, "high": hi, "log": log}
+                         for k, (lo, hi, log) in SEARCH_SPACE.items()},
+        "fixed_params": dict(FIXED_PARAMS),
+        "result": _phase_block(study, scenario_list),
+    }
+    _atomic_write_json(output_path, payload)
+    print(f"Candidat de phase ecrit dans {output_path} ({payload['status']}).")
+    return output_path
 
 
 def _save_results(study_p1, study_p2, study_p3,
@@ -1207,18 +1186,11 @@ def _save_results(study_p1, study_p2, study_p3,
                       if study_c3 is not None else None),
     }
 
-    with open(output_path, "w") as f:
-        json.dump(results, f, indent=4)
+    _atomic_write_json(output_path, results)
     print(f"\nResultats finaux ecrits dans {output_path}")
     print(f"  quantique  : {results['deploy']['quantum']}")
     print(f"  classique  : {results['deploy']['classical']}")
 
-    if IN_COLAB:
-        try:
-            shutil.copytree(local_dir, drive_dir, dirs_exist_ok=True)
-            print(f"Copie vers Drive : {drive_dir}")
-        except Exception as e:
-            print(f"Erreur lors de la copie vers Drive : {e}")
     return output_path
 
 
@@ -1232,19 +1204,36 @@ PHASE_CHOICES = ("1", "2", "3", "classical_1", "classical_2", "classical_3",
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        description="Entrainement des hyperparametres Q-HAS (8 parametres).")
+        description="Entrainement des hyperparametres Q-HAS (9 parametres).")
     p.add_argument("--phase", choices=PHASE_CHOICES,
-                   default=os.environ.get("WORKER_PHASE") or "all",
-                   help="phase a executer (defaut : WORKER_PHASE, sinon tout)")
+                   default="all", help="phase a executer (defaut : tout)")
     p.add_argument("--seed", type=int,
-                   default=(int(os.environ["OPTUNA_SEED"])
-                            if os.environ.get("OPTUNA_SEED") else None),
+                   default=None,
                    help="graine du sampler TPE. Sans elle, Optuna tire au "
                         "hasard et la campagne n'est pas reproductible.")
+    p.add_argument("--n-trials", type=int,
+                   help="cible globale d'essais pour --phase 1; remplace la "
+                        "valeur du protocole pour cette execution")
+    p.add_argument("--result-path",
+                   help="chemin du JSON candidat de --phase 1")
     p.add_argument("--print-space", action="store_true",
                    help="affiche l'espace de recherche et sort, sans rien "
                         "calculer. A lancer AVANT de louer des coeurs.")
-    return p.parse_args(argv)
+    p.add_argument("--prepare-only", action="store_true",
+                   help="prepare/reprend la phase 1 avant de lancer les workers")
+    p.add_argument("--finalize-only", action="store_true",
+                   help="valide et exporte le candidat de phase 1 sans calcul")
+    args = p.parse_args(argv)
+    if args.n_trials is not None and args.n_trials < 1:
+        p.error("--n-trials doit etre >= 1")
+    if ((args.n_trials is not None or args.result_path is not None)
+            and args.phase != "1"):
+        p.error("--n-trials et --result-path sont reserves a --phase 1")
+    if (args.prepare_only or args.finalize_only) and args.phase != "1":
+        p.error("--prepare-only/--finalize-only sont reserves a --phase 1")
+    if args.prepare_only and args.finalize_only:
+        p.error("--prepare-only et --finalize-only sont exclusifs")
+    return args
 
 
 def _load_study(phase_key):
@@ -1270,12 +1259,34 @@ def main(argv=None):
         return 0
 
     announce_environment()
+    if args.prepare_only or args.finalize_only:
+        target = (args.n_trials if args.n_trials is not None
+                  else PHASES["phase1_composite"]["n_trials"])
+        study, recovered = prepare_phase1(target)
+        if args.finalize_only:
+            result_path = (args.result_path or os.path.join(
+                ensure_dirs(), "candidate_phase1.json"))
+            save_phase_candidate(
+                study, "phase1_composite", SCENARIOS_ISOLATED,
+                target, result_path)
+            return 0
+        print(f"Campagne prete : {trials_done(study)}/{target} essais; "
+              f"{recovered} essai(s) interrompu(s) marques a recalculer.")
+        return 0
     if args.seed is None:
         print("[WARN] pas de --seed : le sampler TPE est aleatoire, cette "
               "campagne ne sera pas reproductible telle quelle.")
 
     if args.phase == "1":
-        _run_phase1(_precompute_dns_for(SCENARIOS_ISOLATED, "4 isoles"), args.seed)
+        target = (args.n_trials if args.n_trials is not None
+                  else PHASES["phase1_composite"]["n_trials"])
+        study = _run_phase1(
+            _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles"),
+            args.seed, n_trials=target)
+        result_path = (args.result_path or
+                       os.path.join(ensure_dirs(), "candidate_phase1.json"))
+        save_phase_candidate(study, "phase1_composite", SCENARIOS_ISOLATED,
+                             target, result_path)
 
     elif args.phase == "2":
         _run_phase2(_load_study("phase1_composite"), args.seed)
@@ -1284,7 +1295,7 @@ def main(argv=None):
         _run_phase3(_load_study("phase2_complex"), args.seed)
 
     elif args.phase == "classical_1":
-        _run_classical_phase1(_precompute_dns_for(SCENARIOS_ISOLATED, "4 isoles"),
+        _run_classical_phase1(_precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles"),
                               args.seed)
 
     elif args.phase == "classical_2":
@@ -1294,13 +1305,13 @@ def main(argv=None):
         _run_classical_phase3(_load_study("classical_phase2"), args.seed)
 
     elif args.phase == "classical":
-        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "4 isoles")
+        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles")
         c1 = _run_classical_phase1(dns, args.seed)
         c2 = _run_classical_phase2(c1, args.seed)
         _run_classical_phase3(c2, args.seed)
 
     else:  # "all"
-        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "4 isoles")
+        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles")
         p1 = _run_phase1(dns, args.seed)
         p2 = _run_phase2(p1, args.seed)
         p3 = _run_phase3(p2, args.seed)

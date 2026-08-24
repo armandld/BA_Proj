@@ -1,31 +1,4 @@
-"""D-23 — la trace DNS de reference finissait a un autre temps que ses deux bras.
-
-`precompute_dns` construit la trajectoire de REFERENCE contre laquelle les
-deux bras sont notes. Deux choses y etaient tacites, et l'une etait fausse.
-
-DEFAUT : `dt = min(sim_dns.adapt_dt(...), T_MAX - t_current)`. `adapt_dt`
-FIXE `sim_dns.dt` et le rend ; le `min` ne creait qu'une variable locale.
-`step_full` integrait donc avec le dt NON borne pendant que `t_current`
-avancait du dt borne — et c'est le dt borne qui etait ecrit dans la trace.
-
-Mesure, orszag_tang N=32, T_MAX=0.05, dernier pas :
-
-  integre par le solveur   0.037997804
-  ecrit dans la trace      0.010730092
-
-La reference finissait a t ~ 0.077 quand la trace annoncait 0.050. Le
-pipeline, qui avance ses deux bras avec `dns_trace[step]['dt']`, les
-comparait donc a une verite terrain prise 3.5 fois plus loin dans le temps.
-
-Rien ne pouvait le signaler : la trace est bien formee, ses champs sont
-finis, son `dt` est plausible. Seul un rejeu — refaire la trajectoire avec
-les dt de la trace et comparer au dernier instantane — le montre. C'est ce
-que fait le premier test.
-
-CONVENTION, tacite mais voulue : les entrees portent l'etat AVANT leur pas,
-sauf la derniere qui porte l'etat APRES. Le pipeline a besoin des deux.
-Elle est desormais ecrite dans la docstring, et figee ici.
-"""
+"""Contracts for the DNS trajectory used to score every campaign arm."""
 
 import os
 import sys
@@ -138,21 +111,21 @@ def test_the_last_step_is_the_one_that_used_to_be_clamped():
 
 # ── La convention de temps des instantanes ───────────────────────────
 
-def test_intermediate_snapshots_hold_the_state_before_their_step():
+def test_every_snapshot_holds_the_state_after_its_step():
     cfg = _cfg(T_MAX=0.11, HYBRID_DT=0.02)
     trace, _ = precompute_dns(cfg)
     snaps = sorted(k for k, v in trace.items() if "fluxes" in v)
     assert len(snaps) >= 3, "pas assez d'instantanes pour tester la convention"
     s = MHDSolver(PeriodicGrid(cfg["N"]), dt=cfg["DT"], Re=cfg["Re"], Rm=cfg["Rm"])
     _init_dns_scenario(s, cfg["scenario"])
-    before = {}
+    after = {}
     for k in sorted(trace):
-        before[k] = s.vx.copy()
         s.dt = trace[k]["dt"]
         s.step_full(record_stats=False)
-    for k in snaps[:-1]:
-        assert np.max(np.abs(trace[k]["fluxes"]["vx"] - before[k])) == 0.0, (
-            f"l'instantane {k} ne porte pas l'etat d'AVANT son pas")
+        after[k] = s.vx.copy()
+    for k in snaps:
+        assert np.max(np.abs(trace[k]["fluxes"]["vx"] - after[k])) == 0.0, (
+            f"snapshot {k} does not hold the state after its step")
 
 
 def test_the_last_snapshot_holds_the_state_after_its_step():
@@ -163,11 +136,29 @@ def test_the_last_snapshot_holds_the_state_after_its_step():
     assert np.max(np.abs(trace[max(trace)]["fluxes"]["vx"] - s.vx)) == 0.0
 
 
-def test_the_two_conventions_are_written_in_the_docstring():
-    """Une convention tacite se fait prendre pour l'autre."""
+def test_the_time_convention_is_written_in_the_docstring():
     doc = precompute_dns.__doc__
-    assert "CONVENTION DE TEMPS" in doc
-    assert "AVANT" in doc and "APRES" in doc
+    assert "after step" in doc
+
+
+def test_physics_seed_is_reproducible_and_recorded():
+    cfg = _cfg(T_MAX=0.02, phys_seed=3, physics_noise_amplitude=0.05)
+    trace_a, hot_a = precompute_dns(cfg)
+    trace_b, hot_b = precompute_dns(cfg)
+    assert hot_a["phys_seed"] == hot_b["phys_seed"] == 3
+    assert hot_a["physics_noise_amplitude"] == pytest.approx(0.05)
+    for field in ("vx", "vy", "Bx", "By"):
+        np.testing.assert_array_equal(
+            trace_a[max(trace_a)]["fluxes"][field],
+            trace_b[max(trace_b)]["fluxes"][field])
+
+
+def test_distinct_physics_seeds_create_distinct_trajectories():
+    trace_a, _ = precompute_dns(_cfg(T_MAX=0.02, phys_seed=1))
+    trace_b, _ = precompute_dns(_cfg(T_MAX=0.02, phys_seed=2))
+    assert not np.array_equal(
+        trace_a[max(trace_a)]["fluxes"]["vx"],
+        trace_b[max(trace_b)]["fluxes"]["vx"])
 
 
 # ── Structure et gardes ───────────────────────────────────────────────

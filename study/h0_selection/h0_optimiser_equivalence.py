@@ -70,10 +70,8 @@ from h2b_feature_selection import git_commit_hash          # v3, reutilise
 from ising_terms_and_annealing import (                          # V2, reutilise
     build_ising_terms, total_energy, delta_energy,
     _build_incidence, sa_multi_restart, spins_to_decisions,
+    exhaustive_ground_state, MAX_ENUM_QUBITS, TOL_E,
 )
-
-TOL_E = 1e-9          # tolerance d'egalite energetique
-MAX_ENUM_QUBITS = 22  # garde-fou memoire pour l'enumeration exhaustive
 
 
 # -------------------------------------------------------------------
@@ -104,66 +102,6 @@ def classical_init_spins(score_vqa, threshold_amr, dim):
     spins[:n_cells] = np.where(refine, -1, 1)
     spins[n_cells:] = np.where(refine, -1, 1)
     return spins
-
-
-def exhaustive_ground_state(h_bias, edges, plaqs, n_q,
-                            max_qubits=MAX_ENUM_QUBITS, chunk=1 << 16):
-    """Etat fondamental EXACT par enumeration des 2^n_q configurations.
-
-    Licite parce que le Hamiltonien est diagonal (Z/ZZ/ZZZZ) : minimiser
-    <psi|H|psi> revient a minimiser E(s) sur les configurations classiques.
-    Evaluation vectorisee par blocs pour rester en memoire bornee.
-
-    Retourne (best_spins, best_E, n_optima) ou n_optima compte les
-    configurations degenerees a l'optimum (a tol pres).
-    """
-    if n_q > max_qubits:
-        raise ValueError(
-            f"exhaustive enumeration refused for {n_q} qubits "
-            f"(max {max_qubits}); use SA/greedy instead")
-    edge_idx, edge_coef = edges
-    plaq_idx, plaq_coef = plaqs
-    n_states = 1 << n_q
-    bit = (1 << np.arange(n_q, dtype=np.int64))
-
-    def _energies(start, stop):
-        idx = np.arange(start, stop, dtype=np.int64)[:, None]
-        # spin = +1 si bit 0, -1 si bit 1 (|1> a valeur propre Z = -1)
-        S = np.where((idx & bit) > 0, -1.0, 1.0)          # (m, n_q)
-        E = S @ h_bias
-        if len(edge_coef):
-            E = E + (S[:, edge_idx[:, 0]] * S[:, edge_idx[:, 1]]) @ edge_coef
-        if len(plaq_coef):
-            E = E + (S[:, plaq_idx[:, 0]] * S[:, plaq_idx[:, 1]]
-                     * S[:, plaq_idx[:, 2]] * S[:, plaq_idx[:, 3]]) @ plaq_coef
-        return S, E
-
-    # Passe 1 : le minimum. Passe 2 : sa degenerescence.
-    #
-    # Compter en une seule passe est incorrect des que l'enumeration depasse
-    # un bloc : quand un meilleur minimum apparait dans le bloc k, les
-    # configurations degenerees des blocs 0..k-1 ne sont plus jamais
-    # revisitees, et celles des blocs suivants s'ajoutent par-dessus. Le
-    # compte n'etait donc juste que pour 2^n_q <= chunk, soit n_q <= 16 —
-    # correct a la taille deployee (8 qubits), faux et silencieux au-dela.
-    best_E, best_spins = np.inf, None
-    for start in range(0, n_states, chunk):
-        S, E = _energies(start, min(start + chunk, n_states))
-        k = int(np.argmin(E))
-        if E[k] < best_E - TOL_E:
-            best_E = float(E[k])
-            best_spins = S[k].astype(np.int8).copy()
-
-    n_opt = 0
-    for start in range(0, n_states, chunk):
-        _, E = _energies(start, min(start + chunk, n_states))
-        n_opt += int(np.sum(E <= best_E + TOL_E))
-
-    if best_spins is None or n_opt < 1:
-        raise RuntimeError(
-            "enumeration exhaustive sans minimum : impossible sur un "
-            "hamiltonien diagonal non vide")
-    return best_spins, float(best_E), int(n_opt)
 
 
 def greedy_local_search(h_bias, edges, plaqs, n_q, init_spins,
@@ -245,8 +183,7 @@ def _output_path(args):
         RESULTS_DIR,
         f"h0_optimiser_equivalence_N{args.N}_dim{args.dim}"
         + _scen_tag
-        + ("_withpsi" if args.with_psi else "")
-        + ("_fixedcurl" if args.fixed_curl else "")
+        + ("_legacycurl" if args.legacy_curl else "")
         + ("_zeropsi" if args.zero_psi else "")
         + ("_noexact" if args.no_exact else "")
         + ("" if args.backend == "state_vector" else f"_{args.backend}")
@@ -340,12 +277,12 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  use_v2=True, sweeps=500, n_restarts=5,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
                  zero_psi=False, scale_kopt=False, no_exact=False,
-                 backend='state_vector', prev_fields=None, with_psi=False,
-                 run_qaoa=True, seed=0, fixed_curl=False):
+                 backend='state_vector', prev_fields=None, with_psi=True,
+                 run_qaoa=True, seed=0, fixed_curl=True, prev_phi=None):
     """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
     from qaoa_inputs import (                      # V2, reutilise
         prepare_qaoa_inputs, run_qaoa_on_snapshot,
-        classical_warm_start_params,
+        constant_initial_params,
     )
     from VQA.cost_hamiltonian import create_period_hamiltonian
     from config import V2_THRESHOLD, TRAINED_THRESHOLD
@@ -357,7 +294,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     # hyperparametres ont ete optimises.
     data_in, hp, score_vqa = prepare_qaoa_inputs(
         vx, vy, Bx, By, N, dim, re, use_v2=use_v2,
-        prev_fields=prev_fields, with_psi=with_psi, fixed_curl=fixed_curl)
+        prev_fields=prev_fields, with_psi=with_psi, fixed_curl=fixed_curl,
+        prev_phi=prev_phi)
 
     # Ablation psi : psi porte une derivee temporelle du flux qui n'existe
     # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
@@ -393,8 +331,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     gt_refine = np.asarray(l2_errors >= l2_threshold)
     init = classical_init_spins(score_vqa, thr_amr, dim)
 
-    diagonal = is_diagonal_cost_hamiltonian(
-        create_period_hamiltonian(hp, dim, False))
+    diagonal = is_diagonal_cost_hamiltonian(create_period_hamiltonian(hp, dim))
 
     rows = {}
 
@@ -446,22 +383,15 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     _record("classical_init", init, 0.0)
 
     # --- QAOA a profondeurs croissantes ------------------------------
-    # D-48 : malgre son nom et sa signature, `classical_warm_start_params`
-    # ne lit ni `score_vqa` ni `thr_amr` (mesure : sortie identique
-    # bit-a-bit sur 6 entrees, ecart 0,0e+00). Le bras QAOA n'est donc PAS
-    # warm-starte sur la decision classique comme le sont `sa_warm` et
-    # `greedy` ci-dessus — il part d'un schedule constant. Ce qui porte la
-    # decision classique dans le bras QAOA, c'est theta = 2 asin(sqrt(score)),
-    # pas ces (beta, gamma).
     if run_qaoa:
         for reps in qaoa_reps:
-            ws = classical_warm_start_params(score_vqa, thr_amr, reps)
+            ws = constant_initial_params(reps)
             t0 = time.time()
             _, dh, dv, _, _ = run_qaoa_on_snapshot(
                 data_in, hp, dim, reps=reps,
                 K_opt=(k_opt * reps if scale_kopt else k_opt),
                 shots=qaoa_shots, backend_name=backend,
-                warm_start_params=ws)
+                warm_start_params=ws, seed=seed)
             s = np.ones(n_q, dtype=np.int8)
             s[:dim * dim] = np.where(dh.ravel(), -1, 1)
             s[dim * dim:] = np.where(dv.ravel(), -1, 1)
@@ -469,13 +399,13 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
 
         # QAOA avec shots finis (echantillonnage, pas statevector ideal)
         reps = max(qaoa_reps)
-        ws = classical_warm_start_params(score_vqa, thr_amr, reps)
+        ws = constant_initial_params(reps)
         t0 = time.time()
         _, dh, dv, _, _ = run_qaoa_on_snapshot(
             data_in, hp, dim, reps=reps,
             K_opt=(k_opt * reps if scale_kopt else k_opt),
             shots=qaoa_shots, backend_name="aer",
-            warm_start_params=ws)
+            warm_start_params=ws, seed=seed)
         s = np.ones(n_q, dtype=np.int8)
         s[:dim * dim] = np.where(dh.ravel(), -1, 1)
         s[dim * dim:] = np.where(dv.ravel(), -1, 1)
@@ -684,29 +614,16 @@ def main():
                         "indecidable mais H0b reste mesurable : elle ne "
                         "demande qu'un etalement d'energies et les F1 "
                         "correspondants. Necessaire au-dela de 22 qubits.")
-    p.add_argument("--with-psi", action="store_true",
-                   help="rebranche l'encodage de phase psi en utilisant "
-                        "l'instantane PRECEDENT, comme le fait le pipeline "
-                        "deploye. Sans ce drapeau psi vaut zero, ce qui est "
-                        "le comportement historique de l'etude et NON celui "
-                        "contre lequel les hyperparametres ont ete regles.")
     p.add_argument("--zero-psi", action="store_true",
-                   help="met psi a zero dans l'etat initial du QAOA. Isole "
-                        "ce que l'encodage de phase apporte a la descente "
-                        "vers le fondamental et a la detection.")
+                   help="ablate the deployed temporal phase psi")
     p.add_argument("--no-resume", action="store_true",
                    help="ignore le point de reprise et recalcule tout. Par "
                         "defaut une relance identique repart de l'instantane "
                         "ou elle s'etait arretee ; un point de reprise issu "
                         "d'autres reglages est refuse, jamais melange.")
-    p.add_argument("--fixed-curl", action="store_true",
-                   help="applique la convention d'axes AXIS_X/AXIS_Y declaree "
-                        "par grid.py au rotationnel et a la divergence des "
-                        "mappeurs. Par defaut ceux-ci utilisent la convention "
-                        "indexing='xy', sous laquelle leur « vorticite » vaut "
-                        "dv_y/dy - dv_x/dx et ne voit pas la rotation solide. "
-                        "Les artefacts portent alors le suffixe _fixedcurl ; "
-                        "le chemin par defaut reste inchange.")
+    p.add_argument("--legacy-curl", action="store_true",
+                   help="axis-convention ablation; the deployed convention "
+                        "is used by default")
     p.add_argument("--scale-kopt", action="store_true",
                    help="budget COBYLA proportionnel a p (k_opt * reps). Sans "
                         "ce drapeau, p=6 optimise 12 parametres avec le meme "
@@ -765,22 +682,27 @@ def main():
             n_dns = len(vx)
             sel = sorted(set(int(round(i)) for i in
                              np.linspace(0, n_dns - 1, args.n_snaps + 1)[1:]))
+            from qaoa_inputs import _ema_update, _stress_flux_for_snapshot
+            selected = set(sel)
+            ema_before = {}
+            phi_ema = None
+            for dns_idx in range(n_dns):
+                if dns_idx in selected:
+                    ema_before[dns_idx] = phi_ema
+                phi_ema = _ema_update(
+                    phi_ema,
+                    _stress_flux_for_snapshot(
+                        vx[dns_idx], vy[dns_idx], Bx[dns_idx], By[dns_idx],
+                        args.N,
+                    ),
+                )
             for si in sel:
                 if (sc, re, si) in done:
                     continue
                 t0 = time.time()
-                # psi est une derivee temporelle : elle exige l'instantane
-                # PRECEDENT. si=0 n'en a pas, et la selection commence a 1,
-                # mais on garde la garde explicite.
-                prev = None
-                if args.with_psi:
-                    if si == 0:
-                        raise SystemExit(
-                            "--with-psi exige un instantane precedent ; "
-                            "l'instantane 0 n'en a pas")
-                    prev = {"vx": vx[si - 1], "vy": vy[si - 1],
-                            "Bx": Bx[si - 1], "By": By[si - 1],
-                            "Jz": np.zeros_like(vx[si - 1])}
+                if ema_before[si] is None:
+                    raise RuntimeError(
+                        "the selected snapshot has no temporal predecessor")
                 out = solver_panel(
                     vx[si], vy[si], Bx[si], By[si], args.N, args.dim, re,
                     l2[si], thr, use_v2=(args.mapper == "v2"),
@@ -788,9 +710,9 @@ def main():
                     qaoa_reps=tuple(args.qaoa_reps), qaoa_shots=args.shots,
                     zero_psi=args.zero_psi, scale_kopt=args.scale_kopt,
                     no_exact=args.no_exact, backend=args.backend,
-                    prev_fields=prev, with_psi=args.with_psi,
+                    prev_phi=ema_before[si], with_psi=True,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
-                    seed=args.seed, fixed_curl=args.fixed_curl)
+                    seed=args.seed, fixed_curl=not args.legacy_curl)
                 diag_flags.append(out["diagonal"])
                 snap_records = [
                     dict(scenario=sc, re=re, snap=si, solver=name,

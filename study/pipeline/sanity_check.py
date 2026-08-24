@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
-"""
-Phase 0.3 - Sanity check of the v2 Hamiltonian across all 4 scenarios at Re=400.
+"""Compare the V1 and parameter-free V2 Hamiltonians on every scenario.
 
-Runs the evaluation (not training) using the new parameter-free Hamiltonian
-and compares side-by-side with the old v1 Hamiltonian:
-  1. Are the coefficients non-zero? (survival check)
-  2. Does the QAOA converge? (optimization check)
-  3. Do the corrections go in the right direction? (quality check)
-  4. Side-by-side coefficient statistics for v1 vs v2
-
-This is NOT a performance benchmark -- just a sanity check that the
-physics-first Hamiltonian produces sensible coefficients and QAOA behaviour.
-
-Usage:
-  python study/sanity_check.py
-  python study/sanity_check.py --scenario orszag_tang
+This is a functional diagnostic, not a performance benchmark.
 """
 import argparse, os, sys, time
 import numpy as np
@@ -38,13 +25,16 @@ from VQA.cost_hamiltonian import create_period_hamiltonian
 from VQA.mapping import mapping
 from VQA.execute import execute
 from VQA.postprocess import postprocess
+from config import (
+    SCENARIOS, TRAINED_THRESHOLD, V2_THRESHOLD, trained_mapper_params,
+)
 
 
 # -------------------------------------------------------------------
 # Scenario setup
 # -------------------------------------------------------------------
 
-ALL_SCENARIOS = ["orszag_tang", "harris_tearing", "kelvin_helmholtz", "mhd_rotor"]
+ALL_SCENARIOS = list(SCENARIOS)
 RE = 400
 N = 32   # small grid for fast sanity check
 DIM = 2  # 2x2 patches -> 8 qubits (fast exact diag + QAOA)
@@ -52,13 +42,8 @@ WARMUP_STEPS = 50
 REPS = 2
 K_OPT = 60
 
-# v1 trained parameters
-V1_PARAMS = dict(
-    sigma=0.023, beta_curl=4.27, beta_xpoint=2.39,
-    w_z_frac=10.40, gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0,
-)
-V1_THRESHOLD = 0.1496
-V2_THRESHOLD = 0.15
+V1_PARAMS = trained_mapper_params()
+V1_THRESHOLD = TRAINED_THRESHOLD
 
 
 def marginals_converged(marg, tol=0.01):
@@ -94,7 +79,13 @@ def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
         "harris_tearing": sim.init_harris_tearing,
         "kelvin_helmholtz": sim.init_kelvin_helmholtz,
         "mhd_rotor": sim.init_mhd_rotor,
+        "lamb_oseen": sim.init_lamb_oseen_vortex,
+        "island_coalescence": sim.init_island_coalescence,
+        "double_tearing": sim.init_double_tearing,
+        "magnetic_twist": sim.init_magnetic_twist,
     }
+    if scenario not in inits:
+        raise ValueError(f"unknown scenario: {scenario}")
     inits[scenario]()
 
     # warmup
@@ -120,9 +111,11 @@ def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
     mapper_v2 = PhysicalMapperV2(dx=dx)
 
     coeffs_v1 = mapper_v1.compute_coefficients(
-        sim, score, fields, V1_THRESHOLD, verbose=False)
+        sim, score, fields, V1_THRESHOLD,
+        advanced_anomalies_enabled=True, verbose=False)
     coeffs_v2 = mapper_v2.compute_coefficients(
-        sim, score, fields, V2_THRESHOLD, verbose=False)
+        sim, score, fields, V2_THRESHOLD,
+        advanced_anomalies_enabled=True, verbose=False)
 
     # ---- 3. Report coefficient statistics ----
     def coeff_stats(coeffs, label):
@@ -197,6 +190,7 @@ def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
     def run_qaoa(mapper, threshold, label):
         coeffs = mapper.compute_coefficients(
             sim_vqa, score_vqa, fields_vqa, threshold,
+            advanced_anomalies_enabled=True,
             dx_override=dx_vqa, verbose=False)
 
         # angles
@@ -239,26 +233,8 @@ def run_scenario(scenario, Re=RE, N_grid=N, dim=DIM):
         print(f"    Classical decisions:  {classical_decisions.flatten().astype(int)}")
         print(f"    Score per patch:      {score_vqa.flatten()}")
 
-        # did QAOA converge? (marginals should not all be 0.5)
-        #
-        # D-44 : le critere etait `np.std(marg) > 0.01`, c'est-a-dire la
-        # DISPERSION des marginales, pas leur distance a 0.5 — la grandeur
-        # que le commentaire ci-dessus annonce. Les deux ne coincident pas :
-        # un bras qui repond 0.976-0.980 partout est unanime et maximalement
-        # tranche, et son ecart-type vaut 1.9e-03. Mesure sur les defauts du
-        # script (Re=400, N=32, dim=2, les 4 scenarios), les deux runs que
-        # l'ancien critere declarait « NOT converged (flat) » sont les DEUX
-        # PLUS TRANCHES des huit :
-        #
-        #   scenario          bras  std(marg)  max|m-0.5|  ancien verdict
-        #   harris_tearing    v1      0.0019      0.4800   NOT converged
-        #   kelvin_helmholtz  v1      0.0014      0.2393   NOT converged
-        #   orszag_tang       v1      0.0585      0.1769   converged
-        #
-        # et orszag_tang v1, declare converge, porte une marginale a 0.517,
-        # soit 0.0169 de 0.5 — indecise. Le critere inversait le verdict
-        # aux deux extremes. La tolerance 0.01 est conservee, portee sur la
-        # bonne grandeur.
+        # A uniform but decisive vector is converged; distance from 0.5 is
+        # therefore the relevant diagnostic, not dispersion across qubits.
         converged, decisiveness, weakest, spread = marginals_converged(marg)
         print(f"    Distance to 0.5: max={decisiveness:.4f} min={weakest:.4f}  "
               f"(std={spread:.4f})  "

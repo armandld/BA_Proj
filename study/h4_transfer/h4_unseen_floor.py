@@ -156,7 +156,7 @@ def main():
     print("=" * 80, flush=True)
 
     T = _load_v1_training_module()
-    cfg = dict(fold_scenarios(T, warn=False))[args.fold]
+    cfg = dict(fold_scenarios(T))[args.fold]
     hp = dict(rec["hyperparams"])
     hp["threshold_amr"] = args.threshold
 

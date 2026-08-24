@@ -1,175 +1,237 @@
-"""V4 Tache 23 — le decompte de tete, CALCULE et non recopie.
+#!/usr/bin/env python3
+"""Aggregate the confirmatory trajectory-level closed-loop results."""
 
-POURQUOI CETTE TACHE EXISTE
----------------------------
-Le resultat le plus cite de l'etude — « Q-HAS est moins fidele que la regle
-classique appariee en budget sur 19/20 executions, plus couteux sur 18/20,
-strictement Pareto-domine sur 17/20 » — n'etait produit par AUCUN script.
-Il avait ete compose a la main dans `RESULTS.md`, et ne se reproduisait
-pas depuis les artefacts. Deux ecarts :
-
-  1. sur `kh`, les colonnes « moins fidele » et « plus couteux » etaient
-     TRANSPOSEES (4/5 et 5/5 au lieu de 5/5 et 4/5) ;
-  2. sur `rotor`, les 2 tirages AVORTES etaient comptes au denominateur,
-     d'ou un total sur 20 quand seules 18 executions ont abouti. C'est
-     exactement le defaut deja recense (une agregation qui melange les
-     tirages avortes aux valides), reapparu dans le texte apres avoir ete
-     corrige dans le code.
-
-Le decompte correct est plus NET sur la fidelite et plus faible sur le
-cout : 18/18, 16/18, 16/18.
-
-LA CONVENTION, EXPLICITE
-------------------------
-Reference = le point BUDGET-APPARIE mesure par T15b
-(`t15b_budget_matched_<fold>.json::matched_classical`), sur SES DEUX
-coordonnees : `phys_score` et `patch_ratio`.
-
-  - « moins fidele »  : phys_score(tirage Q-HAS) > phys_score(apparie)
-  - « plus couteux »  : patch_ratio(tirage Q-HAS) > patch_ratio(apparie)
-  - « domine »        : les deux a la fois
-
-Ne PAS utiliser `t20::classical_stats` comme reference. Ce bloc est le
-controle de determinisme du bras classique, et sur `ot` et `kh` il a tourne
-au seuil REGLE, pas au seuil apparie (defaut D14) : sur `ot` il rend
-phys = 0.4845 la ou le point apparie vaut 0.0827, ce qui inverserait le sens
-du resultat sur ce fold.
-
-Seuls les tirages `completed` comptent. Un tirage avorte n'est pas un point
-de mesure, ni au numerateur ni au denominateur.
-"""
 import argparse
 import json
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-# --- chemins du dépôt (bloc unique, généré) -------------------------------
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-for _p in [os.path.join(_REPO_ROOT, "src")] + [
-        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+import numpy as np
+
+
+_REPO_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _path in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", name) for name in (
             "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
             "h3_representation", "h4_transfer", "closed_loop", "common")]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-# -------------------------------------------------------------------------
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
-from h2b_feature_selection import git_commit_hash    # v3, reutilise
+import provenance
+from closed_loop_campaign import (
+    _atomic_json, _load_v1_training_module, fold_scenarios,
+)
+from stats import bootstrap_by_trajectory
+from stats_confirmatory import holm_correction, hierarchical_bootstrap
 
-RESULTS_DIR = os.path.join(_REPO_ROOT, "results")
-FOLDS = ("ot", "kh", "rotor", "tearing")
+
+def _sign_flip_pvalue(deltas):
+    """Exact two-sided randomisation p-value for paired trajectory deltas."""
+    deltas = np.asarray(deltas, dtype=float)
+    if not 1 <= deltas.size <= 20:
+        raise ValueError("exact sign-flip test requires 1 to 20 deltas")
+    observed = abs(float(np.mean(deltas)))
+    masks = np.arange(2 ** deltas.size, dtype=np.uint64)[:, None]
+    bits = (masks >> np.arange(deltas.size, dtype=np.uint64)) & 1
+    signs = 2.0 * bits.astype(float) - 1.0
+    permuted = np.abs(np.mean(signs * deltas[None, :], axis=1))
+    return float(np.mean(permuted >= observed - 1e-15))
 
 
-def matched_reference(results_dir, fold):
-    """Le point budget-apparie de T15b : (phys_score, patch_ratio)."""
-    p = os.path.join(results_dir, f"t15b_budget_matched_{fold}.json")
-    if not os.path.exists(p):
+def fold_counts(results_dir, fold, prefix="t20_qhas_run_variance",
+                n_boot=1000, seed=0):
+    """Return trajectory-level inference for one schema-2 artifact."""
+    path = os.path.join(results_dir, f"{prefix}_{fold}.json")
+    if not os.path.exists(path):
         return None
-    m = json.load(open(p))["matched_classical"]
-    return float(m["phys_score"]), float(m["patch_ratio"])
+    with open(path, encoding="utf-8") as stream:
+        artifact = json.load(stream)
+    if artifact.get("schema") != 2:
+        raise RuntimeError(
+            f"{path} uses an obsolete schema without per-run budget matches")
+    if artifact.get("replication_unit") != "trajectory":
+        raise RuntimeError(
+            f"{path} does not use physics trajectories as replicates")
 
+    runs = artifact.get("qhas_runs", [])
+    physics_seeds = [run.get("physics_seed") for run in runs]
+    if any(value is None for value in physics_seeds):
+        raise RuntimeError(f"{path} omits a physics seed")
+    if len(physics_seeds) != len(set(physics_seeds)):
+        raise RuntimeError(f"{path} repeats a physics seed")
+    qaoa_seeds = {run.get("qaoa_seed") for run in runs}
+    if None in qaoa_seeds or len(qaoa_seeds) != 1:
+        raise RuntimeError(f"{path} does not hold the QAOA seed fixed")
+    completed = [run for run in runs if run.get("completed")]
+    paired = [run for run in completed
+              if run.get("budget_match", {}).get("converged")]
+    deltas = np.asarray(
+        [run["budget_match"]["delta_phys"] for run in paired], dtype=float)
+    if deltas.size and not np.all(np.isfinite(deltas)):
+        raise RuntimeError(f"{path} contains a non-finite paired delta")
 
-def fold_counts(results_dir, fold):
-    """Decompte d'un fold, ou None si un artefact manque.
+    inference = None
+    if deltas.size:
+        trajectory_ids = np.asarray(
+            [f"{fold}:{run['physics_seed']}" for run in paired])
+        boot = bootstrap_by_trajectory(
+            deltas, trajectory_ids, B=n_boot, seed=seed)
+        inference = {
+            "mean_delta_phys": boot["estimate"],
+            "ci_low": boot["ci_low"],
+            "ci_high": boot["ci_high"],
+            "n_trajectories": boot["n_traj"],
+            "sign_flip_p": _sign_flip_pvalue(deltas),
+            "classical_confirmed": bool(boot["ci_low"] > 0.0),
+            "qhas_confirmed": bool(boot["ci_high"] < 0.0),
+        }
 
-    Retourne un dict avec n_completed, n_aborted et les trois compteurs.
-    """
-    ref = matched_reference(results_dir, fold)
-    tp = os.path.join(results_dir, f"t20_qhas_run_variance_{fold}.json")
-    if ref is None or not os.path.exists(tp):
-        return None
-    ref_phys, ref_patch = ref
-    t = json.load(open(tp))
-    ok = [r for r in t["qhas_runs"] if r["completed"]]
-    less = sum(1 for r in ok if r["phys_score"] > ref_phys)
-    cost = sum(1 for r in ok if r["patch_ratio"] > ref_patch)
-    dom = sum(1 for r in ok
-              if r["phys_score"] > ref_phys and r["patch_ratio"] > ref_patch)
-    # Le controle classique du meme artefact : combien de ses rejeux ont
-    # avorte AU POINT COMPARE. C'est la seule forme sous laquelle
-    # l'asymetrie d'avortement peut etre affirmee — le bras classique
-    # diverge lui aussi a d'AUTRES seuils (T19 : le seuil regle de `rotor`,
-    # et 2 de ses 6 points de bissection).
-    cr = t.get("classical_runs", [])
-    c_ab = sum(1 for r in cr if not r.get("completed", True))
     return {
         "fold": fold,
-        "ref_phys": ref_phys, "ref_patch": ref_patch,
-        "n_runs": len(t["qhas_runs"]),
-        "n_completed": len(ok),
-        "n_aborted": len(t["qhas_runs"]) - len(ok),
-        "n_classical_runs": len(cr),
-        "n_classical_aborted": c_ab,
-        "less_faithful": less, "costlier": cost, "dominated": dom,
+        "scenario": artifact.get("scenario"),
+        "Re": artifact.get("Re"),
+        "status": artifact.get("status"),
+        "n_runs": len(runs),
+        "n_completed": len(completed),
+        "n_aborted": len(runs) - len(completed),
+        "n_paired": len(paired),
+        "n_unmatched": len(completed) - len(paired),
+        "qhas_lower_error": int(np.sum(deltas < 0)),
+        "classical_lower_error": int(np.sum(deltas > 0)),
+        "ties": int(np.sum(deltas == 0)),
+        "mean_delta_phys": float(np.mean(deltas)) if deltas.size else None,
+        "deltas_phys": deltas.tolist(),
+        "physics_seeds": physics_seeds,
+        "qaoa_seed": next(iter(qaoa_seeds)),
+        "inference": inference,
+        "parent_campaign_contract_sha256": artifact.get(
+            "parent_campaign_contract_sha256"),
     }
 
 
 def totals(rows):
-    t = {"n_completed": 0, "n_aborted": 0,
-         "n_classical_runs": 0, "n_classical_aborted": 0,
-         "less_faithful": 0, "costlier": 0, "dominated": 0}
-    for r in rows:
-        for k in t:
-            t[k] += r[k]
-    return t
+    keys = (
+        "n_runs", "n_completed", "n_aborted", "n_paired", "n_unmatched",
+        "qhas_lower_error", "classical_lower_error", "ties",
+    )
+    out = {key: sum(row[key] for row in rows) for key in keys}
+    weighted = [
+        (row["mean_delta_phys"], row["n_paired"]) for row in rows
+        if row["mean_delta_phys"] is not None and row["n_paired"]
+    ]
+    out["mean_delta_phys"] = (
+        sum(value * count for value, count in weighted)
+        / sum(count for _, count in weighted)
+        if weighted else None)
+    return out
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--folds", nargs="+", default=list(FOLDS))
-    p.add_argument("--seed", type=int, default=0,
-                   help="sans effet : cette tache ne simule rien, elle "
-                        "relit des artefacts. Present pour l'uniformite.")
-    args = p.parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--folds", nargs="+")
+    parser.add_argument("--prefix", default="t20_qhas_run_variance")
+    parser.add_argument("--bootstrap", type=int, default=1000)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--allow-missing", action="store_true")
+    parser.add_argument("--allow-protocol-deviation", action="store_true")
+    args = parser.parse_args()
 
-    rows, missing = [], []
-    for f in args.folds:
-        r = fold_counts(RESULTS_DIR, f)
-        (rows.append(r) if r else missing.append(f))
+    from config import RESULTS_DIR
 
-    print("=" * 84)
-    print("  V4 T23 - headline counts, recomputed from the artifacts")
-    print("=" * 84)
-    if missing:
-        print(f"  missing artifacts for: {', '.join(missing)}")
+    prov = provenance.start()
+    if args.folds is None:
+        training = _load_v1_training_module()
+        args.folds = [key for key, _ in fold_scenarios(training)]
+
+    rows = []
+    missing = []
+    for fold in args.folds:
+        row = fold_counts(
+            RESULTS_DIR, fold, args.prefix, args.bootstrap, args.seed)
+        if row is None:
+            missing.append(fold)
+        else:
+            rows.append(row)
+    if missing and not args.allow_missing:
+        raise RuntimeError(f"missing sensitivity artifacts: {', '.join(missing)}")
     if not rows:
-        raise SystemExit("no fold has both t15b and t20 artifacts")
+        raise RuntimeError("no sensitivity artifact to aggregate")
+    incomplete = [row["fold"] for row in rows
+                  if row["status"] != "complete"
+                  or row["n_paired"] != row["n_runs"]]
+    if incomplete:
+        raise RuntimeError(
+            f"incomplete matched comparisons: {', '.join(incomplete)}")
+    deviations = []
+    if len(rows) != 8:
+        deviations.append(f"{len(rows)} folds instead of 8")
+    wrong_replicates = [row["fold"] for row in rows
+                        if row["n_runs"] != 3 or row["n_paired"] != 3]
+    if wrong_replicates:
+        deviations.append(
+            "not exactly 3 paired trajectories: " + ", ".join(wrong_replicates))
+    if deviations and not args.allow_protocol_deviation:
+        raise RuntimeError("protocol deviation: " + "; ".join(deviations))
 
-    print("\n  reference = t15b budget-matched point, BOTH coordinates")
-    print("  aborted draws excluded from numerator AND denominator\n")
-    print("  | fold | n | aborted | less faithful | costlier | dominated |")
-    print("  |---|---|---|---|---|---|")
-    for r in rows:
-        n = r["n_completed"]
-        print(f"  | `{r['fold']}` | {n} | {r['n_aborted']} | "
-              f"{r['less_faithful']}/{n} | {r['costlier']}/{n} | "
-              f"**{r['dominated']}/{n}** |")
-    t = totals(rows)
-    n = t["n_completed"]
-    print(f"  | **total** | **{n}** | {t['n_aborted']} | "
-          f"**{t['less_faithful']}/{n}** | **{t['costlier']}/{n}** | "
-          f"**{t['dominated']}/{n}** |")
+    inferential_rows = [row for row in rows if row["inference"] is not None]
+    adjusted = holm_correction(
+        [row["inference"]["sign_flip_p"] for row in inferential_rows])
+    for index, row in enumerate(inferential_rows):
+        row["inference"]["holm_p"] = float(adjusted["p_adjusted"][index])
+        row["inference"]["holm_reject"] = bool(adjusted["reject"][index])
 
-    print(f"\n  Over {n} completed closed-loop runs across "
-          f"{len(rows)} held-out classes, Q-HAS is less faithful than the")
-    print(f"  budget-matched classical rule on {t['less_faithful']}/{n}, "
-          f"more expensive on {t['costlier']}/{n}, and strictly")
-    print(f"  Pareto-dominated on {t['dominated']}/{n}.")
-    print(f"\n  aborts at the compared operating point: "
-          f"Q-HAS {t['n_aborted']}/{n + t['n_aborted']}, "
-          f"classical {t['n_classical_aborted']}/{t['n_classical_runs']}.")
-    print("  This is NOT a claim that the classical rule never diverges: "
-          "T19 records\n  its tuned threshold aborting on `rotor`, and 2 of "
-          "that fold's 6 bisection\n  points. Divergence is a property of "
-          "the threshold, and both arms have\n  thresholds that diverge.")
+    all_deltas = []
+    class_ids = []
+    regime_ids = []
+    for row in rows:
+        all_deltas.extend(row["deltas_phys"])
+        class_ids.extend([row["fold"]] * len(row["deltas_phys"]))
+        regime_ids.extend([row.get("Re") or 400] * len(row["deltas_phys"]))
+    overall = None
+    if all_deltas:
+        result = hierarchical_bootstrap(
+            all_deltas, class_ids, regime_ids,
+            B=args.bootstrap, seed=args.seed)
+        overall = {key: value for key, value in result.items()
+                   if key != "boot"}
+        overall["frac_classical_lower_error"] = float(
+            np.mean(np.asarray(all_deltas) > 0.0))
+        overall["n_classical_confirmed_folds"] = sum(
+            row["inference"]["classical_confirmed"]
+            for row in inferential_rows)
+        overall["n_qhas_confirmed_folds"] = sum(
+            row["inference"]["qhas_confirmed"]
+            for row in inferential_rows)
+        overall["classical_falsification_rule_met"] = bool(
+            len(rows) == 8
+            and overall["n_classical_confirmed_folds"] >= 6)
 
-    out = {"folds": rows, "total": t, "n_folds": len(rows),
-           "missing": missing, "git_hash": git_commit_hash(),
-           "cli_args": vars(args)}
-    op = os.path.join(RESULTS_DIR, "t23_headline_counts.json")
-    json.dump(out, open(op, "w"), indent=1)
-    print(f"\n  saved: {os.path.basename(op)}")
-    print("\nV4 Task 23 complete.")
+    total = totals(rows)
+    print("| fold | paired | Q-HAS lower | classical lower | mean delta | 95% CI | Holm p |")
+    print("|---|---:|---:|---:|---:|---:|---:|")
+    for row in rows:
+        inf = row["inference"]
+        print(f"| {row['fold']} | {row['n_paired']} | "
+              f"{row['qhas_lower_error']} | {row['classical_lower_error']} | "
+              f"{row['mean_delta_phys']:+.6f} | "
+              f"[{inf['ci_low']:+.6f}, {inf['ci_high']:+.6f}] | "
+              f"{inf['holm_p']:.4f} |")
+
+    payload = {
+        "artifact": "closed_loop_headline_counts",
+        "schema": 2,
+        "folds": rows,
+        "total": total,
+        "overall_hierarchical": overall,
+        "protocol_deviations": deviations,
+        "missing": missing,
+        "cli_args": vars(args),
+    }
+    payload.update(provenance.finish(prov))
+    output = os.path.join(RESULTS_DIR, "t23_headline_counts.json")
+    _atomic_json(output, payload)
+    print(f"saved: {output}")
 
 
 if __name__ == "__main__":

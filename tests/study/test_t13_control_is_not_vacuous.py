@@ -68,12 +68,12 @@ def test_removed_max_separates_a_real_ablation_from_an_empty_one():
     real = t13.zero_hamiltonian_terms(hp, ("ZZ",))
     assert t13.coefficients_removed(hp, real, dim) == pytest.approx(2.0)
 
-    # ablation vide : une cle que `build_ising_terms` ne lit pas (le cas
-    # exact de `K_xpoint`, D-51)
+    # K_xpoint is emitted on the same plaquette as K_plaquettes. The
+    # comparison must aggregate duplicate operator indices.
     hp_x = dict(hp, K_xpoint=np.full((dim, dim), 42.0))
     empty = t13.zero_hamiltonian_terms(hp_x, ("ZZZZ",))
     empty["K_plaquettes"] = hp_x["K_plaquettes"]      # seul K_xpoint retire
-    assert t13.coefficients_removed(hp_x, empty, dim) == 0.0
+    assert t13.coefficients_removed(hp_x, empty, dim) == pytest.approx(42.0)
 
 
 def test_empty_ablation_is_named_instead_of_read_as_inert():

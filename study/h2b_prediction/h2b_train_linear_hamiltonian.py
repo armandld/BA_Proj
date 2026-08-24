@@ -1,57 +1,24 @@
 #!/usr/bin/env python3
-"""
-Phase 10 - Closed-loop training of the v2 Hamiltonian.
+"""Phase 10: supervised rescue fit of the fixed-form V2 Hamiltonian.
 
-Trains theta = (c_bias, thr_amr) against the L2-hard mask F1 by running
-an actual optimiser in the loop:
+``c_bias`` and the classical-score threshold are fitted against the L2-hard
+mask. Each DNS trajectory is split chronologically into training, model
+selection and final test blocks. The test block is evaluated once after
+selection. Per-configuration, per-scenario and joint fits expose how much
+specialisation the fixed Hamiltonian form requires.
 
-    for step in range(n_steps):
-        theta_k = optimiser.ask()
-        H_k     = build_H(theta_k)          # v2: w_zz=2, w_zzzz=1 fixed
-        spins_k = SA(H_k)
-        F1_k    = score(spins_k vs GT)      # averaged over train batch
-        optimiser.tell(theta_k, -F1_k)
-
-Three training modes are run back-to-back and compared:
-
-  (1) per-config   : one (c*, thr*) per (scenario, Re)   [N_s * N_Re runs]
-  (2) per-scenario : one (c*, thr*) per scenario         [N_s runs]
-  (3) joint        : one (c*, thr*) over ALL configs     [1 run]
-
-Rationale: a joint fit may fail if the optimal (c*, thr*) varies across
-scenarios (e.g. rotor vs Orszag-Tang have different circulation
-topologies, so the right c_bias / thr_amr differs). Running all three
-and reporting their spread is itself the scientific result:
-
-  - per-config and per-scenario agree -> scenario-universal,
-    joint training is valid.
-  - per-config disagrees sharply      -> v2 ground state is
-    scenario-specific, joint is too hard; thesis finding is that
-    one Hamiltonian parameterisation cannot cover all MHD regimes.
-
-Sanity checks printed at the end:
-  - (c*, thr*) not hitting optimisation bounds
-  - F1_val > classical baseline (delta > 0)
-  - spread across training modes
-
-w_zz = 2.0 and w_zzzz = 1.0 are fixed by physical reasoning (v2 design
-choice) and are NOT trained.
-
-Parameter vector (theta):
-  theta[0] = log10(c_bias)   in [-1.0 ,  2.0 ]   -> c_bias in [0.1, 100]
-  theta[1] = thr_amr         in [ 0.02,  0.60]
-
-Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
-        results/patches_{scenario}_Re{Re}_N{N}_dim{D}.npz
-Output: results/train_{tag}_N{N}_dim{D}.npz  (one per run)
-        results/train_COMPARE_N{N}_dim{D}.npz (cross-mode summary)
+This is a post-hoc rescue diagnostic. Phases 3--8 intentionally evaluate the
+a-priori V2 constants and do not consume these fitted parameters.
 
 Usage:
-  python study/phase10_train_hamiltonian.py --dim 4
-  python study/phase10_train_hamiltonian.py --dim 4 --modes per-scenario joint
-  python study/phase10_train_hamiltonian.py --dim 4 --modes per-config
+  python study/h2b_prediction/h2b_train_linear_hamiltonian.py --dim 4
 """
-import argparse, os, sys, time
+import argparse
+import importlib.util
+import json
+import os
+import sys
+import time
 import numpy as np
 
 # --- chemins du dépôt (bloc unique, généré) -------------------------------
@@ -70,13 +37,10 @@ from ising_terms_and_annealing import (
     build_ising_terms, sa_multi_restart, spins_to_decisions, _metrics,
 )
 
-try:
-    import cma           # noqa: F401
-    HAS_CMA = True
-except Exception:
-    HAS_CMA = False
+HAS_CMA = importlib.util.find_spec("cma") is not None
 
 from scipy.optimize import minimize
+import provenance
 
 
 # -------------------------------------------------------------------
@@ -84,8 +48,8 @@ from scipy.optimize import minimize
 # -------------------------------------------------------------------
 
 THETA_BOUNDS = np.array([
-    [-1.0,  2.0],    # log10(c_bias)     -> [0.1, 100]
-    [ 0.02, 0.60],   # thr_amr
+    [-1.0, 5.0],     # log10(c_bias) -> [0.1, 100000]
+    [0.0, 1.0],      # score threshold
 ])
 THETA_DIM = len(THETA_BOUNDS)
 THETA_INIT = np.array([np.log10(1.0),  # c_bias = 1.0
@@ -93,16 +57,64 @@ THETA_INIT = np.array([np.log10(1.0),  # c_bias = 1.0
 
 
 def decode_theta(theta):
+    theta = np.asarray(theta, dtype=float)
+    if theta.shape != (THETA_DIM,) or not np.all(np.isfinite(theta)):
+        raise ValueError(f"theta must be a finite vector of shape ({THETA_DIM},)")
     theta = np.clip(theta, THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1])
     return float(10 ** theta[0]), float(theta[1])
 
 
 def hits_bound(theta, rel_tol=0.02):
     """True if theta is within 2% of a bound (flags unreliable optimum)."""
+    theta = np.asarray(theta, dtype=float)
+    if (theta.shape != (THETA_DIM,) or not np.all(np.isfinite(theta))
+            or not np.isfinite(rel_tol) or rel_tol < 0.0):
+        raise ValueError("theta and rel_tol must be finite and valid")
     lb, ub = THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]
     span = ub - lb
     return bool(np.any((theta - lb) / span < rel_tol) or
                 np.any((ub - theta) / span < rel_tol))
+
+
+def chronological_split_indices(n_snapshots, train_frac=0.6, val_frac=0.2):
+    """Split one trajectory into ordered train, validation and test blocks."""
+    if not isinstance(n_snapshots, (int, np.integer)) or n_snapshots < 3:
+        raise ValueError("each trajectory needs at least three snapshots")
+    if not (np.isfinite(train_frac) and np.isfinite(val_frac)
+            and 0.0 < train_frac < 1.0 and 0.0 < val_frac < 1.0
+            and train_frac + val_frac < 1.0):
+        raise ValueError("train_frac and val_frac must be positive and sum to < 1")
+    n_train = min(max(1, int(np.floor(train_frac * n_snapshots))),
+                  n_snapshots - 2)
+    n_val = min(max(1, int(np.floor(val_frac * n_snapshots))),
+                n_snapshots - n_train - 1)
+    cut = n_train + n_val
+    return (np.arange(0, n_train, dtype=int),
+            np.arange(n_train, cut, dtype=int),
+            np.arange(cut, n_snapshots, dtype=int))
+
+
+def evenly_subsample(indices, limit):
+    """Return at most ``limit`` ordered indices spanning the input."""
+    indices = np.asarray(indices, dtype=int).ravel()
+    if not isinstance(limit, (int, np.integer)) or limit < 1:
+        raise ValueError("subsample limit must be a positive integer")
+    if indices.size <= limit:
+        return indices.copy()
+    positions = np.linspace(0, indices.size - 1, int(limit), dtype=int)
+    return indices[positions]
+
+
+def split_snapshot_pairs(snaps_list, train_frac=0.6, val_frac=0.2):
+    """Build aligned chronological split pairs for multiple trajectories."""
+    train_pairs, val_pairs, test_pairs = [], [], []
+    for config_index, snaps in enumerate(snaps_list):
+        train_idx, val_idx, test_idx = chronological_split_indices(
+            len(snaps["vx"]), train_frac, val_frac)
+        train_pairs.extend((config_index, int(i)) for i in train_idx)
+        val_pairs.extend((config_index, int(i)) for i in val_idx)
+        test_pairs.extend((config_index, int(i)) for i in test_idx)
+    return train_pairs, val_pairs, test_pairs
 
 
 # -------------------------------------------------------------------
@@ -150,40 +162,100 @@ def f1_for_theta(theta, snaps, dim, snap_indices, sweeps, n_restarts, rng):
     return float(np.mean(f1s)), float(np.mean(cfs))
 
 
-# -------------------------------------------------------------------
-# Core training loop (shared by all modes)
-# -------------------------------------------------------------------
+def _subsample_pairs_by_config(pairs, max_total):
+    """Cap a split while retaining every represented configuration."""
+    groups = {}
+    for config_index, snapshot_index in pairs:
+        groups.setdefault(config_index, []).append(snapshot_index)
+    if len(pairs) <= max_total:
+        return list(pairs)
+    if max_total < len(groups):
+        raise ValueError(
+            "split cap must retain at least one snapshot per configuration")
+    base, remainder = divmod(max_total, len(groups))
+    selected = []
+    for rank, (config_index, indices) in enumerate(sorted(groups.items())):
+        limit = base + (rank < remainder)
+        selected.extend(
+            (config_index, int(i))
+            for i in evenly_subsample(indices, limit)
+        )
+    return selected
+
+
+def _sample_train_pairs(pairs, max_total, rng):
+    """Draw a stratified training batch with all configurations represented."""
+    groups = {}
+    for config_index, snapshot_index in pairs:
+        groups.setdefault(config_index, []).append(snapshot_index)
+    if len(pairs) <= max_total:
+        return list(pairs)
+    if max_total < len(groups):
+        raise ValueError(
+            "max_batch must be at least the number of configurations")
+    base, remainder = divmod(max_total, len(groups))
+    selected = []
+    for rank, (config_index, indices) in enumerate(sorted(groups.items())):
+        limit = min(len(indices), base + (rank < remainder))
+        picks = rng.choice(indices, size=limit, replace=False)
+        selected.extend((config_index, int(i)) for i in picks)
+    return selected
+
+
+def _nelder_mead_simplex(x0):
+    """Construct a non-degenerate bounded simplex around ``x0``."""
+    x0 = np.asarray(x0, dtype=float)
+    lb, ub = THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]
+    steps = np.array([1.0, 0.15])
+    vertices = [x0.copy()]
+    for axis, step in enumerate(steps):
+        vertex = x0.copy()
+        if x0[axis] + step <= ub[axis]:
+            vertex[axis] += step
+        elif x0[axis] - step >= lb[axis]:
+            vertex[axis] -= step
+        else:
+            vertex[axis] = lb[axis] if x0[axis] != lb[axis] else ub[axis]
+        vertices.append(vertex)
+    return np.asarray(vertices)
+
+
+def _load_cma():
+    """Load the requested optimizer or fail before any objective evaluation."""
+    if not HAS_CMA:
+        raise RuntimeError(
+            "CMA-ES was requested but package 'cma' is not installed")
+    try:
+        import cma
+    except Exception as exc:
+        raise RuntimeError("CMA-ES could not be imported") from exc
+    return cma
 
 def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
-          train_frac, seed, optimiser_name, max_batch, max_val,
+          train_frac, val_frac, seed, optimiser_name, max_batch, max_val,
+          max_test,
           tag="", theta_init=None):
-    """
-    Optimise theta against mean F1 on a pooled train split.
+    """Fit on train, select on validation, then evaluate once on test."""
+    if not snaps_list:
+        raise ValueError("snaps_list must not be empty")
+    if n_iters < 3 or sweeps < 1 or n_restarts < 1:
+        raise ValueError("n_iters, sweeps and n_restarts must be positive")
+    if max_batch < 1 or max_val < 1 or max_test < 1:
+        raise ValueError("batch and split caps must be positive")
+    if optimiser_name not in {"cma", "nelder-mead"}:
+        raise ValueError("unknown optimizer")
+    if optimiser_name == "cma" and n_iters < 4:
+        raise ValueError("CMA-ES requires at least four objective evaluations")
 
-    Key design choices (lessons from the first Result_phase10.txt run):
-      - Val set is FROZEN (val_fixed) so F1_val is comparable across steps.
-      - Train batches are resampled each call (noise is a feature of SGD).
-      - Initial Nelder-Mead simplex spans a meaningful fraction of the
-        search space (large perturbations in log10(c_bias) and thr_amr),
-        otherwise NM collapses at x0 on noisy objectives.
-      - CMA-ES uses sigma0=0.5 and popsize>=6 for noise tolerance.
-      - Final best is chosen by RE-EVALUATING the top-K visited thetas
-        on val_fixed, not by a single noisy mid-training val sample.
-    """
     rng = np.random.default_rng(seed)
+    train_pairs, val_pairs, test_pairs = split_snapshot_pairs(
+        snaps_list, train_frac, val_frac)
+    val_fixed = _subsample_pairs_by_config(val_pairs, max_val)
+    test_fixed = _subsample_pairs_by_config(test_pairs, max_test)
 
-    pairs = [(ci, si) for ci, s in enumerate(snaps_list)
-             for si in range(len(s["vx"]))]
-    pairs = [pairs[i] for i in rng.permutation(len(pairs))]
-    n_tr = max(1, int(train_frac * len(pairs)))
-    train_pairs = pairs[:n_tr]
-    val_pairs   = pairs[n_tr:] if n_tr < len(pairs) else pairs[-1:]
-    # deterministic, fixed val subset (same every time we eval val)
-    val_fixed = val_pairs[:max_val]
-
-    print(f"  [{tag}] dataset: {len(pairs)} pairs "
-          f"-> train {len(train_pairs)}, val {len(val_pairs)} "
-          f"(val_fixed={len(val_fixed)})")
+    print(f"  [{tag}] chronological split: train={len(train_pairs)}, "
+          f"validation={len(val_pairs)}, test={len(test_pairs)} "
+          f"(evaluated: validation={len(val_fixed)}, test={len(test_fixed)})")
 
     def _eval_on(theta, use_pairs, eval_rng):
         """Mean F1 (SA vs GT) + classical over a fixed pair list."""
@@ -198,12 +270,7 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
         return float(np.mean(f1_all)), float(np.mean(cf_all))
 
     def _train_batch(theta, eval_rng):
-        if len(train_pairs) > max_batch:
-            idx = eval_rng.choice(len(train_pairs), size=max_batch,
-                                  replace=False)
-            sub = [train_pairs[i] for i in idx]
-        else:
-            sub = train_pairs
+        sub = _sample_train_pairs(train_pairs, max_batch, eval_rng)
         return _eval_on(theta, sub, eval_rng)
 
     history_theta, history_f1_tr, history_f1_val = [], [], []
@@ -211,84 +278,66 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
 
     def objective(theta_raw):
         t0 = time.time()
-        f1_tr, _ = _train_batch(theta_raw, eval_rng)
+        theta = np.clip(np.asarray(theta_raw, dtype=float),
+                        THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1])
+        f1_tr, _ = _train_batch(theta, eval_rng)
         dt = time.time() - t0
-        history_theta.append(np.array(theta_raw, copy=True))
+        history_theta.append(theta.copy())
         history_f1_tr.append(f1_tr)
-        # val on frozen set, only every 5 steps (expensive)
         if len(history_theta) % 5 == 1:
-            f1_v, _ = _eval_on(theta_raw, val_fixed, eval_rng)
+            val_rng = np.random.default_rng(seed + 1000 + len(history_theta))
+            f1_v, _ = _eval_on(theta, val_fixed, val_rng)
         else:
             f1_v = history_f1_val[-1] if history_f1_val else f1_tr
         history_f1_val.append(f1_v)
-        c, thr = decode_theta(theta_raw)
+        c, thr = decode_theta(theta)
         print(f"    [{tag}] step {len(history_theta):>3}  "
               f"c={c:>7.3f}  thr={thr:.3f}  "
               f"F1_tr={f1_tr:.3f}  F1_val={f1_v:.3f}   [{dt:.1f}s]")
         return -f1_tr
 
-    # ------------------------------------------------------------
-    # Run optimiser
-    # ------------------------------------------------------------
     x0 = (THETA_INIT.copy() if theta_init is None
           else np.clip(np.asarray(theta_init, dtype=float),
                        THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]))
     c0_, thr0_ = decode_theta(x0)
-    # D-87 : `hits_bound` n'etait evalue que sur le theta FINAL. Un x0 pose sur
-    # une borne — ce que l'init analytique produisait pour 3 lignes sur 4 —
-    # n'apparaissait nulle part, ni a l'ecran ni dans l'artefact.
     x0_bnd = hits_bound(x0)
     print(f"  [{tag}] x0: c_bias={c0_:.3f}  thr={thr0_:.3f}  "
           f"(source: {'analytical' if theta_init is not None else 'default'})"
-          f"{'  [x0 SUR UNE BORNE, D-87]' if x0_bnd else ''}")
+          f"{'  [BOUND]' if x0_bnd else ''}")
     lb, ub = THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1]
-    use_cma = (optimiser_name == "cma") and HAS_CMA
-    if optimiser_name == "cma" and not HAS_CMA:
-        print(f"  [{tag}][warn] cma not installed -> Nelder-Mead")
-
-    if use_cma:
-        # popsize>=6 and sigma0=0.5 give robust exploration on noisy F1
+    if optimiser_name == "cma":
+        cma = _load_cma()
+        popsize = min(6, n_iters)
         print(f"  [{tag}] optimiser: CMA-ES, budget {n_iters}, "
-              f"sigma0=0.5, popsize=6")
+              f"sigma0=0.5, popsize={popsize}")
         es = cma.CMAEvolutionStrategy(
             x0, 0.5,
             {'bounds': [list(lb), list(ub)],
              'maxfevals': n_iters,
-             'popsize': 6,
+             'popsize': popsize,
              'tolx': 1e-3,
              'tolfun': 1e-3,
              'verbose': -9,
              'seed': int(seed) + 2})
-        while not es.stop() and len(history_theta) < n_iters:
+        while (not es.stop()
+               and len(history_theta) + popsize <= n_iters):
             xs = es.ask()
             ys = [objective(x) for x in xs]
             es.tell(xs, ys)
     else:
-        # Large initial simplex — otherwise NM collapses at x0 on noise.
-        # Perturb log10(c_bias) by 1.0 (factor 10) and thr by 0.15.
-        init_simplex = np.array([
-            x0,
-            x0 + np.array([ 1.0, 0.0 ]),   # c_bias = 10
-            x0 + np.array([ 0.0, 0.15]),   # thr = 0.30
-        ])
-        # clip into bounds
-        init_simplex = np.clip(init_simplex, lb, ub)
+        init_simplex = _nelder_mead_simplex(x0)
         print(f"  [{tag}] optimiser: Nelder-Mead (adaptive), "
-              f"budget {n_iters}, wide simplex")
+              f"budget {n_iters}")
         minimize(objective, x0, method="Nelder-Mead",
                  options=dict(maxfev=n_iters,
                               xatol=1e-3, fatol=1e-3,
                               adaptive=True,
                               initial_simplex=init_simplex))
 
-    # ------------------------------------------------------------
-    # Robust best selection: reevaluate top-K thetas on val_fixed
-    # using a FRESH rng, pick the highest mean F1.
-    # ------------------------------------------------------------
+    if not history_theta:
+        raise RuntimeError("optimizer produced no objective evaluation")
     K = min(5, len(history_theta))
-    # rank by training F1 (noisy) to pick candidates
     order = np.argsort(history_f1_tr)[::-1]
-    # dedupe near-identical thetas (within 1e-3)
     uniq_idx = []
     seen = []
     for i in order:
@@ -298,24 +347,32 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
         if len(uniq_idx) >= K:
             break
 
-    final_rng = np.random.default_rng(seed + 42)
     final_scores = []
     print(f"\n  [{tag}] re-evaluating top-{len(uniq_idx)} candidates "
           f"on val_fixed ({len(val_fixed)} pairs)...")
     for rank, idx in enumerate(uniq_idx, 1):
         th = history_theta[idx]
-        f1v, cf = _eval_on(th, val_fixed, final_rng)
+        # Reset to the same stream for every candidate (common random
+        # numbers), so SA noise cannot favour one candidate by evaluation
+        # order.
+        candidate_rng = np.random.default_rng(seed + 10_000)
+        f1v, cf = _eval_on(th, val_fixed, candidate_rng)
         c_, thr_ = decode_theta(th)
         final_scores.append((f1v, cf, th))
         print(f"    cand {rank}: c={c_:>7.3f} thr={thr_:.3f}  "
               f"val F1={f1v:.3f}  class={cf:.3f}")
 
-    best_f1v, best_cf, best_theta = max(final_scores, key=lambda t: t[0])
+    best_f1v, best_cf_val, best_theta = max(
+        final_scores, key=lambda t: t[0])
+    test_rng = np.random.default_rng(seed + 20_000)
+    best_f1_test, best_cf_test = _eval_on(
+        best_theta, test_fixed, test_rng)
     c, thr = decode_theta(best_theta)
     bnd = hits_bound(best_theta)
     print(f"\n  [{tag}] BEST: c_bias={c:.3f} thr={thr:.3f}  "
-          f"F1_val={best_f1v:.3f}  classical={best_cf:.3f}  "
-          f"delta={best_f1v - best_cf:+.3f}  "
+          f"F1_val={best_f1v:.3f}; "
+          f"F1_test={best_f1_test:.3f}  classical_test={best_cf_test:.3f}  "
+          f"delta_test={best_f1_test - best_cf_test:+.3f}  "
           f"{'BOUND!' if bnd else 'OK'}")
 
     return dict(
@@ -326,18 +383,26 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
         best_theta=best_theta,
         best_c_bias=c, best_thr=thr,
         best_f1_val=best_f1v,
-        classical_f1=best_cf,
-        delta=best_f1v - best_cf,
+        classical_f1_val=best_cf_val,
+        delta_val=best_f1v - best_cf_val,
+        best_f1_test=best_f1_test,
+        classical_f1=best_cf_test,
+        classical_f1_test=best_cf_test,
+        delta=best_f1_test - best_cf_test,
+        delta_test=best_f1_test - best_cf_test,
         hits_bound=bnd,
-        # D-87 : sans ces trois cles, un run parti d'un coin de la boite et un
-        # run parti de l'interieur sont le meme artefact.
         x0_theta=np.asarray(x0, dtype=float),
         x0_hits_bound=x0_bnd,
         x0_from_analytical=bool(theta_init is not None),
         train_pairs=np.array(train_pairs, dtype=int),
         val_pairs=np.array(val_pairs, dtype=int),
         val_fixed=np.array(val_fixed, dtype=int),
-        optimiser="cma" if use_cma else "nelder-mead",
+        test_pairs=np.array(test_pairs, dtype=int),
+        test_fixed=np.array(test_fixed, dtype=int),
+        split_strategy="chronological_per_configuration",
+        train_fraction=float(train_frac),
+        validation_fraction=float(val_frac),
+        optimiser=optimiser_name,
         w_zz=2.0, w_zzzz=1.0,
     )
 
@@ -347,19 +412,18 @@ def train(snaps_list, dim, *, n_iters, sweeps, n_restarts,
 # -------------------------------------------------------------------
 
 def print_comparison(results):
-    """Show how (c*, thr*) varies across training modes."""
+    """Compare fitted parameters and untouched test performance."""
     print("\n" + "=" * 88)
     print("  CROSS-MODE COMPARISON  (the scientific payload)")
     print("=" * 88)
     print(f"  {'tag':<28} {'c_bias*':>9} {'thr*':>7} "
-          f"{'F1_val':>7} {'class':>6} {'delta':>7} {'bnd':>4}")
+          f"{'F1_test':>7} {'class':>6} {'delta':>7} {'bnd':>4}")
     for r in results:
         print(f"  {r['tag']:<28} {r['best_c_bias']:>9.3f} "
-              f"{r['best_thr']:>7.3f} {r['best_f1_val']:>7.3f} "
+              f"{r['best_thr']:>7.3f} {r['best_f1_test']:>7.3f} "
               f"{r['classical_f1']:>6.3f} {r['delta']:>+7.3f} "
               f"{'YES' if r['hits_bound'] else '':>4}")
 
-    # spread of optima
     cs  = np.array([r['best_c_bias'] for r in results])
     ths = np.array([r['best_thr']    for r in results])
     print(f"\n  c_bias*  range: [{cs.min():.3f}, {cs.max():.3f}]  "
@@ -367,7 +431,6 @@ def print_comparison(results):
     print(f"  thr*     range: [{ths.min():.3f}, {ths.max():.3f}]  "
           f"ratio max/min = {ths.max()/max(ths.min(), 1e-6):.2f}x")
 
-    # verdict
     c_ratio  = cs.max() / max(cs.min(), 1e-6)
     th_ratio = ths.max() / max(ths.min(), 1e-6)
     joint = [r for r in results if r['tag'] == 'joint']
@@ -382,10 +445,10 @@ def print_comparison(results):
         print("      -> v2 Hamiltonian is not scenario-universal; "
               "this is itself a thesis finding.")
     if joint and per_scene:
-        mean_per = np.mean([r['best_f1_val'] for r in per_scene])
-        print(f"    * mean F1_val per-scenario = {mean_per:.3f}  vs  "
-              f"joint = {joint[0]['best_f1_val']:.3f}")
-        if joint[0]['best_f1_val'] < mean_per - 0.02:
+        mean_per = np.mean([r['best_f1_test'] for r in per_scene])
+        print(f"    * mean F1_test per-scenario = {mean_per:.3f}  vs  "
+              f"joint = {joint[0]['best_f1_test']:.3f}")
+        if joint[0]['best_f1_test'] < mean_per - 0.02:
             print("      -> joint sacrifices F1; scenario-specific "
                   "(c, thr) would be needed in practice.")
     any_bnd = any(r['hits_bound'] for r in results)
@@ -401,21 +464,7 @@ def print_comparison(results):
 # -------------------------------------------------------------------
 
 def build_init_map(tags, thr_star, c_bias_star, degenerate):
-    """tag -> theta_init = (log10 c_bias*, thr*), lignes degenerees ecartees.
-
-    Returns (init_map, n_skipped).
-
-    D-86 : extrait de `main()` pour etre testable sans rejouer la campagne
-    (meme geste que D-46/D-50/D-52/D-85). La phase 10a marque desormais les
-    lignes dont la courbe F1(c_bias) est plate : leur `c_bias*` n'est pas un
-    optimum mais le bord GAUCHE de la grille, rendu par `argmax` faute de
-    mieux. Les prendre pour `theta_init` demarrait l'optimiseur a
-    `log10 c_bias = -1`, le bord du domaine, sur la foi d'une mesure qui
-    n'avait rien mesure — et cela arrivait sur 14 des 52 configurations
-    parcourues. Une ligne degeneree (ou NaN, pour un scenario dont tous les
-    Re le sont) est ecartee : le module retombe sur son x0 par defaut,
-    exactement comme si la phase 10a n'avait pas tourne.
-    """
+    """Build analytical initial points, omitting uninformative rows."""
     init_map, n_skipped = {}, 0
     for t, th, cb, dg in zip(tags, thr_star, c_bias_star, degenerate):
         if bool(dg) or not (np.isfinite(cb) and np.isfinite(th)):
@@ -423,22 +472,54 @@ def build_init_map(tags, thr_star, c_bias_star, degenerate):
             continue
         theta_raw = np.array([np.log10(max(float(cb), 0.1)), float(th)])
         theta_x0 = np.clip(theta_raw, THETA_BOUNDS[:, 0], THETA_BOUNDS[:, 1])
-        # D-87 : `np.clip` ne dit rien. `thr*` est cherche par la phase 10a sur
-        # une grille qui deborde la boite — mesure, `--dim 4 --N 256
-        # --max-snaps 8 --seed 0`, Re=400 : 0,6777 (harris_tearing) et 0,6908
-        # (kelvin_helmholtz) contre une borne haute de 0,60, rabotes sur la
-        # borne. Un x0 pose SUR une borne est par ailleurs exactement ce que
-        # `hits_bound` sert a signaler — il n'etait evalue que sur le theta
-        # FINAL. Mesure, meme configuration : vrai sur 3 lignes sur 4.
         if not np.allclose(theta_raw, theta_x0):
-            print(f"  [{t}] init analytique RABOTE sur la boite (D-87) : "
+            print(f"  [{t}] analytical init clipped to optimizer bounds: "
                   f"(log10 c, thr) {theta_raw} -> {theta_x0}")
         if hits_bound(theta_x0):
-            print(f"  [{t}] x0 analytique est SUR une borne de la boite "
-                  f"(D-87) : l'optimiseur y demarre au coin, et le vrai "
-                  f"optimum peut etre au-dela.")
+            print(f"  [{t}] analytical init lies on an optimizer bound")
         init_map[str(t)] = theta_x0
     return init_map, n_skipped
+
+
+def build_init_map_from_artifact(artifact, train_frac=0.6, val_frac=0.2):
+    """Validate a phase-10a artifact before using it as optimizer input."""
+    required = {
+        "tags", "thr_star", "c_bias_star", "degenerate", "theta_bounds",
+        "at_left_edge", "at_right_edge", "bias_only_limit",
+        "split_strategy", "train_fraction", "validation_fraction",
+    }
+    available = set(artifact.files) if hasattr(artifact, "files") else set(artifact)
+    missing = sorted(required - available)
+    if missing:
+        raise RuntimeError(
+            "analytical initialization artifact is obsolete; missing "
+            f"{missing}. Re-run phase 10a before phase 10")
+    bounds = np.asarray(artifact["theta_bounds"], dtype=float)
+    if bounds.shape != THETA_BOUNDS.shape or not np.allclose(
+            bounds, THETA_BOUNDS, rtol=0.0, atol=0.0):
+        raise RuntimeError(
+            "analytical initialization uses different search bounds; "
+            "re-run phase 10a with the current code")
+    if (str(np.asarray(artifact["split_strategy"]).item())
+            != "chronological_per_configuration"
+            or not np.isclose(float(artifact["train_fraction"]), train_frac)
+            or not np.isclose(float(artifact["validation_fraction"]), val_frac)):
+        raise RuntimeError(
+            "analytical initialization uses a different temporal split; "
+            "re-run phase 10a with matching --train-frac/--val-frac")
+    degenerate = np.asarray(artifact["degenerate"], dtype=bool)
+    left = np.asarray(artifact["at_left_edge"], dtype=bool)
+    right = np.asarray(artifact["at_right_edge"], dtype=bool)
+    bias_only = np.asarray(artifact["bias_only_limit"], dtype=bool)
+    unresolved = (~degenerate) & (left | (right & ~bias_only))
+    if np.any(unresolved):
+        tags = np.asarray(artifact["tags"])[unresolved]
+        raise RuntimeError(
+            "analytical initialization contains unresolved edge sweeps for "
+            f"{list(map(str, tags))}; widen the phase-10a grid")
+    return build_init_map(
+        artifact["tags"], artifact["thr_star"], artifact["c_bias_star"],
+        degenerate)
 
 
 # -------------------------------------------------------------------
@@ -447,7 +528,7 @@ def build_init_map(tags, thr_star, c_bias_star, degenerate):
 
 def main():
     p = argparse.ArgumentParser(
-        description="Phase 10: train v2 (c_bias, thr_amr) in 3 modes")
+        description="Phase 10: supervised V2 rescue fit")
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--scenario", nargs="+", default=SCENARIOS)
     p.add_argument("--dim", type=int, default=4)
@@ -460,11 +541,16 @@ def main():
                    help="max objective evaluations per training run")
     p.add_argument("--sweeps", type=int, default=600)
     p.add_argument("--n-restarts", type=int, default=2)
-    p.add_argument("--train-frac", type=float, default=0.7)
+    p.add_argument("--train-frac", type=float, default=0.6,
+                   help="chronological training fraction per trajectory")
+    p.add_argument("--val-frac", type=float, default=0.2,
+                   help="chronological model-selection fraction")
     p.add_argument("--max-batch", type=int, default=16,
                    help="train snaps sampled per eval (↑ = less noise)")
     p.add_argument("--max-val", type=int, default=24,
-                   help="snaps in the frozen val_fixed set")
+                   help="maximum validation snapshots per fit")
+    p.add_argument("--max-test", type=int, default=24,
+                   help="maximum untouched test snapshots per fit")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--optimiser", choices=["cma", "nelder-mead"],
                    default="cma")
@@ -473,9 +559,17 @@ def main():
                         "for results/analytical_N{N}_dim{D}.npz; 'none' "
                         "disables it.")
     args = p.parse_args()
+    # Validate the split before loading inputs or starting an optimizer.
+    try:
+        chronological_split_indices(3, args.train_frac, args.val_frac)
+    except ValueError as exc:
+        p.error(str(exc))
+    if args.optimiser == "cma" and not HAS_CMA:
+        p.error("--optimiser cma requires the declared 'cma' dependency")
+    run_provenance = provenance.start()
 
     print("=" * 88)
-    print("  Phase 10: training of v2 (c_bias, thr_amr)")
+    print("  Phase 10: supervised V2 rescue fit")
     print(f"  theta = (log10 c_bias, thr_amr) ; w_zz=2, w_zzzz=1 (fixed)")
     print(f"  modes: {args.modes}")
     print(f"  optimiser={args.optimiser}  budget/run={args.n_iters}")
@@ -497,15 +591,8 @@ def main():
                 print(f"  SKIP {sc} Re={re}: missing input")
 
     if not configs:
-        # D-56 : ce garde imprimait un message et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui
-        # de la campagne precedente. Une campagne qui n'avait rien mesure
-        # etait indiscernable d'une campagne reussie.
         raise RuntimeError(
-            "balayage vide : aucune configuration n'a d'artefact d'entree "
-            "pour les arguments donnes. Le script sortait ici avec le code "
-            "0 et sans artefact, donc sans se distinguer d'une campagne "
-            "reussie.")
+            "empty sweep: no configuration has both DNS and patch inputs")
 
     # load once
     snaps_all = [load_snapshots(dp, pp) for _, _, dp, pp in configs]
@@ -526,22 +613,11 @@ def main():
             ana_path = args.analytical_init
         if os.path.exists(ana_path):
             ana = np.load(ana_path, allow_pickle=False)
-            tags = ana["tags"]; thr_s = ana["thr_star"]
-            c_s = ana["c_bias_star"]
-            # D-86 : la phase 10a marque desormais les lignes dont la courbe
-            # F1(c_bias) est plate — leur `c_bias*` n'est pas un optimum mais
-            # le bord gauche de la grille, rendu par `argmax` faute de mieux.
-            # Les prendre pour theta_init demarrait l'optimiseur au bord du
-            # domaine sur la foi d'une mesure qui n'avait rien mesure. Une
-            # ligne degeneree (ou NaN, pour un scenario dont tous les Re le
-            # sont) est ecartee : le module retombe sur son x0 par defaut,
-            # exactement comme si la phase 10a n'avait pas tourne.
-            degen = ana["degenerate"] if "degenerate" in ana.files \
-                else np.zeros(len(tags), dtype=bool)
-            init_map, n_skip = build_init_map(tags, thr_s, c_s, degen)
+            init_map, n_skip = build_init_map_from_artifact(
+                ana, args.train_frac, args.val_frac)
             print(f"  analytical init loaded from "
                   f"{os.path.basename(ana_path)}: {len(init_map)} entries"
-                  + (f", {n_skip} degenerees ecartees (D-86)"
+                  + (f", {n_skip} uninformative rows skipped"
                      if n_skip else "") + "\n")
         else:
             print(f"  no analytical init at {ana_path} -> "
@@ -554,27 +630,22 @@ def main():
             snaps_list, args.dim,
             n_iters=args.n_iters, sweeps=args.sweeps,
             n_restarts=args.n_restarts, train_frac=args.train_frac,
+            val_frac=args.val_frac,
             seed=args.seed, optimiser_name=args.optimiser,
-            max_batch=args.max_batch, max_val=args.max_val, tag=tag,
+            max_batch=args.max_batch, max_val=args.max_val,
+            max_test=args.max_test, tag=tag,
             theta_init=theta_init,
         )
         print(f"  [{tag}] wall-time: {time.time()-t0:.0f}s\n")
         fname = f"train_{tag.replace(':', '-').replace(' ', '_')}_" \
                 f"N{args.N}_dim{args.dim}.npz"
-        # D-80 : ce filtre `not isinstance(v, str)` ecartait les deux seules
-        # chaines de `res` — `tag`, reajoutee juste apres sous `tag_str`, et
-        # `optimiser`, qui ne l'etait pas. Or `optimiser` est la SEULE trace
-        # du repli : si `cma` n'est pas installe, le script previent sur une
-        # ligne parmi des centaines puis tourne en Nelder-Mead, et l'artefact
-        # etait alors indiscernable d'un vrai run CMA-ES. Mesure : sur un
-        # conteneur sans `cma`, l'artefact ne portait aucune cle `optimiser`.
         np.savez_compressed(
             os.path.join(RESULTS_DIR, fname),
-            **{k: v for k, v in res.items() if not isinstance(v, str)},
+            **{k: v for k, v in res.items() if k != "tag"},
             tag_str=tag,
-            optimiser=res["optimiser"],
-            optimiser_requested=args.optimiser,
-            cma_available=HAS_CMA)
+            cli_args=json.dumps(vars(args), sort_keys=True),
+            seed=args.seed,
+            **provenance.finish(run_provenance))
         print(f"  saved: {fname}")
         return res
 
@@ -608,15 +679,23 @@ def main():
         c_bias=np.array([r["best_c_bias"] for r in all_results]),
         thr=np.array([r["best_thr"] for r in all_results]),
         f1_val=np.array([r["best_f1_val"] for r in all_results]),
+        classical_f1_val=np.array(
+            [r["classical_f1_val"] for r in all_results]),
+        delta_val=np.array([r["delta_val"] for r in all_results]),
+        f1_test=np.array([r["best_f1_test"] for r in all_results]),
         classical_f1=np.array([r["classical_f1"] for r in all_results]),
+        classical_f1_test=np.array(
+            [r["classical_f1_test"] for r in all_results]),
         delta=np.array([r["delta"] for r in all_results]),
+        delta_test=np.array([r["delta_test"] for r in all_results]),
         hits_bound=np.array([r["hits_bound"] for r in all_results]),
-        # D-80 : la table de comparaison croise les modes ; sans cette
-        # colonne, deux lignes optimisees par deux optimiseurs differents
-        # y sont indiscernables.
         optimiser=np.array([r["optimiser"] for r in all_results]),
-        optimiser_requested=args.optimiser,
-        cma_available=HAS_CMA,
+        split_strategy="chronological_per_configuration",
+        train_fraction=args.train_frac,
+        validation_fraction=args.val_frac,
+        cli_args=json.dumps(vars(args), sort_keys=True),
+        seed=args.seed,
+        **provenance.finish(run_provenance),
     )
     print(f"\n  saved compare: {os.path.basename(compare_path)}")
     print("\nPhase 10 complete.")

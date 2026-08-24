@@ -73,22 +73,9 @@ _SRC = os.path.join(_ROOT, "src")
 _URL_WITH_PASSWORD = re.compile(
     r"[a-z][a-z0-9+.\-]*://[^\s/:@\"']+:[^\s/:@\"']+@[^\s\"']+")
 
-#: Les couples utilisateur:motdepasse qui ne sont PAS des secrets — des
-#: modeles que la documentation et ce test montrent volontairement. Chacun
-#: doit rester trouvable dans le depot : une exemption perimee est un
-#: mensonge qui dort (meme regle que `_EXEMPTIONS` de
-#: `tests/test_launcher_paths_resolve.py`).
-#:
-#: D-161 : deux entrees ont ete RETIREES d'ici parce qu'elles ne
-#: neutralisaient plus rien. `utilisateur:motdepasse` n'apparaît qu'en prose
-#: (aucune URL ne le porte) et `user:secret` n'est ecrit qu'en morceaux
-#: concatenes, que `_URL_WITH_PASSWORD` ne reconnaît pas. Mesure : les
-#: retirer laisse **0 fuite**. Elles n'exemptaient donc rien — elles
-#: autorisaient d'avance tout secret qui aurait porte ces couples.
-_MODELES = {
-    "user:pass": "README.md — la forme d'une URL Optuna, sans valeur reelle",
-    "user:pw": "docs/MODE_EMPLOI_CAMPAGNE.md — idem, forme abregee",
-}
+#: No credential-bearing URL, including a placeholder, is needed by the
+#: single-machine workflow. Keep the exemption set empty.
+_MODELES = {}
 
 #: Extensions balayees : tout ce qui peut porter une valeur executee ou
 #: copiee-collee. Les binaires et les artefacts en sont exclus par extension,
@@ -97,8 +84,8 @@ _EXTENSIONS = (".py", ".sh", ".ipynb", ".yaml", ".yml", ".json", ".toml",
                ".cfg", ".ini", ".md", ".txt", ".env", ".tex")
 
 #: Dossiers sans code vivant : historique de campagne et caches.
-_HORS_BALAYAGE = ("__pycache__", ".git", "node_modules", "Train_results",
-                  "Data_results")
+_HORS_BALAYAGE = ("__pycache__", ".git", ".venv", ".venv_vigil", "env",
+                  "node_modules", "Train_results", "Data_results")
 
 #: Plancher mesure a `c7a1e9c`. Un balayage qui retrecit ne prouve plus rien.
 _PLANCHER_FICHIERS = 200
@@ -325,10 +312,6 @@ def test_le_detecteur_de_porteurs_peut_rendre_vide():
     rendre la liste vide.
     """
     assert _porteurs_reels("temoin_d161:aucune_url_ne_le_porte") == []
-    #  et un couple reellement porte doit, lui, rendre quelque chose
-    assert _porteurs_reels("user:pass"), (
-        "le balayage des porteurs ne trouve plus le modele du README : il "
-        "est vide ou tronque, et le controle de peremption ne prouve rien")
 
 
 def test_a_real_secret_wearing_a_placeholder_username_is_still_caught():

@@ -9,9 +9,9 @@ transfer » a partir d'une moyenne sur QUATRE folds dont l'ecart-type vaut
 0.29, et dont deux valent exactement 0.400 (tout positif) ou 0.000 (tout
 negatif) — des constantes, pas des modeles.
 
-Ce script recalcule les memes folds, garde les predictions, et met un
-intervalle de confiance bootstrap par trajectoire (bloc = un instantane) sur
-chaque ecart. Un verdict n'est emis QUE si l'intervalle ne contient pas zero.
+Ce script recalcule les folds et re-echantillonne les trajectoires physiques
+completes (scenario, Re, graine). Un verdict n'est emis QUE si l'intervalle
+ne contient pas zero.
 Sinon la ligne dit « indecidable », ce qui est l'information reelle.
 
 Il signale aussi les folds ou le modele s'est effondre sur une constante :
@@ -43,9 +43,13 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from config import RESULTS_DIR, RE_VALUES, SCENARIOS, DNS_N
+from config import (
+    DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+)
+from data_catalog import labelled_trajectory_paths
 from h2b_ceiling_random_split import make_model, fit_eval, best_threshold_f1
 from h2b_loso_transfer import _gather_scenario
+from h2b_feature_selection import git_commit_hash
 from stats import bootstrap_by_trajectory
 
 B_DEFAULT = 1000
@@ -58,9 +62,7 @@ def _f1(y, pred):
 def delta_ci(y, pred_a, pred_b, traj, B, seed):
     """IC bootstrap par trajectoire sur F1(b) - F1(a).
 
-    Le bloc de reechantillonnage est l'instantane : les patches d'un meme
-    instantane ne sont pas independants, les traiter comme tels retrecirait
-    l'intervalle artificiellement.
+    Le bloc de reechantillonnage est une trajectoire physique complete.
     """
     idx = np.arange(len(y))
 
@@ -77,18 +79,11 @@ def constant_predictor(pred):
     return pred.min() == pred.max()
 
 
-def run_dim(dim, N, re_values, scenarios, max_snaps, seed, B, suffix):
-    by_scene = {}
-    for sc in scenarios:
-        rows = []
-        for re in re_values:
-            dns = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{N}.npz")
-            pat = os.path.join(
-                RESULTS_DIR, f"patches_{sc}_Re{re}_N{N}_dim{dim}{suffix}.npz")
-            if os.path.exists(dns) and os.path.exists(pat):
-                rows.append((re, dns, pat))
-        if rows:
-            by_scene[sc] = rows
+def run_dim(dim, N, re_values, scenarios, physics_seeds, max_snaps, seed,
+            B, suffix):
+    by_scene = labelled_trajectory_paths(
+        RESULTS_DIR, scenarios, re_values, N, dim, physics_seeds,
+        label_suffix=suffix)
     if len(by_scene) < 3:
         raise SystemExit(
             f"dim={dim}{suffix}: {len(by_scene)} scenarios disponibles, il en "
@@ -96,9 +91,18 @@ def run_dim(dim, N, re_values, scenarios, max_snaps, seed, B, suffix):
 
     data = {}
     for sc, rows in by_scene.items():
-        Xs, Xn, Y, S = _gather_scenario(rows, dim, max_snaps)
-        traj = np.arange(len(Y)) // (dim * dim)      # un bloc = un instantane
-        data[sc] = dict(X_site=Xs, X_sten=Xn, Y=Y, S=S, traj=traj)
+        pieces = []
+        for trajectory_id, row in enumerate(rows):
+            Xs, Xn, Y, S = _gather_scenario([row], dim, max_snaps)
+            pieces.append((Xs, Xn, Y, S,
+                           np.full(len(Y), trajectory_id, dtype=int)))
+        data[sc] = dict(
+            X_site=np.concatenate([piece[0] for piece in pieces]),
+            X_sten=np.concatenate([piece[1] for piece in pieces]),
+            Y=np.concatenate([piece[2] for piece in pieces]),
+            S=np.concatenate([piece[3] for piece in pieces]),
+            traj=np.concatenate([piece[4] for piece in pieces]),
+        )
 
     print(f"\n{'='*78}")
     print(f"  dim={dim}  N={N}  labels='{suffix or 'par scenario'}'  "
@@ -209,6 +213,8 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--scenario", nargs="+", default=SCENARIOS)
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--max-snaps", type=int, default=30)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--bootstrap", type=int, default=B_DEFAULT)
@@ -224,7 +230,7 @@ def main():
     t0 = time.time()
     all_rows, verdicts = [], {}
     for dim in args.dim:
-        rows = run_dim(dim, args.N, args.re, args.scenario,
+        rows = run_dim(dim, args.N, args.re, args.scenario, args.phys_seed,
                        args.max_snaps, args.seed, args.bootstrap,
                        args.label_suffix)
         verdicts[dim] = verdict(rows)
@@ -251,6 +257,8 @@ def main():
         constant_compared=np.array([r["constant_compared"] for r in all_rows]),
         verdict_by_dim=np.array([f"{d}:{v}" for d, v in verdicts.items()]),
         label_suffix=args.label_suffix,
+        physics_seeds=np.array(args.phys_seed),
+        git_hash=git_commit_hash(),
         cli_args=" ".join(sys.argv[1:]),
     )
     print(f"\n  saved: {os.path.basename(out)}   ({time.time() - t0:.1f}s)")

@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""
-Phase 5 - QAOA evaluation on promising patches.
+"""Phase 5: QAOA benchmark on every snapshot evaluated by phase 4.
 
-Only runs on patches where Phase 4 showed the Hamiltonian is correct
-(exact ground state agrees with L2 ground truth). Compares:
-  1. QAOA decisions (optimized circuit)
-  2. Classical threshold decisions
-  3. Exact ground state decisions (from Phase 4)
-  4. L2 ground truth
-
-This is the final validation: does the QAOA circuit actually find
-decisions close to the exact ground state, and does it beat classical?
+QAOA, the exact Ising solution and the classical threshold are compared to
+the same L2-hard labels. ``promising`` is retained only as a diagnostic and
+never filters the panel. Agreement with an arbitrary exact state is omitted
+when the ground-state manifold is degenerate.
 
 Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
         results/patches_{scenario}_Re{Re}_N{N}_dim{D}.npz
@@ -18,10 +12,9 @@ Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
 Output: results/qaoa_eval_{scenario}_Re{Re}_N{N}_dim{D}.npz
 
 Usage:
-  python study/qaoa_inputs.py
-  python study/qaoa_inputs.py --re 800 --dim 2 --reps 2
+  python study/common/qaoa_inputs.py --re 800 --dim 2 --reps 2
 """
-import argparse, os, sys, time
+import argparse, json, os, sys, time
 import numpy as np
 
 # --- chemins du dépôt (bloc unique, généré) -------------------------------
@@ -35,12 +28,10 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 from config import (
     RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, VQA_DIMS,
-    TRAINED_SIGMA, TRAINED_BETA_CURL, TRAINED_BETA_XPOINT,
-    TRAINED_W_Z_FRAC, TRAINED_THRESHOLD, TRAINED_GAMMA_HYDRO,
-    TRAINED_GAMMA_MAG, TRAINED_KAPPA, TRAINED_BETA,
+    TRAINED_THRESHOLD, TRAINED_BETA, trained_mapper_params,
     V2_THRESHOLD,
 )
-from Simulation.grid import PeriodicGrid
+from Simulation.grid import AXIS_X, AXIS_Y, PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.HamiltParams import PhysicalMapper
 from Simulation.HamiltParams_v2 import PhysicalMapperV2
@@ -49,6 +40,7 @@ from VQA.cost_hamiltonian import create_period_hamiltonian
 from VQA.mapping import mapping
 from VQA.execute import execute
 from VQA.postprocess import postprocess
+import provenance
 
 
 # -------------------------------------------------------------------
@@ -58,10 +50,9 @@ from VQA.postprocess import postprocess
 def prune_hamilt_params(hamilt_params, eps):
     """Zero out coefficients with |coeff| < eps * max(|coeff|) in each block.
 
-    Returns a new dict with H_edges, C_edges, K_plaquettes pruned. This
-    yields sparser Hamiltonians → shorter compiled circuits → faster
-    simulation. We prune each block independently so a very strong H_i
-    doesn't kill all C/K terms (they live on different scales).
+    Returns a new dict with H_edges, C_edges, K_plaquettes and K_xpoint
+    pruned. Blocks are thresholded independently because they represent
+    distinct operator families.
     """
     import copy
     hp = copy.deepcopy(hamilt_params)
@@ -92,52 +83,26 @@ def prune_hamilt_params(hamilt_params, eps):
         hp["K_plaquettes"] = _prune_block(
             np.asarray(hp["K_plaquettes"], dtype=float).copy())
 
+    if "K_xpoint" in hp and hp["K_xpoint"] is not None:
+        hp["K_xpoint"] = _prune_block(
+            np.asarray(hp["K_xpoint"], dtype=float).copy())
+
     return hp
 
 
 # -------------------------------------------------------------------
-# Warm-start from classical score (path D)
+# Deterministic QAOA parameter initialisation
 # -------------------------------------------------------------------
 
-def classical_warm_start_params(score_vqa, threshold_amr, reps):
-    """Schedule (beta, gamma) CONSTANT — ne lit NI `score_vqa` NI `threshold_amr`.
+def constant_initial_params(reps):
+    """Return a deterministic ``(beta, gamma)`` schedule for QAOA.
 
-    D-48. Le nom, l'ancienne docstring (« from the classical AMR decision »)
-    et l'aide CLI de `--warm-start` (« classical-score-derived ») annoncaient
-    un warm start derive de la decision classique. Il n'en est rien : le
-    corps ne consomme aucun des deux premiers arguments et rend
-    `beta = 0.05` partout, `gamma = 0.15 / k`, pour tout champ et tout seuil.
-
-    Mesure du contrat (6 entrees couvrant tout l'intervalle : score nul,
-    score unite, score aleatoire, seuil 0 / 1 / 1e9) : sortie identique
-    BIT-A-BIT, ecart maximal **0,0e+00**. Les deux arguments sont morts.
-
-    Cela compte parce que les appelants les passent a cote de warm starts
-    qui, eux, sont reels — `sa_warm` et `greedy` demarrent sur
-    `classical_init_spins(score_vqa, thr_amr, dim)` dans
-    `h0_optimiser_equivalence.solver_panel` — et parce que la fiche d'audit
-    compte « warm start present » parmi les axes que les etudes h0/h3
-    traversent. Elles ne le traversent pas : elles traversent une
-    initialisation constante.
-
-    NON CORRIGE — decision, pas defaut de code. Rendre le schedule
-    reellement dependant du score deplacerait `progress` (T11b,
-    `RESULTS.md`), un nombre publie : voir la mesure dans `DEFAUTS.md` D-48.
-    Le schedule reste donc bit-a-bit celui sur lequel les nombres publies
-    ont ete obtenus. `tests/study/test_warm_start_is_constant.py` epingle
-    cette independance : le jour ou quelqu'un la lie au score, le test
-    tombe et la mesure doit etre refaite.
-
-    Les deux arguments sont conserves dans la signature parce que les quatre
-    sites d'appel les passent ; les retirer serait un changement d'API sans
-    rapport avec la question posee.
+    This is an optimiser initialisation, not a classical warm start. The
+    encoded classical score already enters the circuit through ``theta``.
     """
-    del score_vqa, threshold_amr        # D-48 : jamais lus, explicitement.
-    # Small ramp: large-ish gamma on first layer so the cost Hamiltonian
-    # nudges amplitudes in the classical direction; tiny beta to avoid
-    # flattening the distribution.
+    if reps < 1:
+        raise ValueError("reps doit etre >= 1")
     beta = np.full(reps, 0.05)
-    # gamma ramp: geometric decay, first layer dominant
     k = np.arange(1, reps + 1)
     gamma = 0.15 / k
     return np.concatenate([beta, gamma])
@@ -149,17 +114,12 @@ def classical_warm_start_params(score_vqa, threshold_amr, reps):
 
 
 def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
-                       HamiltMapper, threshold_amr, beta, fixed_curl=False):
-    """Angles (theta, psi) tels que les calcule le pipeline DEPLOYE.
+                       HamiltMapper, threshold_amr, beta, fixed_curl=True,
+                       prev_phi=None):
+    """Delegate theta/psi encoding to the deployed depth-zero encoder.
 
-    On ne recalcule rien : on appelle `refinement._prepare_vqa_input`, qui
-    est l'encodeur reellement utilise par V1. Reimplementer donnerait un psi
-    qui RESSEMBLE au vrai sans l'etre — et un psi vraisemblable mais faux
-    serait indiscernable du bon, ce qui est precisement le defaut que cette
-    etude traque.
-
-    Le scan de profondeur 0 est periodique et couvre tout le domaine, donc
-    bounds = (0, N, 0, N) et depth = 0.
+    ``prev_phi`` accepts the pipeline's exponential moving average directly.
+    ``prev_fields`` is retained for snapshot-pair studies.
     """
     from types import SimpleNamespace
 
@@ -173,7 +133,22 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
 
     mapper = AngleMapper()
     Phi = mapper.compute_stress_flux(physics_state)
-    Phi_prev = mapper.compute_stress_flux(prev_fields)
+    if prev_phi is None:
+        if prev_fields is None:
+            raise ValueError("prev_fields or prev_phi is required")
+        prev_state = dict(prev_fields)
+        prev_state["Jz"] = (
+            (np.roll(prev_state["By"], -1, axis=AXIS_X)
+             - np.roll(prev_state["By"], 1, axis=AXIS_X))
+            - (np.roll(prev_state["Bx"], -1, axis=AXIS_Y)
+               - np.roll(prev_state["Bx"], 1, axis=AXIS_Y))
+        ) / (2.0 * dx)
+        Phi_prev = mapper.compute_stress_flux(prev_state)
+    else:
+        missing = {"phi_horizontal", "phi_vertical"} - set(prev_phi)
+        if missing:
+            raise KeyError(f"prev_phi is missing {sorted(missing)}")
+        Phi_prev = prev_phi
 
     full_h, full_v = Phi["phi_horizontal"], Phi["phi_vertical"]
     prev_h, prev_v = Phi_prev["phi_horizontal"], Phi_prev["phi_vertical"]
@@ -188,7 +163,7 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
     prep = _prepare_vqa_input(
         full_h, full_v, prev_h, prev_v, full_score,
         physics_state, (0, N, 0, N), 0, mapper,
-        SimpleNamespace(AdvAnomaliesEnable=False),
+        SimpleNamespace(AdvAnomaliesEnable=True),
         average_phi_dev, beta, n_patches,
         HamiltMapper=HamiltMapper, sim=sim, threshold_amr=threshold_amr,
     )
@@ -202,7 +177,8 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
 
 def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
                         use_v2=False, prev_fields=None,
-                        with_psi=False, beta=1.0, fixed_curl=False):
+                        with_psi=False, beta=1.0, fixed_curl=True,
+                        prev_phi=None):
     """
     Prepare all inputs needed for QAOA on one snapshot.
 
@@ -211,24 +187,12 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
       hamilt_params: dict for Hamiltonian construction
       score_vqa: (n_patches, n_patches) classical score
 
-    prev_fields / with_psi
-    ----------------------
-    psi encode la DERIVEE TEMPORELLE du flux de contrainte. Il vaut zero par
-    defaut ici (voir plus bas), alors que le pipeline deploye le calcule
-    (refinement.py:181) et que la campagne Optuna a regle les hyperparametres
-    avec lui actif. Passer prev_fields (l'instantane precedent) et
-    with_psi=True rebranche cet encodage, en DELEGUANT a l'encodeur du
-    pipeline plutot qu'en le reimplementant.
+    With ``with_psi=True``, ``prev_phi`` should be the deployed EMA of the
+    stress flux. A raw ``prev_fields`` snapshot is also accepted for paired
+    representation studies.
 
-    fixed_curl
-    ----------
-    Les mappeurs forment leur rotationnel et leur divergence sous la
-    convention indexing='xy' alors que `grid.py` declare indexing='ij'. Sous
-    la convention du depot, leur « vorticite » vaut dv_y/dy - dv_x/dx : elle
-    est aveugle a la rotation solide (voir `tests/test_analytic_fields.py`).
-    fixed_curl=True applique la convention declaree. Le defaut reste False,
-    bit-a-bit identique au chemin sur lequel les hyperparametres ont ete
-    optimises.
+    ``fixed_curl=True`` applique la convention ``indexing='ij'`` de la
+    grille. Une ablation explicite peut passer ``False``.
     """
     dx = 2 * np.pi / N
     nu = 1.0 / Re
@@ -240,10 +204,8 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     else:
         mapper = PhysicalMapper(
             cs=1.0, nu=nu, eta_mhd=eta, dx=dx,
-            gamma_hydro=TRAINED_GAMMA_HYDRO, gamma_mag=TRAINED_GAMMA_MAG,
-            kappa=TRAINED_KAPPA, sigma=TRAINED_SIGMA,
-            beta_curl=TRAINED_BETA_CURL, beta_xpoint=TRAINED_BETA_XPOINT,
-            w_z_frac=TRAINED_W_Z_FRAC, fixed_curl=fixed_curl,
+            fixed_curl=fixed_curl,
+            **trained_mapper_params(),
         )
 
     # compute Jz at full resolution for classical score
@@ -283,6 +245,7 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     threshold_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
     hamilt_params = mapper.compute_coefficients(
         sim_vqa, score_vqa, fields_vqa, threshold_amr,
+        advanced_anomalies_enabled=True,
         dx_override=dx_vqa, verbose=False,
     )
 
@@ -296,15 +259,13 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     psi_v = np.zeros_like(theta_v)
 
     if with_psi:
-        if prev_fields is None:
+        if prev_fields is None and prev_phi is None:
             raise ValueError(
-                "with_psi=True exige prev_fields : psi est une derivee "
-                "temporelle, il ne peut pas etre calcule sur un instantane "
-                "isole. Un psi fabrique sans instantane precedent serait "
-                "indiscernable du vrai.")
+                "with_psi=True requires prev_fields or prev_phi")
         theta_h, theta_v, psi_h, psi_v = _psi_from_pipeline(
             vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
             mapper, threshold_amr, beta, fixed_curl=fixed_curl,
+            prev_phi=prev_phi,
         )
 
     data_in = {
@@ -325,7 +286,8 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
                          K_opt=100, shots=8192,
                          backend_name="state_vector",
                          warm_start_params=None,
-                         prune_eps=0.0):
+                         prune_eps=0.0,
+                         seed=0):
     """
     Build and run QAOA circuit, return decisions.
 
@@ -347,7 +309,6 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
     # build circuit
     qc, cost_hamiltonian = mapping(
         data_in, hamilt_params,
-        advanced_anomalies_enabled=True,
         period_bound=True,
         reps=reps,
     )
@@ -369,6 +330,7 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
         E_max=E_max,
         verbose=False,
         warm_start_params=warm_start_params,
+        seed=seed,
     )
 
     n_qubits = 2 * dim * dim
@@ -393,7 +355,8 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
 # -------------------------------------------------------------------
 
 def full_comparison(qaoa_h, qaoa_v, exact_h, exact_v,
-                    gt_refine, score_patch, threshold_amr):
+                    gt_refine, score_patch, threshold_amr,
+                    exact_ground_degeneracy=1):
     """
     Compare QAOA vs exact diag vs classical vs ground truth.
     """
@@ -413,13 +376,39 @@ def full_comparison(qaoa_h, qaoa_v, exact_h, exact_v,
         return {"accuracy": acc, "precision": prec, "recall": rec, "f1": f1}
 
     # agreement between QAOA and exact ground state
-    qaoa_exact_agree = np.mean(qaoa_refine == exact_refine)
+    qaoa_exact_agree_raw = float(np.mean(qaoa_refine == exact_refine))
+    qaoa_exact_agree = (
+        qaoa_exact_agree_raw if exact_ground_degeneracy == 1 else np.nan)
 
     return {
         "qaoa": metrics(qaoa_refine, gt_refine),
         "exact": metrics(exact_refine, gt_refine),
         "classical": metrics(classical_refine, gt_refine),
         "qaoa_exact_agreement": qaoa_exact_agree,
+        "qaoa_exact_agreement_raw": qaoa_exact_agree_raw,
+        "exact_ground_degeneracy": int(exact_ground_degeneracy),
+    }
+
+
+def _stress_flux_for_snapshot(vx, vy, Bx, By, N):
+    """Compute the stress flux with the deployed grid convention."""
+    dx = 2 * np.pi / N
+    jz = (
+        (np.roll(By, -1, axis=AXIS_X) - np.roll(By, 1, axis=AXIS_X))
+        - (np.roll(Bx, -1, axis=AXIS_Y) - np.roll(Bx, 1, axis=AXIS_Y))
+    ) / (2.0 * dx)
+    return AngleMapper().compute_stress_flux({
+        "vx": vx, "vy": vy, "Bx": Bx, "By": By, "Jz": jz,
+    })
+
+
+def _ema_update(previous, current, alpha=0.3):
+    if previous is None:
+        return {key: np.asarray(value) for key, value in current.items()}
+    return {
+        key: alpha * np.asarray(current[key])
+        + (1.0 - alpha) * np.asarray(previous[key])
+        for key in current
     }
 
 
@@ -430,11 +419,18 @@ def full_comparison(qaoa_h, qaoa_v, exact_h, exact_v,
 def run_phase5(dns_path, patches_path, ed_path, n_patches,
                reps=2, K_opt=100, use_v2=False,
                backend_name="state_vector",
-               warm_start_classical=False,
-               prune_eps=0.0):
+               constant_initialisation=False,
+               prune_eps=0.0,
+               seed=0,
+               zero_psi=False):
     """
     Run Phase 5 for one (scenario, Re, dim) combination.
     """
+    if isinstance(seed, (bool, np.bool_)) or not isinstance(
+            seed, (int, np.integer)):
+        raise TypeError("seed must be an integer")
+    if not 0 <= int(seed) <= 2**32 - 1:
+        raise ValueError("seed must be between 0 and 2**32 - 1")
     dns = np.load(dns_path)
     patches = np.load(patches_path)
     ed = np.load(ed_path)
@@ -449,49 +445,41 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
 
     l2_all = patches["l2_errors"]
     l2_threshold = float(patches["l2_threshold"])
-    is_hard_all = patches["is_hard"]
-
     # Phase 4 results
     promising = ed["promising"]
     snap_indices = ed["snap_indices"]
     ed_decisions_h = ed["decisions_h"]
     ed_decisions_v = ed["decisions_v"]
-    ed_gt_refine = ed["gt_refine"]
-
-    # D-47 — `promising` est un DIAGNOSTIC, plus un FILTRE.
-    #
-    # La porte valait `f1_exact >= f1_classique` (exact_diagonalisation.py).
-    # Mesure sur 40 instantanes : decision exacte tout-a-1 40/40, ligne de
-    # base classique tout-a-1 40/40, `exact != classical` 0/40, F1 egaux
-    # 40/40 et jamais superieurs. Deux predicteurs CONSTANTS identiques
-    # rendent le meme F1 par construction, donc la porte valait True 40/40
-    # avec `>=` et aurait valu False 40/40 avec le `>` de son propre
-    # commentaire : elle portait ZERO bit dans les deux sens.
-    #
-    # Cause, mesuree : a resolution VQA le score est a 8,4 sigma du seuil,
-    # donc la fenetre gaussienne du couplage ZZ vaut au plus 1,15e-31 et le
-    # biais Z, positif partout, domine le ZZZZ de 2 a 6,6x. Le fondamental
-    # met tous les qubits a |1> faute de terme portant une structure
-    # spatiale. C'est une limite STRUCTURELLE de l'hamiltonien v1 a cette
-    # resolution, pas un defaut de la phase 4.
-    #
-    # Consequence : filtrer sur cette porte, c'est selectionner sur une
-    # constante. La phase 5 traite donc TOUS les instantanes, et le compte
-    # reste imprime comme diagnostic.
-    #
-    # Ce changement ne deplace AUCUN nombre publie : avec `>=`, `promising`
-    # etait deja vrai partout, donc rien n'etait ecarte. Verifie par
-    # `tests/study/test_phase5_ne_filtre_plus_sur_promising.py`.
+    ed_keys = set(ed.files) if hasattr(ed, "files") else set(ed)
+    if "ground_degeneracy" not in ed_keys:
+        raise RuntimeError(
+            "exact-diagonalization artifact lacks ground_degeneracy; "
+            "rerun phase 4 before phase 5")
+    ground_degeneracy = np.asarray(ed["ground_degeneracy"], dtype=np.int64)
+    # ``promising`` remains a diagnostic; every aligned snapshot is evaluated.
     n_promising = int(np.sum(promising))
     print(f"  {scenario} Re={Re} dim={n_patches}: "
           f"{n_promising}/{len(promising)} snapshots 'promising' "
-          f"(diagnostic — la phase 5 les traite TOUS, D-47)")
+          "(diagnostic; all snapshots are evaluated)")
 
     all_results = []
-    warm_start = None
+    phi_ema = None
+    flux_cursor = 0
 
     for idx in range(len(snap_indices)):
-        si = snap_indices[idx]
+        si = int(snap_indices[idx])
+        snapshot_seed = (int(seed) + idx) % (2**32)
+
+        # Advance the same EMA used by the deployed pipeline, including DNS
+        # snapshots that are not part of the phase-4 evaluation subset.
+        while flux_cursor < si:
+            phi = _stress_flux_for_snapshot(
+                vx_all[flux_cursor], vy_all[flux_cursor],
+                Bx_all[flux_cursor], By_all[flux_cursor], N,
+            )
+            phi_ema = _ema_update(phi_ema, phi)
+            flux_cursor += 1
+
         vx = vx_all[si].astype(np.float64)
         vy = vy_all[si].astype(np.float64)
         Bx = Bx_all[si].astype(np.float64)
@@ -500,17 +488,16 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
         # prepare inputs
         data_in, hamilt_params, score_vqa = prepare_qaoa_inputs(
             vx, vy, Bx, By, N, n_patches, Re, use_v2=use_v2,
+            prev_phi=phi_ema,
+            with_psi=(phi_ema is not None and not zero_psi),
         )
 
-        # pick warm-start:
-        #   - previous optimal params if available (warm across snapshots)
-        #   - else the FIXED schedule if enabled (D-48 : « classical » de nom
-        #     seulement, il ne lit pas score_vqa)
-        #   - else None (use linear ramp default)
-        this_warm = warm_start
-        if this_warm is None and warm_start_classical:
-            thr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
-            this_warm = classical_warm_start_params(score_vqa, thr, reps)
+        # Each snapshot is an independent solver benchmark. This avoids an
+        # order-dependent optimiser state in the QAOA-vs-exact comparison.
+        initial_params = (
+            constant_initial_params(reps)
+            if constant_initialisation else None
+        )
 
         # run QAOA
         marginals, qaoa_h, qaoa_v, optimal_params, wall_time = \
@@ -518,12 +505,14 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
                 data_in, hamilt_params, n_patches,
                 reps=reps, K_opt=K_opt,
                 backend_name=backend_name,
-                warm_start_params=this_warm,
+                warm_start_params=initial_params,
                 prune_eps=prune_eps,
+                seed=snapshot_seed,
             )
 
-        # warm start for next snapshot
-        warm_start = optimal_params
+        phi_ema = _ema_update(
+            phi_ema, _stress_flux_for_snapshot(vx, vy, Bx, By, N))
+        flux_cursor = si + 1
 
         # ground truth
         gt_refine = l2_all[si] >= l2_threshold
@@ -534,13 +523,22 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
             ed_decisions_h[idx], ed_decisions_v[idx],
             gt_refine, score_vqa,
             V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD,
+            int(ground_degeneracy[idx]),
         )
+        degeneracy = int(ground_degeneracy[idx])
+        comp.setdefault("exact_ground_degeneracy", degeneracy)
+        comp.setdefault(
+            "qaoa_exact_agreement_raw",
+            float(comp.get("qaoa_exact_agreement", np.nan)))
+        if degeneracy != 1:
+            comp["qaoa_exact_agreement"] = np.nan
 
         print(f"    snap {si:3d}: "
               f"QAOA_F1={comp['qaoa']['f1']:.3f} "
               f"exact_F1={comp['exact']['f1']:.3f} "
               f"class_F1={comp['classical']['f1']:.3f} "
               f"QAOA-exact agree={comp['qaoa_exact_agreement']:.2f} "
+              f"ground degeneracy={degeneracy} "
               f"({wall_time:.1f}s)")
 
         all_results.append({
@@ -550,6 +548,7 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
             "qaoa_v": qaoa_v,
             "optimal_params": optimal_params,
             "wall_time": wall_time,
+            "seed": snapshot_seed,
             "comparison": comp,
         })
 
@@ -562,14 +561,18 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
     class_f1s = [r["comparison"]["classical"]["f1"] for r in all_results]
     agrees = [r["comparison"]["qaoa_exact_agreement"] for r in all_results]
 
-    print(f"\n  Summary ({len(all_results)} promising snapshots):")
+    print(f"\n  Summary ({len(all_results)} evaluated snapshots):")
     print(f"    QAOA F1:       mean={np.mean(qaoa_f1s):.3f} "
           f"std={np.std(qaoa_f1s):.3f}")
     print(f"    Exact diag F1: mean={np.mean(exact_f1s):.3f} "
           f"std={np.std(exact_f1s):.3f}")
     print(f"    Classical F1:  mean={np.mean(class_f1s):.3f} "
           f"std={np.std(class_f1s):.3f}")
-    print(f"    QAOA-exact agreement: mean={np.mean(agrees):.3f}")
+    if np.any(np.isfinite(agrees)):
+        print(f"    QAOA-exact agreement (unique ground states only): "
+              f"mean={np.nanmean(agrees):.3f}")
+    else:
+        print("    QAOA-exact agreement: undefined (all ground states degenerate)")
 
     # verdict
     qaoa_wins = sum(q > c for q, c in zip(qaoa_f1s, class_f1s))
@@ -578,24 +581,35 @@ def run_phase5(dns_path, patches_path, ed_path, n_patches,
     meta = {
         "scenario": scenario, "Re": Re, "N": N,
         "n_patches": n_patches, "reps": reps, "K_opt": K_opt,
-        "suffix": "_v2" if use_v2 else "",
+        "seed": int(seed),
+        "backend": backend_name,
+        "constant_initialisation": bool(constant_initialisation),
+        "prune_eps": float(prune_eps),
+        "zero_psi": bool(zero_psi),
+        "suffix": ("_zeropsi" if zero_psi else "")
+                  + ("_v2" if use_v2 else ""),
     }
 
     return all_results, meta
 
 
-def save_results(all_results, meta, outdir=RESULTS_DIR):
+def save_results(all_results, meta, outdir=RESULTS_DIR, *,
+                 run_provenance=None, cli_args=None):
     """Save Phase 5 results."""
     if all_results is None:
         return None
 
-    suffix = meta.get("suffix", "")
+    variant = (
+        f"_p{meta['reps']}_k{meta['K_opt']}_{meta['backend']}"
+        f"_seed{meta['seed']}"
+        + ("_constinit" if meta.get("constant_initialisation") else "")
+        + (f"_prune{meta['prune_eps']:g}"
+           if meta.get("prune_eps", 0.0) > 0.0 else "")
+    )
+    suffix = variant + meta.get("suffix", "")
     fname = (f"qaoa_eval_{meta['scenario']}_Re{meta['Re']}"
              f"_N{meta['N']}_dim{meta['n_patches']}{suffix}.npz")
     path = os.path.join(outdir, fname)
-
-    n = len(all_results)
-    dim = meta["n_patches"]
 
     snap_indices = np.array([r["snap_idx"] for r in all_results])
     marginals = np.array([r["marginals"] for r in all_results])
@@ -607,7 +621,16 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
     class_f1 = np.array([r["comparison"]["classical"]["f1"] for r in all_results])
     agreement = np.array([r["comparison"]["qaoa_exact_agreement"]
                           for r in all_results])
+    agreement_raw = np.array(
+        [r["comparison"]["qaoa_exact_agreement_raw"] for r in all_results])
+    ground_degeneracy = np.array(
+        [r["comparison"]["exact_ground_degeneracy"] for r in all_results],
+        dtype=np.int64)
+    seeds = np.array([r["seed"] for r in all_results], dtype=np.uint32)
 
+    provenance_fields = (
+        provenance.finish(run_provenance)
+        if run_provenance is not None else {})
     np.savez_compressed(
         path,
         snap_indices=snap_indices,
@@ -619,11 +642,22 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
         exact_f1=exact_f1,
         classical_f1=class_f1,
         qaoa_exact_agreement=agreement,
+        qaoa_exact_agreement_raw=agreement_raw,
+        exact_ground_degeneracy=ground_degeneracy,
+        seeds=seeds,
+        seed=meta["seed"],
+        zero_psi=meta.get("zero_psi", False),
         scenario=meta["scenario"],
         Re=meta["Re"],
         N=meta["N"],
         n_patches=meta["n_patches"],
         reps=meta["reps"],
+        K_opt=meta["K_opt"],
+        backend=meta["backend"],
+        constant_initialisation=meta.get("constant_initialisation", False),
+        prune_eps=meta.get("prune_eps", 0.0),
+        cli_args="" if cli_args is None else cli_args,
+        **provenance_fields,
     )
     size_kb = os.path.getsize(path) / 1024
     print(f"  Saved: {fname} ({size_kb:.0f} KB)")
@@ -632,7 +666,7 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Phase 5: QAOA evaluation on promising patches")
+        description="Phase 5: QAOA evaluation on the phase-4 panel")
     parser.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     parser.add_argument("--scenario", nargs="+", default=SCENARIOS)
     parser.add_argument("--dim", nargs="+", type=int, default=VQA_DIMS)
@@ -641,28 +675,35 @@ def main():
                         help="QAOA circuit depth (number of layers)")
     parser.add_argument("--K_opt", type=int, default=100,
                         help="Max COBYLA iterations")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="Base seed for transpilation and quantum shots")
     parser.add_argument("--v2", action="store_true",
-                        help="Use parameter-free v2 Hamiltonian")
+                        help="Use the a-priori v2 Hamiltonian")
     parser.add_argument("--backend", default="state_vector",
                         choices=["state_vector", "matrix_product_state",
                                  "aer"],
                         help="Aer simulation method (use matrix_product_state "
                              "for dim>=3 scaling)")
-    parser.add_argument("--warm-start", action="store_true",
-                        help="Initialise QAOA from a FIXED (beta, gamma) "
-                             "schedule instead of execute()'s E_max-scaled "
-                             "ramp. Ne derive pas du score classique (D-48)")
+    parser.add_argument("--constant-init", action="store_true",
+                        help="Initialise each independent QAOA optimisation "
+                             "with a fixed (beta, gamma) schedule")
+    parser.add_argument("--zero-psi", action="store_true",
+                        help="Ablate the temporal stress-flux phase")
     parser.add_argument("--prune-eps", type=float, default=0.0,
                         help="Prune |coeff| < eps * max per block before "
                              "QAOA (0 = no pruning)")
     args = parser.parse_args()
+    run_provenance = provenance.start()
+    cli_args = json.dumps(vars(args), sort_keys=True)
 
     version = "v2" if args.v2 else "v1"
-    print(f"Phase 5: QAOA evaluation on promising patches ({version})")
+    print(f"Phase 5: QAOA evaluation on the phase-4 snapshot panel ({version})")
     print(f"  Patch dims: {args.dim}, reps={args.reps}, K_opt={args.K_opt}")
     print(f"  Backend:    {args.backend}")
-    if args.warm_start:
-        print(f"  Warm-start: classical-derived schedule")
+    print(f"  Seed:       {args.seed}")
+    if args.constant_init:
+        print("  QAOA initialisation: fixed schedule per snapshot")
+    print(f"  Temporal phase: {'ablated' if args.zero_psi else 'deployed EMA'}")
     if args.prune_eps > 0:
         print(f"  Pruning:    |coeff| < {args.prune_eps} * max (per block)")
     print()
@@ -699,11 +740,16 @@ def main():
                         reps=args.reps, K_opt=args.K_opt,
                         use_v2=args.v2,
                         backend_name=args.backend,
-                        warm_start_classical=args.warm_start,
+                        constant_initialisation=args.constant_init,
                         prune_eps=args.prune_eps,
+                        seed=args.seed,
+                        zero_psi=args.zero_psi,
                     )
                     if results is not None:
-                        save_results(results, meta)
+                        save_results(
+                            results, meta,
+                            run_provenance=run_provenance,
+                            cli_args=cli_args)
                         final_summary[(sc, re, dim)] = {
                             "qaoa_f1": np.mean([r["comparison"]["qaoa"]["f1"]
                                                 for r in results]),
@@ -711,42 +757,34 @@ def main():
                                                  for r in results]),
                             "class_f1": np.mean([r["comparison"]["classical"]["f1"]
                                                  for r in results]),
-                            "n_promising": len(results),
+                            "n_evaluated": len(results),
                         }
                     print()
 
     if not final_summary:
-        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 5. Mesure :
-        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
-        # avoir imprime « Phase 5 complete. », sans artefact et sans verdict
-        # — indiscernable d'une campagne reussie.
         raise RuntimeError(
-            "balayage vide : aucun (scenario, Re, dim) n'a produit de "
-            "resultat QAOA pour les arguments donnes. Le script sortait ici "
-            "avec le code 0, sans artefact et sans verdict (D-148).")
+            "empty sweep: no (scenario, Re, dim) produced a QAOA result")
 
-    # final verdict
     if final_summary:
         print("=" * 70)
-        print("PHASE 5 FINAL VERDICT")
+        print("PHASE 5 SUMMARY")
         print("=" * 70)
         print(f"  {'Scenario':<16} {'Re':>4} {'dim':>4}  "
               f"{'QAOA_F1':>8} {'Exact_F1':>8} {'Class_F1':>8} "
-              f"{'N_prom':>6}")
+              f"{'N_eval':>6}")
         for (sc, re, dim), s in sorted(final_summary.items()):
             print(f"  {sc:<16} {re:>4} {dim:>4}  "
                   f"{s['qaoa_f1']:>8.3f} {s['exact_f1']:>8.3f} "
-                  f"{s['class_f1']:>8.3f} {s['n_promising']:>6}")
+                  f"{s['class_f1']:>8.3f} {s['n_evaluated']:>6}")
 
-        # overall: does QAOA beat classical on average?
         all_qaoa = [s["qaoa_f1"] for s in final_summary.values()]
         all_class = [s["class_f1"] for s in final_summary.values()]
         print(f"\n  Overall QAOA F1: {np.mean(all_qaoa):.3f}")
         print(f"  Overall Classical F1: {np.mean(all_class):.3f}")
-        if np.mean(all_qaoa) > np.mean(all_class):
-            print("  >> QAOA provides quantum advantage on hard patches.")
-        else:
-            print("  >> Classical threshold remains competitive.")
+        print(f"  Descriptive delta: "
+              f"{np.mean(all_qaoa) - np.mean(all_class):+.3f}")
+        print("  No advantage claim is made without paired uncertainty and "
+              "budget-matched closed-loop evidence.")
 
     print("\nPhase 5 complete.")
 

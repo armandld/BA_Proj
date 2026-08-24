@@ -205,7 +205,7 @@ def main():
     args = parser.parse_args()
 
     use_v2 = not args.v1
-    version = ("v2 (parameter-free)" if use_v2
+    version = ("v2 (a-priori constants)" if use_v2
                else f"v1 (trained, sigma={args.sigma:.3f})")
 
     print("=" * 78)

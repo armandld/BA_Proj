@@ -8,7 +8,7 @@ from VQA.init_qbits_state import init_qbits_state
 from VQA.cost_hamiltonian import create_bounded_hamiltonian, create_period_hamiltonian
 
 
-def mapping(data_in, hamilt_params, advanced_anomalies_enabled=False, period_bound=True, reps=2):
+def mapping(data_in, hamilt_params, period_bound=True, reps=2):
     """
     Build the QAOA circuit from encoded angles and Hamiltonian coefficients.
 
@@ -30,13 +30,13 @@ def mapping(data_in, hamilt_params, advanced_anomalies_enabled=False, period_bou
     psi_v   = np.array(data_in.get("psi_v",   []))
 
     if period_bound:
-        cost_hamiltonian = create_period_hamiltonian(hamilt_params, dim, advanced_anomalies_enabled)
+        cost_hamiltonian = create_period_hamiltonian(hamilt_params, dim)
         init_th, init_tv = theta_h, theta_v
         init_ph, init_pv = psi_h, psi_v
     else:
         # Bounded: Hamiltonian uses halo θ for boundary <Z> values
         cost_hamiltonian, core_theta_h, core_theta_v, core_psi_h, core_psi_v = create_bounded_hamiltonian(
-            hamilt_params, dim, theta_h, theta_v, psi_h, psi_v, advanced_anomalies_enabled
+            hamilt_params, dim, theta_h, theta_v, psi_h, psi_v
         )
         # Core only for qubit initialization (strip halo)
         init_th, init_tv = core_theta_h, core_theta_v

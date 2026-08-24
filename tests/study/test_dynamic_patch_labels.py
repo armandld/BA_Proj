@@ -29,8 +29,8 @@ for _p in [os.path.join(_RACINE, "src")] + [
 
 from dynamic_patch_labels import (                           # noqa: E402
     _l2_relatif, coarsen_one_patch, dynamic_patch_errors, evolue,
-    sequence_de_pas, seuil_global, spearman, analyse_snapshot, DELTA_T,
-    MAX_SUBSTEPS)
+    sequence_de_pas, seuil_global, spearman, analyse_snapshot,
+    patch_crossing_time, label_diagnostics, downsample_fields, MAX_SUBSTEPS)
 from hard_patch_labels import patch_l2_errors                # noqa: E402
 
 
@@ -42,6 +42,12 @@ def _champ(N=32, graine=0):
             np.cos(X) + 0.3 * rng.standard_normal((N, N)),
             np.tanh(np.sin(Y)),
             np.sin(2 * X))
+
+
+def test_downsample_fields_uses_block_means():
+    array = np.arange(16, dtype=float).reshape(1, 4, 4)
+    np.testing.assert_allclose(
+        downsample_fields(array, 2)[0], [[2.5, 4.5], [10.5, 12.5]])
 
 
 # ==================================================================
@@ -272,13 +278,6 @@ def test_un_horizon_absurde_crie_au_lieu_de_tourner():
 # ==================================================================
 #  3. le label dit-il autre chose que le label statique ?
 # ==================================================================
-#: Relu DEPUIS les artefacts committes (N=96, Re=400, dim=8, 5 instantanes,
-#: moyenne sur les 4 scenarios). C'est le nombre qui condamne l'horizon du
-#: protocole — et il est celui que `results/d_patches_*.npz` rend, pas celui
-#: d'une exploration a la main.
-_RHO_ATTENDU = {0.1: 0.9926, 2.0: 0.8796}
-
-
 def test_spearman_rend_un_pour_une_transformation_monotone():
     """Le calcul de rho, verifie sur une reponse connue avant d'en tirer
     une conclusion."""
@@ -288,54 +287,53 @@ def test_spearman_rend_un_pour_une_transformation_monotone():
     assert np.isnan(spearman(x, np.ones_like(x)))
 
 
-@pytest.mark.slow
-def test_a_lhorizon_du_protocole_le_label_dynamique_est_une_redite_du_statique():
-    """LE resultat de la tache 6, et il contredit le protocole.
-
-    Le protocole §1.2 fixe `delta_t = one hybrid step (0.1)` et demande comme
-    seul controle « Spearman(d_i, e_i) > 0 ». Ce controle est verifie — et il
-    ne suffit pas : a cet horizon, rho vaut **0,99**. Le label dynamique est
-    une renumerotation monotone du label statique, il ne repond donc pas au
-    probleme de specification de tache (H5) pour lequel il a ete demande.
-
-    Sur quelle entree ce test echoue : si rho tombait sous 0,95 a
-    `delta_t = 0,1`, le label dynamique deviendrait informatif a l'horizon du
-    protocole et cette lecture serait a reecrire.
-    """
-    dns = os.path.join(_RACINE, "results", "dns_harris_tearing_Re400_N96.npz")
-    if not os.path.exists(dns):
-        pytest.skip("artefact DNS N=96 absent")
-    n = len(np.load(dns)["t"])
-    r = analyse_snapshot(dns, n // 2, 4, delta_t=DELTA_T)
-    rho = spearman(r["d_errors"], r["l2_errors"])
-
-    assert rho > 0.0, (
-        f"rho = {rho:+.4f} : le controle du protocole lui-meme echoue")
-    assert rho > 0.95, (
-        f"rho = {rho:+.4f} a delta_t = {DELTA_T} : le label dynamique s'est "
-        "decolle du statique a l'horizon du protocole — c'est une bonne "
-        "nouvelle, et la lecture publiee est a reecrire")
+def test_le_temps_de_traversee_emploie_la_largeur_du_patch():
+    n, dim = 16, 4
+    vx = np.full((n, n), 2.0)
+    vy = np.zeros((n, n))
+    Bx = np.full((n, n), 1.0)
+    By = np.zeros((n, n))
+    assert patch_crossing_time(vx, vy, Bx, By, dim) == pytest.approx(
+        (2 * np.pi / dim) / 3.0)
+    assert patch_crossing_time(vx, vy, Bx, By, 2 * dim) == pytest.approx(
+        patch_crossing_time(vx, vy, Bx, By, dim) / 2)
 
 
-@pytest.mark.slow
-def test_le_label_se_decolle_quand_on_allonge_lhorizon():
-    """Le champ qui SEPARE : sans lui, le test ci-dessus laisserait croire
-    que `d` est structurellement condamne a redire `e`.
+def test_le_defaut_evolue_pendant_un_temps_de_traversee():
+    champs = _champ(16)
+    _, _, meta = dynamic_patch_errors(*champs, 4, Re=400)
+    assert meta["horizon_mode"] == "patch_crossing"
+    assert meta["delta_t"] == pytest.approx(
+        patch_crossing_time(*champs, 4))
+    assert meta["crossing_multiple"] == pytest.approx(1.0)
 
-    Mesure : rho passe de 0,99 (delta_t=0,1) a 0,81 (delta_t=2,0). Ce n'est
-    pas le label qui est mauvais, c'est l'horizon qui est trop court.
-    """
-    dns = os.path.join(_RACINE, "results", "dns_orszag_tang_Re400_N96.npz")
-    if not os.path.exists(dns):
-        pytest.skip("artefact DNS N=96 absent")
-    n = len(np.load(dns)["t"])
-    court = spearman(*[analyse_snapshot(dns, n // 2, 4, delta_t=0.1)[k]
-                       for k in ("d_errors", "l2_errors")])
-    long_ = spearman(*[analyse_snapshot(dns, n // 2, 4, delta_t=2.0)[k]
-                       for k in ("d_errors", "l2_errors")])
-    assert court > long_ + 0.05, (
-        f"rho court {court:+.4f} contre long {long_:+.4f} : allonger "
-        "l'horizon ne decolle plus le label, la conclusion change")
+
+def test_un_horizon_fixe_reste_une_ablation_explicite():
+    _, _, meta = dynamic_patch_errors(
+        *_champ(16), 4, Re=400, delta_t=0.01)
+    assert meta["horizon_mode"] == "fixed"
+    assert meta["delta_t"] == pytest.approx(0.01)
+
+
+def test_le_diagnostic_refuse_une_renumerotation_monotone():
+    static = np.arange(1.0, 9.0)
+    redundant = label_diagnostics(2 * static, static, np.full(8, 2.0))
+    assert redundant["rho_d_vs_e"] == pytest.approx(1.0)
+    assert redundant["amplification_log_iqr"] == pytest.approx(0.0)
+    assert redundant["informative"] is False
+
+    dynamic = np.array([1, 8, 2, 7, 3, 6, 4, 5], dtype=float)
+    informative = label_diagnostics(
+        dynamic, static, np.geomspace(1.0, 4.0, 8))
+    assert informative["rho_d_vs_e"] < 0.95
+    assert informative["informative"] is True
+
+    rank_change_only = label_diagnostics(dynamic, static, np.ones(8))
+    assert rank_change_only["informative"] is True
+
+    amplification_only = label_diagnostics(
+        2 * static, static, np.geomspace(1.0, 4.0, 8))
+    assert amplification_only["informative"] is True
 
 
 # ==================================================================
@@ -393,7 +391,7 @@ def test_lartefact_porte_un_seuil_scalaire_et_les_fractions(tmp_path, monkeypatc
     os.symlink(dns, os.path.join(str(tmp_path), os.path.basename(dns)))
     monkeypatch.setattr(sys, "argv", [
         "dynamic_patch_labels", "--snaps", "3", "--dim", "4", "--N", "96",
-        "--delta-t", "0.01"])
+        "--delta-t", "0.01", "--allow-redundant"])
     dpl.main()
 
     f = [x for x in os.listdir(str(tmp_path)) if x.startswith("d_patches_")][0]
@@ -428,12 +426,14 @@ def test_lartefact_porte_sa_provenance(tmp_path):
         [sys.executable, os.path.join(_RACINE, "study", "pipeline",
                                       "dynamic_patch_labels.py"),
          "--snaps", "1", "--dim", "4", "--N", "96", "--delta-t", "0.01",
+         "--allow-redundant",
          "--out", out], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
 
     z = np.load(out, allow_pickle=True)
     for cle in ("d_errors", "d0_errors", "amplification", "l2_errors",
                 "is_hard_dynamic", "d_threshold", "rho_d_vs_e",
+                "amplification_log_iqr", "label_informative",
                 "git_hash", "argv", "label_kind", "delta_t"):
         assert cle in z.files, f"cle absente de l'artefact : {cle}"
     assert str(z["label_kind"]) == "dynamic"
@@ -466,7 +466,7 @@ def test_deux_horizons_ecrivent_DEUX_fichiers(tmp_path, monkeypatch):
     for dt in ("0.01", "0.02"):
         monkeypatch.setattr(sys, "argv", [
             "dynamic_patch_labels", "--snaps", "1", "--dim", "4",
-            "--N", "96", "--delta-t", dt])
+            "--N", "96", "--delta-t", dt, "--allow-redundant"])
         dpl.main()
 
     ecrits = sorted(f for f in os.listdir(str(tmp_path))
@@ -495,6 +495,7 @@ def test_l2_errors_de_lartefact_est_bien_le_label_STATIQUE(tmp_path):
         [sys.executable, os.path.join(_RACINE, "study", "pipeline",
                                       "dynamic_patch_labels.py"),
          "--snaps", "1", "--dim", "4", "--N", "96", "--delta-t", "0.01",
+         "--allow-redundant",
          "--out", out], capture_output=True, text=True, check=True)
 
     z = np.load(out, allow_pickle=True)

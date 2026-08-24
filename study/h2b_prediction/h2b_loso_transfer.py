@@ -52,7 +52,11 @@ from h2b_ceiling_random_split import (
 def _gather_scenario(dns_paths_for_scen, dim, max_snaps):
     """Return (X_site, X_sten, Y, S) stacked for one scenario."""
     X_site, X_sten, Y, S = [], [], [], []
-    for re, dns_path, patches_path in dns_paths_for_scen:
+    for row in dns_paths_for_scen:
+        if len(row) == 4:
+            re, _physics_seed, dns_path, patches_path = row
+        else:
+            re, dns_path, patches_path = row
         dns = np.load(dns_path)
         patches = np.load(patches_path)
         vx_all = dns["vx"].astype(np.float64)

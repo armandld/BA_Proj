@@ -296,7 +296,7 @@ def main():
     rec = json.load(open(path))
 
     T = _load_v1_training_module()
-    scen = dict(fold_scenarios(T, warn=False))
+    scen = dict(fold_scenarios(T))
     cfg = scen[args.fold]
     scenario = rec.get("scenario") or args.fold
     conds = CONDITIONS.get(scenario, [])

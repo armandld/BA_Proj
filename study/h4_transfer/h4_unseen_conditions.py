@@ -262,7 +262,7 @@ def main():
     print("=" * 84, flush=True)
 
     T = _load_v1_training_module()
-    cfg = dict(fold_scenarios(T, warn=False))[args.fold]
+    cfg = dict(fold_scenarios(T))[args.fold]
 
     hp_q = dict(rec["hyperparams"])
     if args.mode == "leak-free":

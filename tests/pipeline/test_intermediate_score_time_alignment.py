@@ -1,75 +1,45 @@
-"""D-143 — le score intermédiaire d'Optuna et la référence qu'il consomme.
+"""Every pipeline score must compare states at the same physical time."""
 
-**Tests de déviation.** Ils n'épinglent pas un comportement correct : ils
-épinglent un défaut **mesuré et non corrigé**, pour qu'il ne se perde pas et
-qu'il ne se corrige pas en silence. Le jour où D-143 est tranché, ce fichier
-rougit — c'est le jour où il doit être relu, pas contourné.
-
-Le défaut, en une phrase : `pipeline()` incrémente `step` puis lit
-`dns_trace[step - 1]` pour noter l'essai, si bien que le bras (à `t_step`)
-est comparé à l'état DNS de `t_step-1`. Le score **final**, vingt lignes
-plus bas, choisit `step if step in dns_trace else step - 1` — deux lectures
-du même `dns_trace` avec deux conventions.
-
-**Deux sites, de portées très inégales — mesuré, pas supposé.** Le site du
-score **intermédiaire** est **inatteignable en production** : les trois
-appelants de `pipeline()` (`train_hyperparams.py:695`,
-`closed_loop_campaign.py:220`, `pipeline.py:271`) passent tous
-`trial=None`, l'élagage de la campagne vivant par scénario ailleurs. C'est
-un piège armé, pas un défaut vivant — et ce fichier est le seul endroit du
-dépôt qui passe un vrai `trial`. Le site du chemin de **divergence**, lui,
-est **vivant** : la campagne y passe dès qu'un essai diverge. Voir D-143.
-
-Le champ d'essai est choisi pour **SÉPARER** : `patch_ratio = 1,0`, donc le
-bras reproduit la DNS exactement. Toute erreur rapportée non nulle ne peut
-alors venir que de la référence, et de rien d'autre. Sur un bras inexact les
-deux hypothèses rendraient toutes deux « un petit nombre » et le test ne
-mesurerait rien.
-
-Axes empruntés : `classical_only` ; `dns_trace` présent (départ à chaud) ;
-`max_depth_override = 1` ; élagage branché (`trial` non nul) mais
-`should_prune()` toujours faux, pour que le run aille au bout. Axes NON
-empruntés, écrits pour ne pas être supposés : bras quantique, `dim > 2`,
-`N = 256`, `HYBRID_DT = 0,10` — la configuration de campagne n'est pas
-rejouée ici, son coût est hors budget d'une suite.
-
-Mesures de référence (`ae394f0`, KH `N = 32`, deux exécutions identiques au
-dernier chiffre) :
-
-    phys_score FINAL (alignement juste)        3,055743e-15
-    rapport step 21   annoncé 3,274533e-02     aligné 6,142937e-16
-    rapport step 22   annoncé 3,197032e-02     aligné 1,201023e-15
-    rapport step 23   annoncé 3,127157e-02     aligné 1,885542e-15
-    rapport step 25   annoncé 3,055743e-15     (aligné par la réécriture)
-    évolution propre de la DNS entre 2 instantanés   3,457654e-02
-
-Les assertions portent sur des **ordres de grandeur**, pas sur ces valeurs :
-le dépôt n'épingle aucune version de `numpy`/`scipy`. Les valeurs sont
-écrites ici pour qu'une dérive se voie à la lecture.
-"""
-import os
-import sys
 import warnings
 
 import numpy as np
 import pytest
 
-_REPO_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-if os.path.join(_REPO_ROOT, "src") not in sys.path:
-    sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
+import pipeline as P
+import train_hyperparams as TH
+from Simulation.pre_compute_dns import precompute_dns
+from Simulation.solver import MHDSolver
+
 
 FIELDS = ("vx", "vy", "Bx", "By", "Jz")
 
 
-class _TrialSansElagage:
-    """Un essai Optuna qui enregistre et n'élague jamais.
+def _synthetic_precomputed_run(dt=0.1, with_final_flux=True):
+    zeros = np.zeros((4, 4))
+    hot = {
+        "vx": zeros, "vy": zeros, "Bx": zeros, "By": zeros,
+        "t_current": 0.0, "step": 0,
+    }
+    entry = {"dt": dt}
+    if with_final_flux:
+        entry["fluxes"] = {field: zeros for field in FIELDS}
+    return {0: entry}, hot
 
-    Il faut `trial is not None` pour atteindre le bloc de notation
-    intermédiaire ; il faut que `should_prune()` reste faux pour que le run
-    atteigne aussi son score final, qui est le terme de comparaison.
-    """
 
+def test_precomputed_run_must_cover_the_requested_time_exactly():
+    trace, hot = _synthetic_precomputed_run()
+    P.validate_precomputed_run(trace, hot, N=4, T_MAX=0.1)
+    with pytest.raises(ValueError, match="covers"):
+        P.validate_precomputed_run(trace, hot, N=4, T_MAX=0.2)
+
+
+def test_precomputed_run_requires_a_final_reference_snapshot():
+    trace, hot = _synthetic_precomputed_run(with_final_flux=False)
+    with pytest.raises(ValueError, match="final DNS"):
+        P.validate_precomputed_run(trace, hot, N=4, T_MAX=0.1)
+
+
+class RecordingTrial:
     def __init__(self):
         self.reports = []
         self.attrs = {}
@@ -80,404 +50,146 @@ class _TrialSansElagage:
     def should_prune(self):
         return False
 
-    def set_user_attr(self, cle, valeur):
-        self.attrs[cle] = valeur
+    def set_user_attr(self, key, value):
+        self.attrs[key] = value
 
 
-def _ecart_max(a, b):
-    """Écart maximum champ à champ, en norme infinie."""
-    return max(float(np.max(np.abs(a[f] - b[f]))) for f in FIELDS)
+def _max_gap(left, right):
+    return max(float(np.max(np.abs(left[key] - right[key])))
+               for key in FIELDS)
+
+
+def _case():
+    config = {
+        **TH.SCENARIO_KH,
+        "N": 32,
+        "T_START": 0.9,
+        "T_MAX": 1.2,
+        "HYBRID_DT": 0.02,
+        "K_opt": 4,
+        "shots": 32,
+        "max_depth_override": 1,
+        "study_name": "dns_kh",
+    }
+    trace, hot = precompute_dns(config)
+    hyperparams = {
+        **{name: (low + high) / 2
+           for name, (low, high, _scale) in TH.SEARCH_SPACE.items()},
+        **TH.FIXED_PARAMS,
+    }
+    return config, trace, hot, hyperparams
 
 
 @pytest.fixture(scope="module")
-def run_note():
-    """Un run complet, avec `pipeline.score` espionné.
+def scored_run():
+    config, trace, hot, hyperparams = _case()
+    calls = []
+    real_score = P.score
 
-    L'espion ne réimplémente rien : il délègue à la vraie fonction et garde
-    une copie des DEUX tableaux qu'elle a reçus. C'est ce qui permet de
-    prouver l'alignement par identité de tableaux plutôt que par
-    ressemblance de nombres.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        import train_hyperparams as TH
-        from Simulation.pre_compute_dns import precompute_dns
-        import pipeline as P
+    def recording_score(candidate, reference, *args, **kwargs):
+        calls.append((
+            {key: value.copy() for key, value in candidate.items()},
+            {key: value.copy() for key, value in reference.items()},
+        ))
+        return real_score(candidate, reference, *args, **kwargs)
 
-        cfg = {**TH.SCENARIO_KH, "N": 32, "T_START": 0.9, "T_MAX": 1.2,
-               "HYBRID_DT": 0.02, "K_opt": 4, "shots": 32,
-               "max_depth_override": 1, "study_name": "dns_kh"}
-        trace, hot = precompute_dns(cfg)
-        hp = {**{n: (lo + hi) / 2 for n, (lo, hi, _) in TH.SEARCH_SPACE.items()},
-              **TH.FIXED_PARAMS}
-
-        vrai_score = P.score
-        appels = []
-
-        def espion(q, r, *a, **k):
-            appels.append(({x: y.copy() for x, y in q.items()},
-                           {x: y.copy() for x, y in r.items()}))
-            return vrai_score(q, r, *a, **k)
-
-        trial = _TrialSansElagage()
-        P.score = espion
-        try:
+    trial = RecordingTrial()
+    P.score = recording_score
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             final = P.pipeline(
-                N=cfg["N"], VQA_N=2, T_MAX=cfg["T_MAX"], DT=cfg["DT"],
-                HYBRID=int(cfg["HYBRID_DT"] / cfg["DT"]), verbose=False,
-                argus=TH.create_argus(cfg), hyperparams=hp, lambda_cost=0.4,
-                trial=trial, dns_trace=trace, hot_start_state=hot,
-                max_depth_override=cfg["max_depth_override"],
-                scenario=cfg["scenario"], return_details=True,
-                classical_only=True)
-        finally:
-            P.score = vrai_score
-
-    return {"trace": trace, "reports": trial.reports, "appels": appels,
-            "final": final, "score": vrai_score}
-
-
-@pytest.fixture(scope="module")
-def rapports_propres(run_note):
-    """Les rapports dont la référence alignée est utilisable.
-
-    Tout rapport dont la référence alignée serait le DERNIER index de la
-    trace est écarté : `pre_compute_dns.py:126` réécrit cette entrée après
-    la boucle avec l'état de fin de run (« AJOUT CRITIQUE »), donc
-    `trace[dernier]` ne décrit plus l'instant `t_dernier` et ne peut servir
-    de terme de comparaison. Mesuré : au rapport 24 le bras diffère de
-    `trace[24]` de 6,964e-04, pas de l'epsilon machine — c'est la
-    réécriture qu'on lirait, pas le décalage. Restent les rapports 21 à 23.
-    """
-    trace = run_note["trace"]
-    dernier = max(trace)
-    propres = []
-    for (step, valeur), (q, r) in zip(run_note["reports"], run_note["appels"]):
-        if step >= dernier or step not in trace:
-            continue
-        if "fluxes" not in trace[step] or "fluxes" not in trace.get(step - 1, {}):
-            continue
-        propres.append({"step": step, "valeur": valeur, "q": q, "r": r})
-    return propres
-
-
-# ══════════════════════════════════════════════════════════════════
-#  1. La mesure avant d'accuser le code : le bras est-il bien exact ?
-# ══════════════════════════════════════════════════════════════════
-
-def test_the_arm_reproduces_the_dns_so_a_reported_error_can_only_be_the_reference(run_note):
-    """Sans ceci, tout le reste du fichier mesurerait autre chose.
-
-    `patch_ratio = 1,0` : tout est raffiné, le bras intègre à la résolution
-    de la DNS et la reproduit. Le score final le confirme à 3,055743e-15.
-    Si un jour ce test rougit, les suivants ne prouvent plus rien — les
-    relire AVANT de toucher au code qu'ils accusent.
-    """
-    final = run_note["final"]
-    assert final["patch_ratio"] == pytest.approx(1.0, abs=1e-12), (
-        f"le bras ne raffine plus tout ({final['patch_ratio']}) : le champ "
-        "d'essai ne sépare plus les deux alignements")
-    assert final["phys_score"] < 1e-9, (
-        f"le bras n'est plus exact (phys_score = {final['phys_score']:.6e}, "
-        "mesuré 3,055743e-15) : une erreur rapportée ne s'attribue plus à "
-        "la seule référence")
-
-
-def test_the_sweep_is_not_empty(rapports_propres):
-    """Un balayage vide doit crier — trois rapports propres, mesurés."""
-    assert len(rapports_propres) >= 3, (
-        f"{len(rapports_propres)} rapport(s) intermédiaire(s) exploitable(s), "
-        "3 attendus (steps 21, 22, 23) : le run ne traverse plus le bloc de "
-        "notation d'Optuna, et ce fichier ne mesure plus rien")
-
-
-# ══════════════════════════════════════════════════════════════════
-#  2. D-143 — le décalage, prouvé par identité de tableaux
-# ══════════════════════════════════════════════════════════════════
-
-def test_the_intermediate_reference_is_the_snapshot_of_the_previous_step(rapports_propres, run_note):
-    """DÉVIATION D-143. Preuve par identité, pas par ressemblance.
-
-    La référence consommée est bit-à-bit `dns_trace[step-1]['fluxes']`
-    (écart 0,000e+00 aux trois rapports), et le bras est bit-à-bit
-    `dns_trace[step]['fluxes']` (4,441e-16 à 8,882e-16). Les deux
-    instantanés diffèrent, eux, de 1,789e-03 à 1,825e-03 : c'est l'entrée
-    qui SÉPARE les deux conventions d'index.
-
-    Rougit le jour où l'index est aligné — donc le jour où D-143 est
-    tranché.
-    """
-    trace = run_note["trace"]
-    for r in rapports_propres:
-        k = r["step"]
-        avant = trace[k - 1]["fluxes"]
-        aligne = trace[k]["fluxes"]
-
-        assert _ecart_max(r["r"], avant) == 0.0, (
-            f"step {k} : la référence n'est plus l'instantané du pas "
-            f"précédent — D-143 a peut-être été corrigé, relire l'entrée")
-        assert _ecart_max(r["q"], aligne) < 1e-12, (
-            f"step {k} : le bras ne coïncide plus avec dns_trace[{k}], "
-            f"écart {_ecart_max(r['q'], aligne):.3e}")
-        assert _ecart_max(avant, aligne) > 1e-5, (
-            f"step {k} : les deux instantanés ne se distinguent plus "
-            f"({_ecart_max(avant, aligne):.3e}) — le champ d'essai a cessé "
-            "de séparer, ce test ne prouverait plus rien")
-
-
-def test_the_intermediate_score_reports_the_dns_own_motion_not_the_arm_error(rapports_propres, run_note):
-    """DÉVIATION D-143. L'écart chiffré, mesuré à l'opérateur assorti.
-
-    On recalcule la MÊME grandeur avec `score` lui-même — jamais une
-    réimplémentation — contre l'instantané du bon instant. Mesuré :
-    3,274533e-02 / 3,197032e-02 / 3,127157e-02 annoncés contre
-    6,142937e-16 / 1,201023e-15 / 1,885542e-15 alignés, soit 1,7e13 à
-    5,3e13.
-
-    L'assertion porte sur la séparation des ordres, pas sur ces valeurs.
-    """
-    score = run_note["score"]
-    trace = run_note["trace"]
-    for r in rapports_propres:
-        k = r["step"]
-        annonce = score(r["q"], r["r"], 0.0, 1, 1, 1)["phys_score"]
-        aligne = score(r["q"], trace[k]["fluxes"], 0.0, 1, 1, 1)["phys_score"]
-
-        assert aligne < 1e-9, (
-            f"step {k} : l'alignement juste ne rend plus zéro "
-            f"({aligne:.6e}) — remesurer avant de conclure")
-        assert annonce > 1e-3, (
-            f"step {k} : l'erreur annoncée est tombée à {annonce:.6e}. "
-            "D-143 a peut-être été corrigé — relire son entrée dans "
-            "DEFAUTS.md avant de toucher à ce test")
-
-
-def test_the_two_readings_of_dns_trace_disagree_inside_one_function(run_note):
-    """Question 4 : le score FINAL, lui, est aligné.
-
-    C'est le contraste qui fait de D-143 un défaut et non une convention :
-    dans la même fonction, la notation finale préfère `step` et la notation
-    intermédiaire lit `step - 1` sans repli. Le final est mesuré exact
-    (3,055743e-15) là où les intermédiaires annoncent 3,1e-02.
-    """
-    propres = [v for s, v in run_note["reports"]
-               if v > 0.29]  # combined = (phys + 0,4)/1,4, phys ~ 3,1e-02
-    assert propres, "aucun rapport intermédiaire n'est au-dessus du plancher"
-    assert run_note["final"]["phys_score"] < 1e-9, (
-        "le score final n'est plus aligné : c'est une régression AUTRE que "
-        "D-143, et elle passe avant")
-
-
-def test_the_last_report_is_aligned_only_by_the_end_of_run_overwrite(run_note):
-    """Le dernier rapport est juste — par accident, et il faut le savoir.
-
-    `pre_compute_dns.py:126` réécrit la dernière entrée de la trace avec
-    l'état de FIN de run. Cette entrée ne suit donc pas la convention des
-    autres, et c'est elle que lit le dernier rapport : il tombe aligné.
-    Mesuré 3,055743e-15, contre 3,1e-02 pour les précédents.
-
-    Écrit pour qu'une passe future ne conclue pas « le dernier rapport est
-    bon, donc le bloc l'est » — un seul point aligné sur cinq.
-    """
-    reports = run_note["reports"]
-    assert len(reports) >= 2, "il faut au moins deux rapports pour comparer"
-    dernier = reports[-1][1]
-    precedents = [v for _, v in reports[:-1]]
-    assert dernier < min(precedents) - 1e-3, (
-        f"le dernier rapport ({dernier:.6e}) ne se détache plus des "
-        f"précédents ({min(precedents):.6e}) : la réécriture de fin de run "
-        "a peut-être changé, relire pre_compute_dns.py")
-
-
-# ══════════════════════════════════════════════════════════════════
-#  3. Le chemin de divergence — deuxième site du même décalage,
-#     et la branche que D-135 n'atteignait que par une chaîne
-# ══════════════════════════════════════════════════════════════════
-#
-# Ces deux tests forcent l'avortement PAR `pipeline()` lui-même : on rend
-# `MHDSolver.is_diverged` vrai au n-ième appel. Rien de `src/` n'est
-# touché ; c'est le vrai bloc `--- Divergence guard ---` qui s'exécute,
-# avec de vrais champs.
-
-
-def _run_avorte(n, poids=None):
-    """Un run avorté au n-ième appel de `is_diverged`, par `pipeline()`.
-
-    `poids` remplace `pipeline.instability_weight_map` le temps du run —
-    c'est l'entrée qui SÉPARE une L2 pondérée d'une L2 nue.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        import train_hyperparams as TH
-        from Simulation.pre_compute_dns import precompute_dns
-        from Simulation.solver import MHDSolver
-        import pipeline as P
-
-        cfg = {**TH.SCENARIO_KH, "N": 32, "T_START": 0.9, "T_MAX": 1.2,
-               "HYBRID_DT": 0.02, "K_opt": 4, "shots": 32,
-               "max_depth_override": 1, "study_name": "dns_kh"}
-        trace, hot = precompute_dns(cfg)
-        hp = {**{k: (lo + hi) / 2 for k, (lo, hi, _) in TH.SEARCH_SPACE.items()},
-              **TH.FIXED_PARAMS}
-
-        compteur = {"k": 0}
-
-        def faux_is_diverged(self, max_value=1e8):
-            compteur["k"] += 1
-            return compteur["k"] > n
-
-        vues = []
-        vrai_map = P.instability_weight_map
-
-        def espion_map(ref):
-            vues.append({x: y.copy() for x, y in ref.items()})
-            return (poids or vrai_map)(ref)
-
-        # Le chemin de divergence n'appelle pas `score` : pour savoir OÙ se
-        # trouve le bras au moment de l'avortement, on capture le premier
-        # argument de chaque `weighted_relative_error`. La boucle parcourt
-        # `variables` dans l'ordre de FIELDS, donc les cinq derniers appels
-        # reconstruisent l'état du bras.
-        bras = []
-        vrai_wre = P.weighted_relative_error
-
-        def espion_wre(arr_q, arr_r, w, w_sum):
-            bras.append(arr_q.copy())
-            return vrai_wre(arr_q, arr_r, w, w_sum)
-
-        vrai_id = MHDSolver.is_diverged
-        MHDSolver.is_diverged = faux_is_diverged
-        P.instability_weight_map = espion_map
-        P.weighted_relative_error = espion_wre
-        try:
-            out = P.pipeline(
-                N=cfg["N"], VQA_N=2, T_MAX=cfg["T_MAX"], DT=cfg["DT"],
-                HYBRID=int(cfg["HYBRID_DT"] / cfg["DT"]), verbose=False,
-                argus=TH.create_argus(cfg), hyperparams=hp, lambda_cost=0.4,
-                trial=None, dns_trace=trace, hot_start_state=hot,
-                max_depth_override=cfg["max_depth_override"],
-                scenario=cfg["scenario"], return_details=True,
-                classical_only=True)
-        finally:
-            MHDSolver.is_diverged = vrai_id
-            P.instability_weight_map = vrai_map
-            P.weighted_relative_error = vrai_wre
-
-    etat_bras = (dict(zip(FIELDS, bras[-len(FIELDS):]))
-                 if len(bras) >= len(FIELDS) else None)
-    return {"out": out, "trace": trace, "ref": vues[-1] if vues else None,
-            "bras": etat_bras}
-
-
-def _index_dans_la_trace(trace, champs, tol=0.0):
-    """L'index de trace dont les `fluxes` valent `champs`, ou None.
-
-    `tol = 0` pour la RÉFÉRENCE : elle sort du dictionnaire, elle est
-    bit-à-bit. `tol` non nul pour le BRAS : il est intégré, donc égal à
-    l'epsilon machine près (mesuré ≤ 8,9e-16) et jamais bit-à-bit. Exiger
-    0,0 des deux côtés rendait ce test rouge sur du code sain.
-    """
-    trouves = [k for k, v in sorted(trace.items())
-               if "fluxes" in v and _ecart_max(champs, v["fluxes"]) <= tol]
-    return trouves[0] if len(trouves) == 1 else None
-
-
-@pytest.fixture(scope="module")
-def avorte():
-    return _run_avorte(1)
-
-
-def test_the_divergence_path_starts_its_lookup_one_step_early(avorte):
-    """DÉVIATION D-143, DEUXIÈME site — et il n'était pas dans l'entrée.
-
-    Le chemin de divergence écrit `last_ok = step - 1` puis remonte tant
-    qu'il ne trouve pas de `'fluxes'`. Le bras est à `t_step` : la
-    recherche devrait partir de `step`. Mesuré ici — la trace porte des
-    instantanés à TOUS les index 18…24, donc l'instantané aligné existe et
-    n'est simplement pas regardé.
-
-    Deux des trois sites de notation partent donc de `step - 1` ; seul le
-    score final préfère `step`.
-
-    L'assertion porte sur la RELATION entre deux index, pas sur la seule
-    existence d'un successeur : `index(référence) == index(bras) − 1`.
-    Vérifié en mutant `last_ok = step - 1` en `last_ok = step` — une
-    première version de ce test passait encore sous cette mutation, donc
-    ne prouvait rien.
-    """
-    trace, ref, bras = avorte["trace"], avorte["ref"], avorte["bras"]
-    assert ref is not None, "le chemin de divergence n'a pas été atteint"
-    assert bras is not None, "l'état du bras n'a pas pu être capturé"
-
-    i_ref = _index_dans_la_trace(trace, ref)
-    i_bras = _index_dans_la_trace(trace, bras, tol=1e-12)
-    assert i_ref is not None, "la référence ne coïncide avec aucun index"
-    assert i_bras is not None, (
-        "le bras ne coïncide avec aucun index : il n'est plus exact, et le "
-        "champ d'essai ne sépare plus les deux conventions")
-    assert "fluxes" in trace.get(i_bras, {}), (
-        f"l'instantané aligné trace[{i_bras}] n'existe pas : ce run ne "
-        "sépare plus « part de step-1 » de « part de step »")
-    assert _ecart_max(trace[i_ref]["fluxes"], trace[i_bras]["fluxes"]) > 1e-5, (
-        "les deux instantanés ne se distinguent plus")
-    assert i_ref == i_bras - 1, (
-        f"le bras est à trace[{i_bras}] et la référence à trace[{i_ref}] : "
-        "la recherche ne part plus d'un cran trop tôt. D-143 a peut-être "
-        "été tranché sur ce site — relire son entrée dans DEFAUTS.md")
-
-
-def test_the_divergence_path_really_weights_by_the_instability_map():
-    """D-135, direction 2 — la branche atteinte PAR `pipeline()`.
-
-    `DEFAUTS.md` D-135 : l'accord des deux chemins de score n'était gardé
-    que par `assert "field_errors[var] = weighted_relative_error(" in src`.
-    La mutation A′ y réintroduit la L2 NON pondérée de D-5 en laissant la
-    chaîne en place, et le fichier restait à 46 passed.
-
-    Ici l'assertion est comportementale : on remplace la carte de poids par
-    une carte UNIFORME et on exige que le résultat BOUGE. Une L2 nue
-    ignorerait la carte, donc rendrait le même nombre.
-
-    Mesuré : pondéré 3,27453290e-02, uniforme 3,31748727e-02, écart
-    −1,2948 %. C'est l'ordre de grandeur de l'écart de 1,8 % que D-5 avait
-    mesuré sur un champ à nappe de courant.
-
-    Ce test ne corrige rien dans `src/` : D-135 reste ouvert sur sa
-    direction 1 (extraire la boucle par champ). Il ferme le trou de garde.
-    """
-    pondere = _run_avorte(1)["out"]
-    uniforme = _run_avorte(1, poids=lambda ref: np.ones_like(ref["Jz"]))["out"]
-
-    a = pondere["phys_score"]
-    b = uniforme["phys_score"]
-    assert a < 1.0 and b < 1.0, (
-        f"le chemin de divergence a rendu la pénalité ({a}, {b}) au lieu "
-        "d'un score partiel : il ne mesure plus les champs")
-    ecart = abs(a - b) / b
-    assert ecart > 1e-3, (
-        f"pondéré {a:.8e} et uniforme {b:.8e} ne diffèrent que de "
-        f"{ecart * 100:.4f} % (mesuré 1,2948 %) : le chemin de divergence "
-        "n'emploie plus la carte d'instabilité — c'est D-5 qui revient")
-
-
-# ══════════════════════════════════════════════════════════════════
-#  4. La déviation reste écrite là où elle vit
-# ══════════════════════════════════════════════════════════════════
-
-def test_the_open_defect_stays_written_in_the_registry():
-    """« Ne jamais laisser une déviation connue non écrite » — VIGIL.md.
-
-    Une déviation non consignée se fait recorriger par erreur. Ce test
-    interroge le registre, pas la mise en forme : il exige l'entrée D-143
-    et le fait qu'elle soit encore déclarée non corrigée.
-    """
-    defauts = os.path.join(_REPO_ROOT, "docs", "DEFAUTS.md")
-    texte = open(defauts, encoding="utf-8").read()
-    assert "## D-143" in texte, (
-        "D-143 a quitté DEFAUTS.md : s'il est corrigé, ce fichier de "
-        "déviation doit être remesuré et réécrit, pas laissé en place")
-    debut = texte.index("## D-143")
-    corps = texte[debut:debut + 400]
-    assert "rien n'est corrigé" in corps.lower(), (
-        "l'entrée D-143 ne se déclare plus « rapport seul » — la décision a "
-        "peut-être été prise ; relire avant de faire passer ce fichier")
+                N=config["N"], VQA_N=2, T_MAX=config["T_MAX"],
+                DT=config["DT"],
+                HYBRID=int(config["HYBRID_DT"] / config["DT"]),
+                verbose=False, argus=TH.create_argus(config),
+                hyperparams=hyperparams, lambda_cost=0.4, trial=trial,
+                dns_trace=trace, hot_start_state=hot,
+                max_depth_override=config["max_depth_override"],
+                scenario=config["scenario"], return_details=True,
+                classical_only=True,
+            )
+    finally:
+        P.score = real_score
+    return trace, trial, calls, final
+
+
+def test_intermediate_scores_use_the_snapshot_after_the_completed_step(
+        scored_run):
+    trace, trial, calls, _final = scored_run
+    assert len(trial.reports) >= 3
+    intermediate_calls = calls[:len(trial.reports)]
+    for (reported_step, _value), (candidate, reference) in zip(
+            trial.reports, intermediate_calls):
+        completed_step = reported_step - 1
+        expected = trace[completed_step]["fluxes"]
+        assert _max_gap(reference, expected) == 0.0
+        assert _max_gap(candidate, expected) < 1e-12
+
+
+def test_intermediate_physics_error_is_zero_for_an_exact_full_grid_arm(
+        scored_run):
+    _trace, trial, _calls, final = scored_run
+    compute_floor = 0.4 / 1.4
+    assert trial.reports
+    for _step, combined in trial.reports:
+        assert combined == pytest.approx(compute_floor, abs=1e-9)
+    assert final["patch_ratio"] == pytest.approx(1.0)
+    assert final["phys_score"] < 1e-9
+
+
+def _aborted_run():
+    config, trace, hot, hyperparams = _case()
+    count = {"calls": 0}
+    references = []
+    candidates = []
+    real_diverged = MHDSolver.is_diverged
+    real_map = P.instability_weight_map
+    real_error = P.weighted_relative_error
+
+    def diverges_on_first_pipeline_check(self, max_value=1e8):
+        count["calls"] += 1
+        return count["calls"] > 1
+
+    def recording_map(reference):
+        references.append({key: value.copy()
+                           for key, value in reference.items()})
+        return real_map(reference)
+
+    def recording_error(candidate, reference, weights, weight_sum):
+        candidates.append(candidate.copy())
+        return real_error(candidate, reference, weights, weight_sum)
+
+    MHDSolver.is_diverged = diverges_on_first_pipeline_check
+    P.instability_weight_map = recording_map
+    P.weighted_relative_error = recording_error
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = P.pipeline(
+                N=config["N"], VQA_N=2, T_MAX=config["T_MAX"],
+                DT=config["DT"],
+                HYBRID=int(config["HYBRID_DT"] / config["DT"]),
+                verbose=False, argus=TH.create_argus(config),
+                hyperparams=hyperparams, lambda_cost=0.4, trial=None,
+                dns_trace=trace, hot_start_state=hot,
+                max_depth_override=config["max_depth_override"],
+                scenario=config["scenario"], return_details=True,
+                classical_only=True,
+            )
+    finally:
+        MHDSolver.is_diverged = real_diverged
+        P.instability_weight_map = real_map
+        P.weighted_relative_error = real_error
+
+    candidate = dict(zip(FIELDS, candidates[-len(FIELDS):]))
+    return references[-1], candidate, result
+
+
+def test_divergence_score_uses_a_time_aligned_reference():
+    reference, candidate, result = _aborted_run()
+    assert _max_gap(candidate, reference) < 1e-12
+    assert result["phys_score"] < 1e-9
+    assert result["scoring_error"] is None
+    assert result["completed"] is False
+    assert result["abort"]["kind"] == "numerical_divergence"

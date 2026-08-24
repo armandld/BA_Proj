@@ -9,7 +9,7 @@ from help_visual import visualize_vqa_step
 from Simulation.RescaleArrays import get_adaptive_flux, _process_score
 
 
-from Simulation.utils import slice_hamiltonian_params, get_periodic_patch
+from Simulation.utils import get_periodic_patch
 
 
 #: Patches dont l'Hamiltonien était vide (tous coefficients < COEFF_MIN).

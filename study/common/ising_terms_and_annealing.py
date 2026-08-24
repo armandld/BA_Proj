@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""
-Phase 7 - Simulated Annealing baseline on the SAME QUBO.
+"""Phase 7: simulated annealing on the Ising objective used by QAOA.
 
-This is the honest scaling test promised in the quantum-advantage angle:
-run classical simulated annealing on the EXACT SAME Hamiltonian that
-QAOA minimises, and compare F1/AUC against the L2 ground truth.
-
-If QAOA matches SA at dim=2,3,4 and pulls ahead at dim=5 (MPS), that is
-a publishable scaling plot. If QAOA ties SA forever, we have an honest
-negative result — also publishable, and still a contribution.
+This module also contains the shared Ising-term builder and exact enumerator.
+Decisions are compared descriptively to the L2-hard labels and the classical
+threshold; inferential claims belong to the paired trajectory analysis.
 
 Per spin convention: Z = +1 is "don't refine" (|0>), Z = -1 is "refine"
 (|1>). So decision[i] = 1 iff spin[i] == -1. The Hamiltonian energy for
@@ -26,31 +21,16 @@ Input:  results/dns_{scenario}_Re{Re}_N{N}.npz
 Output: results/sa_baseline_{scenario}_Re{Re}_N{N}_dim{D}{sfx}.npz
 
 Usage:
-  python study/ising_terms_and_annealing.py --dim 4 --v2
-  python study/ising_terms_and_annealing.py --dim 4 --v2 --sweeps 5000 --n-restarts 20
+  python study/common/ising_terms_and_annealing.py --dim 4
 """
 
-#: Seuil sous lequel un coefficient n'entre pas dans l'Hamiltonien.
-#:
-#: ALIGNE SUR `VQA.cost_hamiltonian.COEFF_MIN` (1e-6), et non sur le 1e-12
-#: qui trainait ici. `study/` doit falsifier ce que le circuit EXECUTE, pas
-#: un Hamiltonien plus fourni que lui.
-#:
-#: Mesure de l'ecart, coefficients tombant entre 1e-12 et 1e-6 :
-#:
-#:     scenario           dim   total   entre les deux seuils
-#:     harris_tearing       2      16       4   (25 %)
-#:     harris_tearing       4      64      16   (25 %)
-#:     mhd_rotor            4      64       1
-#:     orszag_tang        2, 4  16, 64       0
-#:
-#: Un quart des termes a dim=2 sur le scenario de reconnexion : la
-#: diagonalisation exacte et le recuit voyaient donc un probleme que le
-#: circuit ne resout pas. C'est exactement la question 4 -- deux chemins
-#: censes coincider.
+# Must match ``VQA.cost_hamiltonian.COEFF_MIN`` so every solver sees the same
+# Hamiltonian.
 COEFF_MIN = 1e-6
+TOL_E = 1e-9
+MAX_ENUM_QUBITS = 22
 
-import argparse, os, sys, time
+import argparse, json, os, sys, time
 import numpy as np
 
 # --- chemins du dépôt (bloc unique, généré) -------------------------------
@@ -64,12 +44,11 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 from config import (
     RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, VQA_DIMS,
-    TRAINED_SIGMA, TRAINED_BETA_CURL, TRAINED_BETA_XPOINT,
-    TRAINED_W_Z_FRAC, TRAINED_THRESHOLD, TRAINED_GAMMA_HYDRO,
-    TRAINED_GAMMA_MAG, TRAINED_KAPPA,
+    TRAINED_THRESHOLD, trained_mapper_params,
     V2_THRESHOLD,
 )
 from exact_diagonalisation import build_patch_hamiltonian
+import provenance
 
 
 # -------------------------------------------------------------------
@@ -84,30 +63,14 @@ def _idx_V(y, x, dim):
 
 
 def build_ising_terms(hamilt_params, dim):
-    """Flatten the (H_edges, C_edges, K_plaquettes) coefficient dict into
-    three numpy arrays ready for cheap energy and single-flip evaluation.
+    """Flatten the Hamiltonian coefficients for classical energy evaluation.
 
     Returns
     -------
-    h_bias   : (n_qubits,) float   — local Z terms
-    edges    : (E, 3) int         — (i, j, coeff) for ZZ terms
-    plaqs    : (P, 5) int         — (i, j, k, l, coeff) for ZZZZ terms
-        (coeff columns are float inside a 2D object; we actually return
-         a tuple (edge_idx, edge_coeff) and (plaq_idx, plaq_coeff) to
-         keep integer/float separation.)
-
-    D-59 — CORRIGÉ, ici et dans `create_period_hamiltonian` : les deux
-    chemins doivent coïncider, donc la même déduplication est appliquée des
-    deux côtés. À dim = 2 l'anneau périodique dégénère — le lien ZZ
-    `(i,0)->(i,1)` coïncide avec `(i,1)->(i,0 mod 2)` — et les deux
-    itérations ajoutaient chacune une entrée `edge_idx` pour la même paire
-    de qubits, doublant le couplage shear effectif. À dim >= 3 aucune paire
-    ne se répète : tableaux inchangés bit à bit.
-
-    Impact mesuré sur les nombres publiés : 0 décision changée sur 12,
-    max|ΔE| = 0,000e+00 — au réglage déployé la fenêtre gaussienne éteint
-    déjà ZZ (D-47), donc dédupliquer n'a rien à retirer. Voir
-    `docs/RESULTS.md`, D-59.
+    Returns local biases and separate integer-index/float-coefficient tuples
+    for the unique periodic ZZ links and all ZZZZ plaquette terms. At dim=2,
+    opposite periodic traversals denote the same undirected ZZ link and are
+    therefore emitted once, matching the circuit Hamiltonian.
     """
     n_q = 2 * dim * dim
     h_bias = np.zeros(n_q, dtype=np.float64)
@@ -125,16 +88,7 @@ def build_ising_terms(hamilt_params, dim):
     C0, C1 = hamilt_params["C_edges"]
     edge_idx = []
     edge_coef = []
-    # D-59 : deduplication par PAIRE NON ORDONNEE de qubits. A dim = 2
-    # l'anneau periodique degenere -- (i,0)->(i,1) et (i,1)->(i,0 mod 2)
-    # relient la MEME paire -- et les deux iterations ajoutaient chacune une
-    # entree, doublant le couplage shear effectif. A dim >= 3 aucune paire
-    # ne se repete, donc les tableaux rendus sont INCHANGES bit a bit.
-    #
-    # Ce chemin (SA/exhaustif) et `cost_hamiltonian.create_period_hamiltonian`
-    # (QAOA/diagonalisation) doivent coincider : la meme deduplication est
-    # appliquee des deux cotes, et `preflight_coefficients.py` verifie que
-    # les deux rendent la meme energie.
+    # Deduplicate undirected periodic links, including the dim=2 alias.
     _liens_zz_emis = set()
 
     def _lien_zz_neuf(a, b):
@@ -175,22 +129,7 @@ def build_ising_terms(hamilt_params, dim):
                         _idx_V(i, j, dim),
                     ))
                     plaq_coef.append(kv)
-    # K_xpoint : SECOND terme ZZZZ, meme topologie de plaquette.
-    #
-    # `build_ising_terms` ne lisait que H_edges, C_edges et K_plaquettes :
-    # la diagonalisation exacte, le recuit simule et les ablations de
-    # `study/` etaient donc STRUCTURELLEMENT aveugles au terme de point X,
-    # que la campagne d'entrainement active pourtant sur 6/6 scenarios.
-    # `h3_term_ablation` mettait meme K_xpoint a zero sur l'ablation
-    # `no_ZZZZ` en croyant l'ablater -- il annulait une cle que
-    # `ground_state_mask` ne lisait jamais.
-    #
-    # `cost_hamiltonian` (le chemin DEPLOYE) ajoute un terme ZZZZ separe
-    # sur les memes quatre qubits ; SparsePauliOp somme les doublons, ce
-    # qui revient a additionner les deux coefficients. On reproduit ce
-    # comportement a l'identique.
-    #
-    # Meme seuil que K_plaquettes et que le circuit deploye : COEFF_MIN.
+    # K_xpoint is a second ZZZZ coefficient on the same plaquette topology.
     KX = hamilt_params.get("K_xpoint")
     if KX is not None:
         for i in range(dim):
@@ -227,6 +166,82 @@ def total_energy(spins, h_bias, edges, plaqs):
     return e
 
 
+def _enumerated_energy_chunks(h_bias, edges, plaqs, n_q, chunk):
+    """Yield ``(start, spins, energies)`` over the computational basis."""
+    edge_idx, edge_coef = edges
+    plaq_idx, plaq_coef = plaqs
+    bit = 1 << np.arange(n_q, dtype=np.int64)
+    for start in range(0, 1 << n_q, chunk):
+        stop = min(start + chunk, 1 << n_q)
+        indices = np.arange(start, stop, dtype=np.int64)[:, None]
+        spins = np.where((indices & bit) > 0, -1.0, 1.0)
+        energies = spins @ h_bias
+        if len(edge_coef):
+            energies += (
+                spins[:, edge_idx[:, 0]] * spins[:, edge_idx[:, 1]]
+            ) @ edge_coef
+        if len(plaq_coef):
+            energies += (
+                spins[:, plaq_idx[:, 0]] * spins[:, plaq_idx[:, 1]]
+                * spins[:, plaq_idx[:, 2]] * spins[:, plaq_idx[:, 3]]
+            ) @ plaq_coef
+        yield start, spins, energies
+
+
+def exhaustive_ground_state(h_bias, edges, plaqs, n_q,
+                            max_qubits=MAX_ENUM_QUBITS, chunk=1 << 16):
+    """Return the exact minimizing spin state, energy and degeneracy."""
+    if not isinstance(n_q, (int, np.integer)) or n_q < 1:
+        raise ValueError("n_q must be a positive integer")
+    if n_q > max_qubits:
+        raise ValueError(
+            f"exhaustive enumeration refused for {n_q} qubits "
+            f"(max {max_qubits})")
+    if not isinstance(chunk, (int, np.integer)) or chunk < 1:
+        raise ValueError("chunk must be a positive integer")
+
+    best_energy, best_spins = np.inf, None
+    for _, spins, energies in _enumerated_energy_chunks(
+            h_bias, edges, plaqs, n_q, int(chunk)):
+        index = int(np.argmin(energies))
+        if energies[index] < best_energy - TOL_E:
+            best_energy = float(energies[index])
+            best_spins = spins[index].astype(np.int8).copy()
+
+    degeneracy = 0
+    for _, _, energies in _enumerated_energy_chunks(
+            h_bias, edges, plaqs, n_q, int(chunk)):
+        degeneracy += int(np.sum(energies <= best_energy + TOL_E))
+    if best_spins is None or degeneracy < 1:
+        raise RuntimeError("exhaustive enumeration found no ground state")
+    return best_spins, best_energy, degeneracy
+
+
+def exact_ising_spectrum(h_bias, edges, plaqs, n_q,
+                         max_qubits=20, chunk=1 << 16):
+    """Return one exact ground state and the sorted diagonal spectrum."""
+    if not isinstance(n_q, (int, np.integer)) or n_q < 1:
+        raise ValueError("n_q must be a positive integer")
+    if n_q > max_qubits:
+        raise ValueError(
+            f"exact spectrum refused for {n_q} qubits (max {max_qubits})")
+    if not isinstance(chunk, (int, np.integer)) or chunk < 1:
+        raise ValueError("chunk must be a positive integer")
+    spectrum = np.empty(1 << n_q, dtype=np.float64)
+    best_energy, best_spins = np.inf, None
+    for start, spins, energies in _enumerated_energy_chunks(
+            h_bias, edges, plaqs, n_q, int(chunk)):
+        spectrum[start:start + len(energies)] = energies
+        index = int(np.argmin(energies))
+        if energies[index] < best_energy - TOL_E:
+            best_energy = float(energies[index])
+            best_spins = spins[index].astype(np.int8).copy()
+    spectrum.sort()
+    if best_spins is None:
+        raise RuntimeError("exact spectrum found no ground state")
+    return best_spins, best_energy, spectrum
+
+
 def delta_energy(spins, q, h_bias, edges, plaqs,
                  edges_by_q, plaqs_by_q):
     """Energy change from flipping spin q. O(neighbours of q)."""
@@ -249,6 +264,16 @@ def delta_energy(spins, q, h_bias, edges, plaqs,
     return dE
 
 
+def coefficient_scale(h_bias, edges, plaqs):
+    """Largest absolute Ising coefficient, used only to scale temperature."""
+    arrays = [np.asarray(h_bias), np.asarray(edges[1]), np.asarray(plaqs[1])]
+    maxima = [float(np.max(np.abs(a))) for a in arrays if a.size]
+    scale = max(maxima, default=0.0)
+    if not np.isfinite(scale):
+        raise ValueError("Ising coefficients must be finite")
+    return scale if scale > 0.0 else 1.0
+
+
 def _build_incidence(n_q, edges, plaqs):
     edge_idx, _ = edges
     plaq_idx, _ = plaqs
@@ -268,7 +293,7 @@ def _build_incidence(n_q, edges, plaqs):
 # -------------------------------------------------------------------
 
 def simulated_annealing(h_bias, edges, plaqs, n_q,
-                        sweeps=2000, T_start=2.0, T_end=0.01,
+                        sweeps=2000, T_start=None, T_end=None,
                         rng=None, init_spins=None):
     """Metropolis SA with a geometric cooling schedule.
 
@@ -276,6 +301,12 @@ def simulated_annealing(h_bias, edges, plaqs, n_q,
     """
     if rng is None:
         rng = np.random.default_rng()
+    scale = coefficient_scale(h_bias, edges, plaqs)
+    T_start = scale if T_start is None else float(T_start)
+    T_end = 0.005 * scale if T_end is None else float(T_end)
+    if not (np.isfinite(T_start) and np.isfinite(T_end)
+            and T_start > 0.0 and T_end > 0.0 and T_start >= T_end):
+        raise ValueError("temperatures must be finite with T_start >= T_end > 0")
     edges_by_q, plaqs_by_q = _build_incidence(n_q, edges, plaqs)
 
     # initial configuration
@@ -316,7 +347,7 @@ def simulated_annealing(h_bias, edges, plaqs, n_q,
 
 def sa_multi_restart(h_bias, edges, plaqs, n_q,
                      sweeps=2000, n_restarts=10,
-                     T_start=2.0, T_end=0.01, rng=None,
+                     T_start=None, T_end=None, rng=None,
                      classical_init=None):
     """Run SA n_restarts times; return the best solution across restarts.
 
@@ -386,10 +417,7 @@ def analyze_snapshot_sa(vx, vy, Bx, By, N, dim, Re,
         hp, score_vqa, _ = build_patch_hamiltonian(
             vx, vy, Bx, By, N, dim, Re,
             threshold_amr=thr_amr,
-            sigma=TRAINED_SIGMA, beta_curl=TRAINED_BETA_CURL,
-            beta_xpoint=TRAINED_BETA_XPOINT, w_z_frac=TRAINED_W_Z_FRAC,
-            gamma_hydro=TRAINED_GAMMA_HYDRO, gamma_mag=TRAINED_GAMMA_MAG,
-            kappa=TRAINED_KAPPA,
+            **trained_mapper_params(),
         )
 
     h_bias, edges, plaqs = build_ising_terms(hp, dim)
@@ -486,14 +514,19 @@ def run_phase7(dns_path, patches_path, dim, *,
         "suffix": "_v2" if use_v2 else "",
         "sweeps": sweeps, "n_restarts": n_restarts,
         "classical_warm": classical_warm,
+        "seed": int(seed),
     }
     return all_results, meta
 
 
-def save_results(all_results, meta, outdir=RESULTS_DIR):
+def save_results(all_results, meta, outdir=RESULTS_DIR, *,
+                 run_provenance=None, cli_args=None):
     if not all_results:
         return None
-    suffix = meta.get("suffix", "")
+    variant = (f"_sweeps{meta['sweeps']}_r{meta['n_restarts']}"
+               f"_seed{meta['seed']}"
+               + ("_warm" if meta.get("classical_warm") else ""))
+    suffix = variant + meta.get("suffix", "")
     fname = (f"sa_baseline_{meta['scenario']}_Re{meta['Re']}"
              f"_N{meta['N']}_dim{meta['dim']}{suffix}.npz")
     path = os.path.join(outdir, fname)
@@ -505,6 +538,9 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
     sa_refine = np.array([r["sa_refine"] for r in all_results])
     gt_refine = np.array([r["gt_refine"] for r in all_results])
 
+    provenance_fields = (
+        provenance.finish(run_provenance)
+        if run_provenance is not None else {})
     np.savez_compressed(
         path,
         best_E=best_E,
@@ -516,6 +552,10 @@ def save_results(all_results, meta, outdir=RESULTS_DIR):
         scenario=meta["scenario"],
         Re=meta["Re"], N=meta["N"], dim=meta["dim"],
         sweeps=meta["sweeps"], n_restarts=meta["n_restarts"],
+        seed=meta["seed"],
+        classical_warm=meta.get("classical_warm", False),
+        cli_args="" if cli_args is None else cli_args,
+        **provenance_fields,
     )
     size_kb = os.path.getsize(path) / 1024
     print(f"  Saved: {fname} ({size_kb:.0f} KB)")
@@ -537,6 +577,8 @@ def main():
                         help="Use classical AMR decision as SA restart 0")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    run_provenance = provenance.start()
+    cli_args = json.dumps(vars(args), sort_keys=True)
 
     use_v2 = not args.v1
     version = "v2" if use_v2 else "v1"
@@ -568,7 +610,10 @@ def main():
                     classical_warm=args.classical_warm,
                     seed=args.seed,
                 )
-                save_results(results, meta)
+                save_results(
+                    results, meta,
+                    run_provenance=run_provenance,
+                    cli_args=cli_args)
                 summary[(sc, re, dim)] = {
                     "sa_f1":    np.mean([r["metrics_sa"]["f1"]        for r in results]),
                     "class_f1": np.mean([r["metrics_classical"]["f1"] for r in results]),
@@ -577,13 +622,8 @@ def main():
                 print()
 
     if not summary:
-        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 7. Mesure :
-        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
-        # avoir imprime « Phase 7 complete. », sans artefact ni resume.
         raise RuntimeError(
-            "balayage vide : aucun (scenario, Re, dim) n'a d'artefact "
-            "d'entree pour les arguments donnes. Le script sortait ici avec "
-            "le code 0 et sans resume (D-148).")
+            "empty sweep: no (scenario, Re, dim) has both input artifacts")
 
     if summary:
         print("=" * 70)
@@ -600,12 +640,9 @@ def main():
         mean_class = np.mean([s["class_f1"] for s in summary.values()])
         print(f"\n  Overall SA F1:        {mean_sa:.3f}")
         print(f"  Overall Classical F1: {mean_class:.3f}")
-        if mean_sa > mean_class + 0.02:
-            print("  >> SA on H beats classical score → Hamiltonian carries signal.")
-        elif mean_sa < mean_class - 0.02:
-            print("  >> SA on H worse than classical → Hamiltonian is miscalibrated.")
-        else:
-            print("  >> SA on H ties classical.")
+        print(f"  Descriptive delta:      {mean_sa - mean_class:+.3f}")
+        print("  Interpret with paired trajectory-level uncertainty; this phase "
+              "alone does not establish superiority or equivalence.")
 
     print("\nPhase 7 complete.")
 

@@ -74,9 +74,9 @@ def test_the_error_lists_the_backends_that_do_exist():
     try:
         VQARuntime("inconnu", "simulator", 1024, 0)
     except ValueError as e:
-        for name in ("state_vector", "matrix_product_state", "aer",
-                     "estimator"):
+        for name in ("state_vector", "matrix_product_state", "aer"):
             assert name in str(e)
+        assert "estimator" not in str(e)
 
 
 @pytest.mark.parametrize("backend", ["state_vector", "aer"])

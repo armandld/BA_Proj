@@ -325,41 +325,16 @@ def test_each_exemption_still_names_a_real_dead_path():
 # ══════════════════════════════════════════════════════════════════
 
 def test_a_cd_on_its_own_line_moves_the_targets_that_follow():
-    """Epinglage de l'ancien comportement, sur le lanceur qui l'a revele.
-
-    `scripts/run_reoptimisation.sh` fait `cd "$ROOT_DIR/src"` sur sa propre
-    ligne, puis `python train_hyperparams.py`. Le fichier invoque est donc
-    `src/train_hyperparams.py`, qui existe.
-
-    Sur quelle entree ce test echoue : sur le parseur d'avant D-151, qui
-    resolvait la cible contre la racine du depot et rendait
-    `train_hyperparams.py` — absent, donc un ROUGE sur un lanceur juste.
-
-    **Seuil remesure le 18 aout 2026.** Les numeros de ligne etaient
-    epingles en dur (`cd` ligne 69, invocation ligne 72). L'ajout des
-    gardes 4 et 5 au lanceur les a deplaces a 101 et 104 — un decalage sans
-    rapport avec la propriete testee, qui rendait le test rouge sur un
-    lanceur juste. La constante est remplacee par une localisation : on
-    cherche la ligne du `cd`, et on verifie l'invocation qui la suit. La
-    propriete epinglee est inchangee ; seule sa facon de designer la ligne
-    ne depend plus de la longueur du fichier.
-    """
-    lanceur = os.path.join(_ROOT, "scripts", "run_reoptimisation.sh")
-    lignes = open(lanceur, encoding="utf-8").read().splitlines()
-    cd_ln = next((i + 1 for i, l in enumerate(lignes)
-                  if l.strip() == 'cd "$ROOT_DIR/src"'), None)
-    assert cd_ln is not None, (
-        "le lanceur ne fait plus de `cd` sur sa propre ligne : ce test "
-        "n'epingle plus rien, le retirer ou le reecrire")
-
-    cibles = dict((ln, t) for t, ln in _invocations(lanceur))
-    apres = {ln: t for ln, t in cibles.items() if ln > cd_ln}
-    assert apres, f"aucune invocation apres le `cd` (ligne {cd_ln})"
-    ln_cible = min(apres)
-    assert apres[ln_cible] == "src/train_hyperparams.py", (
-        f"ligne {ln_cible} resolue en {apres[ln_cible]!r} au lieu de "
-        f"'src/train_hyperparams.py' : le `cd` de la ligne {cd_ln} est ignore")
-    assert os.path.exists(os.path.join(_ROOT, apres[ln_cible]))
+    """A standalone `cd` changes how subsequent targets are resolved."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(
+            "w", suffix=".sh", dir=_ROOT, delete=False) as fh:
+        fh.write("cd src\npython train_hyperparams.py\n")
+        path = fh.name
+    try:
+        assert _invocations(path) == [("src/train_hyperparams.py", 2)]
+    finally:
+        os.remove(path)
 
 
 def test_a_cd_inside_a_command_substitution_does_not_move_what_follows():
@@ -443,5 +418,6 @@ def test_the_sweep_still_sees_every_invocation_it_saw_before():
     deux en silence (`run_fold.sh`, dont le `cd "$root"` n'etait pas
     resoluble) : c'est ce test qui l'a dit.
     """
-    assert len(_ALL) >= 83, (
-        f"{len(_ALL)} invocations balayees, 83 mesurees a `f8edebf`")
+    assert len(_ALL) >= 80, (
+        f"{len(_ALL)} invocations balayees, 80 attendues apres retrait des "
+        "trois utilitaires de stockage obsoletes")

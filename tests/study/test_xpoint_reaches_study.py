@@ -1,17 +1,4 @@
-"""`study/` voit-il enfin le terme de point X ?
-
-`build_ising_terms` ne lisait que `H_edges`, `C_edges` et `K_plaquettes`.
-La diagonalisation exacte, le recuit simule et les ablations etaient donc
-STRUCTURELLEMENT aveugles au terme de point X, que la campagne
-d'entrainement active pourtant sur 6/6 scenarios. `h3_term_ablation`
-mettait meme `K_xpoint` a zero sur l'ablation `no_ZZZZ` en croyant
-l'ablater : il annulait une cle que `ground_state_mask` ne lisait jamais.
-
-Le test central est celui de COINCIDENCE : le chemin `study/` et le chemin
-DEPLOYE (`create_period_hamiltonian`) doivent rendre la meme energie sur
-les memes coefficients. Sans quoi la falsification porterait sur un autre
-hamiltonien que l'entrainement.
-"""
+"""Le chemin Study et l'opérateur QAOA encodent le même Hamiltonien."""
 
 import itertools
 import os
@@ -77,8 +64,7 @@ def test_study_et_le_chemin_deploye_coincident(graine):
     nq = 2 * dim * dim
     hp = _coeffs(dim, graine)
 
-    diag = np.real(np.diag(create_period_hamiltonian(
-        hp, dim, advanced_anomalies_enabled=True).to_matrix()))
+    diag = np.real(np.diag(create_period_hamiltonian(hp, dim).to_matrix()))
 
     h, e, p = build_ising_terms(hp, dim)
     energies = np.array([
@@ -94,9 +80,7 @@ def test_study_et_le_chemin_deploye_coincident(graine):
         f"le chemin deploye. Mesure de reference : 5.3e-15.")
 
 
-def test_le_drapeau_des_anomalies_est_actif_dans_study():
-    """`qaoa_inputs` codait `advanced_anomalies_enabled=False` en dur,
-    alors que la campagne d'entrainement l'active sur 6/6 scenarios."""
+def test_le_producteur_xpoint_est_actif_dans_study():
     import ast
     import pathlib
 

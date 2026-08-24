@@ -16,28 +16,22 @@ AXIS_Y = 1
 # =====================================================================
 # OPERATEURS DISCRETS EN DIFFERENCES AVANT
 # =====================================================================
-# Les mappeurs (HamiltParams, HamiltParams_v2, PhysToAngle) forment un
-# rotationnel et une divergence par differences avant non divisees par dx.
-# Deux ecritures coexistent dans le depot et ne different que par le role
-# des deux axes :
+# Les mappeurs forment rotationnel et divergence par différences avant, sans
+# division par dx. Deux conventions explicites sont disponibles :
 #
 #   - `forward_curl_z` / `forward_divergence` respectent AXIS_X / AXIS_Y
 #     declares ci-dessus (convention indexing='ij'). Ce sont celles de
 #     `grad`, `div`, `_compute_q_criterion` et `MHDSolver.get_fluxes`.
 #
-#   - `legacy_forward_curl_z` / `legacy_forward_divergence` sont les
-#     formules historiques des mappeurs. Elles sont correctes sous la
-#     convention indexing='xy' (axis 0 = Y, axis 1 = X), qui n'est pas
-#     celle du depot. Sous AXIS_X=0 / AXIS_Y=1 elles valent en realite
+#   - `legacy_forward_curl_z` / `legacy_forward_divergence` reproduisent la
+#     variante d'ablation indexing='xy'. Sous la convention courante :
 #         legacy_curl = df_y/dy - df_x/dx      (difference de deformations
 #                                               normales)
 #         legacy_div  = df_x/dy + df_y/dx      (deformation de cisaillement)
 #     c'est-a-dire deux composantes du tenseur des deformations, aveugles
 #     a la rotation solide et a la compression isotrope.
 #
-# Les deux formes sont conservees pour que la variante `fixed_curl` des
-# mappeurs soit un choix explicite et mesurable, et non une reecriture
-# silencieuse du chemin par defaut.
+# La variante ``fixed_curl=False`` est réservée aux ablations.
 # =====================================================================
 
 def forward_curl_z(fx, fy):
@@ -74,26 +68,13 @@ def legacy_forward_divergence(fx, fy):
 
 
 def curl_z(fx, fy, fixed_curl=True):
-    """Rotationnel discret : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
-    historique si `fixed_curl=False` est demande explicitement.
-
-    (D-175 : ce docstring disait l'inverse — « forme historique par defaut,
-    forme 'ij' si demande » — alors que `fixed_curl=True` est deja le defaut
-    de la signature. Mesure sur un champ aleatoire 8x8 : `curl_z(fx, fy)`
-    sans 3e argument est identique bit-a-bit a `forward_curl_z`, ecart a
-    `legacy_forward_curl_z` de 1,1006. Comportement inchange, seul le texte
-    etait faux ; deja epingle par `tests/solver/test_analytic_fields.py`.)
-    """
+    """Discrete ij curl; ``fixed_curl=False`` selects the ablation variant."""
     return (forward_curl_z(fx, fy) if fixed_curl
             else legacy_forward_curl_z(fx, fy))
 
 
 def divergence(fx, fy, fixed_curl=True):
-    """Divergence discrete : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
-    historique si `fixed_curl=False` est demande explicitement.
-
-    (D-175 : meme correction de docstring que `curl_z`, meme mesure.)
-    """
+    """Discrete ij divergence, or the ablation variant when requested."""
     return (forward_divergence(fx, fy) if fixed_curl
             else legacy_forward_divergence(fx, fy))
 
@@ -107,9 +88,8 @@ def project_divergence_free_any(vx, vy):
     global SOUS-ECHANTILLONNE, qui reste periodique mais n'a plus la taille
     de la grille.
 
-    Cette fonction deduit la taille du tableau. Elle est identique a la
-    methode pour un champ de taille N : meme traitement du mode de Nyquist
-    (D-7), meme garde sur la singularite k=0.
+    Cette fonction déduit la taille du tableau et traite le mode de Nyquist
+    comme la méthode de la grille globale.
 
     PRECONDITION : le champ doit etre PERIODIQUE. Sur un patch local avec
     halo, qui ne l'est pas, le resultat n'a pas de sens physique — la
@@ -124,8 +104,7 @@ def project_divergence_free_any(vx, vy):
     k = np.fft.fftfreq(n, d=1.0 / n)
     KX, KY = np.meshgrid(k, k, indexing='ij')
 
-    # D-7 : annuler la derivee au Nyquist, sans quoi la projection n'est ni
-    # exacte ni idempotente sur un champ bruite.
+    # Annuler la dérivée au Nyquist garantit une projection idempotente.
     if n % 2 == 0:
         nyq = n // 2
         KX = KX.copy()

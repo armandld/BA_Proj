@@ -26,8 +26,8 @@ if _FIGURES not in sys.path:
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 from h0_optimiser_equivalence import (
-    classical_init_spins, decision_agreement, exhaustive_ground_state,
-    f1_from_masks, greedy_local_search,
+    classical_init_spins, decision_agreement, f1_from_masks,
+    greedy_local_search,
 )
 from h0_qaoa_displacement import (
     ground_state_marginals, mask_uniformity, theta_marginals,
@@ -42,9 +42,39 @@ from stats_confirmatory import (
     holm_correction, hierarchical_bootstrap, paired_hierarchical_delta,
     tost_equivalence,
 )
+from ising_terms_and_annealing import exhaustive_ground_state, simulated_annealing
 
 EMPTY_E = (np.zeros((0, 2), dtype=np.int64), np.zeros(0))
 EMPTY_P = (np.zeros((0, 4), dtype=np.int64), np.zeros(0))
+
+
+def test_default_annealing_is_invariant_to_global_energy_scale():
+    h = np.array([0.4, -1.2, 0.7, -0.3])
+    edges = (np.array([[0, 1], [1, 2], [2, 3]]),
+             np.array([-0.8, 0.5, -1.1]))
+    plaqs = (np.array([[0, 1, 2, 3]]), np.array([-0.6]))
+    base = simulated_annealing(
+        h, edges, plaqs, 4, sweeps=80, rng=np.random.default_rng(9))
+    scale = 1e6
+    scaled = simulated_annealing(
+        scale * h,
+        (edges[0], scale * edges[1]),
+        (plaqs[0], scale * plaqs[1]),
+        4,
+        sweeps=80,
+        rng=np.random.default_rng(9),
+    )
+    np.testing.assert_array_equal(base[0], scaled[0])
+    np.testing.assert_allclose(base[2] * scale, scaled[2], rtol=1e-12)
+
+
+def test_invalid_explicit_temperature_schedule_is_rejected():
+    with pytest.raises(ValueError, match="temperatures"):
+        simulated_annealing(
+            np.ones(2), EMPTY_E, EMPTY_P, 2,
+            sweeps=2, T_start=0.1, T_end=1.0,
+            rng=np.random.default_rng(0),
+        )
 
 
 def _naive_ground_state(h, edges, plaqs, n_q):
@@ -357,10 +387,7 @@ def test_tost_unpaired_path_runs():
 
 # ------------------- Level-3 driver (pure helpers) --------------------
 
-def test_fold_scenarios_deduplicates_the_v1_scenario_list():
-    """Defaut V1 : SCENARIOS_ALL liste ot et rotor deux fois. Sans
-    deduplication, un fold LOSO garderait la classe tenue dans
-    l'entrainement (fuite)."""
+def test_fold_scenarios_rejects_duplicate_scenarios():
     from types import SimpleNamespace
     from closed_loop_campaign import fold_scenarios
     cfg = lambda name: {"scenario": name, "N": 256, "T_MAX": 1.0, "Re": 800}
@@ -369,10 +396,8 @@ def test_fold_scenarios_deduplicates_the_v1_scenario_list():
         ("tearing", cfg("harris_tearing")), ("rotor", cfg("mhd_rotor")),
         ("ot", cfg("orszag_tang")), ("rotor", cfg("mhd_rotor")),
     ])
-    scen = fold_scenarios(T, warn=False)
-    keys = [k for k, _ in scen]
-    assert keys == ["kh", "ot", "tearing", "rotor"]
-    assert len(keys) == len(set(keys))
+    with pytest.raises(ValueError, match="duplicate fold keys"):
+        fold_scenarios(T)
 
 
 def test_fold_scenarios_filter_by_key_or_scenario_name():
@@ -381,9 +406,9 @@ def test_fold_scenarios_filter_by_key_or_scenario_name():
     T = SimpleNamespace(SCENARIOS_ALL=[
         ("kh", {"scenario": "kelvin_helmholtz"}),
         ("ot", {"scenario": "orszag_tang"})])
-    assert [k for k, _ in fold_scenarios(T, ["ot"], warn=False)] == ["ot"]
+    assert [k for k, _ in fold_scenarios(T, ["ot"])] == ["ot"]
     assert [k for k, _ in
-            fold_scenarios(T, ["kelvin_helmholtz"], warn=False)] == ["kh"]
+            fold_scenarios(T, ["kelvin_helmholtz"])] == ["kh"]
 
 
 def test_summarise_pairs_arms_and_counts_wins():
@@ -401,6 +426,56 @@ def test_summarise_pairs_arms_and_counts_wins():
     assert s["combined"]["n_qhas_better"] == 1 and s["combined"]["n"] == 2
     # le cout est plus eleve pour Q-HAS sur les deux folds
     assert s["patch_ratio"]["n_qhas_better"] == 0
+
+
+def test_run_arm_propagates_the_requested_quantum_seed(monkeypatch):
+    from types import SimpleNamespace
+    import pipeline as pipeline_module
+    from closed_loop_campaign import run_arm
+
+    seen = {}
+
+    def fake_pipeline(**kwargs):
+        seen["seed"] = kwargs["argus"].seed
+        return {"combined": 0.0}
+
+    class FakeTraining:
+        LAMBDA_COST_SOFT = 0.5
+
+        @staticmethod
+        def create_argus(_config):
+            return SimpleNamespace(seed=0)
+
+    monkeypatch.setattr(pipeline_module, "pipeline", fake_pipeline)
+    config = {
+        "N": 8, "DT": 0.1, "HYBRID_DT": 0.2, "T_MAX": 0.3,
+        "scenario": "unit", "max_depth_override": 1,
+    }
+    run_arm(FakeTraining, "unit", config,
+            {"unit": ({}, {})}, {}, False, seed=37)
+    assert seen["seed"] == 37
+
+
+def test_closed_loop_study_refuses_a_changed_protocol():
+    import optuna
+    from closed_loop_campaign import _bind_contract
+
+    study = optuna.create_study(direction="minimize")
+    _bind_contract(study, {"schema": 1, "target_trials": 10})
+    _bind_contract(study, {"schema": 1, "target_trials": 10})
+    with pytest.raises(RuntimeError, match="contract mismatch"):
+        _bind_contract(study, {"schema": 1, "target_trials": 11})
+
+
+def test_closed_loop_cannot_adopt_an_uncontracted_existing_study():
+    import optuna
+    from closed_loop_campaign import _bind_contract
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(lambda trial: trial.suggest_float("x", 0.0, 1.0),
+                   n_trials=1)
+    with pytest.raises(RuntimeError, match="without a campaign contract"):
+        _bind_contract(study, {"schema": 1})
 
 
 # ------------------ agregation V4 et figure Pareto --------------------

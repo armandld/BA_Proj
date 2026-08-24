@@ -258,14 +258,9 @@ def test_constant_predictors_do_not_vote():
     )
 
 
-def test_bootstrap_blocks_are_snapshots_not_patches():
-    """Les patches d'un meme instantane ne sont pas independants.
-
-    Rechantillonner par patch retrecirait l'intervalle d'un facteur ~dim,
-    ce qui rendrait n'importe quel ecart significatif.
-    """
+def test_bootstrap_blocks_are_complete_physics_trajectories():
+    """Neither patches nor snapshots are independent replication units."""
     src = open(_study_file("h2b_loso_delta_ci.py"), encoding="utf-8").read()
-    assert "np.arange(len(Y)) // (dim * dim)" in src, (
-        "le bloc de bootstrap doit etre l'instantane"
-    )
+    assert "bootstrap_by_trajectory" in src
+    assert "np.full(len(Y), trajectory_id" in src
     assert "bootstrap_by_trajectory" in src

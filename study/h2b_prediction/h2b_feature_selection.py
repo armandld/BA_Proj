@@ -155,7 +155,10 @@ def main():
     p = argparse.ArgumentParser(
         description="V3 Task 1: B5 score-only GBT + forward selection (LOSO)")
     # imports lourds ici seulement
-    from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+    from config import (
+        DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+    )
+    from data_catalog import labelled_trajectory_paths
     from h2b_ceiling_random_split import FEATURE_NAMES, N_FEATS
     from h2b_loso_transfer import _gather_scenario
 
@@ -164,6 +167,8 @@ def main():
     p.add_argument("--dim", type=int, default=4)
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
@@ -176,26 +181,11 @@ def main():
     print()
 
     # ---- memes entrees que phase 11b ----
-    by_scene = {}
-    for sc in args.scenario:
-        rows = []
-        for re in args.re:
-            dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
-            pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
-            if os.path.exists(dp) and os.path.exists(pp):
-                rows.append((re, dp, pp))
-        if rows:
-            by_scene[sc] = rows
+    by_scene = labelled_trajectory_paths(
+        RESULTS_DIR, args.scenario, args.re, args.N, args.dim,
+        args.phys_seed)
     if len(by_scene) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
-        raise RuntimeError(
-            "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
-            f"d'entree, {len(by_scene)} trouve(s) ({sorted(by_scene)}). Le script "
-            "sortait ici avec le code 0 et sans artefact (D-75).")
+        raise RuntimeError("LOSO requires at least two scenarios")
 
     print("  building per-scenario feature matrices...")
     t0 = time.time()

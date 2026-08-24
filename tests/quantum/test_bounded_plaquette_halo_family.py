@@ -59,10 +59,10 @@ def _params(k_cells, kx_cells=None):
 
 def _coeffs(params, theta_h, theta_v, advanced=False):
     zero = np.zeros((M, M))
+    if not advanced:
+        params = {k: v for k, v in params.items() if k != "K_xpoint"}
     op, *_ = create_bounded_hamiltonian(
-        params, DIM, theta_h, theta_v, zero, zero,
-        advanced_anomalies_enabled=advanced,
-    )
+        params, DIM, theta_h, theta_v, zero, zero)
     return {lbl: float(c.real) for lbl, c in zip(op.paulis.to_labels(), op.coeffs)}
 
 

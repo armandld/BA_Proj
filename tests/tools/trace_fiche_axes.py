@@ -52,7 +52,7 @@ def _wrap_period(hamilt_params, dim, *args, **kwargs):
 
 def _wrap_execute(qc, cost_hamiltonian, mode, backend_name, shots, reps,
                   K_opt, eps, E_max, verbose, vqa_runtime=None,
-                  method="COBYLA", warm_start_params=None):
+                  method="COBYLA", warm_start_params=None, seed=0):
     AXES['backend'][str(backend_name)] += 1
     AXES['optimiseur'][str(method)] += 1
     AXES['warm_start']['present' if warm_start_params is not None
@@ -64,7 +64,8 @@ def _wrap_execute(qc, cost_hamiltonian, mode, backend_name, shots, reps,
     AXES['hamiltonien']['nul' if nul else 'non_nul'] += 1
     return _orig_execute(qc, cost_hamiltonian, mode, backend_name, shots, reps,
                          K_opt, eps, E_max, verbose, vqa_runtime=vqa_runtime,
-                         method=method, warm_start_params=warm_start_params)
+                         method=method, warm_start_params=warm_start_params,
+                         seed=seed)
 
 
 ch.create_bounded_hamiltonian = _wrap_bounded

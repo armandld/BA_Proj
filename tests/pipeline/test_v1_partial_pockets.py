@@ -9,7 +9,7 @@ Ce fichier porte ce qui en est sorti :
   - **D-48**, la seule trouvaille : `mode="hardware"` s'exécutait sur un
     simulateur sans le dire ;
   - trois vérifications **saines**, épinglées pour ne pas être refaites —
-    la mémoire TTL, le bras `classical_only`, et le mode Colab.
+    la mémoire TTL, le bras `classical_only`, et le stockage de campagne.
 
 Une vérification saine est un résultat : sans elle, la prochaine passe
 relit le même code. Chaque test dit donc aussi **quels axes ont été
@@ -46,7 +46,6 @@ def test_the_runtime_only_ever_built_simulators():
         "state_vector": "AerSimulator",
         "matrix_product_state": "AerSimulator",
         "aer": "AerSimulator",
-        "estimator": "FakeFez",
     }
     for name, cls in attendu.items():
         r = VQARuntime(backend_name=name, mode="simulator", shots=64, opt_level=1)
@@ -57,7 +56,7 @@ def test_the_runtime_only_ever_built_simulators():
 def test_a_non_simulator_mode_is_refused_at_construction(mode):
     """Le refus tombe au constructeur, pas au milieu d'une campagne."""
     from VQA.runtime import VQARuntime
-    with pytest.raises(ValueError, match="non supporte"):
+    with pytest.raises(ValueError, match="Unsupported mode"):
         VQARuntime(backend_name="state_vector", mode=mode, shots=64, opt_level=1)
 
 
@@ -94,7 +93,7 @@ def test_execute_refuses_the_hardware_path_too():
     H = SparsePauliOp.from_list([("Z" + "I" * (n - 1), -0.5)])
     qc = QAOAAnsatz(cost_operator=H, reps=2, initial_state=qc0).decompose().decompose()
 
-    with pytest.raises(ValueError, match="non supporte"):
+    with pytest.raises(ValueError, match="Unsupported mode"):
         execute(qc, H, "hardware", "state_vector", 64, 2, 4, 1e-2, 1.0, False,
                 vqa_runtime=None, method="COBYLA")
 
@@ -274,16 +273,16 @@ def test_the_classical_arm_carries_the_sigma_provenance_too(petit_run):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  Vérifié et trouvé sain — le mode Colab
-#  Axe NON empruntable ici : `google.colab` n'est pas importable.
-#  Ce qui est vérifiable l'est ; le reste est nommé.
+#  Une seule cible : une machine louee, plusieurs processus locaux
 # ══════════════════════════════════════════════════════════════════
 
-def test_outside_colab_no_drive_path_is_ever_constructed():
-    import train_hyperparams as TH
-    assert TH.IN_COLAB is False
-    assert TH.drive_dir is None and TH.local_dir is None
-    assert TH.data_dir.endswith("Train_results")
+def test_training_has_no_platform_specific_storage_paths():
+    source = open(os.path.join(_REPO_ROOT, "src",
+                               "train_hyperparams.py"), encoding="utf-8").read()
+    forbidden = ("google.colab", "drive.mount", "OPTUNA_STORAGE",
+                 "OPTUNA_JOURNAL", "postgresql://", "IN_COLAB",
+                 "DISTRIBUTED")
+    assert not [token for token in forbidden if token in source]
 
 
 def test_ensure_dirs_is_idempotent_and_silent(tmp_path, monkeypatch, capsys):
@@ -295,31 +294,11 @@ def test_ensure_dirs_is_idempotent_and_silent(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_every_drive_copy_sits_under_an_in_colab_guard():
-    """Les recopies Drive touchent `drive_dir`, qui vaut None hors Colab :
-    une seule non gardée lèverait `TypeError` sur une machine ordinaire.
-
-    Le contrôle marche sur l'AST — il vérifie que chaque appel est
-    DANS un `if IN_COLAB`, pas qu'il en soit voisin dans le texte.
-    """
-    import ast
-    tree = ast.parse(open(os.path.join(_REPO_ROOT, "src",
-                                       "train_hyperparams.py")).read())
-
-    def copies_drive(noeud):
-        return [ast.unparse(n)[:60] for n in ast.walk(noeud)
-                if isinstance(n, ast.Call)
-                and getattr(n.func, "attr", None) in ("copy2", "copytree")
-                and "drive_dir" in ast.unparse(n)]
-
-    toutes = copies_drive(tree)
-    assert toutes, "aucune recopie Drive : le balayage ne prouve rien"
-
-    gardees = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.If) and "IN_COLAB" in ast.unparse(node.test):
-            gardees.extend(copies_drive(node))
-
-    assert set(toutes) == set(gardees), (
-        f"recopies Drive hors garde IN_COLAB : "
-        f"{sorted(set(toutes) - set(gardees))}")
+def test_campaign_storage_is_a_local_journal(tmp_path, monkeypatch):
+    import train_hyperparams as TH
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "JOURNAL_DIR", str(tmp_path / "journal"))
+    monkeypatch.setattr(TH, "_DIRS_READY", False)
+    storage = TH._get_storage({"study_name": "storage_contract"})
+    assert storage.__class__.__name__ == "JournalStorage"
+    assert (tmp_path / "journal").is_dir()

@@ -48,7 +48,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
-from h2b_dynamic_ground_truth import downsample_fields          # v3, reutilise
+from dynamic_patch_labels import downsample_fields
 from dns_validation import total_energy   # V2, reutilise
 
 FIELDS = ("vx", "vy", "Bx", "By")
@@ -105,10 +105,10 @@ def evolve_to(scenario, N, re, t_end, cfl=0.4, dt0=1e-3, record=None):
     """
     from Simulation.grid import PeriodicGrid
     from Simulation.solver import MHDSolver
-    from dns_extension import _extended_init        # v3, 8 scenarios
+    from dns_sweep import init_scenario
 
     sim = MHDSolver(PeriodicGrid(N), dt=dt0, Re=re, Rm=re)
-    _extended_init(sim, scenario, seed=0, amplitude=0.0)
+    init_scenario(sim, scenario, phys_seed=0, noise_amplitude=0.0)
     dx = 2 * np.pi / N
     t, k = 0.0, 0
     while t < t_end - 1e-12:
@@ -174,11 +174,11 @@ def splitting_order_diagnostic(scenario="orszag_tang", N=64, re=400,
     """
     from Simulation.grid import PeriodicGrid
     from Simulation.solver import MHDSolver
-    from dns_extension import _extended_init
+    from dns_sweep import init_scenario
 
     def _run(n_steps, project):
         sim = MHDSolver(PeriodicGrid(N), dt=T / n_steps, Re=re, Rm=re)
-        _extended_init(sim, scenario, seed=0, amplitude=0.0)
+        init_scenario(sim, scenario, phys_seed=0, noise_amplitude=0.0)
         sim.dt = T / n_steps
         for _ in range(n_steps):
             sim.vx, sim.vy, sim.Bx, sim.By = sim._rk4_step(

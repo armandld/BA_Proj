@@ -255,17 +255,13 @@ def test_le_detecteur_separe_la_presence_du_mot_cle_de_sa_valeur():
 def test_le_balayage_des_appelants_n_est_pas_vide():
     """Un balayage vide doit crier — y compris celui-ci.
 
-    Mesure du 18 aout 2026 : 66 fichiers dans `study/`, 7 appelants.
-
-    D-170 : le plancher a 40 ne detectait plus rien — meme quantite que
-    D-167 (`STUDY_FILES`), un troisieme site independant qui la recalcule
-    par `os.walk` plutot que `glob`."""
+    Le generateur dynamique duplique a ete retire : le corpus courant porte
+    65 fichiers et toujours 7 appelants de l'encodage temporel."""
     fichiers = [os.path.join(d, n)
                 for d, _s, ns in os.walk(_STUDY) if "__pycache__" not in d
                 for n in ns if n.endswith(".py")]
-    assert len(fichiers) >= 66, (
-        f"{len(fichiers)} fichiers de study/ balayes ; 66 mesures a "
-        "`3d4f095` (18 aout 2026)")
+    assert len(fichiers) >= 65, (
+        f"{len(fichiers)} fichiers de study/ balayes ; 65 attendus")
     assert len(_callers()) >= 7, (
         f"{len(_callers())} appelants trouves — mesure du 18 aout : 7. Le "
         "balayage a perdu une forme d'appel")

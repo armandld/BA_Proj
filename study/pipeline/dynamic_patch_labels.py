@@ -1,84 +1,15 @@
 #!/usr/bin/env python3
-"""Verite terrain DYNAMIQUE : ce que coute VRAIMENT un patch laisse grossier.
+"""Dynamic ground truth for the error caused by coarsening one patch.
 
-Protocole v3 §1.2, tache 6. Le protocole nomme ce fichier
-`study/v3/t6_dynamic_gt.py` ; il est ici sous `study/pipeline/` parce que le
-depot a ete reorganise depuis (le `study/phase2_hard_patches.py` du protocole
-est aujourd'hui `study/pipeline/hard_patch_labels.py`). Meme code, meme place
-dans la chaine.
+Each patch is replaced by its mean and evolved with the exact CFL step
+sequence used by the full-resolution reference. The reported distance is
+measured over the whole domain after one patch-crossing time by default:
 
-POURQUOI CE LABEL EXISTE
-------------------------
-Le label de la phase 2, `e_i`, est l'ecart INTRA-patch a la moyenne du patch :
-une mesure de non-lissite, instantanee et confinee au patch. Ce n'est pas ce
-que l'AMR cherche a controler. L'AMR cherche a controler l'erreur que le
-grossissement d'un patch fait commettre A LA SIMULATION.
+``t_x = patch_width / (v_rms + b_rms)``.
 
-Ces deux choses ne coincident pas necessairement, et il y a une raison
-mesuree de s'en inquieter : l'AUC du score classique seul contre `e_i` vaut
-1,000 (harris), 0,997 (KH), 0,948 (rotor), 0,592 (OT). Sur trois scenarios
-sur quatre, `e_i` est presque une fonction deterministe du detecteur
-classique — la tache y est quasi gratuite, et tout ecart mesure contre une
-baseline quasi parfaite ne mesure pas ce qu'on croit (voir `RESULTS.md`,
-« Un second fait, qui n'etait pas cherche », et H5).
-
-CE QUI EST CALCULE
-------------------
-Pour un instantane t et un patch i :
-
-    reference  = le champ evolue de dt=delta_t a pleine resolution
-    variante_i = le champ ou le patch i SEUL est remplace par sa moyenne,
-                 puis evolue de delta_t
-    d_i        = ||variante_i(t+dt) - reference(t+dt)||_2 / rms_global(t)
-
-La difference porte sur le CHAMP ENTIER, pas sur le patch : c'est tout
-l'interet. Une erreur introduite dans le patch i se propage, et `d_i` compte
-ce qu'elle abime ailleurs. `e_i` ne peut pas voir cela.
-
-LA SEQUENCE DE PAS EST GELEE
-----------------------------
-`dns_sweep.py` appelle `sim.adapt_dt()` a chaque pas : le pas depend du
-champ. Si chaque variante adaptait le sien, elle divergerait de la reference
-par sa SEQUENCE DE PAS autant que par sa physique, et `d_i` melangerait les
-deux. Le protocole l'exige explicitement (« same CFL dt sequence ») : la
-sequence est calculee UNE FOIS sur la reference, puis rejouee telle quelle
-pour les dim^2 variantes. `MHDSolver.check_cfl` ne fait qu'avertir, il
-n'adapte rien, donc rejouer suffit.
-
-LE TEST DE FALSIFICATION DU LABEL LUI-MEME
-------------------------------------------
-Un label dynamique qui ne serait qu'une redite du label statique ne vaudrait
-pas son cout. On mesure donc aussi `d0_i`, la meme distance AVANT toute
-evolution — c'est-a-dire la perturbation de grossissement elle-meme :
-
-    d0_i = ||variante_i(t) - reference(t)||_2 / rms_global(t)
-
-Comme la perturbation est nulle hors du patch i, `d0_i` vaut **exactement**
-`e_i / dim` (l'identite est demontree dans `tests/study/` et epinglee). Si
-`d_i` restait proportionnel a `d0_i`, le label dynamique n'apporterait rien
-et il faudrait le dire. Le rapport `d_i / d0_i` — l'AMPLIFICATION — est donc
-publie a cote du label, et c'est lui qui justifie ou condamne l'exercice.
-
-SORTIE
-------
-`results/d_patches_{scenario}_Re{Re}_N{N}_dim{D}_dt{delta_t}.npz`.
-
-`delta_t` est dans le nom, et ce n'est pas cosmetique : c'est le parametre
-qui decide si le label dit quelque chose (voir la mesure dans `RESULTS.md`).
-Deux horizons dans un meme nom ecraseraient silencieusement la mesure
-precedente.
-
-**Deviation assumee au protocole**, tache 6 : le protocole demande que la
-sortie « mirrors the phase-2 format so phase-11 builders accept it as a
-drop-in label source ». Ce fichier n'ecrit PAS le label dynamique sous la
-cle `l2_errors`. Un artefact qui a la forme de la phase 2 mais dont
-`l2_errors` designe autre chose est precisement la classe de defaut que
-`CODE_REVIEW.md` retient comme la seule qui compte : bonne forme, valeurs
-plausibles, sens different. Les cles sont donc explicites (`d_errors`,
-`d0_errors`, `amplification`), `label_kind` vaut `"dynamic"`, et `l2_errors`
-— present pour la comparaison — contient bien le label STATIQUE, recalcule
-sur le meme instantane. Un consommateur qui veut le label dynamique le
-nomme.
+An explicit ``--delta-t`` remains available for horizon ablations. Artifact
+keys distinguish the dynamic error, its instantaneous component, and the
+static label; no key changes meaning between label types.
 """
 import argparse
 import glob
@@ -103,8 +34,11 @@ from hard_patch_labels import patch_l2_errors, patch_classical_scores  # noqa: E
 from Simulation.grid import PeriodicGrid                     # noqa: E402
 from Simulation.solver import MHDSolver                      # noqa: E402
 
-#: Horizon d'evolution, protocole §1.2 : « delta_t = one hybrid step (0.1) ».
-DELTA_T = 0.10
+#: Default horizon: one patch-crossing time, computed per snapshot.
+DELTA_T = None
+CROSSING_MULTIPLE = 1.0
+REDUNDANCY_RHO_LIMIT = 0.95
+MIN_AMPLIFICATION_LOG_IQR = np.log(1.10)
 
 #: Garde-fou : au-dela, la sequence de pas est trop longue pour un horizon
 #: aussi court — signe que `adapt_dt` a rendu un pas absurde.
@@ -138,6 +72,20 @@ def coarsen_one_patch(field, pi, pj, patch_size):
     return out
 
 
+def downsample_fields(array, factor):
+    """Block-average an array shaped ``(snapshots, N, N)``."""
+    array = np.asarray(array)
+    if array.ndim != 3:
+        raise ValueError(f"forme attendue (snapshots, N, N), recue {array.shape}")
+    n_snapshots, nx, ny = array.shape
+    if nx != ny or factor <= 0 or nx % factor:
+        raise ValueError(
+            f"grille {array.shape} incompatible avec le facteur {factor}")
+    coarse = nx // factor
+    return array.reshape(
+        n_snapshots, coarse, factor, coarse, factor).mean(axis=(2, 4))
+
+
 # -------------------------------------------------------------------
 #  2. l'evolution, a sequence de pas imposee
 # -------------------------------------------------------------------
@@ -147,7 +95,21 @@ def _solveur(N, Re, champs, dt):
     return sim
 
 
-def sequence_de_pas(N, Re, champs, delta_t=DELTA_T, cfl_target=0.4):
+def patch_crossing_time(vx, vy, Bx, By, n_patches):
+    """Characteristic time for velocity/Alfven transport across one patch."""
+    if not isinstance(n_patches, (int, np.integer)) or n_patches <= 0:
+        raise ValueError(f"n_patches doit etre un entier positif, recu {n_patches!r}")
+    v_rms = float(np.sqrt(np.mean(vx ** 2 + vy ** 2)))
+    b_rms = float(np.sqrt(np.mean(Bx ** 2 + By ** 2)))
+    speed = v_rms + b_rms
+    if not np.isfinite(speed) or speed <= 0.0:
+        raise ValueError(
+            "v_rms + b_rms doit etre fini et strictement positif pour "
+            "definir le temps de traversee d'un patch")
+    return (2.0 * np.pi / n_patches) / speed
+
+
+def sequence_de_pas(N, Re, champs, delta_t, cfl_target=0.4):
     """Sequence de pas ADAPTATIVE, calculee une fois sur la reference.
 
     Rendue separement pour pouvoir etre rejouee a l'identique sur chaque
@@ -155,6 +117,8 @@ def sequence_de_pas(N, Re, champs, delta_t=DELTA_T, cfl_target=0.4):
     dernier pas est rogne pour tomber EXACTEMENT sur `delta_t`, sans quoi
     reference et variantes n'arriveraient pas au meme instant.
     """
+    if not np.isfinite(delta_t) or delta_t <= 0.0:
+        raise ValueError(f"delta_t doit etre fini et positif, recu {delta_t!r}")
     sim = _solveur(N, Re, champs, dt=1e-3)
     pas, t = [], 0.0
     while t < delta_t - 1e-15:
@@ -193,7 +157,7 @@ def _l2_relatif(a, b, rms):
 
 
 def dynamic_patch_errors(vx, vy, Bx, By, n_patches, Re, delta_t=DELTA_T,
-                         verbose=False):
+                         crossing_multiple=CROSSING_MULTIPLE, verbose=False):
     """Rend `(d, d0, meta)` — le label dynamique, sa part instantanee, le cout.
 
     `d[pi, pj]`  : distance au champ de reference APRES `delta_t`.
@@ -212,6 +176,16 @@ def dynamic_patch_errors(vx, vy, Bx, By, n_patches, Re, delta_t=DELTA_T,
             f"Exiger dim <= N/8 (ici dim <= {N // 8}).")
 
     champs = tuple(np.asarray(c, dtype=float) for c in (vx, vy, Bx, By))
+    crossing_time = patch_crossing_time(*champs, n_patches)
+    if not np.isfinite(crossing_multiple) or crossing_multiple <= 0.0:
+        raise ValueError("crossing_multiple doit etre fini et positif")
+    if delta_t is None:
+        delta_t = crossing_multiple * crossing_time
+        horizon_mode = "patch_crossing"
+    else:
+        if not np.isfinite(delta_t) or delta_t <= 0.0:
+            raise ValueError("delta_t doit etre fini et positif")
+        horizon_mode = "fixed"
     rms = float(np.sqrt(np.mean(sum(c ** 2 for c in champs))))
     if rms < 1e-15:
         rms = 1.0
@@ -238,6 +212,9 @@ def dynamic_patch_errors(vx, vy, Bx, By, n_patches, Re, delta_t=DELTA_T,
         "n_substeps": int(len(pas)),
         "dt_min": float(pas.min()), "dt_max": float(pas.max()),
         "delta_t": float(delta_t),
+        "patch_crossing_time": float(crossing_time),
+        "crossing_multiple": float(delta_t / crossing_time),
+        "horizon_mode": horizon_mode,
         "wall_seconds": float(time.time() - t0),
         "wall_seconds_reference": float(t_ref),
         "rms_global": rms,
@@ -249,7 +226,8 @@ def dynamic_patch_errors(vx, vy, Bx, By, n_patches, Re, delta_t=DELTA_T,
 #  4. un instantane, de bout en bout
 # -------------------------------------------------------------------
 def analyse_snapshot(dns_path, snap_index, n_patches, delta_t=DELTA_T,
-                     percentile=L2_PERCENTILE_HARD, verbose=False):
+                     percentile=L2_PERCENTILE_HARD,
+                     crossing_multiple=CROSSING_MULTIPLE, verbose=False):
     z = np.load(dns_path, allow_pickle=True)
     N = int(z["meta_N"])
     Re = int(z["meta_Re"])
@@ -257,7 +235,9 @@ def analyse_snapshot(dns_path, snap_index, n_patches, delta_t=DELTA_T,
                       for k in ("vx", "vy", "Bx", "By"))
 
     d, d0, meta = dynamic_patch_errors(vx, vy, Bx, By, n_patches, Re,
-                                       delta_t, verbose=verbose)
+                                       delta_t,
+                                       crossing_multiple=crossing_multiple,
+                                       verbose=verbose)
     e = patch_l2_errors(vx, vy, Bx, By, n_patches)
     scores = patch_classical_scores(vx, vy, Bx, By, n_patches, 2 * np.pi / N)
 
@@ -303,6 +283,29 @@ def spearman(a, b):
     return float((ra * rb).sum() / den) if den > 0 else float("nan")
 
 
+def label_diagnostics(dynamic_error, static_error, amplification):
+    """Diagnostics used to reject a dynamic label that repeats the static one."""
+    finite_amp = np.asarray(amplification, float)
+    finite_amp = finite_amp[np.isfinite(finite_amp) & (finite_amp > 0.0)]
+    if finite_amp.size < 3:
+        log_iqr = float("nan")
+    else:
+        q25, q75 = np.quantile(np.log(finite_amp), [0.25, 0.75])
+        log_iqr = float(q75 - q25)
+    rho = spearman(dynamic_error, static_error)
+    informative = bool(
+        np.isfinite(rho)
+        and np.isfinite(log_iqr)
+        and (rho < REDUNDANCY_RHO_LIMIT
+             or log_iqr >= MIN_AMPLIFICATION_LOG_IQR)
+    )
+    return {
+        "rho_d_vs_e": rho,
+        "amplification_log_iqr": log_iqr,
+        "informative": informative,
+    }
+
+
 def _rangs(x):
     ordre = np.argsort(x, kind="mergesort")
     r = np.empty(x.size, float)
@@ -327,11 +330,19 @@ def main():
     ap.add_argument("--dim", type=int, default=4)
     ap.add_argument("--snaps", type=int, default=2,
                     help="nombre d'instantanes, repartis sur la trajectoire")
-    ap.add_argument("--delta-t", type=float, default=DELTA_T)
+    ap.add_argument(
+        "--delta-t", type=float, default=None,
+        help="horizon fixe pour une ablation ; par defaut, un temps de traversee")
+    ap.add_argument(
+        "--crossing-multiple", type=float, default=CROSSING_MULTIPLE,
+        help="multiple du temps de traversee utilise sans --delta-t")
     ap.add_argument("--percentile", type=float, default=L2_PERCENTILE_HARD)
     ap.add_argument("--seed", type=int, default=0,
                     help="aucun tirage aleatoire ici ; consigne pour la trace")
     ap.add_argument("--out", default=None)
+    ap.add_argument(
+        "--allow-redundant", action="store_true",
+        help="ecrire une ablation meme si le label reste equivalent au statique")
     ap.add_argument("--dry-run", action="store_true",
                     help="projette le cout sans calculer")
     args = ap.parse_args()
@@ -360,12 +371,26 @@ def main():
         print(f"  [ATTENTION] patch de {p}x{p} cellules : la contrainte "
               f"confortable est dim <= N/8, soit dim <= {args.N // 8}")
 
+    if args.delta_t is not None and (
+            not np.isfinite(args.delta_t) or args.delta_t <= 0.0):
+        raise SystemExit("--delta-t doit etre fini et positif")
+    if not np.isfinite(args.crossing_multiple) or args.crossing_multiple <= 0.0:
+        raise SystemExit("--crossing-multiple doit etre fini et positif")
+
+    selected_horizons = []
+    for si in idx:
+        fields = tuple(z[k][si].astype(float) for k in ("vx", "vy", "Bx", "By"))
+        tx = patch_crossing_time(*fields, args.dim)
+        selected_horizons.append(
+            args.delta_t if args.delta_t is not None else args.crossing_multiple * tx)
+
     print(f"Verite terrain DYNAMIQUE — {args.scenario} Re={args.re} "
           f"N={args.N} dim={args.dim}")
     print(f"  {len(idx)} instantane(s) {idx}, {args.dim ** 2} patches chacun, "
-          f"delta_t={args.delta_t}")
+          f"delta_t in [{min(selected_horizons):.4g}, "
+          f"{max(selected_horizons):.4g}]")
     print(f"  soit {len(idx) * (args.dim ** 2 + 1)} evolutions de "
-          f"{args.delta_t} a N={args.N}")
+          f"l'horizon indique a N={args.N}")
     if args.dry_run:
         return
 
@@ -374,24 +399,36 @@ def main():
         print(f"  instantane {k + 1}/{len(idx)} (index {si}, "
               f"t={float(z['t'][si]):.3f})")
         r = analyse_snapshot(dns, si, args.dim, args.delta_t,
-                             args.percentile, verbose=True)
-        rho = spearman(r["d_errors"], r["l2_errors"])
+                             args.percentile,
+                             crossing_multiple=args.crossing_multiple,
+                             verbose=True)
+        diagnostic = label_diagnostics(
+            r["d_errors"], r["l2_errors"], r["amplification"])
         fini = np.isfinite(r["amplification"])
-        print(f"    rho(d, e) = {rho:+.4f} | "
+        print(f"    rho(d, e) = {diagnostic['rho_d_vs_e']:+.4f} | "
               f"amplification mediane = "
               f"{np.median(r['amplification'][fini]):.2f}x | "
+              f"log-IQR={diagnostic['amplification_log_iqr']:.3f} | "
+              f"{'INFORMATIF' if diagnostic['informative'] else 'REDONDANT'} | "
               f"{r['meta']['wall_seconds']:.1f} s")
+        r["diagnostic"] = diagnostic
         res.append(r)
 
-    # `delta_t` est dans le NOM, et ce n'est pas cosmetique : c'est le
-    # parametre qui decide si le label dit quelque chose. A 0,1 il est une
-    # redite du label statique (rho = 0,995) ; a 2,0 il s'en decolle sur le
-    # seul scenario turbulent. Deux horizons dans un meme nom de fichier
-    # ecraseraient silencieusement la mesure precedente.
+    if (not any(r["diagnostic"]["informative"] for r in res)
+            and not args.allow_redundant):
+        raise RuntimeError(
+            "label dynamique redondant : aucun instantane ne satisfait "
+            f"rho(d,e) < {REDUNDANCY_RHO_LIMIT:g} ou log-IQR(amplification) "
+            f">= {MIN_AMPLIFICATION_LOG_IQR:.3f}. Augmenter "
+            "--crossing-multiple ou utiliser --delta-t pour une ablation ; "
+            "aucun artefact n'a ete ecrit.")
+
+    horizon_tag = (f"dt{args.delta_t:g}" if args.delta_t is not None
+                   else f"tx{args.crossing_multiple:g}")
     out = args.out or os.path.join(
         RESULTS_DIR,
         f"d_patches_{args.scenario}_Re{args.re}_N{args.N}"
-        f"_dim{args.dim}_dt{args.delta_t:g}.npz")
+        f"_dim{args.dim}_{horizon_tag}.npz")
     empile = lambda k: np.stack([r[k] for r in res])          # noqa: E731
     d_tous = empile("d_errors")
     seuil, dur = seuil_global(d_tous, args.percentile)
@@ -414,10 +451,21 @@ def main():
         snap_index=np.array(idx),
         n_substeps=np.array([r["meta"]["n_substeps"] for r in res]),
         wall_seconds=np.array([r["meta"]["wall_seconds"] for r in res]),
-        rho_d_vs_e=np.array([spearman(r["d_errors"], r["l2_errors"])
-                             for r in res]),
+        rho_d_vs_e=np.array(
+            [r["diagnostic"]["rho_d_vs_e"] for r in res]),
+        amplification_log_iqr=np.array(
+            [r["diagnostic"]["amplification_log_iqr"] for r in res]),
+        label_informative=np.array(
+            [r["diagnostic"]["informative"] for r in res]),
         scenario=args.scenario, Re=args.re, N=args.N, n_patches=args.dim,
-        delta_t=args.delta_t, percentile=args.percentile,
+        delta_t=np.array([r["meta"]["delta_t"] for r in res]),
+        patch_crossing_time=np.array(
+            [r["meta"]["patch_crossing_time"] for r in res]),
+        crossing_multiple=np.array(
+            [r["meta"]["crossing_multiple"] for r in res]),
+        horizon_mode=np.array([r["meta"]["horizon_mode"] for r in res]),
+        allow_redundant=bool(args.allow_redundant),
+        percentile=args.percentile,
         git_hash=git_hash(), argv=" ".join(sys.argv),
     )
     tot = time.time() - t0

@@ -623,7 +623,8 @@ class TestQAOAExecution:
             "psi_h": np.full((dim, dim), psi_val).tolist(),
             "psi_v": np.full((dim, dim), psi_val).tolist(),
         }
-        qc, cost_ham = mapping(data, hamilt_params, False, period_bound=True, reps=reps)
+        qc, cost_ham = mapping(
+            data, hamilt_params, period_bound=True, reps=reps)
 
         E_max = 0
         for key, value in hamilt_params.items():
@@ -702,7 +703,7 @@ class TestQAOAExecution:
             "psi_h": np.zeros((dim, dim)).tolist(),
             "psi_v": np.zeros((dim, dim)).tolist(),
         }
-        qc, cost_ham = mapping(data, hp, False, period_bound=True, reps=2)
+        qc, cost_ham = mapping(data, hp, period_bound=True, reps=2)
 
         E_max = 0
         for key, value in hp.items():
@@ -909,7 +910,7 @@ class TestEndToEndConsistency:
             "psi_h": np.zeros((dim, dim)).tolist(),
             "psi_v": np.zeros((dim, dim)).tolist(),
         }
-        qc, cost_ham = mapping(data, hp, False, period_bound=True, reps=2)
+        qc, cost_ham = mapping(data, hp, period_bound=True, reps=2)
         E_max = np.sum(np.abs(hp['H_edges'][0])) + np.sum(np.abs(hp['H_edges'][1]))
         dist, _ = execute(qc, cost_ham, "simulator", "state_vector",
                           4096, 2, 200, 1e-4, max(E_max, 1e-10), verbose=False)
@@ -935,7 +936,7 @@ class TestEndToEndConsistency:
             "psi_h": np.zeros((dim, dim)).tolist(),
             "psi_v": np.zeros((dim, dim)).tolist(),
         }
-        qc, cost_ham = mapping(data, hp, False, period_bound=True, reps=2)
+        qc, cost_ham = mapping(data, hp, period_bound=True, reps=2)
         E_max = 0
         for key, value in hp.items():
             if isinstance(value, (tuple, list)):

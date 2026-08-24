@@ -1,18 +1,5 @@
-# Dependances de Q-HAS, pip.
-#
-# `docs/MODE_EMPLOI_CAMPAGNE.md` §4 demandait `pip install -r requirements.txt`
-# alors que ce fichier n'existait pas : la mise en place echouait sur une
-# machine deja payee, apres l'allocation. Meme famille que D-136 (un mode
-# annonce qui s'effondre au lancement, sur des coeurs factures).
-#
-# Les bornes basses sont les versions sur lesquelles la suite a ete vue
-# verte en entier le 18 aout 2026 (Python 3.11) — mesurees, pas supposees.
-# Les bornes hautes n'existent volontairement pas : une campagne se lance au
-# commit exact, et `best_hyperparams.json` porte sa provenance ; figer plus
-# dur casserait les installations conda existantes sans rien prouver.
-#
-# `environment.yaml` reste la voie conda et doit rester coherent avec ce
-# fichier — `tests/lint/test_dependances_declarees.py` le verifie.
+# Dependances pip de Q-HAS. La campagne doit toujours etre lancee depuis un
+# commit exact ; ses artefacts enregistrent ce commit et les arguments CLI.
 
 # --- numerique et donnees ---
 numpy>=2.0
@@ -23,7 +10,7 @@ matplotlib>=3.9
 networkx>=3.3
 
 # --- optimisation (campagne) ---
-optuna>=4.0          # < 4.0 : l'API Journal a bouge, cf. D-136
+optuna>=4.0
 cma>=3.3
 
 # --- pile quantique ---

@@ -63,7 +63,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
     if _p not in sys.path:
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
-from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, V2_THRESHOLD
 
 from exact_diagonalisation import build_patch_hamiltonian
 
@@ -92,22 +92,16 @@ def _block_avg(f, patch_size, dim):
 
 def extract_features_2d(vx, vy, Bx, By, N, dim, Re):
     """Return (dim, dim, n_features) feature tensor + (dim, dim) score."""
-    hp, score_vqa, _ = build_patch_hamiltonian(
+    _, score_vqa, _ = build_patch_hamiltonian(
         vx, vy, Bx, By, N, dim, Re,
-        threshold_amr=0.15, use_v2=True, c_bias=1.0,
+        threshold_amr=V2_THRESHOLD, use_v2=True,
     )
     ps = N // dim
 
     vx_d = _block_avg(vx, ps, dim); vy_d = _block_avg(vy, ps, dim)
     Bx_d = _block_avg(Bx, ps, dim); By_d = _block_avg(By, ps, dim)
 
-    # Convention du depot : `grid.AXIS_X = 0`, `AXIS_Y = 1` (indexing='ij').
-    # Les huit lignes precedentes lisaient axis=1 comme x et axis=0 comme y,
-    # soit l'inverse. `omega_z = dxvy - dyvx` valait donc en fait
-    # dvy/dy - dvx/dx : une combinaison de DEFORMATION, pas un rotationnel.
-    # Ce n'est pas un rotationnel de signe oppose — c'est son complementaire :
-    # sur une rotation solide elle rend exactement 0, et sur une compression
-    # pure elle rend ce que le rotationnel ne voit pas. Meme chose pour J_z.
+    # Repository convention: AXIS_X=0, AXIS_Y=1 with ``indexing='ij'``.
     dxvy = np.roll(vy_d, -1, axis=AXIS_X) - vy_d
     dyvx = np.roll(vx_d, -1, axis=AXIS_Y) - vx_d
     dxBy = np.roll(By_d, -1, axis=AXIS_X) - By_d

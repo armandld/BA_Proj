@@ -24,9 +24,6 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-ALL_FOLDS = ("ot", "kh", "rotor", "tearing")
-
-
 def optuna_progress(db_path):
     """Retourne {study_name: (n_complete, n_running, best_value)} ou {}.
 
@@ -101,8 +98,8 @@ def format_status(st, oneline=False):
 
 def main():
     p = argparse.ArgumentParser(description="Level-3 campaign status")
-    from config import RESULTS_DIR
-    p.add_argument("--folds", nargs="+", default=list(ALL_FOLDS))
+    from config import FOLD_KEYS, RESULTS_DIR
+    p.add_argument("--folds", nargs="+", default=list(FOLD_KEYS))
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--oneline", action="store_true")
     args = p.parse_args()

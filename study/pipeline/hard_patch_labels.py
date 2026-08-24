@@ -104,27 +104,7 @@ def patch_l2_errors(vx, vy, Bx, By, n_patches):
 # -------------------------------------------------------------------
 
 def patch_classical_scores(vx, vy, Bx, By, n_patches, dx):
-    """
-    Compute classical AMR score per patch using the 4-indicator RMS.
-    Returns: (n_patches, n_patches) array of scores in [0, 1].
-
-    D-77 — deviation connue, mesuree, NON corrigee ici.
-    `AngleMapper.classical_score` prend `fixed_curl=True` depuis D-1
-    (`bb6a387`, 11 aout) : deux de ses quatre indicateurs, vorticite et
-    divergence, ont change de convention d'axes. Les artefacts `patches_*`
-    ecrits AVANT cette date n'ont jamais ete regeneres. Sur les 156 du depot,
-    **84 portent un `classical_scores` que cette fonction ne reproduit plus**
-    (ecart jusqu'a 3,8e-01 sur un score borne a [0, 1]) ; 50 d'entre eux sont
-    reproduits **bit a bit** par `fixed_curl=False`. Les `l2_errors` du meme
-    fichier, eux, se reproduisent (9,4e-12, plancher float32) : ils ne
-    dependent d'aucun rotationnel.
-
-    Rien n'est corrige ici : regenerer changerait des artefacts publies, ce
-    qui se signale et se laisse trancher. Ne PAS "reparer" en regenerant au
-    passage — `tests/study/test_patches_classical_score_provenance.py`
-    epingle l'etat mesure et fera echouer la suite si ces fichiers bougent
-    sans que D-77 soit mis a jour.
-    """
+    """Return the four-indicator classical score for every patch."""
     N = vx.shape[0]
     patch_size = N // n_patches
 
@@ -252,6 +232,7 @@ def analyze_dns_file(dns_path, n_patches_list):
     return results_by_dim, {
         "scenario": scenario, "Re": Re, "N": N,
         "t": t_all, "n_snaps": n_snaps,
+        "phys_seed": int(data.get("meta_phys_seed", 0)),
     }
 
 
@@ -259,8 +240,10 @@ def save_patches(results_by_dim, meta, outdir=RESULTS_DIR):
     """Save patch analysis for each dim."""
     paths = []
     for n_p, res in results_by_dim.items():
+        seed = int(meta.get("phys_seed", 0))
+        suffix = "" if seed == 0 else f"_seed{seed}"
         fname = (f"patches_{meta['scenario']}_Re{meta['Re']}"
-                 f"_N{meta['N']}_dim{n_p}.npz")
+                 f"_N{meta['N']}_dim{n_p}{suffix}.npz")
         path = os.path.join(outdir, fname)
         np.savez_compressed(
             path,
@@ -273,6 +256,7 @@ def save_patches(results_by_dim, meta, outdir=RESULTS_DIR):
             Re=meta["Re"],
             N=meta["N"],
             n_patches=n_p,
+            phys_seed=seed,
         )
         size_kb = os.path.getsize(path) / 1024
         print(f"    Saved: {fname} ({size_kb:.0f} KB)")
@@ -282,10 +266,13 @@ def save_patches(results_by_dim, meta, outdir=RESULTS_DIR):
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 2: Hard patch identification")
+    from config import PHYSICS_SEEDS
     parser.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     parser.add_argument("--scenario", nargs="+", default=SCENARIOS)
     parser.add_argument("--dim", nargs="+", type=int, default=VQA_DIMS)
     parser.add_argument("--N", type=int, default=DNS_N)
+    parser.add_argument("--phys-seed", nargs="+", type=int,
+                        default=list(PHYSICS_SEEDS))
     args = parser.parse_args()
 
     print("Phase 2: Hard patch identification")
@@ -294,14 +281,9 @@ def main():
 
     dns_files = sorted(glob.glob(os.path.join(RESULTS_DIR, "dns_*.npz")))
     if not dns_files:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
         raise RuntimeError(
             f"balayage vide : aucun fichier dns_*.npz dans {RESULTS_DIR}. "
-            "Lancer study/pipeline/dns_sweep.py d'abord. Le script sortait ici "
-            "avec le code 0 et sans artefact (D-75).")
+            "Lancer study/pipeline/dns_sweep.py d'abord.")
 
     # filter by requested scenario/Re
     analysed = 0
@@ -309,7 +291,10 @@ def main():
         data = np.load(dns_path, allow_pickle=True)
         sc = str(data.get("meta_scenario", ""))
         re = int(data.get("meta_Re", 0))
-        if sc not in args.scenario or re not in args.re:
+        N = int(data.get("meta_N", 0))
+        seed = int(data.get("meta_phys_seed", 0))
+        if (sc not in args.scenario or re not in args.re or N != args.N
+                or seed not in args.phys_seed):
             continue
 
         print(f"Analyzing: {os.path.basename(dns_path)}")
@@ -319,17 +304,9 @@ def main():
         print()
 
     if not analysed:
-        # D-148 : la garde de D-75 ci-dessus couvre « aucun dns_*.npz du
-        # tout » ; elle ne couvre PAS « aucun dns_*.npz ne correspond a la
-        # demande », qui est le cas courant (un `--scenario` mal orthographie
-        # suffit). Mesure : `--scenario no_such_scenario --N 64` sortait avec
-        # le code 0 apres avoir imprime « Phase 2 complete. », sans ecrire
-        # d'artefact — donc en laissant en place ceux de la campagne
-        # precedente, et sans se distinguer d'une campagne reussie.
         raise RuntimeError(
             f"balayage vide : {len(dns_files)} fichier(s) dns_*.npz present(s), "
-            f"aucun ne correspond a scenario={args.scenario} re={args.re}. "
-            "Le script sortait ici avec le code 0 et sans artefact (D-148).")
+            f"aucun ne correspond a scenario={args.scenario} re={args.re}.")
 
     print("Phase 2 complete.")
 

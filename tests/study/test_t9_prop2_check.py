@@ -23,7 +23,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-from h3_locality_proposition import mean_field_state, per_site_condition
+from h3_locality_proposition import build_params, mean_field_state, per_site_condition
 
 DIM = 2
 N_Q = 2 * DIM * DIM
@@ -160,3 +160,20 @@ def test_strong_couplings_break_condition_and_mean_field():
     s_mf = mean_field_state(hp, DIM)
     assert not np.array_equal(s_star, s_mf)
     assert E_star < _energy(hp, s_mf)   # le champ moyen n'est pas optimal
+
+
+def test_v2_proposition_uses_the_same_apriori_mapper_as_other_phases(monkeypatch):
+    import exact_diagonalisation
+    from config import V2_THRESHOLD
+
+    captured = {}
+
+    def fake_builder(*args, **kwargs):
+        captured.update(kwargs)
+        return _hp(), np.zeros((DIM, DIM)), np.zeros((4, 4))
+
+    monkeypatch.setattr(exact_diagonalisation, "build_patch_hamiltonian",
+                        fake_builder)
+    field = np.zeros((4, 4))
+    build_params(field, field, field, field, 4, DIM, 400, "v2")
+    assert captured == {"threshold_amr": V2_THRESHOLD, "use_v2": True}

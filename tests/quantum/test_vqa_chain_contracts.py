@@ -258,8 +258,9 @@ def test_the_state_vector_backend_silently_forces_optimisation_level_zero():
 
     captured = {}
 
-    def _fake_pass_manager(optimization_level, backend):
+    def _fake_pass_manager(optimization_level, backend, seed_transpiler):
         captured["level"] = optimization_level
+        captured["seed"] = seed_transpiler
 
         class _NoOpPM:
             def run(self, qc):
@@ -278,6 +279,7 @@ def test_the_state_vector_backend_silently_forces_optimisation_level_zero():
         "au pass manager alors que 0 est attendu, quel que soit le niveau "
         "demande par l'appelant"
     )
+    assert captured["seed"] == 0
 
 
 def test_a_non_state_vector_backend_keeps_the_requested_optimisation_level():
@@ -287,8 +289,9 @@ def test_a_non_state_vector_backend_keeps_the_requested_optimisation_level():
 
     captured = {}
 
-    def _fake_pass_manager(optimization_level, backend):
+    def _fake_pass_manager(optimization_level, backend, seed_transpiler):
         captured["level"] = optimization_level
+        captured["seed"] = seed_transpiler
 
         class _NoOpPM:
             def run(self, qc):
@@ -306,6 +309,7 @@ def test_a_non_state_vector_backend_keeps_the_requested_optimisation_level():
         f"aer a transmis optimization_level={captured['level']!r} : le "
         "niveau demande par l'appelant doit passer inchange sur ce backend"
     )
+    assert captured["seed"] == 0
 
 
 def test_an_unknown_backend_is_refused_instead_of_silently_defaulting():
@@ -346,7 +350,7 @@ def _deployed_circuit(reps=_REPS, dim=2, seed=0):
     z = np.zeros((p, p))
     qc, _ = mapping({"theta_h": th, "theta_v": th.copy(),
                      "psi_h": z, "psi_v": z.copy()},
-                    params, False, period_bound=False, reps=reps)
+                    params, period_bound=False, reps=reps)
     return qc, sc
 
 

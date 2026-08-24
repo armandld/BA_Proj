@@ -82,7 +82,7 @@ def test_la_cli_n_annonce_que_des_scenarios_configures(P):
     La liste ecrite a la main annoncait dix scenarios pour sept entrees de
     `PHASE` : trois etaient acceptes puis levaient `KeyError`.
     """
-    r = subprocess.run([sys.executable, _SCRIPT, "--scenario", "magnetic_twist"],
+    r = subprocess.run([sys.executable, _SCRIPT, "--scenario", "not_a_scenario"],
                        capture_output=True, text=True, timeout=300)
     assert r.returncode != 0, "un scenario absent de PHASE doit etre refuse"
     assert "invalid choice" in r.stderr, r.stderr

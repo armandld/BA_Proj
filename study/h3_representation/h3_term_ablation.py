@@ -38,8 +38,10 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
-from ising_terms_and_annealing import build_ising_terms, spins_to_decisions
-from h0_optimiser_equivalence import exhaustive_ground_state, f1_from_masks
+from ising_terms_and_annealing import (
+    build_ising_terms, exhaustive_ground_state, spins_to_decisions,
+)
+from h0_optimiser_equivalence import f1_from_masks
 from h0_qaoa_displacement import mask_uniformity
 
 # Familles de termes ablatables et cle correspondante dans hamilt_params.
@@ -88,15 +90,7 @@ def ground_state_mask(hamilt_params, dim):
 
 
 def coefficients_removed(hamilt_params, hamilt_params_ablated, dim):
-    """max|Delta| de ce que `build_ising_terms` produit REELLEMENT.
-
-    D-54 : le controle `full` ne peut pas distinguer « ablation qui retire un
-    terme sans effet causal » de « ablation qui ne retire rien ». Mesure
-    faite avec l'operateur assorti — pas sur les cles de `hamilt_params`,
-    mais sur les trois tableaux que `ground_state_mask` consomme : mettre a
-    zero une cle que `build_ising_terms` ne lit pas rend 0,0 ici, et c'est
-    exactement le cas de `K_xpoint` (D-51).
-    """
+    """Maximum coefficient change in the emitted Ising operator."""
     h0, e0, p0 = build_ising_terms(hamilt_params, dim)
     h1, e1, p1 = build_ising_terms(hamilt_params_ablated, dim)
     deltas = [float(np.max(np.abs(np.asarray(h0) - np.asarray(h1))))
@@ -106,10 +100,15 @@ def coefficients_removed(hamilt_params, hamilt_params_ablated, dim):
     # zeros. Comparer les tableaux position par position n'a pas de sens ;
     # on les compare indexes par leur tuple de qubits, sur l'union des deux.
     for (idx0, c0), (idx1, c1) in ((e0, e1), (p0, p1)):
-        d0 = {tuple(int(q) for q in row): float(c)
-              for row, c in zip(np.asarray(idx0), np.asarray(c0, dtype=float))}
-        d1 = {tuple(int(q) for q in row): float(c)
-              for row, c in zip(np.asarray(idx1), np.asarray(c1, dtype=float))}
+        d0, d1 = {}, {}
+        for row, coefficient in zip(
+                np.asarray(idx0), np.asarray(c0, dtype=float)):
+            key = tuple(int(q) for q in row)
+            d0[key] = d0.get(key, 0.0) + float(coefficient)
+        for row, coefficient in zip(
+                np.asarray(idx1), np.asarray(c1, dtype=float)):
+            key = tuple(int(q) for q in row)
+            d1[key] = d1.get(key, 0.0) + float(coefficient)
         keys = set(d0) | set(d1)
         deltas.append(max((abs(d0.get(k, 0.0) - d1.get(k, 0.0))
                            for k in keys), default=0.0))

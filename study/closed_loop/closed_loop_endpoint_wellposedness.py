@@ -138,10 +138,10 @@ def counting_vs_lambda(rows, lambdas):
 def main():
     p = argparse.ArgumentParser(
         description="V4 T21: is the primary endpoint well posed?")
-    from config import RESULTS_DIR
+    from config import FOLD_KEYS, RESULTS_DIR
 
     p.add_argument("--folds", nargs="+",
-                   default=["ot", "kh", "rotor", "tearing"])
+                   default=list(FOLD_KEYS))
     p.add_argument("--results-dir", default=None)
     args = p.parse_args()
     results_dir = args.results_dir or RESULTS_DIR

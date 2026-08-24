@@ -62,7 +62,8 @@ def run_vqa(theta_h, theta_v, psi_h, psi_v, hamilt_params, label=""):
         "psi_h": psi_h.tolist(),
         "psi_v": psi_v.tolist(),
     }
-    qc, cost_ham = mapping(data, hamilt_params, args.AdvAnomaliesEnable, period_bound=True, reps=args.reps)
+    qc, cost_ham = mapping(
+        data, hamilt_params, period_bound=True, reps=args.reps)
 
     # E_max computation — exactly like call_vqa_shell.py
     E_max = 0

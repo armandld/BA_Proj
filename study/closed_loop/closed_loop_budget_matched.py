@@ -1,35 +1,9 @@
 #!/usr/bin/env python3
-"""
-V4 Task 15b - Comparaison a BUDGET APPARIE (audit, Priorite 0).
+"""Compare Q-HAS with classical AMR at the same realised patch budget.
 
-MOTIVATION. Le fold Level-3 `ot` donne Q-HAS meilleur en fidelite
-(phys 0.194 contre 0.485) mais a 2.1x le cout (patch 0.680 contre 0.324).
-Les deux bras ne sont donc pas au meme point de la frontiere erreur-cout, et
-l'ecart de fidelite n'est pas interpretable tel quel. La cause est une
-asymetrie de reglage heritee du module V1 : dans
-`make_composite_objective`, le seuil du bras QAOA est CODE EN DUR
-(`HyperParams["threshold_amr"] = 0.1496`, jamais propose a Optuna), alors
-que `make_classical_composite_objective` l'optimise librement sur [0.05,
-0.8] et retient ici 0.4616.
-
-PROTOCOLE. On fixe le budget et on compare la fidelite :
-  1. lire le `patch_ratio` realise par Q-HAS sur la classe tenue ;
-  2. chercher par bissection le seuil classique qui reproduit ce meme
-     `patch_ratio` (a `--tol` pres) ;
-  3. comparer `phys_score` A COUT EGAL.
-Le bras classique est le seul re-execute : la trajectoire Q-HAS, la trace
-DNS, le hot start et le budget hybride sont ceux du fold deja calcule.
-
-LECTURE PRE-SPECIFIEE.
-  - si, a budget egal, la fidelite classique rejoint celle de Q-HAS, le
-    gain observe au fold Level-3 est un simple deplacement le long de la
-    frontiere de Pareto, pas une amelioration de la regle de decision ;
-  - si Q-HAS conserve un avantage de fidelite a cout egal, le gain est
-    attribuable a la regle de decision et doit etre rapporte comme tel.
-
-Sortie : results/t15b_budget_matched_{fold}.json
-Usage :
-  python study/closed_loop/closed_loop_budget_matched.py --fold ot --max-iter 5
+The classical threshold is bisected until its ``patch_ratio`` matches the
+Q-HAS fold result within tolerance. Non-finite evaluations are rejected and
+an unconverged search is saved as inconclusive with a non-zero exit status.
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -45,15 +19,15 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from h2b_feature_selection import git_commit_hash
 from closed_loop_campaign import (
-    _load_v1_training_module, fold_scenarios, run_arm,
+    _atomic_json, _load_v1_training_module, fold_scenarios, run_arm,
 )
+import provenance
 
 
 def bisect_threshold_for_budget(T, key, cfg, dns_held, base_hp, target_patch,
                                 lo=0.05, hi=0.80, max_iter=5, tol=0.02,
-                                lambda_cost=None, verbose=False):
+                                lambda_cost=None, verbose=False, seed=0):
     """Cherche le seuil classique reproduisant `target_patch`.
 
     `patch_ratio` decroit avec le seuil (seuil haut -> on raffine moins),
@@ -63,18 +37,50 @@ def bisect_threshold_for_budget(T, key, cfg, dns_held, base_hp, target_patch,
     Retourne (best, trace) ou best est l'evaluation la plus proche de la
     cible et trace la liste des evaluations.
     """
+    if not np.isfinite(target_patch):
+        raise ValueError("target_patch must be finite")
+    if not (0 <= target_patch <= 1):
+        raise ValueError("target_patch must be in [0, 1]")
+    if not (np.isfinite(lo) and np.isfinite(hi) and lo < hi):
+        raise ValueError("lo and hi must be finite with lo < hi")
+    if max_iter < 0 or tol < 0:
+        raise ValueError("max_iter and tol must be non-negative")
+
     trace = []
+
+    def _finite_evaluations():
+        return [
+            row for row in trace
+            if np.isfinite(row["patch_ratio"])
+            and np.isfinite(row["phys_score"])
+        ]
+
+    def _best_finite():
+        finite = _finite_evaluations()
+        if not finite:
+            raise RuntimeError(
+                "budget matching produced no finite evaluation")
+        return min(
+            finite,
+            key=lambda row: abs(row["patch_ratio"] - target_patch),
+        )
 
     def _eval(thr):
         hp = dict(base_hp)
         hp["threshold_amr"] = float(thr)
         r = run_arm(T, key, cfg, dns_held, hp, True,
-                    lambda_cost=lambda_cost, verbose=verbose)
+                    lambda_cost=lambda_cost, verbose=verbose, seed=seed)
+        completed = bool(r.get("completed", True))
         rec = dict(threshold=float(thr),
-                   patch_ratio=float(r.get("patch_ratio", np.nan)),
-                   phys_score=float(r.get("phys_score", np.nan)),
-                   combined=float(r.get("combined", np.nan)),
-                   wall_s=float(r.get("wall_s", np.nan)))
+                   patch_ratio=(float(r.get("patch_ratio", np.nan))
+                                if completed else np.nan),
+                   phys_score=(float(r.get("phys_score", np.nan))
+                               if completed else np.nan),
+                   combined=(float(r.get("combined", np.nan))
+                             if completed else np.nan),
+                   wall_s=float(r.get("wall_s", np.nan)),
+                   completed=completed,
+                   abort=r.get("abort"))
         trace.append(rec)
         print(f"    thr={thr:.4f} -> patch={rec['patch_ratio']:.4f} "
               f"phys={rec['phys_score']:.4f} "
@@ -82,24 +88,45 @@ def bisect_threshold_for_budget(T, key, cfg, dns_held, base_hp, target_patch,
         return rec
 
     r_lo, r_hi = _eval(lo), _eval(hi)
-    if not (min(r_lo["patch_ratio"], r_hi["patch_ratio"]) - tol
-            <= target_patch
-            <= max(r_lo["patch_ratio"], r_hi["patch_ratio"]) + tol):
+    endpoint_ratios = [
+        row["patch_ratio"] for row in (r_lo, r_hi)
+        if np.isfinite(row["patch_ratio"])
+    ]
+    if (len(endpoint_ratios) < 2
+            or not (min(endpoint_ratios) - tol <= target_patch
+                    <= max(endpoint_ratios) + tol)):
         print("    [warn] target budget outside the bracket; returning the "
               "closest evaluation", flush=True)
     for _ in range(max_iter):
-        best = min(trace, key=lambda r: abs(r["patch_ratio"] - target_patch))
+        best = _best_finite()
         if abs(best["patch_ratio"] - target_patch) <= tol:
             break
         mid = 0.5 * (lo + hi)
         r_mid = _eval(mid)
+        if not (np.isfinite(r_mid["patch_ratio"])
+                and np.isfinite(r_mid["phys_score"])):
+            raise RuntimeError(
+                f"non-finite budget evaluation at threshold {mid:.6g}; "
+                "bisection direction is undefined")
         # patch_ratio decroissant en thr
         if r_mid["patch_ratio"] > target_patch:
             lo = mid
         else:
             hi = mid
-    best = min(trace, key=lambda r: abs(r["patch_ratio"] - target_patch))
+    best = _best_finite()
     return best, trace
+
+
+def budget_match_reading(delta_phys, converged):
+    """Describe the observed direction only after budget convergence."""
+    if not converged or not np.isfinite(delta_phys):
+        return ("INCONCLUSIVE: the classical arm did not reach the target "
+                "budget within tolerance.")
+    if delta_phys < 0:
+        return "Q-HAS has lower observed error at the matched budget."
+    if delta_phys > 0:
+        return "classical AMR has lower observed error at the matched budget."
+    return "the observed errors are equal at the matched budget."
 
 
 def main():
@@ -109,35 +136,32 @@ def main():
 
     p.add_argument("--fold", required=True, help="cle du fold (ex: ot)")
     p.add_argument("--prefix", default="t15_level3")
-    p.add_argument("--max-iter", type=int, default=5)
+    p.add_argument("--max-iter", type=int, default=8)
     p.add_argument("--tol", type=float, default=0.02,
                    help="tolerance sur le patch_ratio cible")
     p.add_argument("--lambda-cost", type=float, default=None)
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
+    prov = provenance.start()
+
+    T = _load_v1_training_module()
+    scen = dict(fold_scenarios(T))
+    if args.fold not in scen:
+        raise SystemExit(f"unknown fold {args.fold} (balayage vide)")
+    cfg = scen[args.fold]
 
     fold_path = os.path.join(RESULTS_DIR,
                              f"{args.prefix}_fold_{args.fold}.json")
     if not os.path.exists(fold_path):
-        # D-74 : rendait la main avec le code 0, sans artefact — un
-        # balayage vide (ici : un fold manquant) indiscernable d'une
-        # execution reussie. Meme famille que D-56 (CLAUDE.md : « un
-        # balayage vide doit crier »), deja corrigee sur les 11 sites
-        # soeurs de study/ mais jamais appliquee a ce fichier.
         raise SystemExit(
-            f"missing {fold_path}; run t15 for this fold first. "
-            "(balayage vide : aucun fold correspondant, voir D-74)")
-    rec = json.load(open(fold_path))
+            f"missing {fold_path}; run the closed-loop fold first")
+    with open(fold_path, encoding="utf-8") as stream:
+        rec = json.load(stream)
+    if not rec.get("campaign_contract_sha256"):
+        raise RuntimeError(
+            "fold artifact has no campaign contract; refusing an "
+            "unverifiable budget match")
     target = float(rec["qhas"]["patch_ratio"])
-
-    T = _load_v1_training_module()
-    scen = dict(fold_scenarios(T, warn=False))
-    if args.fold not in scen:
-        # D-74, meme garde : un fold inconnu ne doit pas non plus rendre
-        # la main en silence.
-        raise SystemExit(
-            f"unknown fold {args.fold} (balayage vide, voir D-74)")
-    cfg = scen[args.fold]
 
     print("=" * 88)
     print(f"  V4 Task 15b: budget-matched comparison, fold {args.fold}")
@@ -156,10 +180,12 @@ def main():
     best, trace = bisect_threshold_for_budget(
         T, args.fold, cfg, dns_held, rec["hyperparams"], target,
         max_iter=args.max_iter, tol=args.tol,
-        lambda_cost=args.lambda_cost)
+        lambda_cost=args.lambda_cost, seed=args.seed)
     wall = time.time() - t0
 
     d_phys = rec["qhas"]["phys_score"] - best["phys_score"]
+    mismatch = best["patch_ratio"] - target
+    converged = bool(np.isfinite(d_phys) and abs(mismatch) <= args.tol)
     print("\n  " + "=" * 84)
     print(f"  budget-matched classical: thr={best['threshold']:.4f}  "
           f"patch={best['patch_ratio']:.4f}  phys={best['phys_score']:.4f}")
@@ -169,23 +195,27 @@ def main():
           f"(negative favours Q-HAS)")
     print(f"  budget mismatch remaining    = "
           f"{best['patch_ratio'] - target:+.4f}")
-    print("\n  READING: " + (
-        "the Level-3 fidelity gap survives at equal compute; it is "
-        "attributable to the decision rule."
-        if d_phys < -0.01 else
-        "at equal compute the classical arm recovers the fidelity; the "
-        "Level-3 gap was a move along the error-cost frontier, not a "
-        "better decision rule."))
+    print("\n  READING: " + budget_match_reading(d_phys, converged))
 
-    out = os.path.join(RESULTS_DIR,
-                       f"t15b_budget_matched_{args.fold}.json")
-    json.dump(dict(fold=args.fold, target_patch=target,
-                   qhas=rec["qhas"], tuned_classical=rec["classical"],
-                   matched_classical=best, trace=trace,
-                   delta_phys_matched=d_phys, wall_s=wall,
-                   git_hash=git_commit_hash(), cli_args=vars(args)),
-              open(out, "w"), indent=1, default=float)
+    output_prefix = ("t15b_budget_matched" if args.prefix == "t15_level3"
+                     else f"{args.prefix}_budget_matched")
+    out = os.path.join(RESULTS_DIR, f"{output_prefix}_{args.fold}.json")
+    payload = dict(
+        artifact="closed_loop_budget_match", schema=2,
+        fold=args.fold, target_patch=target,
+        qhas=rec["qhas"], tuned_classical=rec["classical"],
+        matched_classical=best, trace=trace,
+        delta_phys_matched=d_phys,
+        budget_mismatch=mismatch,
+        converged=converged,
+        parent_campaign_contract_sha256=rec["campaign_contract_sha256"],
+        wall_s=wall, cli_args=vars(args),
+    )
+    payload.update(provenance.finish(prov))
+    _atomic_json(out, payload)
     print(f"\n  saved: {os.path.basename(out)}")
+    if not converged:
+        raise SystemExit(2)
     print("\nV4 Task 15b complete.")
 
 

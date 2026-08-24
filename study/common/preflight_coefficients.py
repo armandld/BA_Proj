@@ -1,32 +1,11 @@
 #!/usr/bin/env python3
-"""Controle AVANT VOL des coefficients — a passer avant de louer des coeurs.
+"""Contrôle avant vol de l'architecture des coefficients.
 
-Une campagne de reoptimisation coute ~224 h CPU. Ce module verifie, en
-quelques minutes, que les coefficients font ce qu'ils doivent faire AVANT
-qu'on les regle. Il rend un code de sortie non nul si un seul controle
-echoue.
-
-Les cinq controles, chacun avec sa mesure de reference :
-
-  1. SPECIFICITE   chaque famille repond a SON instabilite, le controle
-                   uniforme rend zero sur les quatre.
-  2. EQUILIBRE     canal magnetique / canal fluide dans [0.1, 10].
-                   Mesure de reference : 2.29 (fluide 0.501, magnetique
-                   1.148). RESULTS.md annoncait « 0.44 » : c'etait le
-                   rapport INVERSE, fluide/magnetique. Meme mesure, libelle
-                   faux — corrige ici et la-bas. Avant l'harmonisation des
-                   unites des portes g, le rapport valait 1/27 500.
-  3. VIVANT        les termes a quatre corps sont non nuls A LA RESOLUTION
-                   D'ENTRAINEMENT (N=256). Ils etaient identiquement nuls
-                   avant le critere relatif.
-  4. PERTINENCE    le coefficient correle avec l'erreur REELLE
-                   DNS-vs-grossier. Reference : rho = 0.798 sur
-                   harris_tearing, APRES l'harmonisation des portes g.
-                   Il valait 0.897 avant — la correction a legerement
-                   baisse la correlation tout en reveillant le canal
-                   magnetique. Remesure, non ajustee.
-  5. COINCIDENCE   le chemin `study/` et le chemin deploye rendent la meme
-                   energie. Reference : 5.3e-15.
+Les contrôles portent sur la spécificité des familles, leur équilibre,
+leur activité à la résolution d'entraînement, leur pertinence spatiale et
+la coïncidence exacte entre les chemins Study et QAOA. La pertinence exige
+que l'espace de recherche contienne une configuration qui dépasse le score
+classique sur le problème de contrôle.
 
 Usage :
     python study/common/preflight_coefficients.py
@@ -50,15 +29,34 @@ from Simulation.grid import PeriodicGrid                       # noqa: E402
 from Simulation.solver import MHDSolver                        # noqa: E402
 from Simulation.PhysToAngle import AngleMapper                 # noqa: E402
 from Simulation.HamiltParams import PhysicalMapper             # noqa: E402
+from train_hyperparams import FIXED_PARAMS, SEARCH_SPACE        # noqa: E402
 
 HP = dict(gamma_hydro=2.1272, gamma_mag=2.3611, kappa=14.3321, sigma=0.05,
-          beta_curl=0.8199, beta_xpoint=0.4256, w_z_frac=0.1013)
+          beta_curl=0.8199, beta_xpoint=0.4256, w_z_frac=0.1013,
+          relative_percentile=90.0)
 RE = RM = 800
+RELEVANCE_PROBES = 256
+RELEVANCE_MARGIN = 0.01
 
 
-def _coeffs(sim, grid, seuil=0.3):
+def relevance_is_sufficient(rho_nominal, rho_classical, rho_best,
+                            margin=RELEVANCE_MARGIN):
+    """Return whether the nominal signal is live and the search adds value."""
+    return bool(
+        np.isfinite(rho_nominal)
+        and rho_nominal > 0.6
+        and np.isfinite(rho_classical)
+        and np.isfinite(rho_best)
+        and rho_best - rho_classical > margin + 1e-12
+    )
+
+
+def _coeffs(sim, grid, seuil=None, mapper_params=None):
+    if seuil is None:
+        seuil = FIXED_PARAMS["threshold_amr"]
+    params = HP if mapper_params is None else mapper_params
     m = PhysicalMapper(cs=1.0, nu=grid.L / RE, eta_mhd=grid.L / RM,
-                       dx=grid.dx, **HP)
+                       dx=grid.dx, **params)
     st = sim.get_fluxes()
     score = AngleMapper.classical_score(st)
     return m.compute_coefficients(sim, score, st, threshold_amr=seuil,
@@ -140,12 +138,52 @@ def controle_pertinence():
         c_ = bm(np.repeat(np.repeat(fc[v], NF // NC, 0), NF // NC, 1))
         err += np.abs(d - c_) / (np.abs(d).mean() + 1e-12)
 
-    c, _ = _coeffs(sf, gf)
-    kb = bm(np.abs(np.asarray(c["K_plaquettes"])))
-    if np.ptp(kb) == 0 or np.ptp(err) == 0:
-        return False, {"rho": None, "raison": "coefficient ou erreur constant"}
-    rho = float(spearmanr(kb.ravel(), err.ravel()).statistic)
-    return rho > 0.6, {"rho": rho}
+    if np.ptp(err) == 0:
+        return False, {"raison": "erreur de reference constante"}
+
+    def rho(field):
+        block = bm(np.abs(np.asarray(field)))
+        if np.ptp(block) == 0:
+            return float("nan")
+        return float(spearmanr(block.ravel(), err.ravel()).statistic)
+
+    score = AngleMapper.classical_score(ff)
+    rho_classical = rho(score)
+    nominal, _ = _coeffs(sf, gf, mapper_params=HP)
+    rho_nominal = rho(nominal["K_plaquettes"])
+
+    # Sondage déterministe de l'espace réellement transmis à Optuna. Le
+    # meilleur point reste un diagnostic et n'est pas injecté comme graine.
+    mapper_names = tuple(HP)
+    rng = np.random.default_rng(0)
+    best_rho = rho_nominal
+    best_params = dict(HP)
+    for _ in range(RELEVANCE_PROBES):
+        params = {}
+        for name in mapper_names:
+            low, high, log = SEARCH_SPACE[name]
+            if log:
+                params[name] = float(
+                    np.exp(rng.uniform(np.log(low), np.log(high))))
+            else:
+                params[name] = float(rng.uniform(low, high))
+        candidate, _ = _coeffs(sf, gf, mapper_params=params)
+        candidate_rho = rho(candidate["K_plaquettes"])
+        if np.isfinite(candidate_rho) and candidate_rho > best_rho:
+            best_rho = candidate_rho
+            best_params = params
+
+    gap = best_rho - rho_classical
+    ok = relevance_is_sufficient(rho_nominal, rho_classical, best_rho)
+    return ok, {
+        "rho_nominal": rho_nominal,
+        "rho_classical": rho_classical,
+        "rho_best_probe": best_rho,
+        "gap_best_vs_classical": gap,
+        "required_margin": RELEVANCE_MARGIN,
+        "n_probes": RELEVANCE_PROBES,
+        "best_probe_params": best_params,
+    }
 
 
 def controle_coincidence():
@@ -161,8 +199,7 @@ def controle_coincidence():
                       -np.abs(rng.normal(size=(dim, dim)))),
           "K_plaquettes": -np.abs(rng.normal(size=(dim, dim))),
           "K_xpoint": -np.abs(rng.normal(size=(dim, dim)))}
-    diag = np.real(np.diag(create_period_hamiltonian(
-        hp, dim, advanced_anomalies_enabled=True).to_matrix()))
+    diag = np.real(np.diag(create_period_hamiltonian(hp, dim).to_matrix()))
     h, e, p = build_ising_terms(hp, dim)
     en = np.array([total_energy(np.array([1 - 2 * x for x in b[::-1]]), h, e, p)
                    for b in itertools.product([0, 1], repeat=nq)])
@@ -178,7 +215,7 @@ CONTROLES = [
     ("vivant", controle_vivant,
      "termes a quatre corps non nuls a N=256, la resolution d'entrainement"),
     ("pertinence", controle_pertinence,
-     "le coefficient correle avec l'erreur reelle — reference rho = 0.798"),
+     "un point de l'espace depasse le score classique sur l'erreur reelle"),
     ("coincidence", controle_coincidence,
      "study/ et le circuit rendent la meme energie — reference 5.3e-15"),
 ]

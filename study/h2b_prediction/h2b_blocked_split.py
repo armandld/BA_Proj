@@ -47,6 +47,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
+from config import V2_THRESHOLD
 from metrics import captured_error_at_budget, degeneracy_flag, spearman
 from h2b_feature_selection import git_commit_hash
 from h2b_neighbour_cone_curve import blocked_split_indices
@@ -181,7 +182,7 @@ def _gather(by_scene, dim, max_snaps):
 
     snaps = []
     for sc, rows in by_scene.items():
-        for re, dns_path, patches_path in rows:
+        for re, physics_seed, dns_path, patches_path in rows:
             dns = np.load(dns_path)
             patches = np.load(patches_path)
             vx_all = dns["vx"].astype(np.float64)
@@ -205,7 +206,7 @@ def _gather(by_scene, dim, max_snaps):
                 # meme champ fin, agregation moyenne (B1) :
                 _, _, full_score = build_patch_hamiltonian(
                     vx, vy, Bx, By, N, dim, re,
-                    threshold_amr=0.15, use_v2=True, c_bias=1.0)
+                    threshold_amr=V2_THRESHOLD, use_v2=True)
                 s_avg = _block_avg(full_score, ps, dim)
                 # coherence : le canal score de feats = block_max(fin)
                 chk = full_score.reshape(dim, ps, dim, ps).max(axis=(1, 3))
@@ -213,7 +214,7 @@ def _gather(by_scene, dim, max_snaps):
                     raise RuntimeError("score aggregation mismatch")
 
                 snaps.append(dict(
-                    cfg=f"{sc}|Re{re}",
+                    cfg=f"{sc}|Re{re}|seed{physics_seed}",
                     X=feats_2d.reshape(-1, N_FEATS),
                     e=l2_all[si].ravel().astype(np.float64),
                     y=(l2_all[si] >= l2_thr).ravel().astype(int),
@@ -332,13 +333,18 @@ def _evaluate_split(snaps, tr_idx, va_idx, seed, label):
 def main():
     p = argparse.ArgumentParser(
         description="V3 Task 4: temporally blocked split, B1-B7 table")
-    from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
+    from config import (
+        DNS_N, PHYSICS_SEEDS, RESULTS_DIR, RE_VALUES, SCENARIOS,
+    )
+    from data_catalog import labelled_trajectory_paths
 
     p.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
     p.add_argument("--scenario", nargs="+", default=SCENARIOS)
     p.add_argument("--dim", type=int, default=4)
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
+    p.add_argument("--phys-seed", nargs="+", type=int,
+                   default=list(PHYSICS_SEEDS))
     p.add_argument("--train-frac-blocked", type=float, default=0.6)
     p.add_argument("--train-frac-random", type=float, default=0.7,
                    help="fraction du split aleatoire de phase 11A")
@@ -352,27 +358,9 @@ def main():
     print("=" * 88)
     print()
 
-    by_scene = {}
-    for sc in args.scenario:
-        rows = []
-        for re in args.re:
-            dp = os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{args.N}.npz")
-            pp = os.path.join(RESULTS_DIR,
-                              f"patches_{sc}_Re{re}_N{args.N}_dim{args.dim}.npz")
-            if os.path.exists(dp) and os.path.exists(pp):
-                rows.append((re, dp, pp))
-        if rows:
-            by_scene[sc] = rows
-    if not by_scene:
-        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
-        # la campagne precedente. Une campagne qui n'avait rien mesure etait
-        # indiscernable d'une campagne reussie. Onze autres modules de
-        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
-        raise RuntimeError(
-            "balayage vide : aucune scenarios n'a d'artefact d'entree pour les "
-            "arguments donnes. Le script sortait ici avec le code 0 et sans "
-            "artefact, donc sans se distinguer d'une campagne reussie.")
+    by_scene = labelled_trajectory_paths(
+        RESULTS_DIR, args.scenario, args.re, args.N, args.dim,
+        args.phys_seed)
 
     print("  building dataset (features + dual-aggregation scores)...")
     t0 = time.time()

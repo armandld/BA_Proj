@@ -179,10 +179,10 @@ def audit_budget_trace(T, all_scen, results_dir, fold):
 def main():
     p = argparse.ArgumentParser(
         description="V4 T19: did each Level-3 arm finish its trajectory?")
-    from config import RESULTS_DIR
+    from config import FOLD_KEYS, RESULTS_DIR
 
     p.add_argument("--folds", nargs="+",
-                   default=["ot", "kh", "rotor", "tearing"])
+                   default=list(FOLD_KEYS))
     p.add_argument("--arms", nargs="+", default=["qhas", "classical"])
     p.add_argument("--prefix", default="t15_level3")
     p.add_argument("--seed", type=int, default=0)
@@ -197,7 +197,7 @@ def main():
     print("=" * 84)
 
     T = _load_v1_training_module()
-    all_scen = fold_scenarios(T, warn=False)
+    all_scen = fold_scenarios(T)
 
     results, t0 = [], time.time()
     if args.trace_only:

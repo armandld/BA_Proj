@@ -181,7 +181,11 @@ def _run_vqa_on_fields(fields, fields_prev=None, dim=DIM, advanced=False,
             E_max += np.sum(np.abs(value))
     E_max = max(E_max, 1e-10)
 
-    qc, cost_hamiltonian = mapping(data, hamilt_params, advanced, period_bound=True, reps=REPS)
+    if not advanced:
+        hamilt_params = {k: v for k, v in hamilt_params.items()
+                         if k != "K_xpoint"}
+    qc, cost_hamiltonian = mapping(
+        data, hamilt_params, period_bound=True, reps=REPS)
 
     distribution, _ = execute(
         qc, cost_hamiltonian, "simulator", "state_vector",
