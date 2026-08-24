@@ -511,10 +511,42 @@ def test_the_z_bias_is_what_breaks_the_uniform_degeneracy():
     assert int(np.sum(np.isclose(diag2, np.min(diag2)))) == 1
 
 
-def test_the_ground_state_is_uniform_on_real_deployed_coefficients():
-    """Le meme fait, mais sur les coefficients que la campagne produit."""
+def _etat_fondamental_v2(champ, norm, dim=2, thr=0.1496):
+    """Chemin complet coefficients -> hamiltonien -> etat fondamental exact."""
     from Simulation.HamiltParams_v2 import PhysicalMapperV2
     from Simulation.PhysToAngle import AngleMapper
+
+    sc = AngleMapper.classical_score(champ)
+    r = PhysicalMapperV2(dx=0.02, norm=norm).compute_coefficients(
+        None, sc, champ, thr)
+    assert np.all(r["C_edges"][0] <= 0) and np.all(r["K_plaquettes"] <= 0)
+    p = sc.shape[0]
+    th = 2.0 * np.arcsin(np.sqrt(np.clip(sc, 0.0, 1.0)))
+    op, *_ = create_bounded_hamiltonian(r, dim, th, th.copy(),
+                                        np.zeros((p, p)), np.zeros((p, p)))
+    diag = _ground_state_energy(op)
+    gs = int(np.argmin(diag))
+    return [(gs >> q) & 1 for q in range(op.num_qubits)]
+
+
+def test_le_fondamental_a_dim2_depend_de_la_normalisation():
+    """D-45/D-47, remesure apres le basculement du defaut sur `norm="max"`.
+
+    Le fait epingle jusqu'ici : a `dim = 2` l'etat fondamental exact est le
+    predicteur CONSTANT, donc tous les solveurs y atteignent l'optimum et il
+    n'y a rien a departager. Ce test le verifiait sur un champ de BRUIT
+    GAUSSIEN — pas sur un champ DNS, malgre son ancien nom (« real deployed
+    coefficients » designait le chemin de code, pas les donnees).
+
+    Sur ce champ synthetique, le basculement change le verdict : `legacy`
+    rend un fondamental uniforme, `max` rend [0,0,1,1,0,1,0,1].
+
+    CE QUE CELA NE DIT PAS. Sur les VRAIS champs DNS (test ci-dessous), la
+    degenerescence de D-45/D-47 TIENT : elle passe de 97,5 % a 90 %
+    d'etats uniformes, elle ne tombe pas. Un champ de bruit gaussien n'est
+    pas representatif, et la premiere lecture de cet echec — « la
+    degenerescence est corrigee » — etait fausse.
+    """
     from Simulation.grid import curl_z
 
     dim = 2
@@ -522,19 +554,69 @@ def test_the_ground_state_is_uniform_on_real_deployed_coefficients():
     rng = np.random.default_rng(0)
     f = {k: rng.normal(size=(p, p)) for k in ("vx", "vy", "Bx", "By")}
     f["Jz"] = curl_z(f["Bx"], f["By"], True)
-    sc = AngleMapper.classical_score(f)
-    r = PhysicalMapperV2(dx=0.02).compute_coefficients(None, sc, f, 0.1496)
-    assert np.all(r["C_edges"][0] <= 0) and np.all(r["K_plaquettes"] <= 0)
-    th = 2.0 * np.arcsin(np.sqrt(np.clip(sc, 0.0, 1.0)))
-    op, *_ = create_bounded_hamiltonian(r, dim, th, th.copy(),
-                                        np.zeros((p, p)), np.zeros((p, p)))
-    diag = _ground_state_energy(op)
-    gs = int(np.argmin(diag))
-    n = op.num_qubits
-    bits = [(gs >> q) & 1 for q in range(n)]
-    assert len(set(bits)) == 1, (
-        f"etat fondamental {bits} — non uniforme, ce qui contredirait "
-        "l'absence de frustration mesuree sur la campagne")
+
+    bits_legacy = _etat_fondamental_v2(f, "legacy", dim)
+    bits_max = _etat_fondamental_v2(f, "max", dim)
+
+    assert len(set(bits_legacy)) == 1, (
+        f"etat fondamental {bits_legacy} sous `legacy` — non uniforme, ce qui "
+        "contredirait l'absence de frustration mesuree sur la campagne")
+    assert len(set(bits_max)) == 2, (
+        f"etat fondamental {bits_max} sous `max` — redevenu uniforme sur ce "
+        "champ : le basculement ne change plus rien ici, remesurer")
+
+
+@pytest.mark.slow
+def test_sur_les_vrais_champs_la_degenerescence_de_dim2_TIENT():
+    """Le champ qui SEPARE le test ci-dessus d'une conclusion trop large.
+
+    40 instantanes (4 scenarios x 10) de DNS reels a N=256, patch 4x4 au
+    centre, `dim = 2`. Mesure le 21 aout 2026 :
+
+        legacy   39/40 uniformes   (2,5 % non uniformes)
+        max      36/40 uniformes   (10,0 % non uniformes)
+
+    La degenerescence BOUGE mais ne TOMBE pas. Toute lecture qui annoncerait
+    D-45/D-47 corrige sur la foi du test synthetique serait fausse.
+
+    Sur quelle entree ce test echoue : le jour ou l'un des deux taux sort de
+    sa fourchette, c'est-a-dire le jour ou la conclusion sur H0 a `dim = 2`
+    doit etre reecrite.
+    """
+    import glob
+    from Simulation.grid import curl_z
+
+    racine = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "results")
+    fichiers = sorted(glob.glob(os.path.join(racine, "dns_*_Re400_N256.npz")))
+    if len(fichiers) < 4:
+        pytest.skip("artefacts DNS N=256 absents")
+
+    taux = {}
+    for norm in ("legacy", "max"):
+        uniformes = total = 0
+        for chemin in fichiers:
+            d = np.load(chemin)
+            n = len(d["vx"])
+            for si in list(range(0, n, max(1, n // 10)))[:10]:
+                c = {}
+                for k in ("vx", "vy", "Bx", "By"):
+                    a = d[k][si].astype(float)
+                    dep = a.shape[0] // 2
+                    c[k] = a[dep:dep + 4, dep:dep + 4]
+                c["Jz"] = curl_z(c["Bx"], c["By"], True)
+                bits = _etat_fondamental_v2(c, norm, 2)
+                uniformes += int(len(set(bits)) == 1)
+                total += 1
+        taux[norm] = uniformes / total
+
+    assert 0.90 <= taux["legacy"] <= 1.00, (
+        f"legacy : {taux['legacy']:.3f} d'etats uniformes, mesure 0,975")
+    assert 0.80 <= taux["max"] <= 0.97, (
+        f"max : {taux['max']:.3f} d'etats uniformes, mesure 0,900")
+    assert taux["legacy"] > taux["max"], (
+        "`max` ne reduit plus la degenerescence du tout : la mesure a bouge")
 
 
 # ======================================================================

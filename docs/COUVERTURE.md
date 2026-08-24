@@ -4049,6 +4049,274 @@ passe). 74 drapeaux `scripts=0` restent dans la file.
 
 ---
 
+## Passe du 21 août — le JEU DE CHAMPS des tests de mapping, audité comme un tout
+
+Les tests de `tests/mapping/` sont mesurés sur quatre champs analytiques —
+`uniforme`, `rotation`, `nappe_courant`, `xpoint`. Cette passe ne relit pas un
+module de `src/` : elle relit **le corpus d'entrée des tests**, qui décide de
+ce que ces tests peuvent voir.
+
+**Le trou, trouvé par mutation.** Les quatre champs sont **purs** : chacun a
+`omega = 0` **ou** `J = 0`. Aucun n'active les deux. Conséquence : pour tout
+coefficient qui combine les deux signaux, une normalisation **par signal**
+(`max|omega|`, `max|J|`) et une normalisation **commune**
+(`max|omega| + max|J|`) donnent **le même résultat au bit près**, puisque le
+terme absent vaut zéro. La mutation « normalisation commune » sur les deux
+termes scindés survivait donc au fichier entier — 23 passed sur 23.
+
+**Corrigé** par l'ajout d'un cinquième champ, `mixte` (omega et J tous deux
+actifs, pics dans un rapport > 2), plus
+`test_le_champ_mixte_a_bien_les_deux_signaux_a_des_pics_differents`, qui
+vérifie que le champ **reste** mixte : sans ce garde, quelqu'un pourrait
+égaliser les deux pics et redonner au test la cécité qu'on vient de lui
+retirer, sans que rien ne crie.
+
+**La leçon, généralisable au reste du dépôt.** Un jeu de champs d'essai est
+un instrument de mesure, et un instrument qui n'excite qu'un mode à la fois
+ne peut pas voir un couplage entre modes. La question à poser à tout corpus
+de test analytique n'est pas « couvre-t-il les cas simples ? » mais **« deux
+implémentations différentes peuvent-elles y rendre le même nombre ? »**.
+Seule la mutation répond ; la lecture ne suffit pas — j'ai relu ce fichier
+avant de le muter et je n'ai rien vu.
+
+**Un piège d'outillage, à connaître.** La première mesure de cette mutation
+annonçait « 2 failed » : elle était fausse. La mutation remplaçait `Jz_curl`
+par `omega_z`, deux identifiants de **même longueur en octets**, si bien que
+la clé d'invalidation du `.pyc` — `(mtime, size)` — pouvait ne pas changer et
+que Python rechargeait l'**ancien** module. Toute campagne de mutation doit
+vider `__pycache__` entre les variantes :
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+```
+
+Sans quoi une mutation peut être rapportée morte alors qu'elle n'a jamais
+été exécutée — le pire des deux mondes, puisque le rapport dit « le test
+mord » précisément là où il ne mord pas.
+
+### Le second trou de la même passe — l'ENSEMBLE des clés n'était gardé nulle part
+
+`PhysicalMapperV2.compute_coefficients` rend un dictionnaire. Tous les tests
+du dépôt vérifient des **valeurs** : `hp["K_plaquettes"]` vaut ceci,
+`max|C|` vaut cela. **Aucun ne vérifiait quelles clés sont rendues.**
+
+Ce n'est pas une omission cosmétique : deux consommateurs de `src/` agrègent
+sur les clés sans liste blanche —
+
+| fichier | ce qu'il fait de toutes les clés |
+|---|---|
+| `src/call_vqa_shell.py` | `E_max += Σ\|coeff\|` sur toute clé tableau ; sert aussi à `max_coeff` |
+| `src/Simulation/RescaleArrays.py` | max-poole toute clé tableau à chaque descente AMR |
+
+— si bien qu'**ajouter une clé est déjà un changement de comportement**,
+même quand aucune valeur partagée ne bouge d'un bit. Mesuré : deux clés de
+plus déplacent `E_max` de +15,9 % (`legacy`) et +33,6 % (`max`).
+
+J'ai livré ce défaut dans une première version de la plaquette scindée, en
+l'annonçant explicitement comme *« pas un changement de comportement »*, sur
+la foi d'une vérification bit à bit qui — correctement exécutée — ne
+regardait que les valeurs partagées. **Une vérification juste sur le mauvais
+objet.**
+
+Gardé désormais par `test_par_defaut_lensemble_des_cles_rendues_est_inchange`
+(liste fermée des 5 clés) et
+`test_le_scindement_deplace_E_max_ce_qui_est_la_raison_du_opt_in`, qui rejoue
+le calcul de `call_vqa_shell` sur le dict rendu.
+
+**À généraliser.** Tout producteur de dictionnaire consommé par agrégation
+sur les clés a besoin d'un test de l'ensemble des clés, pas seulement des
+valeurs. Les autres producteurs du dépôt n'ont pas encore été passés en revue
+sous cet angle : c'est la file suivante.
+
+---
+
+## Passe du 21 août (suite) — les champs d'essai, deuxième trou de la même famille
+
+La passe précédente a ajouté un champ MIXTE aux tests de mapping, parce que
+quatre champs PURS ne pouvaient pas distinguer deux normalisations. Le champ
+mixte ajouté avait lui-même un défaut, et il a fallu trois tests rouges pour
+le voir : **le tourbillon et la nappe de courant y culminaient au MÊME
+POINT.**
+
+Sur un tel champ, aucune structure ne peut en écraser une autre — la question
+même que le test posait n'a pas de sens. Les trois tests censés mesurer
+l'écrasement mesuraient `1,0000` des deux côtés, et auraient « prouvé » qu'il
+n'y a pas d'écrasement alors que sur les vrais champs il atteint un facteur
+179.
+
+**Ce que ça ajoute à la leçon de la passe précédente.** Il ne suffit pas
+qu'un champ d'essai excite plusieurs modes : il faut qu'il les excite **là où
+la formule les fait interagir**. Une somme sous dénominateur commun ne se
+distingue d'une somme de quantités normalisées que si les deux signaux ont
+des supports **disjoints** ou des amplitudes très différentes. Le champ
+d'essai doit reproduire la géométrie du phénomène, pas seulement sa liste
+d'ingrédients.
+
+Les champs mixtes séparent désormais les deux structures (recouvrement
+3,7e-07), ce qui est aussi le cas physique honnête : dans un écoulement réel
+le vortex est ici et la nappe est là.
+
+**Un garde ajouté au corpus lui-même** :
+`test_sur_les_champs_reels_legacy_eteint_une_structure_sur_deux_scenarios`
+(marqué `slow`) rejoue le fait sur les artefacts DNS N=256. Il rougit le jour
+où les scénarios du dépôt cessent d'être dominés par une seule structure —
+c'est-à-dire le jour où la justification du changement de formule tombe.
+
+### Ce que le basculement du défaut a fait apparaître comme non couvert
+
+Six tests ont rougi au basculement de `norm` sur `max`. Aucun n'était un
+faux positif ; chacun désignait quelque chose que personne ne gardait :
+
+| test | ce qu'il a révélé |
+|---|---|
+| `test_legacy_est_le_defaut` | le garde a fonctionné — un défaut se décide |
+| `test_noise_weaker_than_anomaly` | la **grandeur** (le pic) avait cessé de discriminer |
+| `test_the_ground_state_is_uniform...` | son champ est du **bruit**, pas un DNS, malgré son nom |
+| `test_le_cas_mesure_sur_les_vraies_donnees` (×2) | la platitude de D-86 était propre à `legacy` |
+
+**Le trou de couverture commun : rien ne mesurait ces faits PAR
+NORMALISATION.** Chacun était épinglé une fois, sous le défaut du jour, comme
+s'il s'agissait d'une propriété du calcul. Les quatre sont désormais mesurés
+dans les deux modes, avec le champ ou le mode qui les sépare.
+
+Un helper `_balayage_harris(norm)` force la normalisation par
+`__init__.__defaults__` et **vérifie que le forçage a pris** — sans ce garde,
+un changement de signature ferait mesurer deux fois le même mode en silence.
+Mutation vérifiée : forçage rendu no-op → 1 failed.
+
+Deux tests `slow` ont été ajoutés, tous deux sur les **vrais** artefacts DNS,
+là où les mesures de laboratoire ne suffisaient pas :
+`test_sur_les_vrais_champs_la_degenerescence_de_dim2_TIENT` (40 instantanés)
+et `test_sur_les_champs_reels_legacy_eteint_une_structure_sur_deux_scenarios`.
+
+### Ce qui n'est toujours pas couvert
+
+Les autres producteurs de dictionnaires consommés par agrégation sur les clés
+n'ont pas été passés en revue (file ouverte à la passe précédente). Et la
+question « les champs d'essai des AUTRES fichiers de `tests/` reproduisent-ils
+la géométrie de ce qu'ils testent, ou seulement ses ingrédients ? » n'a été
+posée que pour `tests/mapping/`.
+
+**La file la plus lourde, ouverte par cette passe** : combien d'autres faits
+du dépôt sont épinglés une seule fois, sous le défaut du jour, comme s'ils
+étaient des propriétés du calcul ? Quatre l'étaient dans les six tests qui ont
+rougi. La question se pose pour tout test qui construit un mappeur sans
+préciser `norm` — et, plus généralement, pour tout test qui lit un défaut au
+lieu de le nommer.
+
+Et : **les 52 configurations de D-86 n'ont pas été rejouées** sous le nouveau
+défaut. Une seule l'a été. Tout ce qui s'appuie sur un balayage `c_bias` est
+donc non couvert tant que la campagne n'a pas tourné (D-186).
+
+---
+
+## Passe du 21 août (suite) — `study/pipeline/dynamic_patch_labels.py`, module neuf
+
+Premier module écrit pour la tâche 6 du protocole. Ce qu'il couvre, et par
+quel moyen :
+
+| ce qui est vérifié | comment |
+|---|---|
+| le grossissement et la normalisation | **identité analytique** `d0 = e / dim`, à `rtol=1e-12`, dim ∈ {2,4,8} — sans passer par le solveur |
+| que cette identité peut tomber | même calcul avec la **médiane** au lieu de la moyenne : elle tombe |
+| que la variante ne touche que son patch | égalité stricte hors fenêtre, moyenne dedans |
+| le refus de `p = 1` | `ValueError`, même famille que `test_label_degenere_quand_le_patch_est_trop_petit` |
+| le gel de la séquence de pas | atterrissage exact sur l'horizon, déterminisme du rejeu, **et** un champ où référence et variante divergent réellement |
+| que le gel serve à quelque chose | mesure sur les vrais champs : 100 % des patches divergent sur 3 scénarios sur 4 |
+| que le label ne soit pas une redite | ρ(d, e) épinglé aux deux horizons, avec le champ qui les sépare |
+| la traçabilité | `git_hash` et `argv` présents dans le `.npz` |
+| la déviation de format assumée | `l2_errors` de l'artefact recalculé indépendamment : c'est bien le label **statique** |
+| deux horizons ne s'écrasent pas | `main` appelé deux fois, fichiers comptés |
+
+**Un test à moi qui n'a pas pu réussir, et l'a dit.** Le test du gel de la
+séquence a échoué à la première exécution : sur un champ banal, grossir un
+patch ne déplace pas les maxima **globaux** que lit `adapt_dt`, donc les deux
+séquences coïncident. La première version aurait conclu que le gel est
+inutile. Elle avait tort — mesure sur les vrais champs : 100 % des patches
+divergent sur 3 scénarios sur 4, parce que c'est l'**évolution** qui déplace
+les maxima, pas le grossissement initial. Le champ d'essai place désormais
+l'extremum global dans le patch grossi, ce qui force le cas au pas zéro.
+
+**Un test tautologique, retiré.** La première version du test de nommage
+reconstruisait le nom de fichier dans le test lui-même au lieu d'appeler
+`main` : elle ne lisait pas le code testé et ne pouvait donc pas échouer.
+Elle compte maintenant les fichiers réellement écrits par deux appels.
+
+### Ce que ce module ne couvre pas
+
+- **Un seul Re (400) et une seule résolution (N=96).** Le protocole demande
+  un pilote ; la projection de coût vers N=256 est calculée (× 19) mais pas
+  vérifiée.
+- **Aucun consommateur ne lit encore `d_errors`.** Le label existe, aucune
+  tâche du protocole ne le consomme : brancher les tâches 7 et suivantes
+  dessus reste à faire, et demande d'abord de fixer l'horizon sur `t_x`.
+- **Le choix « le patch grossi est remplacé par sa moyenne »** reproduit la
+  définition de la phase 2, donc les deux labels sont comparables. Un vrai
+  AMR ferait une restriction/prolongation d'ordre supérieur : l'écart entre
+  les deux n'est pas mesuré.
+
+---
+
+## Passe du 22 août — relecture adversariale de tout ce qui a été touché la veille
+
+Six vérifications, dont deux ont trouvé quelque chose.
+
+| vérification | résultat |
+|---|---|
+| cas limites de la nouvelle plaquette (0, sous/sur `EPS`, ×1e6) | tous finis et bornés — **mais une marche à `EPS`** → D-189 |
+| le corpus entre-t-il dans la bande dangereuse ? | non : 480 instantanés balayés, 0 dans `(1e-10, 1e-6)` |
+| ai-je manqué un consommateur du défaut de `norm` ? | non : exactement 4 sites, aucune construction indirecte |
+| `spearman` maison contre scipy | écart max **3,3e-16** sur 200 tirages, dont 30 % avec ex aequo |
+| mutations du module dynamique | **une survivait** — voir ci-dessous |
+| chaque nombre publié, remesuré | conformes sauf **un**, périmé — voir ci-dessous |
+
+### Le trou : les pièces étaient gardées, l'assemblage ne l'était pas
+
+La mutation « la variante adapte son propre pas » survivait au fichier
+**entier** (16 passed). `sequence_de_pas` était testée isolément,
+`evolue` aussi, et le fait que référence et variante adapteraient des
+séquences différentes également — mais **rien ne testait que
+`dynamic_patch_errors` emploie réellement la séquence gelée**, qui est
+pourtant la raison d'être du module.
+
+`test_dynamic_patch_errors_emploie_REELLEMENT_la_sequence_gelee` recalcule
+`d` en laissant chaque variante adapter la sienne et exige que le module ne
+rende pas ce résultat-là. La mutation meurt.
+
+**La leçon, générale :** tester les fonctions une par une ne teste pas le
+chemin qui les enchaîne. Un module dont chaque pièce est gardée peut avoir sa
+logique centrale entièrement libre.
+
+### Une incohérence silencieuse avec la phase 2
+
+`hard_patch_labels.py` aplatit `all_l2` **sur les instantanés** avant son
+percentile et rend **un scalaire**. Mon module le calculait **par
+instantané**, ce qui force exactement (100−p) % de patches durs dans *chaque*
+instantané — un instantané calme et un instantané turbulent auraient eu la
+même proportion de patches durs, et la comparabilité avec le label statique
+serait tombée avec. Le module annonçait pourtant « mirroir de la phase 2 ».
+
+Corrigé (`seuil_global`), gardé par trois tests, et les 8 artefacts ont été
+**régénérés** : leur `d_threshold` était un tableau, il est maintenant un
+scalaire, et `hard_fraction_par_instantane` est publiée à côté.
+
+### Un nombre périmé, republié
+
+`E_max` sous `max` : **+34,2 % → +33,6 %**. Le nombre avait été mesuré
+**avant** le changement de formule de la plaquette, qui a déplacé la ligne de
+base (1 231,33 → 1 251,50). La conclusion ne bouge pas ; le nombre, si.
+Corrigé dans `src/`, le test, `COUVERTURE`, `EVALUATION` et `RESULTS` — la
+table historique de l'entrée supersédée le garde, annoté.
+
+### Nouveau fichier de garde
+
+`tests/mapping/test_plaquette_signal_negligeable.py` (5 tests, dont 2 `slow`)
+épingle la marche de D-189 dans les deux modes, balaye les 480 instantanés du
+corpus, vérifie que les pics nuls sont **exactement** nuls, et teste son
+propre plancher de balayage sur un répertoire vide.
+
+---
+
 ## Tenir ce document à jour
 
 À chaque passe : ajouter ce qui vient d'être audité, retirer de la liste

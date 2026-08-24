@@ -100,3 +100,56 @@ def degeneracy_flag(pred, prevalence, tol=0.005, gt=None):
                         abs(f1 - floors["refine_none"])) <= tol)
     rate = pred.mean()
     return bool(rate <= tol or rate >= 1.0 - tol)
+
+
+def threshold_transfer_flag(gt, proba, threshold, auc_floor=0.70, tol=0.005):
+    """Un F1 nul vient-il d'une ABSENCE DE SIGNAL ou d'un SEUIL NON TRANSFERE ?
+
+    Les deux rendent la meme chose — une prediction constante et un F1 au
+    plancher — et le protocole §1.3-B3 les traite deja de la meme facon :
+    `degeneracy_flag` les exclut des decomptes. Mais ce ne sont pas le meme
+    fait, et les confondre a coute une lecture.
+
+    Cas mesure (pli `harris_tearing`, LOSO, dim=16) : les probabilites du
+    GBT y plafonnent a 0.124 tandis que le seuil ajuste sur les scenarios
+    d'entrainement vaut 0.400. Aucun positif n'est predit sur 20 480
+    cellules, donc F1 = 0.000 — alors que l'AUC vaut 0.908 et que le F1 a
+    budget appaire vaut 0.659. Le CLASSEMENT est bon ; c'est l'operateur de
+    decision qui ne traverse pas la frontiere de scenario.
+
+    Renvoie un dict :
+      degenerate            la prediction est-elle constante ?
+      auc                   qualite du CLASSEMENT, independante du seuil
+      verdict               'ok' | 'aucun_signal' | 'seuil_non_transfere'
+      proba_max, threshold  les deux nombres qui expliquent le verdict
+
+    'seuil_non_transfere' n'est PAS un resultat sur la tache : c'est un
+    defaut de l'operateur de mesure, et le nombre a citer est alors le F1 a
+    budget appaire, pas le F1 au seuil.
+    """
+    from sklearn.metrics import roc_auc_score
+
+    gt = np.asarray(gt).astype(int).ravel()
+    proba = np.asarray(proba, dtype=float).ravel()
+    if gt.shape != proba.shape:
+        raise ValueError(f"gt {gt.shape} et proba {proba.shape} ne coincident pas")
+
+    pred = (proba > float(threshold)).astype(int)
+    rate = pred.mean()
+    degenerate = bool(rate <= tol or rate >= 1.0 - tol)
+
+    try:
+        auc = float(roc_auc_score(gt, proba))
+    except ValueError:          # une seule classe dans gt
+        auc = float("nan")
+
+    if not degenerate:
+        verdict = "ok"
+    elif np.isnan(auc) or auc < auc_floor:
+        verdict = "aucun_signal"
+    else:
+        verdict = "seuil_non_transfere"
+
+    return {"degenerate": degenerate, "auc": auc, "verdict": verdict,
+            "proba_max": float(proba.max()) if proba.size else float("nan"),
+            "threshold": float(threshold), "positive_rate": float(rate)}

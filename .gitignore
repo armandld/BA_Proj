@@ -35,3 +35,4 @@ data/
 results/hyperparams/reoptimisation/
 results/hyperparams/reoptimisation_launch.log
 .coverage
+scripts/job_campagne_*.sh

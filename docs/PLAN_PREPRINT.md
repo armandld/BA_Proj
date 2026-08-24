@@ -82,6 +82,56 @@ de H0b et de H3 :
   partitionnent un unique scalaire, ils ne sont pas deux détecteurs
   indépendants.
 
+Un troisième, mesuré depuis, qui appartient à la même section : **aucun des
+deux couplages ne désigne un type d'instabilité.** La plaquette vaut
+`(|ω| + |J|)/norme` — un vortex pur et une nappe de courant pure y rendent la
+même valeur — et le couplage ZZ fait entrer un saut hydrodynamique et un saut
+magnétique dans la même racine. Seul `K_xpoint` est sélectif. C'est une
+propriété de la **forme choisie**, pas un défaut d'implémentation, et elle se
+dit dans cette section : l'hamiltonien détecte « il se passe quelque chose »
+localement, pas « quoi ».
+
+Et un fait qui appartient au manuscrit, pas seulement au journal de bord :
+sous la normalisation historique, **la moitié du terme ZZZZ était
+numériquement morte sur deux scénarios canoniques sur quatre**. La plaquette
+sommait `|ω|` et `|J|` sous un dénominateur commun, si bien que le signal le
+plus faible disparaissait en proportion de son amplitude — rapport 179 sur
+`harris_tearing`, 84 sur `kelvin_helmholtz`. Chaque scénario est dominé par un
+type de structure, et le dénominateur commun transformait ce fait physique en
+effacement de l'autre. Corrigé en rendant les deux magnitudes adimensionnelles
+séparément avant la somme, **sans ajouter de porte**.
+
+Ce fait a sa place dans la section : il montre qu'un coefficient peut être
+*bien formé, borné, adimensionnel* et pourtant ne mesurer qu'une moitié de ce
+qu'il annonce — et que seule une mesure sur les champs réels le révèle.
+
+### La spécification de la tâche — H5, et ce qu'une vérité terrain dynamique en dit
+
+Le label de la phase 2, `e_i`, est l'écart intra-patch à la moyenne : une
+mesure de non-lissité, instantanée et confinée au patch. Ce n'est pas ce que
+l'AMR cherche à contrôler, et l'AUC du score classique seul contre `e_i` —
+**1,000** (harris), **0,997** (KH), **0,948** (rotor), 0,592 (OT) — dit que
+sur trois scénarios sur quatre la tâche est quasi gratuite.
+
+La vérité terrain **dynamique** `d_i` du protocole §1.2 existe désormais, et
+sa mesure appartient au manuscrit :
+
+- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,98 sur les
+  quatre scénarios** : le label dynamique est une renumérotation monotone du
+  statique, et le contrôle d'acceptation du protocole (« Spearman > 0 ») le
+  laisse passer ;
+- la raison est physique et se calcule : à cet horizon la perturbation
+  parcourt **0,11 à 0,25** d'une largeur de patch — il n'y a rien à propager ;
+- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,596) — le seul
+  dont la perturbation **amplifie** (1,38×), et le seul où la tâche statique
+  n'était pas déjà résolue.
+
+Ce que la section doit dire : **changer de label ne suffit pas à réparer la
+spécification de la tâche.** Là où la tâche était triviale, elle le reste ;
+elle ne cesse de l'être que là où l'écoulement est turbulent. C'est une
+contrainte sur ce que ce corpus peut établir, et elle se dit avant les
+résultats, pas après.
+
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 
 Features locales contre features en cône, le protocole d'entraînement, et le
@@ -115,7 +165,24 @@ H3**. Le pari de départ est que le quantique optimise mieux le combinatoire ;
 H0b montre que mieux optimiser n'améliore pas la tâche. C'est la valeur de
 l'optimisation qui est attaquée — précisément ce qu'on paierait en qubits.
 
-Sur H3, l'énoncé défendable est **économique**, pas un argument d'inutilité :
+Sur H3, l'énoncé **doit être réécrit** : la courbe de cône a maintenant deux
+artefacts (`dim = 8` et `dim = 16`, → `RESULTS.md`) et ils vont **contre** la
+formulation ci-dessous.
+
+- Le cône **n'est pas plat** : écarts par saut +0,123 / −0,076 / +0,100 à
+  `dim = 16`, contre un seuil de retrait pré-enregistré de 0,01.
+- Hors pli dégénéré, à la seule taille où les quatre k sont des voisinages,
+  un saut fait passer de 0,429 à 0,593 et le cône **dépasse** le classique.
+- Le gain **croît** de `dim = 8` à `dim = 16` — la clause « décroît quand on
+  affine » est contredite par les deux seuls points mesurés.
+
+Ce qui borne cette lecture : `harris_tearing` rend 0,000 à tous les k, et la
+conclusion change de signe selon qu'on compte ce pli ou non. Rien n'est
+tranché tant qu'il n'est pas expliqué.
+
+**Conséquence de structure** : la fermeture ne peut pas reposer sur H3. Elle
+repose sur **H0b**, qui n'en dépend pas. L'ancienne formulation, conservée
+ici pour mémoire et à ne plus citer telle quelle :
 
 > Le gain apporté par l'information des voisins est réel mais petit, il
 > décroît quand on affine la grille, et il ne justifie pas le coût d'un

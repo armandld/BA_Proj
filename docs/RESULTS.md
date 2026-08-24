@@ -7157,3 +7157,1376 @@ aucun test n'exerçait `OPTUNA_JOURNAL`. Le banc de fumée
 journal. Un mode annoncé qu'aucun test ne traverse est une promesse non
 tenue — même famille que D-48 (`mode="hardware"` accepté et exécuté sur
 simulateur).
+
+---
+
+# La base de campagne porte le nom de son étude, et les fantômes se comptent
+
+Trouvé en lançant réellement la réoptimisation, le 18 août 2026. Deux
+défauts distincts, tous deux dans l'**organisation du stockage** — aucun ne
+touche `src/`, donc aucun nombre publié ne bouge.
+
+## Le fait
+
+`scripts/run_reoptimisation.sh` écrivait en dur `q_has_v3.db`. La base ainsi
+créée contient l'étude `q_has_v2_phase1`, nom que `train_hyperparams.PHASES`
+donne à `phase1_composite`. **Le fichier et son contenu ne disaient pas la
+même chose.** C'est la forme exacte du défaut que D-22 a coûté : un réglage
+dont la provenance ne se lit plus.
+
+Le reste du dépôt respectait déjà l'invariant — `optuna_studies/q_has_v2_phase1.db`
+contient bien `q_has_v2_phase1`. Seul le lanceur de la campagne à venir ne
+le respectait pas, c'est-à-dire précisément la campagne censée **résoudre**
+D-22.
+
+## Ce qui a changé
+
+Le lanceur lit le nom d'étude dans `PHASES` et nomme la base d'après lui :
+`results/hyperparams/reoptimisation/q_has_v2_phase1.db`. Le dossier
+`reoptimisation/` distingue cette campagne des bases gelées ; le nom de
+fichier dit quelle étude, comme dans `optuna_studies/`.
+
+Deux gardes s'ajoutent aux trois existantes, avant le premier essai :
+
+- **garde 4** — `scripts/inventaire_campagne.py` : toute base non vide porte
+  exactement une étude, et son nom est le basename du fichier ;
+- **garde 5** — `scripts/nettoyer_essais_fantomes.py` : les essais `RUNNING`
+  qu'aucun worker ne finira sont marqués `FAIL` au démarrage.
+
+## Les essais fantômes, mesurés
+
+Un worker tué — instance spot reprise, conteneur recyclé, OOM — laisse son
+essai `RUNNING` pour toujours. Trois de mes workers ont été fauchés par un
+recyclage de conteneur et ont laissé trois fantômes.
+
+`python scripts/inventaire_campagne.py` (commit `327d726`) :
+
+| | bases | vides | COMPLETE | fantômes `RUNNING` |
+|---|---|---|---|---|
+| tout `results/hyperparams/` | 26 | 10 | **2 815** | **298** |
+| dont `optuna_studies/` (hors archives) | 10 | 8 | 303 | 45 |
+
+Les 45 de la seconde ligne sont ceux que `PROVENANCE.md` annonce (18
+classiques + 24 quantiques + 3 de la reprise). **L'inventaire confirme
+`PROVENANCE.md` ligne à ligne** : seules `classical_v2_phase1` (125 COMPLETE)
+et `q_has_v2_phase1` (178 COMPLETE) portent des données ; les huit autres
+bases de `optuna_studies/` sont vides.
+
+Les bases gelées ne sont **pas** nettoyées : leurs comptes sont publiés, les
+toucher déplacerait des nombres. La garde 5 n'agit que sur la base de
+réoptimisation.
+# Une normalisation dont l'équilibre ne dépend plus de `dim`
+
+Décidé par USER après l'analyse théorique des trois normalisateurs du v2.
+**Ajout derrière un drapeau** — `norm="legacy"` reste le défaut, donc aucun
+nombre publié ne bouge (table maîtresse : **180 / 176 OK / 4 DIFF /
+0 MISSING**, inchangée). Même idiome que `fixed_curl` : les deux chemins
+coexistent et se comparent.
+
+## Le fait, théorique avant d'être mesuré
+
+`build_patch_hamiltonian` moyenne les champs par blocs à `dim × dim` et
+calcule *tous* les coefficients sur ce champ grossier. `dim` est donc la
+coupure d'un filtre passe-bas appliqué à l'entrée.
+
+Or les trois termes du chemin `legacy` emploient **trois normalisateurs
+différents** :
+
+| terme | normalisé par | quand `dim` monte |
+|---|---|---|
+| ZZ | la **moyenne** des sauts | `max|C| = w_ZZ · max(saut)/⟨saut⟩` — le rapport pic/moyenne, qui **croît** avec l'intermittence |
+| ZZZZ | `max|ω| + max|J|` — **deux** maxima en des points distincts | borné, `max|K| < w_ZZZZ` d'une quantité qui dépend du champ |
+| biais Z | la **médiane** des couplages | la médiane/moyenne **décroît** quand la distribution se dissymétrise |
+
+Un champ MHD est intermittent par nature — nappes de courant, chocs. Donc
+le rapport biais/couplage **dérive avec `dim` par construction**, et la
+dérive est scénario-dépendante. Conséquence pratique : **un réglage
+d'hyperparamètres obtenu à une taille ne transfère pas à une autre**, et un
+balayage en `dim` mesurerait deux choses à la fois.
+
+## Ce que `norm="max"` change
+
+```
+C_ij = -w_ZZ   * |saut_ij|     / max|saut|         ->  max|C| == w_ZZ
+K_p  = -w_ZZZZ * (|ω| + |J|)   / max(|ω| + |J|)    ->  max|K| == w_ZZZZ
+h_i  = +c_bias * max(|C|,|K|)  * (s_i - thr)
+```
+
+L'**équilibre** entre les termes devient indépendant de `dim` : le rapport
+biais/couplage vaut exactement `c_bias`. Les gardes y sont **multiplicatifs**
+(`pic if pic > EPS else 1.0`) et non additifs, ce qui rend les invariances
+exactes.
+
+## Mesuré
+
+Invariance d'amplitude (multiplier v et B par 10), écart relatif max :
+
+| chemin | écart | cause |
+|---|---|---|
+| `legacy` | **9,8e-11** | garde additif `+ EPS`, qui décale l'échelle |
+| `max` | **4,8e-16** | garde multiplicatif — exact à la précision machine |
+
+La docstring de la classe annonçait cette invariance sans la qualifier ;
+elle tient à 1e-10 près sur `legacy`, exactement sur `max`. Les deux
+tolérances sont désormais épinglées séparément — une tolérance unique et
+lâche cacherait que `max` est exact.
+
+Équilibre à `dim ∈ {4, 8, 16, 32}`, même champ d'essai : `max|C|`, `max|K|`
+et `max|h|` identiques aux quatre tailles à 1e-12 près sous `max` ; sous
+`legacy` le rapport biais/couplage s'étale d'un facteur > 1,5.
+
+## Ce que ça ne fait pas
+
+Le **motif spatial** de `C` dépend encore de `dim`, et ne peut pas ne pas en
+dépendre : le champ d'entrée lui-même change avec la coupure. Un test le
+vérifie explicitement — s'il venait à passer, c'est que le champ d'essai
+serait devenu auto-similaire et que les tests d'invariance ne prouveraient
+plus ce qu'ils annoncent.
+
+Et le max est **sensible aux extrêmes** là où la moyenne ne l'est pas : sur
+un champ intermittent un seul saut fixe l'échelle du domaine. Si cela devient
+gênant, un percentile haut garde l'invariance d'échelle sans la fragilité du
+max strict.
+
+## Vérification
+
+```bash
+python scripts/inventaire_campagne.py                    # code 0, 26 bases
+python scripts/nettoyer_essais_fantomes.py --toutes --dry-run
+python -m pytest tests/pipeline/test_campagne_noms_et_fantomes.py -q
+```
+
+**15 tests, tous verts.** Ils construisent leurs propres bases SQLite : ils
+ne dépendent d'aucun artefact et ne peuvent pas devenir verts par
+disparition de leur entrée.
+
+python -m pytest tests/mapping/test_normalisation_max_invariante.py -q   # 24 passed
+python -m pytest tests/mapping -q                                        # 436 passed
+python study/common/aggregate_master_table.py                            # 180 / 176 / 4 / 0
+```
+
+**Les tests mordent, mesuré par mutation** :
+
+| mutation | effet |
+|---|---|
+| le lanceur recode `q_has_v3.db` en dur | 1 failed |
+| le nettoyage ne vérifie plus les workers vivants | 2 failed |
+| le nettoyage passe `FAIL` à **tous** les essais, pas aux seuls `RUNNING` | 1 failed |
+
+Une première version du test du lanceur assertait sur le **texte** du script
+et passait au vert dès qu'un commentaire mentionnait `q_has_v3.db` — la
+famille D-123→D-131. Remplacée par l'évaluation des lignes réelles qui
+calculent `DB`.
+
+## Ce que ça change pour la campagne
+
+Rien sur le fond, tout sur l'attribution : la base à venir portera un nom qui
+désigne son contenu, et son compte d'essais sera celui du travail réellement
+fait. Sans ces deux gardes, la campagne censée lever D-22 aurait reproduit
+la cause de D-22.
+| le biais repasse à la médiane en mode `max` | 5 failed |
+| ZZ repasse à la moyenne en mode `max` | 6 failed |
+| le défaut bascule sur `max` | 1 failed |
+
+La troisième est délibérée : basculer le défaut est un changement de
+comportement scientifique, il doit échouer tant qu'il n'est pas décidé et
+consigné.
+
+---
+
+# La courbe de cône : deux artefacts, et une conclusion qui s'inverse avec `dim`
+
+D-88 notait que `results/` ne contenait **aucun** `t1b_cone_curve_*.npz`. La
+mesure qui décide de H3 — *l'information des voisins apporte-t-elle quelque
+chose ?* — n'existait pas. Elle existe, à deux tailles.
+
+```bash
+python study/pipeline/hard_patch_labels.py --dim 16 --N 96      # patches manquants
+cd study/h2b_prediction
+python h2b_neighbour_cone_curve.py --dim  8 --N 96 --max-snaps 20 --seed 0
+python h2b_neighbour_cone_curve.py --dim 16 --N 96 --max-snaps 20 --seed 0
+```
+
+git `ef5f0a4`. Déterministe (vérifié à `dim = 8` : 19 clés identiques sur
+deux exécutions).
+
+## ⚠️ Rétractation d'une première lecture, publiée le 21 août
+
+Une version antérieure de cette section annonçait *« gain faible en
+distribution (+0,053), aucun sous transfert »* et concluait que la courbe
+allait dans le sens de l'énoncé économique. **Les deux moitiés sont
+retirées.** Deux choix de paramètres, non justifiés, la produisaient :
+
+| choix | ce qu'il faussait |
+|---|---|
+| `--max-snaps 8` alors que **20** étaient disponibles | sous-échantillonnage. Le `[FLAG n_tr/F<20]` sur k=2 et k=3 était **fabriqué par ce choix**, pas une propriété des données : à 20 instantanés, `n_tr/F` vaut 34,8 à k=3. Le gain du premier saut passe de **+0,006 à +0,099** en distribution |
+| `--dim 8` | à cette taille **k=3 couvre 76,6 % de la grille**. Ce n'est plus un voisinage. D-88 n'attrape que les colonnes dupliquées à l'identique, pas le fait que le voisinage ait avalé le domaine |
+
+**La couverture du carré de Chebyshev, par taille** — la table qui manquait :
+
+| dim | k=0 | k=1 | k=2 | k=3 |
+|---|---|---|---|---|
+| 4 | 6,2 % | 56,2 % | **100 %** | **100 %** |
+| 8 | 1,6 % | 14,1 % | 39,1 % | **76,6 %** |
+| 16 | 0,4 % | 3,5 % | 9,8 % | 19,1 % |
+| 32 | 0,1 % | 0,9 % | 2,4 % | 4,8 % |
+
+`dim = 16` est la **première taille où les quatre k sont des voisinages**.
+
+## Le résultat, aux deux tailles, 20 instantanés
+
+Moyennes LOSO. `harris_tearing` rend **0,000 à tous les k, aux deux
+tailles** : le modèle n'y prédit aucun positif. C'est un pli **dégénéré** au
+sens du protocole §1.3 B3, et un prédicteur dégénéré ne vote pas. Les deux
+colonnes sont données, parce que la conclusion en dépend.
+
+| | dim=8 (k=3 = 77 %) | | dim=16 (k=3 = 19 %) | |
+|---|---|---|---|---|
+| | 4 plis | hors pli mort | 4 plis | hors pli mort |
+| classique | 0,443 | 0,369 | 0,577 | 0,444 |
+| k=0 | 0,245 | 0,327 | 0,322 | **0,429** |
+| k=1 | 0,250 | 0,333 | 0,445 | **0,593** |
+| k=2 | 0,168 | 0,223 | 0,369 | 0,491 |
+| k=3 | 0,261 | 0,349 | 0,469 | **0,625** |
+
+## Ce que ça dit — et c'est l'inverse de ce qui était écrit
+
+**Le cône n'est pas plat.** La règle de décision pré-enregistrée du module
+est explicite : *« flat : every |delta| ≤ 0.01 → cone retired »*. Les écarts
+par saut valent **+0,123 / −0,076 / +0,100** à `dim = 16`. Par sa propre
+règle, **le cône n'est pas retiré.**
+
+**À la taille la mieux posée, l'information des voisins aide beaucoup.**
+Hors pli mort, à `dim = 16`, un seul saut fait passer de 0,429 à **0,593**
+(+0,164), et le meilleur k rend **0,625 contre 0,444** pour le classique.
+
+**Et le gain CROÎT quand on affine.** De `dim = 8` à `dim = 16`, hors pli
+mort, le gain du premier saut passe de +0,006 à **+0,164**. C'est la
+**direction opposée** à la clause de `PLAN_PREPRINT` §7 — *« le gain décroît
+quand on affine la grille »*. Cette clause n'est pas soutenue par ces deux
+points ; elle est contredite.
+
+## Ce qui empêche d'en faire un verdict
+
+1. **Tout dépend du pli mort.** Avec les quatre plis, le cône reste sous le
+   classique aux deux tailles (0,469 contre 0,577 à `dim = 16`). Hors pli
+   mort il le dépasse. Tant que `harris_tearing` n'est pas expliqué — le
+   classique y rend 0,976 pendant que le GBT s'effondre à 0,000, une
+   asymétrie qui demande sa propre mesure — la moyenne n'est pas citable
+   dans un sens ni dans l'autre.
+2. **La courbe n'est pas monotone** (+0,123, −0,076, +0,100) : aucune pente
+   ne se cite. Le creux à k=2 se reproduit aux deux tailles, il n'est pas du
+   bruit et il n'est pas expliqué.
+3. **Deux points en `dim`, une graine, un N.** Une direction lue sur deux
+   points n'est pas une tendance.
+4. **Un biais de construction qui borne toute lecture** : les 8 features
+   autres que `score_vqa` sont calculées sur les champs **moyennés par
+   blocs**, alors que le label est la variance **intra-patch** que ce
+   moyennage supprime. Ajouter des voisins de moyennes de patch ne peut pas
+   restituer une variance sous-patch. Une courbe plate serait donc en partie
+   garantie par la construction — ce qui rend d'autant plus notable qu'elle
+   ne le soit pas.
+
+## Conséquence pour le manuscrit
+
+L'énoncé *« l'information des voisins ne sert à rien »* n'est pas soutenu :
+il est **contredit** à la seule taille où la question est bien posée. Et
+l'énoncé économique de `PLAN_PREPRINT` §7 doit être **réécrit** : sa clause
+« décroît quand on affine » va contre la mesure.
+
+Ce qui reste vrai et défendable : le cône ne suffit pas à porter la
+fermeture de l'approche. C'est **H0b** qui la porte — mieux résoudre
+l'hamiltonien dégrade la décision — et H0b ne dépend ni de la localité ni de
+ce résultat.
+
+---
+
+# Le corpus de patches vit dans DEUX conventions de rotationnel
+
+Trouvé en régénérant les patches `dim = 16` à N = 96 : la commande a aussi
+réécrit huit artefacts `dim = 16` à N = 256 et N = 64, et
+`tests/study/test_patches_classical_score_provenance.py` a rougi — 25 cas.
+
+**Ce n'était pas un dégât, c'était un gel documenté que j'avais ignoré.**
+Les huit fichiers sont **délibérément conservés dans l'ancienne convention**
+(`fixed_curl=False`), et un test épingle ce fait, artefact par artefact.
+Les huit ont été restaurés ; le test rend de nouveau **62 passed**.
+
+## Le fait, mesuré
+
+Sur les huit fichiers réécrits, avant restauration :
+
+| grandeur | écart |
+|---|---|
+| `l2_errors` | **identique** |
+| `is_hard` | **identique** |
+| `classical_scores` | **100 % des cellules diffèrent**, jusqu'à 0,39 en absolu (3,7× en relatif) |
+
+Le **label ne bouge pas** — il ne passe pas par les mappeurs. Seul le score
+classique bouge, et il bouge partout.
+
+## L'état réel du corpus
+
+Recalcul à HEAD (`fixed_curl=True` par défaut), écart au score stocké :
+
+| famille | convention | écart au recalcul HEAD |
+|---|---|---|
+| `*_N96_dim8` | **HEAD** | 0,000e+00 |
+| `*_N96_dim16` (produits ici) | **HEAD** | 0,000e+00 |
+| `*_N256_dim16`, `*_N64_dim16` | **ancienne**, gelée | ≠ 0 (c'est le gel) |
+
+**Conséquence à ne pas perdre** : les deux points de la courbe de cône
+(`dim = 8` et `dim = 16`, tous deux à N = 96) sont dans la **même**
+convention et se comparent entre eux. Ils ne se comparent **pas** à un
+nombre calculé sur la famille gelée N = 256 / N = 64.
+
+## Deux défauts de garde, notés sans correction
+
+1. **Le test de provenance porte une liste de noms en dur** : les seize
+   fichiers `N96_dim16` produits ici ne sont couverts par **aucun** de ses
+   cas (`--collect-only` : 0). Son vert ne dit donc rien de leur convention —
+   il a fallu la mesurer à la main. Un garde dont le balayage ne suit pas le
+   corpus laisse entrer ce qu'il est censé surveiller.
+2. **`hard_patch_labels.py --N 96` réécrit des artefacts d'autres N.** Le
+   sélecteur `--N` filtre les DNS lus, pas les fichiers écrits : la commande
+   a touché des N qu'on ne lui avait pas demandés. Même famille que D-158,
+   où l'agrégateur réécrit la table publiée sur une configuration qui ne
+   correspond à rien.
+
+Aucun des deux n'est corrigé ici : le premier touche un test de gel, le
+second un écrivain d'artefacts publiés — les deux demandent une décision.
+
+---
+
+# `dim` n'a de sens que relativement à `N` — et la limite est dure
+
+Question de USER : *« la dim ne marche que si le N est adapté, n'est-ce pas ? »*
+Oui, et la contrainte n'est pas affaire de goût.
+
+## Le mécanisme
+
+Le label de la phase 2 est l'écart-type **intra-patch** : `patch_l2_errors`
+remplace chaque patch par sa moyenne, puis mesure l'écart du champ fin à
+cette moyenne. Un patch de `p × p` cellules estime donc cet écart-type sur
+`p²` échantillons — et **à `p = 1` il vaut identiquement zéro**, puisqu'une
+cellule ne dévie pas de sa propre moyenne.
+
+Le seuil étant un percentile de valeurs toutes nulles vaut 0, et
+`is_hard = (l2 >= 0)` marque alors **100 % des patches comme durs**. Tout F1
+mesuré dessus vaut celui du prédicteur constant.
+
+| N | dim | patch `p` | `p²` | état |
+|---|---|---|---|---|
+| 96 | 8 | 12 | 144 | ok |
+| 96 | 16 | 6 | 36 | **marginal** |
+| 96 | 32 | 3 | 9 | bruit |
+| 256 | 16 | 16 | 256 | ok |
+| 64 | 64 | 1 | 1 | **vide** |
+
+**Règle** : `dim ≤ N/8` pour rester confortable (`p ≥ 8`, soit ≥ 64 points).
+Conséquence directe sur la courbe de cône : son point `dim = 16` a été pris à
+N = 96, donc `p = 6` — **marginal**. Le couple sain pour `dim = 16` est
+N = 256.
+
+## Le corpus, mesuré
+
+**4 artefacts au label identiquement nul**, tous `*_N64_dim64` :
+
+```
+patches_{harris_tearing,kelvin_helmholtz,mhd_rotor,orszag_tang}_Re400_N64_dim64.npz
+   l2_errors tout à zéro   seuil = 0,0e+00   is_hard = 100 % de positifs
+```
+
+## Pourquoi ce n'est pas une entrée `DEFAUTS.md`
+
+Par la règle d'arrêt : un défaut n'y entre que s'il porte une lecture publiée
+ou empêche la campagne de mesurer ce qu'elle prétend. Mesuré :
+
+- **aucun script** de `study/`, `figures/` ou `scripts/` ne nomme `dim=64` ;
+- la table maîtresse ne cite que `dim2`, `dim4`, `dim8`.
+
+Personne ne les consomme. Ils sont donc notés ici et traités après la
+campagne, comme la règle le prévoit.
+
+## Ce qui est gardé
+
+`tests/study/test_t28_t29_labels_and_ci.py` gardait déjà le **consommateur**
+— le relabelliseur lève `SystemExit` sur un seuil dégénéré — et son propre
+message notait que le producteur, lui, *« ne crie pas »*. Ce trou est
+maintenant couvert côté producteur :
+
+`tests/study/test_label_degenere_quand_le_patch_est_trop_petit.py`, **10
+tests** :
+
+- le mécanisme est **calculé**, pas supposé (`p = 1` → label nul), avec le
+  champ qui **sépare** (`p = 2` → label non nul, sinon le test passerait sur
+  un champ uniforme sans rien prouver) ;
+- la liste des quatre dégénérés est **fermée** : un cinquième fait rougir ;
+- une exemption **périmée** crie aussi (si l'un guérit, l'entrée doit sortir) ;
+- et la tolérance est conditionnée : le jour où un script nomme `dim=64`,
+  elle tombe.
+
+**Vérifié par mutation** :
+
+| mutation | effet |
+|---|---|
+| un cinquième artefact dégénéré entre dans le corpus | 1 failed |
+| un script se met à nommer `dim=64` | 1 failed |
+| le plancher de balayage ne lève plus rien | 1 failed |
+
+La troisième a demandé une correction de ma part : la première version du
+plancher **ne pouvait pas échouer** — baisser un seuil déjà satisfait ne fait
+rien tomber. Le balayage prend désormais son répertoire en paramètre, et un
+test lui donne un dossier vide pour vérifier que le plancher se déclenche.
+Un plancher qu'on ne peut pas faire tomber n'est pas un garde.
+
+---
+
+# Le zéro de `harris_tearing` n'est pas physique : c'est un seuil transféré
+
+Demandé par USER : *« réinvestigue sur harris tearing, le zéro bizarre »*.
+Le paradoxe posé était réel — le score classique rend **0,976** sur ce pli
+pendant que le GBT, qui a ce même score comme feature #0, rend **0,000**.
+
+## Mesuré (LOSO, `dim = 16`, N = 96, 20 instantanés)
+
+```
+probabilités du GBT sur harris   min/méd/max = 0,0000 / 0,0025 / 0,1243
+seuil ajusté sur les 3 autres    = 0,4000
+-> positifs prédits : 0 / 20 480   ->  F1 = 0,000
+```
+
+**Aucune probabilité n'atteint le seuil.** Le zéro est arithmétique, pas
+physique. Ce que la même sortie dit quand on retire le seuil :
+
+| grandeur | valeur |
+|---|---|
+| F1 au seuil transféré | **0,000** |
+| **AUC (classement, sans seuil)** | **0,908** |
+| **F1 à budget apparié** (5 120 patches) | **0,659** |
+
+Le classement est bon. C'est l'**opérateur de décision** qui ne traverse pas
+la frontière de scénario — les distributions de probabilité des scénarios
+d'entraînement et de harris ne se recouvrent pas.
+
+## Un second fait, qui n'était pas cherché
+
+AUC du **score classique seul** contre le label, par scénario :
+
+| scénario | AUC | taux positif |
+|---|---|---|
+| orszag_tang | 0,592 | 0,157 |
+| harris_tearing | **1,000** | 0,250 |
+| kelvin_helmholtz | **0,997** | 0,250 |
+| mhd_rotor | **0,948** | 0,205 |
+
+Sur trois scénarios sur quatre, le label est **presque une fonction
+déterministe du score classique**. C'est cohérent avec sa définition — la
+variance intra-patch et un détecteur de gradient agrégé par block-max
+désignent la même structure sur une nappe de courant — mais cela veut dire
+que la tâche y est quasi gratuite. Un plafond de 1,000 laisse peu de place à
+une méthode qui prétendrait faire mieux, et un écart mesuré contre une
+baseline parfaite ne mesure pas ce qu'on croit. À verser au dossier de la
+spécification de la tâche (H5).
+
+## Ce qui est corrigé
+
+Le protocole §1.3-B3 traite déjà « prédiction constante » comme dégénéré, et
+`metrics.degeneracy_flag` l'implémente — mais il rend le **même** verdict
+qu'il y ait du signal ou non. C'est cette confusion qui a fait lire harris
+comme un pli mort, dans deux versions de ce document.
+
+`metrics.threshold_transfer_flag(gt, proba, seuil)` sépare désormais :
+
+| verdict | condition | ce qu'il faut citer |
+|---|---|---|
+| `ok` | prédiction non constante | le F1 |
+| `aucun_signal` | constante **et** AUC < 0,70 | rien : la méthode n'ordonne pas |
+| `seuil_non_transfere` | constante **et** AUC ≥ 0,70 | le **F1 à budget apparié**, jamais le F1 au seuil |
+
+`seuil_non_transfere` **n'est pas un résultat sur la tâche** : c'est un
+défaut de l'opérateur de mesure.
+
+## Vérification
+
+```bash
+python -m pytest tests/study/test_seuil_non_transfere_vs_absence_de_signal.py -q
+```
+
+**8 tests** (7 rapides + 1 `slow` qui rejoue le pli harris réel et exige le
+verdict `seuil_non_transfere`, l'AUC > 0,80 et `proba_max < seuil`). Ce
+dernier échoue le jour où l'AUC tombe — harris serait alors un **vrai** pli
+mort, et la lecture changerait.
+
+Les cas de test sont choisis pour **séparer** : mêmes probabilités basses,
+une fois avec classement, une fois sans. Un test vérifie explicitement que
+`degeneracy_flag` seul rend le même verdict sur les deux — c'est la
+confusion qu'on corrige.
+
+**Mutations** :
+
+| mutation | effet |
+|---|---|
+| le verdict ignore l'AUC (retour à §1.3-B3 seul) | 2 failed |
+| le plancher d'AUC mis à 0 | 2 failed |
+| la détection de dégénérescence neutralisée | 5 failed |
+
+## Conséquence sur ce qui a été écrit
+
+Les moyennes LOSO de la courbe de cône, publiées plus haut avec la mention
+« pli mort », doivent être relues : `harris_tearing` n'est pas mort, il est
+**mal seuillé**. La colonne « hors pli mort » de cette table reste la bonne à
+lire, mais pour une raison différente de celle qui y était donnée.
+
+---
+
+# Sélectivité des coefficients : deux des trois ne captent pas un type
+
+Exigence de USER : *« tous les coeffs doivent être intuitifs — adimensionnels,
+indépendants de tout sauf de capter leur type d'instabilité »*. Les
+invariances sont mesurées ailleurs ; c'est la **sélectivité** qui manquait,
+et elle n'était vérifiée nulle part.
+
+## Le trou de couverture qui rendait la question urgente
+
+Avant ce fichier, **aucun test n'exerçait `norm="max"`** hors des invariances.
+Basculer le défaut aurait laissé toute la réponse physique non vérifiée.
+Les deux normalisations sont désormais exercées à chaque cas.
+
+## Mesuré, sur champs analytiques à réponse connue
+
+Pic de chaque famille, `dim = 32` :
+
+| champ | max\|C\| (ZZ) | max\|K\| (ZZZZ) | max\|K_xp\| |
+|---|---|---|---|
+| uniforme | 0 | 0 | 0 |
+| rotation solide (ω≠0, J=0) | ≠0 | **1,000** | 0 |
+| nappe de courant (ω=0, J≠0) | ≠0 | **1,000** | 0 |
+| X-point (det ∇B < 0) | ≠0 | 1,000 | **1,000** |
+
+## Les trois verdicts
+
+**`K_xpoint` est sélectif** — et c'est le seul. Il ne répond qu'au
+det(∇B) < 0, il est exactement muet là où det > 0 (points elliptiques,
+cœurs d'îlots), et il survit à un facteur d'échelle 10.
+
+**`K_plaquettes` ne l'est pas.** `(|ω| + |J|)/norme` somme les deux
+magnitudes : un vortex pur et une nappe de courant pure rendent **exactement
+la même valeur** (1,000 contre 1,000). Le terme capte « il se passe quelque
+chose de rotationnel **ou** magnétique », pas un type. C'est une propriété de
+conception, pas un défaut — mais elle contredit l'exigence « capter son type
+d'instabilité », et elle est désormais épinglée.
+
+**`C_edges` ne l'est pas non plus.** `sqrt(|dv|² + |dB|²)` fait entrer un
+saut hydrodynamique et un saut magnétique dans la même racine.
+
+## Une conséquence de `norm="max"` qu'il faut connaître
+
+Sous `max`, `max|C| = w_ZZ` et `max|K| = w_ZZZZ` sur **tout** champ non
+uniforme. Par construction, **la magnitude ne distingue plus rien** : toute
+l'information de structure passe dans le motif spatial.
+
+Sous `legacy`, le pic varie : nappe raide 8,09 contre rotation lisse 3,12.
+
+> ### ⚠️ Rétractation, publiée le même jour
+>
+> Cette section concluait que **« le choix est un arbitrage, pas une
+> amélioration pure »** — `legacy` porterait dans son pic une information de
+> structure que `max` retirerait. **C'est retiré**, et c'est la mesure
+> ci-dessus qui le dit, mal lue la première fois.
+>
+> `max|K|` vaut 1 dans les **deux** modes. Le pic `max|C|` n'est donc pas une
+> grandeur libre : c'est le **poids de la famille ZZ relativement à la famille
+> ZZZZ** dans l'hamiltonien. Sous `legacy` il passe de **3,121** (rotation
+> lisse) à **8,095** (nappe raide) — un facteur **2,59** sur l'équilibre de
+> deux familles de termes, décidé par la spikiness de l'instantané au lieu de
+> la conception. Sous `max` il vaut `W_ZZ / W_ZZZZ = 2,000` sur les trois
+> champs non uniformes.
+>
+> Ce n'est pas une information, c'est un **couplage parasite**. Il n'y a donc
+> pas d'arbitrage : `max` le retire. La question de USER — *« pour norm je ne
+> comprends pas le dilemme »* — n'avait pas de réponse parce qu'il n'y en a
+> pas.
+>
+> Les deux côtés sont désormais épinglés :
+> `test_sous_legacy_le_poids_relatif_des_familles_derive_avec_le_champ` et
+> `test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception`.
+> Le test qui portait la lecture retirée s'appelait
+> `test_sous_legacy_le_pic_varie_donc_il_porte_une_structure` : il mesurait le
+> bon nombre sous un mauvais nom.
+
+## Vérification
+
+```bash
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q   # 13 passed
+```
+
+| mutation | effet |
+|---|---|
+| la plaquette devient sélective (`\|ω\|` seul) | 3 failed |
+| ZZ ignore la partie magnétique du saut | 4 failed |
+| le mode `max` cesse de borner le pic | 2 failed |
+| `K_xpoint` : `max(0,−det)` → `\|det\|` | 1 failed |
+| **le scindement redevient le défaut** (le défaut corrigé ci-dessus) | 4 failed |
+| le drapeau est ignoré, les clés sont toujours là | 4 failed |
+| le drapeau est ignoré, les clés n'y sont jamais | 23 failed |
+| `K_xpoint` : signe inversé (X-point ↔ O-point) | 1 failed |
+
+**Un trou de mon propre fait, corrigé en le mutant.** La première version du
+test de sélectivité X-point ne regardait qu'un **maximum sur tout le champ** :
+`max(0,−det)` et `|det|` y donnent le même pic, donc la mutation passait au
+vert. Le test compare désormais **point par point**, et exige que `K_xpoint`
+soit exactement nul là où det > 0. Sans cette correction, le fichier aurait
+affirmé une sélectivité qu'il ne vérifiait pas.
+
+---
+
+# La plaquette scindée : un coefficient par type de structure
+
+> ### ⚠️ Entrée SUPERSÉDÉE le 21 août — lire d'abord
+>
+> Les deux coefficients `K_vorticity` / `K_current` décrits ci-dessous **ont
+> été retirés du code**. Décision de USER : *« il ne faut pas faire
+> différentes portes ZZZZ (c'est coûteux et ça sert à rien) »* — deux familles
+> de termes ZZZZ demandent deux jeux de portes pour la même information.
+>
+> Le **problème** que cette entrée identifie reste entier, et s'est révélé
+> bien plus grave que mesuré ici. La **solution** a changé : au lieu de deux
+> termes, un seul, dont les deux magnitudes sont rendues adimensionnelles
+> **séparément avant** d'être sommées. Voir l'entrée suivante.
+>
+> Ce qui survit de celle-ci : le constat de non-sélectivité, le champ mixte,
+> le test de l'ensemble des clés, et la mesure `E_max` +15,9 % / +33,6 % qui
+> l'a motivé.
+
+
+Demande de USER, à la suite de l'entrée précédente : *« scinde le en deux
+coeffs mais checke bien ce que tu fais et actualise les tests »*. La mesure
+qui la motive est la ligne « `K_plaquettes` ne l'est pas » ci-dessus : un
+vortex pur et une nappe de courant pure rendent **exactement la même valeur**
+(1,000 contre 1,000), donc le terme capte « il se passe quelque chose », pas
+un type d'instabilité.
+
+## Ce qui est ajouté
+
+```python
+K_vort = -w_ZZZZ * |omega_z| / max|omega_z|
+K_curr = -w_ZZZZ * |J_z|     / max|J_z|
+```
+
+Deux clés, rendues **sur demande seulement** — `split_plaquette=True`.
+Adimensionnelles, bornées par `w_ZZZZ`, invariantes en `dx`, en amplitude et
+en mode de normalisation.
+
+**`K_plaquettes` n'est pas touché**, et par défaut **l'ensemble des clés
+rendues est celui de `HEAD`**. Vérifié contre `HEAD`, module chargé par chemin
+explicite, sur un champ mixte bruité, dans les quatre configurations :
+
+```
+norm=legacy xpoint=False  défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=legacy xpoint=True   défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=max    xpoint=False  défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+norm=max    xpoint=True   défaut: modifiées AUCUNE (bit à bit), ajoutées AUCUNE
+                          opt-in: ajoute ['K_current', 'K_vorticity']
+```
+
+## ⚠️ Pourquoi opt-in : un changement de comportement que j'ai failli livrer
+
+La première version de cette entrée annonçait *« deux clés nouvelles dans le
+dictionnaire rendu »* et concluait : *« aucun nombre publié ne bouge […] c'est
+une mise à disposition, pas un changement de comportement »*. **C'était
+faux**, et la vérification bit à bit ne pouvait pas le voir : elle compare les
+**valeurs des clés partagées**.
+
+`src/call_vqa_shell.py` ne consomme pas le dictionnaire clé par clé. Il
+**somme `|coeff|` sur toutes les clés tableau**, sans liste blanche, pour
+former `E_max` :
+
+```python
+for key, value in hamilt_params.items():
+    ...
+    E_max += np.sum(np.abs(value))
+```
+
+Deux clés de plus déplacent donc `E_max`, mesuré sur un champ bruité N=24 :
+
+| mode | `E_max` sans | avec | écart |
+|---|---|---|---|
+| `legacy` | 2 639,02 | 3 059,70 | **+15,9 %** |
+| `max` | 1 231,33 | 1 652,01 | **+34,2 %** |
+
+> Ces deux `E_max` sous `max` sont mesurés sur la **plaquette d'avant** le
+> changement de formule (dénominateur commun). Remesurés sur le code actuel :
+> 1 251,50 → 1 672,18, soit **+33,6 %**. La ligne de base a bougé avec la
+> formule ; la conclusion — l'ensemble des clés fait partie du contrat — ne
+> bouge pas. C'est le chiffre **+33,6 %** qui est cité ailleurs.
+
+
+
+`src/Simulation/RescaleArrays.py` itère lui aussi sur toutes les clés
+(`for key, value in hamilt_params.items()`) et aurait max-poolé les deux
+tableaux à chaque descente AMR.
+
+**La leçon, générale : l'ENSEMBLE des clés fait partie du contrat.** Prouver
+que chaque valeur partagée est identique au bit près ne prouve pas qu'un
+consommateur ne bouge pas, dès lors qu'un consommateur agrège sur les clés.
+C'est exactement le « changement de comportement scientifique fait au
+passage » que `CLAUDE.md` interdit sur `src/`, et je l'avais écrit comme son
+contraire.
+
+Corrigé par le drapeau, et **gardé** par
+`test_par_defaut_lensemble_des_cles_rendues_est_inchange` (liste fermée des
+5 clés par défaut) et
+`test_le_scindement_deplace_E_max_ce_qui_est_la_raison_du_opt_in`, qui
+rejoue le calcul de `call_vqa_shell` et chiffre ce que le défaut évite.
+Remettre le scindement par défaut fait rougir 4 tests.
+
+Le circuit ne lit toujours pas les deux termes : les brancher est une
+décision de conception distincte, qui demandera sa propre campagne.
+
+## La sélectivité, mesurée
+
+`dim = 32`, champs analytiques, `split_plaquette=True`, pics des
+coefficients :
+
+| champ | `K_plaquettes` | `K_vorticity` | `K_current` |
+|---|---|---|---|
+| uniforme | 0 | 0 | 0 |
+| rotation solide (ω≠0, J=0) | **1,000** | **1,000** | 0,000 |
+| nappe de courant (ω=0, J≠0) | **1,000** | 0,000 | **1,000** |
+
+La ligne à lire est la colonne de gauche : elle ne bouge pas entre les deux
+structures, les deux autres s'inversent. C'est le scindement.
+
+## Pourquoi chacun divise par le max de SON signal
+
+L'alternative naturelle serait de garder la normalisation commune de
+`K_plaquettes` (`max|ω| + max|J|`). Elle réintroduirait exactement ce que le
+mode `max` retire : le poids de chaque terme dépendrait du pic de **l'autre**,
+donc de la forme du champ. Sur un champ où B est 4 fois plus faible que v,
+`K_vorticity` culminerait à ~0,8 et `K_current` à ~0,2 au lieu de 1 et 1.
+
+C'est vrai dans les **deux** modes, `legacy` compris : le scindement n'hérite
+pas du défaut qu'on est en train de retirer ailleurs.
+
+## Un test qui ne pouvait pas échouer, trouvé en le mutant
+
+La mutation « les deux termes scindés partagent une normalisation commune »
+**survivait à tout le fichier** — 23 passed sur 23, aucune rougeur. Les
+quatre champs d'essai d'alors sont
+**purs** (ω = 0 **ou** J = 0), et sur un champ pur les deux normalisations
+coïncident au bit près : `max|ω| + 0 = max|ω|`. Le jeu de champs ne pouvait
+pas voir la différence.
+
+Un cinquième champ, **mixte** (ω et J tous deux actifs, pics dans un rapport
+> 2), a été ajouté, plus le garde qui vérifie qu'il reste mixte. La mutation
+meurt maintenant, ainsi que sa variante « max de la somme ».
+
+**Le nombre publié dans une note antérieure pour cette mutation — « 2 failed »
+— était faux**, mesuré avec un `__pycache__` périmé : la mutation remplaçait
+`Jz_curl` par `omega_z`, deux identifiants de **même longueur en octets**, si
+bien que la clé `(mtime, size)` du `.pyc` ne changeait pas et que Python
+rechargeait l'ancien module. Toutes les mutations ci-dessous sont remesurées
+caches vidés.
+
+## Vérification
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q   # 30 passed
+python -m pytest tests/mapping -q                                        # 436 passed
+python -m pytest tests/ -q -m "not slow"          # 5 failed, 3032 passed, 1 h 02
+python study/common/aggregate_master_table.py                            # 180 / 176 / 4 / 0
+```
+
+**Les 5 rouges sont ceux du dépôt, pas les miens.** Vérifié en rejouant les
+cinq sur un `git worktree` propre à `HEAD` : ils échouent à l'identique. Ils
+correspondent exactement à la liste documentée — le trio `a0e0e02` (`K_xpoint`
+désormais consommé par `build_ising_terms`, en attente du rejeu de phase 4,
+T13 et T26) et la paire D-132. Les deux tests intermittents de D-165 sont
+passés ce tour-ci, ce qui est précisément ce que D-165 annonce : *« un
+décompte pris sur une exécution ne dit pas combien de tests sont rouges ; il
+dit combien l'étaient ce jour-là. »*
+
+| test rouge | origine | mien ? |
+|---|---|---|
+| `test_xpoint_term_absent_from_study.py::test_build_ising_terms_ignores_xpoint` | trio `a0e0e02` | non |
+| `test_xpoint_term_absent_from_study.py::test_ablation_zeroes_a_key_nothing_reads` | trio `a0e0e02` | non |
+| `test_t13_control_is_not_vacuous.py::test_removed_max_separates_a_real_ablation_from_an_empty_one` | trio `a0e0e02` | non |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | paire D-132 | non |
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | paire D-132 | non |
+
+| mutation de `src/Simulation/HamiltParams_v2.py` | effet |
+|---|---|
+| `K_current` lit `omega_z` au lieu de `J_z` | 6 failed |
+| `K_vorticity` lit `J_z` au lieu de `omega_z` | 6 failed |
+| les deux termes scindés partagent une normalisation commune | 2 failed |
+| … normalisés par le max de la **somme** (celle de la plaquette) | 2 failed |
+| `K_plaquettes` change de formule (×0,5) | 5 failed |
+| la plaquette devient sélective (`\|ω\|` seul) | 8 failed |
+| `legacy` divise par le max (les deux modes se confondent) | 2 failed |
+| `max` cesse de borner ZZ | 2 failed |
+| `K_xpoint` : `max(0,−det)` → `\|det\|` | 1 failed |
+| **le scindement redevient le défaut** (le défaut corrigé ci-dessus) | 4 failed |
+| le drapeau est ignoré, les clés sont toujours là | 4 failed |
+| le drapeau est ignoré, les clés n'y sont jamais | 23 failed |
+
+## Ce que ça ne dit pas
+
+Que le scindement **améliore** quoi que ce soit. Il rend deux coefficients
+sélectifs là où il y en avait un qui ne l'était pas — c'est une propriété de
+la **forme** des coefficients, mesurée sur des champs analytiques. Savoir si
+un hamiltonien qui les consomme décide mieux est une question de campagne, et
+**aucun résultat d'avant campagne ne peut y répondre**.
+
+---
+
+# La moitié du terme ZZZZ était numériquement morte sur 2 scénarios sur 4
+
+Demande de USER : *« sommer les deux grandeurs adimensionnelles séparément.
+Mais il ne faut pas faire différentes portes ZZZZ (c'est coûteux et ça sert à
+rien). Pour `norm` fais ce qui semble le plus juste. »*
+
+## Le défaut, mesuré sur le corpus avant d'être corrigé
+
+La plaquette valait `(|ω| + |J|) / (max|ω| + max|J|)` : deux magnitudes
+**brutes** sous un dénominateur **commun**. Le signal le plus fort y écrase
+l'autre en proportion de son amplitude. Sur les champs MHD du dépôt, cette
+proportion n'est pas une correction du second ordre.
+
+**Poids effectif de la vorticité dans la somme**, N=256, Re=400, 12
+instantanés par scénario (min – médiane – max) :
+
+| scénario | poids de \|ω\| | rapport max\|J\|/max\|ω\| | lecture |
+|---|---|---|---|
+| `harris_tearing` | 0,000 – **0,003** – 0,006 | **179** | la **vorticité** ne contribue pas |
+| `kelvin_helmholtz` | 0,975 – **0,993** – 1,000 | **84** | le **courant** ne contribue pas |
+| `mhd_rotor` | 0,193 – 0,391 – 1,000 | 1,7 | équilibré |
+| `orszag_tang` | 0,212 – 0,278 – 0,400 | 3,4 | le courant domine 3:1 |
+
+Sur **deux scénarios canoniques sur quatre**, l'une des deux structures que le
+terme prétend détecter est absente de son propre coefficient, sur toute la
+trajectoire. Ce n'est pas un bug : c'est la formule qui le dit. Un Harris
+tearing est une nappe de courant sans écoulement, un Kelvin–Helmholtz un
+cisaillement sans champ — chaque scénario est dominé par un type, et le
+dénominateur commun transforme ce fait physique en **effacement** de l'autre
+signal.
+
+## Ce qui est fait — un seul terme, une seule porte
+
+```python
+K_p = -w_ZZZZ * (|ω|/max|ω| + |J|/max|J|) / max(la somme)
+```
+
+Chaque magnitude est rendue **adimensionnelle par son propre maximum avant**
+la somme. Les deux structures pèsent alors 1/2 chacune quel que soit leur
+rapport d'amplitude, et diviser par le max de la somme ramène le pic à
+`w_ZZZZ` exactement.
+
+**Une seule famille ZZZZ, donc une seule porte.** Le scindement en deux
+coefficients (entre précédente) est retiré : il achetait la même séparation au
+prix d'un second jeu de portes.
+
+## Ce que ce choix affirme, et qui est discutable
+
+Que pour **décider où raffiner**, le type de structure compte et le rapport
+d'amplitude entre types ne compte pas. C'est une position, pas un théorème.
+
+Ce qui la rend défendable : l'amplitude n'est pas perdue, elle entre par les
+deux autres familles — le biais Z est accroché au score classique, le couplage
+ZZ à la magnitude du saut. La plaquette, elle, ne dit plus que **où la
+circulation est localement forte relativement à son propre type**, ce qui est
+l'instinct correct pour un indicateur de raffinement : une structure faible
+mais raide a besoin de résolution autant qu'une structure forte et lisse.
+
+## `norm` : le défaut bascule sur `max`
+
+La question posée était ouverte (*« fais ce qui semble le plus juste »*). Trois
+faits mesurés, tous dans le même sens, et aucun contre :
+
+1. Sous `legacy`, le poids relatif ZZ:ZZZZ dérive d'un **facteur 2,59** avec la
+   seule spikiness du champ (3,121 → 8,095). Sous `max` il vaut
+   `W_ZZ/W_ZZZZ = 2,000` partout. **Cette affirmation était fausse dans la
+   configuration déployée jusqu'au 22 août — voir la rétractation ci-dessous,
+   et sa correction.**
+2. Sous `legacy`, `max|K|` vaut 0,74 à 0,99 selon le scénario — la famille ZZZZ
+   est silencieusement dévaluée jusqu'à 26 % sur `mhd_rotor`, parce que les
+   deux maxima sont pris en des points différents. Sous `max`, `max|K| = 1,000`
+   partout.
+3. Le défaut ci-dessus (une structure effacée sur 2 scénarios sur 4)
+   n'existe que sous `legacy`.
+
+**Rayon d'action, vérifié :** aucun fichier de `src/` ne construit
+`PhysicalMapperV2`. Le solveur V1 déployé reçoit son mappeur par injection et
+n'est **pas** concerné. Les quatre sites qui le construisent sont tous dans
+`study/` — `hamiltonian_coefficients.py`, `sanity_check.py`,
+`exact_diagonalisation.py`, `qaoa_inputs.py` — et **aucun ne passait `norm=`
+explicitement**. Le basculement change donc exactement le pipeline de la
+campagne à venir, ce qui est l'intention.
+
+`legacy` reste joignable et garde une seule raison d'être : **reproduire les
+artefacts gelés**, calculés avec. `test_la_formule_legacy_de_la_plaquette_est_inchangee`
+recalcule la formule historique indépendamment et rougit si quelqu'un
+« améliore » `legacy` aussi — le jour où plus aucun mode ne reproduit le passé,
+toute comparaison avant/après devient impossible.
+
+## Ce que le basculement a réveillé — trois faits, mesurés parce que des tests ont rougi
+
+Le basculement fait passer la suite de 5 rouges à 12. Décomposé : les **5
+rouges documentés** du dépôt (trio `a0e0e02` + paire D-132) sont toujours là,
+**5** viennent du changement, et **2** sont des tests intermittents qui
+n'ont rien à voir avec lui. Chacun des cinq a été instruit avant d'être
+traité.
+
+### 1. Le balayage plat de D-86 était un artefact de la normalisation
+
+D-86 : sur 52 configurations, **14 balayages `c_bias` plats** — écart max-min
+exactement nul, donc `argmax` rendait le bord gauche de la grille comme
+« optimum ». Rejoué sur le cas mesuré (`harris_tearing`, N=96, dim=4, 8
+instantanés, graine 0) dans les deux normalisations :
+
+| `norm` | `f1_span` (4 Re) | dégénérés | `c_bias*` |
+|---|---|---|---|
+| `legacy` | 0,0000 / 0,0000 / 0,0000 / 0,0000 | **4 / 4** | 0,100 (bord **gauche**) |
+| `max` | 0,5655 / 0,5583 / 0,5500 / 0,5583 | **0 / 4** | 75–100 (bord **droit**) |
+
+Sous `legacy`, le hamiltonien de champ moyen ne séparait **rien** sur cette
+configuration : F1 identiquement nul sur les 25 points de grille. Sous `max`,
+il sépare. **L'instrument avait perdu sa résolution**, et c'est la
+normalisation qui la lui retirait.
+
+### 2. …et l'optimum du balayage corrigé est **au bord droit** — D-86 en miroir
+
+`c_bias*` vaut 100,0 sur 3 Re sur 4, soit le sommet de `logspace(-1, 2)`. Un
+optimum au bord n'est pas un optimum, exactement comme le bord gauche ne
+l'était pas. Mesuré en élargissant à `logspace(-1, 5)` :
+
+    F1 sature à 0,6333 dès c_bias ~ 251 ; les six derniers points identiques
+
+L'optimum est donc la **limite biais seul** — les couplages n'apportent rien
+de positif — et il reste **sous la baseline classique (0,745)**. Épinglé, non
+corrigé : élargir la grille déplace tous les `c_bias*` publiés. Entrée
+`DEFAUTS.md`.
+
+### 3. La dégénérescence de D-45/D-47 à `dim = 2` tient — ma première lecture était fausse
+
+`test_the_ground_state_is_uniform_on_real_deployed_coefficients` est devenu
+rouge : sous `max`, l'état fondamental exact à `dim = 2` n'est plus uniforme.
+Lu vite, cela annonçait la fin de la dégénérescence qui vide la réfutation de
+H0.
+
+**Non.** Le champ de ce test est du **bruit gaussien**, pas un champ DNS — son
+nom désignait le chemin de code, pas les données. Remesuré sur 40 instantanés
+DNS réels (4 scénarios × 10, N=256, patch 4×4, `dim = 2`) :
+
+| `norm` | états fondamentaux uniformes | non uniformes |
+|---|---|---|
+| `legacy` | 39 / 40 (**97,5 %**) | 1 |
+| `max` | 36 / 40 (**90,0 %**) | 4 |
+
+La dégénérescence **bouge et ne tombe pas**. D-45/D-47 tient. Les deux taux
+sont désormais épinglés par un test `slow` qui rougit si l'un sort de sa
+fourchette — c'est-à-dire le jour où la conclusion sur H0 à `dim = 2` doit
+être réécrite.
+
+### Un troisième test intermittent, non documenté
+
+`tests/mapping/test_signal_contribution.py::test_C_ZZ` est rouge en suite
+complète et **vert 3 fois sur 3 en isolé**. Il construit son hamiltonien à la
+main et n'appelle jamais le mappeur : il ne peut pas être affecté par ce
+changement. C'est un troisième membre de la famille D-165, dans le même
+fichier que `test_K_ZZZZ` déjà documenté. Entrée `DEFAUTS.md`.
+
+### Deux tests dont la GRANDEUR a cessé de discriminer
+
+`test_noise_weaker_than_anomaly` comparait le **pic** de `|C|` entre un champ
+de bruit et un champ à anomalie. Sous `max` le pic vaut `w_zz = 2,000` sur les
+deux : l'assertion comparait deux nombres identiques. Règle VIGIL — *si la
+grandeur n'est pas discriminante, changer de grandeur, pas de seuil*. Le fait
+physique visé reste vrai et reste mesurable par une grandeur de **forme** :
+
+| statistique | bruit | anomalie | `legacy` | `max` |
+|---|---|---|---|---|
+| pic \|C\| | 4,098 / **2,000** | 32,000 / **2,000** | discrimine | **ne discrimine plus** |
+| fraction du domaine ≥ ½ pic | **0,684** | **0,125** | discrimine | discrimine |
+
+La nouvelle statistique rend **le même nombre dans les deux modes** — elle ne
+dépend plus du choix de normalisation.
+
+`test_legacy_est_le_defaut` a rougi comme prévu : c'est le garde qui exige
+qu'un basculement se décide. Renommé, il exige maintenant la même chose dans
+l'autre sens.
+
+## Ce que ça déplace
+
+| grandeur | `legacy` | `max` |
+|---|---|---|
+| `max\|K\|` harris / KH / rotor / OT | 0,9947 / 0,9902 / 0,7418 / 0,8494 | **1,0000** partout |
+| cellules changeant d'appartenance au top 5 % de la carte | — | 7,8 % / 4,5 % / 0,5 % / 1,6 % |
+
+Les artefacts `.npz` gelés ne bougent pas — ils ne sont pas recalculés — donc
+la table maîtresse reste à **180 / 176 / 4 / 0**. Mais le Hamiltonien du dépôt
+n'est plus celui qui les a produits : **toute campagne relancée produira des
+nombres différents**, et c'est le but.
+
+## ⚠️ Rétractation, le 22 août : l'invariance ZZ:ZZZZ ne tient pas dans la configuration DÉPLOYÉE
+
+Ce qui précède affirme que sous `max` le rapport ZZ:ZZZZ vaut `W_ZZ/W_ZZZZ =
+2,000` partout, et en fait l'argument principal du basculement. **C'est vrai
+seulement avec `advanced_anomalies_enabled=False`.** D-33 enregistre que la
+campagne l'active sur **6 scénarios sur 6**.
+
+`K_plaquettes` et `K_xpoint` sont deux termes `("ZZZZ", …)` posés sur **les
+mêmes quatre qubits** (`cost_hamiltonian.py`, lignes 416 et 431) :
+`SparsePauliOp` les somme, et le coefficient ZZZZ effectif est leur somme.
+Mesuré, N=256, Re=400 :
+
+| scénario | max\|K_plaq\| | max\|K_xp\| | ZZZZ **effectif** | ZZ:ZZZZ déployé |
+|---|---|---|---|---|
+| `harris_tearing` | 1,0000 | 0,9945 | 1,5651 | **1,278** |
+| `kelvin_helmholtz` | 1,0000 | **0,2913** | 1,0000 | 2,000 |
+| `mhd_rotor` | 1,0000 | 1,0000 | 1,7694 | **1,130** |
+| `orszag_tang` | 1,0000 | 1,0000 | 1,9445 | **1,029** |
+
+Le rapport va de **1,029 à 2,000 — facteur 1,94**, soit le même ordre que le
+facteur 2,59 que le basculement était censé retirer. **Le couplage parasite
+n'a pas été éliminé : il entre par l'autre porte.**
+
+Deux causes distinctes, toutes deux réparables :
+
+1. **`K_xpoint` n'est pas normalisé par son propre signal.** Il divise
+   `max(0, −det ∇B)` par `max|det ∇B|` — deux signaux différents. Quand les
+   déterminants positifs dominent en magnitude, le terme n'atteint jamais son
+   normaliseur : **0,291 sur `kelvin_helmholtz`**. C'est exactement le défaut
+   « deux maxima en des points différents » corrigé dans la plaquette, resté
+   vivant ici. Son garde est aussi le seul encore **additif** (`+ EPS`), d'où
+   une adimensionalité à 1e-10 au lieu d'exacte.
+2. **Deux termes ZZZZ sur la même plaquette s'additionnent**, donc la famille
+   peut atteindre `2·w_zzzz`.
+
+**Pourquoi les tests n'ont rien vu.** `test_kxpoint_ne_repond_quau_xpoint`
+exige `Kxp > 0,5` sur le champ analytique `xpoint`, qui rend **1,000** : son
+`det` est symétrique, donc `max(0,−det)` atteint `max|det|` par construction
+et le défaut de normalisation y est **invisible**. Et
+`test_sous_max_le_poids_relatif_des_familles_est_celui_de_la_conception`
+calcule le rapport contre `max|K_plaquettes|` **seul**, jamais contre le ZZZZ
+effectif. Troisième instance de la même leçon : un champ analytique trop
+propre ne peut pas voir ce que les champs réels montrent.
+
+### Corrigé le 22 août — les trois structures sont normalisées ensemble
+
+Décision de USER : plier le X-point dans la plaquette. Les trois types de
+structure de la **même** plaquette — vorticité, courant, point X — sont rendus
+adimensionnels chacun par son propre maximum, puis leur somme est ramenée à
+`w_zzzz` :
+
+```
+S      = ω̂ + Ĵ + X̂
+K_plaq = -w_ZZZZ · (ω̂ + Ĵ) / max(S)
+K_xp   = -w_ZZZZ ·  X̂       / max(S)
+```
+
+`K_xpoint` **reste une clé distincte** — la supprimer transformerait
+l'ablation de `h3_term_ablation.py` en no-op silencieux — mais les deux clés
+portent les deux morceaux d'un **même signal normalisé ensemble**. Leur somme,
+qui est ce que `SparsePauliOp` voit, vaut exactement `-w_zzzz` au pic.
+
+| scénario | ZZ:ZZZZ avant | ZZ:ZZZZ après |
+|---|---|---|
+| `harris_tearing` | 1,278 | **2,0000** |
+| `kelvin_helmholtz` | 2,000 | **2,0000** |
+| `mhd_rotor` | 1,130 | **2,0000** |
+| `orszag_tang` | 1,029 | **2,0000** |
+
+Vérifié contre le commit précédent, modules chargés par chemin explicite :
+`legacy` (X-point actif ou non) et `max` **sans** X-point sont inchangés **bit
+à bit** ; seules les deux clés ZZZZ bougent sous `max` + X-point, et le jeu de
+clés est identique dans les quatre configurations.
+
+**Ce que ça change physiquement, et qui n'est pas neutre.** Le X-point cesse
+d'être un terme *additionnel* pour devenir un *tiers* du signal de plaquette :
+sur les champs réels il pèse désormais 30–45 % de la famille, là où il pouvait
+la doubler.
+
+**Le champ qu'il a fallu inventer.** Les champs analytiques du dépôt ne
+pouvaient pas voir ce défaut — sur `xpoint`, `J` et `det ∇B` culminent en des
+points **disjoints**, donc les deux termes atteignent 1 chacun sans que leur
+somme dépasse 1. `xpoint_superpose` (rotation et X-point au même point) rend
+**2,000 avant, 1,000 après**. Quatre gardes l'épinglent, dont un sur les
+**vrais** DNS et un qui protège la formule `legacy` — sans ce dernier, la
+mutation « `legacy` est amélioré lui aussi » survivait au fichier entier.
+
+→ **D-190, corrigé.**
+
+## Une erreur de conception de mes propres tests, trouvée en les faisant échouer
+
+Les premiers champs « mixtes » plaçaient le tourbillon et la nappe de courant
+**au même endroit**. Sur un tel champ, aucune structure ne peut en écraser une
+autre : les deux formules coïncident, et trois tests qui prétendaient mesurer
+l'écrasement mesuraient en fait `1,0000` des deux côtés. Les champs d'essai
+séparent désormais les deux structures (recouvrement **3,7e-07**), ce qui est
+aussi le cas physique honnête — dans un écoulement réel, le vortex est ici et
+la nappe est là.
+
+## Vérification
+
+```bash
+find . -name __pycache__ -exec rm -rf {} +
+python -m pytest tests/mapping/test_selectivite_des_coefficients.py -q  # 25 passed, 1 skipped
+python -m pytest tests/mapping -q                                # 432 passed, 1 skipped
+python -m pytest tests/ -q -m "not slow"      # 6 failed, 3029 passed, 1 h 07
+python study/common/aggregate_master_table.py            # 180 / 176 / 4 / 0
+```
+
+**Les 6 rouges finaux** : les **5 documentés** du dépôt (trio `a0e0e02`, paire
+D-132), rejoués sur un `worktree` propre à `HEAD` lors de la passe précédente
+et rouges à l'identique, **plus un intermittent** —
+`test_optimiser_axis.py::…[L-BFGS-B]`, vert 3/3 en isolé et 2/2 sur son
+fichier, opérateur codé en dur, aucun lien avec le mappeur (D-187).
+
+La table maîtresse reste à **180 / 176 / 4 / 0** : les artefacts `.npz` ne
+sont pas recalculés, donc aucun nombre publié ne bouge — mais le Hamiltonien
+du dépôt n'est plus celui qui les a produits.
+
+| mutation de `src/Simulation/HamiltParams_v2.py` | effet |
+|---|---|
+| `max` revient au dénominateur commun (la formule d'avant) | 3 failed |
+| la vorticité n'est pas normalisée, le courant si | 2 failed |
+| `legacy` est « amélioré » lui aussi (plus de mode de reproduction) | 5 failed |
+| le pic de la somme n'est plus retiré (`max\|K\| ≠ w`) | 4 failed |
+
+Un test `@pytest.mark.slow` rejoue le fait sur les vrais artefacts DNS et
+rougit le jour où les scénarios du dépôt cessent d'être dominés par une seule
+structure — auquel cas la justification du changement tombe et il faut la
+réécrire, pas retoucher le seuil.
+
+---
+
+# Vérité terrain dynamique : elle existe, et elle dit que l'horizon du protocole est trop court
+
+Protocole v3 §1.2, tâche 6 — le seul « heavy new code » du protocole, et le
+seul artefact qu'aucune campagne n'avait jamais produit : `d_patches_*`
+comptait **0 fichier**.
+
+## Ce que le label calcule
+
+Pour un instantané `t` et un patch `i` : le champ de référence évolué de
+`δt`, contre le même champ où **le patch `i` seul** a été remplacé par sa
+moyenne, évolué de `δt` avec **la même séquence de pas**. `d_i` est la
+distance L2 entre les deux, **sur le champ entier** — c'est tout l'intérêt :
+`e_i` est confiné au patch, `d_i` compte ce que l'erreur abîme ailleurs.
+
+## Le gel de la séquence de pas n'est pas une précaution théorique
+
+`dns_sweep.py` appelle `adapt_dt()` à chaque pas. Si chaque variante adaptait
+la sienne, `d_i` compterait un écart de **pas de temps** comme de la
+physique. Mesuré (N=96, Re=400, δt=0,05) — fraction des patches dont la
+variante adapterait une séquence différente :
+
+| scénario | dim=4 | dim=8 |
+|---|---|---|
+| `harris_tearing` | 0 / 16 | 0 / 64 |
+| `kelvin_helmholtz` | **16 / 16** | **64 / 64** |
+| `mhd_rotor` | **16 / 16** | **64 / 64** |
+| `orszag_tang` | **16 / 16** | **64 / 64** |
+
+Sur trois scénarios sur quatre, **chaque** patch divergerait. Le mécanisme
+n'est pas l'extremum initial — `adapt_dt` lit des maxima globaux, qu'un patch
+grossi ne déplace pas — mais l'évolution, qui les déplace dès le premier pas.
+
+## Le résultat : à l'horizon du protocole, `d` est une redite de `e`
+
+N=96, Re=400, `dim=8` (64 patches), **5 instantanés** par scénario, relus
+**depuis les 8 artefacts committés**. ρ est le Spearman entre le label
+dynamique et le label statique ; l'amplification est `d_i / d0_i`, où `d0_i`
+est la perturbation **avant** toute évolution.
+
+| scénario | ρ(d,e) à δt=0,1 | ρ(d,e) à δt=2,0 | amplif. δt=2,0 (méd. / p90) |
+|---|---|---|---|
+| `harris_tearing` | **+1,0000** | **+1,0000** | 0,58 / 0,66 |
+| `kelvin_helmholtz` | +0,9970 | +0,9927 | 0,82 / 1,03 |
+| `mhd_rotor` | +0,9917 | +0,9297 | 0,58 / 1,43 |
+| `orszag_tang` | +0,9817 | **+0,5961** | **1,38 / 2,06** |
+| **moyenne** | **+0,9926** (min +0,9817) | +0,8796 (min +0,5961) | |
+
+> Une première version de cette table publiait des nombres pris sur **3**
+> instantanés choisis à la main (ρ = 0,714 pour OT à δt=2,0, moyenne 0,9954 à
+> δt=0,1). Ils sont remplacés par ceux que rendent les **artefacts
+> committés** — 5 instantanés répartis sur toute la trajectoire, relisibles
+> par une commande. L'écart est réel sur les deux scénarios les plus agités
+> (rotor 0,985 → 0,9297 ; OT 0,714 → 0,5961) et ne change pas la lecture : il
+> la renforce. Publier une mesure qu'aucun artefact ne reproduit est
+> exactement ce que la table maîtresse existe pour empêcher.
+
+**À `δt = 0,1` — la valeur que le protocole impose — ρ ≥ 0,98 sur les quatre
+scénarios.** Le label dynamique est une renumérotation monotone du label
+statique. Il ne répond donc **pas** au problème de spécification de tâche
+(H5) pour lequel il avait été demandé.
+
+Le contrôle d'acceptation du protocole, *« sanity check Spearman(d_i, e_i) >
+0 reported »*, est **satisfait** — et c'est exactement le problème : un
+contrôle qu'un label redondant passe haut la main ne contrôle rien.
+
+## Pourquoi, et ce n'est pas un accident numérique
+
+Deux mécanismes, tous deux mesurés.
+
+**1. La perturbation n'a pas quitté son patch.** Temps de traversée
+`t_x = (largeur du patch) / (v_rms + b_rms)`, à `dim = 8` :
+
+| scénario | v+b (rms) | `t_x` | ce que vaut δt=0,1 |
+|---|---|---|---|
+| `harris_tearing` | 0,893 | 0,880 | **0,11 t_x** |
+| `kelvin_helmholtz` | 1,062 | 0,739 | **0,14 t_x** |
+| `mhd_rotor` | 1,684 | 0,466 | **0,21 t_x** |
+| `orszag_tang` | 1,926 | 0,408 | **0,25 t_x** |
+
+À δt = 0,1 la perturbation parcourt **un dixième à un quart** d'une largeur de
+patch. Il n'y a rien à propager — donc rien que `d` puisse dire de plus que
+`e`. L'ordre des scénarios suit exactement celui des ρ : harris parcourt le
+moins (0,11 t_x) et rend ρ = 1,0000 **exactement**.
+
+**2. L'amplification est quasi constante d'un patch à l'autre.** Comme
+`d0_i = e_i / dim` exactement (identité démontrée et épinglée), si le facteur
+`d_i/d0_i` ne varie pas entre patches alors `d = constante × e` et ρ = 1 par
+construction. À δt=0,1, médiane 0,88 et p90 0,88–1,01 : la dispersion est
+nulle. **C'est la dispersion de l'amplification, pas sa valeur, qui décide si
+le label dit quelque chose.**
+
+## Ce qui décolle, et où
+
+Un seul scénario sort du lot à δt=2,0 : **`orszag_tang`**, ρ = **0,596**, et
+le seul dont la perturbation **amplifie** (1,38 médian, 2,06 au p90) au lieu
+de décroître. C'est aussi le seul scénario où le label statique n'était **pas**
+quasi gratuit — AUC du score classique seul 0,592, contre 1,000 / 0,997 /
+0,948 pour les trois autres.
+
+Les deux faits se tiennent : **là où l'écoulement est assez turbulent pour
+propager et amplifier une perturbation, le label dynamique dit autre chose —
+et c'est précisément là que la tâche statique n'était pas déjà résolue.**
+
+## Ce que ça change pour le protocole
+
+**L'horizon δt = 0,1 (« one hybrid step ») est à réviser.** Le critère
+défendable n'est pas un nombre de pas hybrides mais une **échelle physique** :
+`δt ≳ t_x = 2π / (dim · (v+b)_rms)`, soit 0,41 à 0,88 à `dim = 8` et 0,82 à
+1,76 à `dim = 4`. C'est ce que la mesure à δt=2,0 confirme.
+
+Ce que ça **ne** dit pas : que le label dynamique sauve H5. Sur trois
+scénarios sur quatre il reste à ρ ≥ 0,985 même à δt=2,0. Le problème « la
+tâche est quasi gratuite » n'est levé que sur `orszag_tang`. Produire ce
+label était nécessaire — c'était le seul moyen de le savoir — mais il ne
+suffit pas.
+
+## Coût, mesuré
+
+N=96, `dim=8`, 65 évolutions par instantané :
+
+| scénario | δt=0,1 | δt=2,0 |
+|---|---|---|
+| `harris_tearing` | 3,1 s | 57 s |
+| `kelvin_helmholtz` | 5,4 s | 90 s |
+| `mhd_rotor` | 19 s | 258 s |
+| `orszag_tang` | 9,6 s | 208 s |
+
+Projection N=256 (échelle N³ : N² cellules × N pas) : **× 19**, soit ~1 à 80
+min par instantané selon le scénario et l'horizon. Le label est donc
+abordable à la résolution de production — ce que le protocole demandait de
+vérifier avant de lancer (« report wall-clock … and project the full cost
+before launching N=256 »).
+
+## ⚠️ Deux corrections trouvées le lendemain, en relisant ce module
+
+**1. Le seuil était calculé par instantané.** `hard_patch_labels.py` aplatit
+`all_l2` **sur les instantanés** avant son percentile et rend **un scalaire**.
+Ce module le calculait **par instantané**, ce qui force exactement (100−p) %
+de patches durs dans *chaque* instantané : un instantané calme et un
+instantané turbulent auraient eu la même proportion de patches durs. Le module
+annonçait pourtant reproduire la phase 2.
+
+Corrigé (`seuil_global`) ; `d_threshold` est désormais un scalaire et
+`hard_fraction_par_instantane` est publiée à côté. **Les 8 artefacts ont été
+régénérés**, et les ρ publiés ci-dessus se relisent **à l'identique** dans les
+nouveaux (ils ne dépendent pas du seuil).
+
+Ce que la correction a réellement changé, mesuré artefact par artefact :
+
+| artefact | fraction dure (min – max) | labels différents |
+|---|---|---|
+| `harris_tearing` (les deux δt) | 0,250 – 0,250 | **0,0 %** |
+| `kelvin_helmholtz` (les deux δt) | 0,250 – 0,250 | **0,0 %** |
+| `mhd_rotor` δt=0,1 / δt=2,0 | 0,188 – 0,344 | 6,2 % / 5,6 % |
+| `orszag_tang` δt=0,1 | **0,000 – 0,500** | **16,2 %** |
+| `orszag_tang` δt=2,0 | 0,047 – 0,406 | 10,6 % |
+
+Sur les deux scénarios quiescents les deux conventions **coïncident** : leurs
+trajectoires sont assez auto-similaires pour que le percentile global et le
+percentile par instantané tombent au même endroit. Sur `orszag_tang`, **16 %
+des labels étaient faux** — et un instantané y a **zéro** patch dur sous le
+seuil global, là où la convention par instantané lui en imposait 25 %. C'est
+exactement l'information que le seuil par instantané détruit : « cet instantané
+est calme ».
+
+Encore une fois, c'est le scénario turbulent qui porte l'écart.
+
+**2. Une mutation survivait au fichier entier.** « La variante adapte son
+propre pas » — c'est-à-dire le débranchement de la séquence gelée, la raison
+d'être du module — passait tous les tests. `sequence_de_pas` était testée
+isolément, `evolue` aussi, et le fait que les deux séquences diffèrent
+également ; **rien ne testait que `dynamic_patch_errors` emploie réellement la
+séquence gelée**. Les pièces étaient gardées, l'assemblage ne l'était pas.
+
+## Déviations au protocole, assumées
+
+| point | protocole | ici | pourquoi |
+|---|---|---|---|
+| chemin | `study/v3/t6_dynamic_gt.py` | `study/pipeline/dynamic_patch_labels.py` | le dépôt a été réorganisé ; `phase2_hard_patches.py` est aujourd'hui `pipeline/hard_patch_labels.py` |
+| pilote | N=128 | **N=96** | aucun artefact DNS N=128 dans le dépôt (N ∈ {64, 96, 256}) |
+| format | « drop-in » : le label dynamique sous la clé `l2_errors` | clés explicites `d_errors` / `d0_errors` ; `l2_errors` reste le label **statique** | un artefact de la forme phase 2 dont `l2_errors` désigne autre chose est la classe de défaut que `CODE_REVIEW.md` retient comme la seule qui compte |
+| nom | — | `δt` dans le nom du fichier | c'est le paramètre qui décide si le label dit quelque chose ; deux horizons partageant un nom s'écraseraient en silence |
+
+## Vérification
+
+```bash
+# produire les 8 artefacts (4 scenarios x 2 horizons)
+for sc in harris_tearing kelvin_helmholtz mhd_rotor orszag_tang; do
+  for dt in 0.1 2.0; do
+    python study/pipeline/dynamic_patch_labels.py \
+        --scenario $sc --re 400 --N 96 --dim 8 --snaps 5 --delta-t $dt
+  done
+done
+
+# relire les nombres publies DEPUIS les artefacts
+python - <<'EOF'
+import glob, os, numpy as np
+for f in sorted(glob.glob("results/d_patches_*.npz")):
+    z = np.load(f, allow_pickle=True)
+    a = z["amplification"]; fini = np.isfinite(a)
+    print(f"{os.path.basename(f):52s} rho={z['rho_d_vs_e'].mean():+.4f} "
+          f"amp={np.median(a[fini]):.2f}")
+EOF
+
+python -m pytest tests/study/test_dynamic_patch_labels.py -q   # 20 passed, 3 deselected
+python -m pytest tests/mapping -q                             # 437 passed, 1 skipped
+python -m pytest tests/ -q -m "not slow"    # 6 failed, 3063 passed, 58 min
+python study/common/aggregate_master_table.py        # 180 / 176 / 4 / 0
+python -m pytest tests/study/test_dynamic_patch_labels.py -q -m slow   # 3 passed
+python -m pytest tests/ -q -m "not slow"    # 5 failed, 3053 passed, 55 min
+```
+
+Les **5 rouges sont les 5 documentés du dépôt** (trio `a0e0e02`, paire
+D-132), rejoués sur un `worktree` propre à `HEAD` lors d'une passe
+antérieure. **Aucun intermittent ce tour-ci** — les quatre de D-165/D-187
+sont tous passés — et le module neuf ne casse rien.
+
+L'identité `d0 = e / dim` est vérifiée à `rtol=1e-12` pour dim ∈ {2, 4, 8} :
+elle teste le grossissement et la normalisation **sans passer par le
+solveur**, et aucune tolérance ne pourrait la masquer.
+
+**Un test à moi qui a mordu.** Le test « la variante adapterait une autre
+séquence » a d'abord échoué, sur un champ où il ne pouvait pas réussir :
+`adapt_dt` lit des maxima **globaux**, que grossir un patch quelconque ne
+déplace pas au premier pas. La première version concluait donc que le gel ne
+servait à rien — faux, et la mesure sur les vrais champs le dit (100 % des
+patches sur 3 scénarios sur 4). Le champ d'essai place désormais l'extremum
+global **dans** le patch grossi.
