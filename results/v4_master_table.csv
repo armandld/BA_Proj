@@ -1,4 +1,4 @@
-# git_hash=7df4c91234c9c98d1c47a1d6614a9d87bad4b73a
+# git_hash=6f255eb5715d949fc65a86b48504be3d2a3588f2
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -42,35 +42,59 @@ t14,temporal order with projection,1.119385,1.120000,OK
 t14,temporal order without projection,3.997801,4.000000,OK
 t14,max |div B| / rms|B|,0.000000,0.000000,OK
 t14,all conservation checks pass,1.000000,1.000000,OK
-t15/ot,Q-HAS phys,0.194035,0.194000,OK
-t15/ot,classical phys,0.484506,0.484500,OK
-t15/ot,Q-HAS patch,0.679656,0.679700,OK
-t15b/ot,budget-matched classical phys,0.082699,0.082700,OK
-t15b/ot,budget-matched patch,0.641167,0.641200,OK
-t15b/ot,delta phys at equal budget,0.111336,0.111300,OK
 t15/kh,Q-HAS phys,0.007002,0.007000,OK
 t15/kh,classical phys,0.002020,0.002000,OK
 t15/kh,Q-HAS patch,0.837644,0.837600,OK
 t15b/kh,budget-matched classical phys,0.001681,0.001700,OK
 t15b/kh,budget-matched patch,0.794271,0.794300,OK
 t15b/kh,delta phys at equal budget,0.005321,0.005300,OK
-t15/rotor,Q-HAS phys,0.167772,0.167800,OK
-t15/rotor,classical phys,1.173099,1.173100,OK
-t15/rotor,Q-HAS patch,0.376105,0.376100,OK
-t15b/rotor,budget-matched classical phys,0.053645,0.053600,OK
-t15b/rotor,budget-matched patch,0.356199,0.356200,OK
-t15b/rotor,delta phys at equal budget,0.114127,0.114100,OK
+t15/vortex,Q-HAS phys,,,MISSING
+t15/vortex,classical phys,,,MISSING
+t15/vortex,Q-HAS patch,,,MISSING
+t15b/vortex,budget-matched classical phys,,,MISSING
+t15b/vortex,budget-matched patch,,,MISSING
+t15b/vortex,delta phys at equal budget,,,MISSING
 t15/tearing,Q-HAS phys,0.018542,0.018500,OK
 t15/tearing,classical phys,0.004429,0.004400,OK
 t15/tearing,Q-HAS patch,0.769192,0.769200,OK
 t15b/tearing,budget-matched classical phys,0.004429,0.004400,OK
 t15b/tearing,budget-matched patch,0.625000,0.625000,OK
 t15b/tearing,delta phys at equal budget,0.014113,0.014100,OK
-t15c,folds completed,4.000000,4.000000,OK
-t15c,folds where Q-HAS better (combined),2.000000,2.000000,OK
-t15c,budget-matched folds,4.000000,4.000000,OK
-t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,4.000000,OK
-t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,0.061200,OK
+t15/coalescence,Q-HAS phys,,,MISSING
+t15/coalescence,classical phys,,,MISSING
+t15/coalescence,Q-HAS patch,,,MISSING
+t15b/coalescence,budget-matched classical phys,,,MISSING
+t15b/coalescence,budget-matched patch,,,MISSING
+t15b/coalescence,delta phys at equal budget,,,MISSING
+t15/double_tearing,Q-HAS phys,,,MISSING
+t15/double_tearing,classical phys,,,MISSING
+t15/double_tearing,Q-HAS patch,,,MISSING
+t15b/double_tearing,budget-matched classical phys,,,MISSING
+t15b/double_tearing,budget-matched patch,,,MISSING
+t15b/double_tearing,delta phys at equal budget,,,MISSING
+t15/magnetic_twist,Q-HAS phys,,,MISSING
+t15/magnetic_twist,classical phys,,,MISSING
+t15/magnetic_twist,Q-HAS patch,,,MISSING
+t15b/magnetic_twist,budget-matched classical phys,,,MISSING
+t15b/magnetic_twist,budget-matched patch,,,MISSING
+t15b/magnetic_twist,delta phys at equal budget,,,MISSING
+t15/ot,Q-HAS phys,0.194035,0.194000,OK
+t15/ot,classical phys,0.484506,0.484500,OK
+t15/ot,Q-HAS patch,0.679656,0.679700,OK
+t15b/ot,budget-matched classical phys,0.082699,0.082700,OK
+t15b/ot,budget-matched patch,0.641167,0.641200,OK
+t15b/ot,delta phys at equal budget,0.111336,0.111300,OK
+t15/rotor,Q-HAS phys,0.167772,0.167800,OK
+t15/rotor,classical phys,1.173099,1.173100,OK
+t15/rotor,Q-HAS patch,0.376105,0.376100,OK
+t15b/rotor,budget-matched classical phys,0.053645,0.053600,OK
+t15b/rotor,budget-matched patch,0.356199,0.356200,OK
+t15b/rotor,delta phys at equal budget,0.114127,0.114100,OK
+t15c,folds completed,4.000000,8.000000,DIFF
+t15c,folds where Q-HAS better (combined),2.000000,,OK
+t15c,budget-matched folds,4.000000,8.000000,DIFF
+t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,,OK
+t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,,OK
 t17,ZZ mass kept (kelvin_helmholtz; level3_trained),0.435660,0.435700,OK
 t17,ZZ mass kept (harris_tearing; level3_trained),0.337923,0.337900,OK
 t17,ZZ mass kept (mhd_rotor; level3_trained),0.594049,0.594000,OK
@@ -85,68 +109,132 @@ t18,no_ZZZZ changed (no window),0.000000,0.000000,OK
 t18,control full (windowed),0.000000,0.000000,OK
 t18,control full (no window),0.000000,0.000000,OK
 t18,window's own effect,0.250000,0.250000,OK
-t20/ot,Q-HAS phys mean,0.107267,0.107270,OK
-t20/ot,Q-HAS phys sd,0.018229,0.018230,OK
-t20/ot,ratio vs matched (mean-based),1.297073,1.300000,OK
-t20/kh,Q-HAS phys mean,0.003199,0.003200,OK
-t20/kh,Q-HAS phys sd,0.002034,0.002030,OK
-t20/kh,ratio vs matched (mean-based),1.902697,1.900000,OK
-t20/rotor,Q-HAS phys mean,0.147251,0.147250,OK
-t20/rotor,Q-HAS phys sd,0.040622,0.040620,OK
-t20/rotor,ratio vs matched (mean-based),2.744905,2.740000,OK
-t20/tearing,Q-HAS phys mean,0.008006,0.008010,OK
-t20/tearing,Q-HAS phys sd,0.001927,0.001930,OK
-t20/tearing,ratio vs matched (mean-based),1.807606,1.810000,OK
-t20,folds with deterministic classical arm,4.000000,4.000000,OK
-t22/ot,dominated on unseen,4.000000,4.000000,OK
-t22/ot,separation z,0.024813,0.020000,OK
-t22/ot,classical / floor (unseen),9.532272,9.530000,OK
-t22/ot,Q-HAS / floor (unseen),14.275925,14.280000,OK
+t20/kh,Q-HAS phys mean,,,MISSING
+t20/kh,Q-HAS phys sd,,,MISSING
+t20/kh,mean matched phys delta,,,MISSING
+t20/kh,paired trajectories,,,MISSING
+t20/vortex,Q-HAS phys mean,,,MISSING
+t20/vortex,Q-HAS phys sd,,,MISSING
+t20/vortex,mean matched phys delta,,,MISSING
+t20/vortex,paired trajectories,,,MISSING
+t20/tearing,Q-HAS phys mean,,,MISSING
+t20/tearing,Q-HAS phys sd,,,MISSING
+t20/tearing,mean matched phys delta,,,MISSING
+t20/tearing,paired trajectories,,,MISSING
+t20/coalescence,Q-HAS phys mean,,,MISSING
+t20/coalescence,Q-HAS phys sd,,,MISSING
+t20/coalescence,mean matched phys delta,,,MISSING
+t20/coalescence,paired trajectories,,,MISSING
+t20/double_tearing,Q-HAS phys mean,,,MISSING
+t20/double_tearing,Q-HAS phys sd,,,MISSING
+t20/double_tearing,mean matched phys delta,,,MISSING
+t20/double_tearing,paired trajectories,,,MISSING
+t20/magnetic_twist,Q-HAS phys mean,,,MISSING
+t20/magnetic_twist,Q-HAS phys sd,,,MISSING
+t20/magnetic_twist,mean matched phys delta,,,MISSING
+t20/magnetic_twist,paired trajectories,,,MISSING
+t20/ot,Q-HAS phys mean,,,MISSING
+t20/ot,Q-HAS phys sd,,,MISSING
+t20/ot,mean matched phys delta,,,MISSING
+t20/ot,paired trajectories,,,MISSING
+t20/rotor,Q-HAS phys mean,,,MISSING
+t20/rotor,Q-HAS phys sd,,,MISSING
+t20/rotor,mean matched phys delta,,,MISSING
+t20/rotor,paired trajectories,,,MISSING
 t22/kh,dominated on unseen,5.000000,5.000000,OK
 t22/kh,separation z,0.662208,0.660000,OK
 t22/kh,classical / floor (unseen),1.385712,1.390000,OK
 t22/kh,Q-HAS / floor (unseen),2.278629,2.280000,OK
-t22/rotor,dominated on unseen,4.000000,4.000000,OK
-t22/rotor,separation z,1.778592,1.780000,OK
-t22/rotor,classical / floor (unseen),0.981068,0.980000,OK
-t22/rotor,Q-HAS / floor (unseen),1.439803,1.440000,OK
+t22/vortex,dominated on unseen,,,MISSING
+t22/vortex,separation z,,,MISSING
+t22/vortex,classical / floor (unseen),,,MISSING
+t22/vortex,Q-HAS / floor (unseen),,,MISSING
 t22/tearing,dominated on unseen,5.000000,5.000000,OK
 t22/tearing,separation z,3.451921,3.450000,OK
 t22/tearing,classical / floor (unseen),1.114853,1.110000,OK
 t22/tearing,Q-HAS / floor (unseen),1.548873,1.550000,OK
-t23/ot,less faithful,5.000000,5.000000,OK
-t23/ot,costlier,5.000000,5.000000,OK
-t23/ot,dominated,5.000000,5.000000,OK
-t23/kh,less faithful,5.000000,5.000000,OK
-t23/kh,costlier,4.000000,4.000000,OK
-t23/kh,dominated,4.000000,4.000000,OK
-t23/rotor,less faithful,3.000000,3.000000,OK
-t23/rotor,costlier,2.000000,2.000000,OK
-t23/rotor,dominated,2.000000,2.000000,OK
-t23/tearing,less faithful,5.000000,5.000000,OK
-t23/tearing,costlier,5.000000,5.000000,OK
-t23/tearing,dominated,5.000000,5.000000,OK
-t23,total runs (completed),18.000000,18.000000,OK
-t23,total less faithful,18.000000,18.000000,OK
-t23,total costlier,16.000000,16.000000,OK
-t23,total dominated,16.000000,16.000000,OK
-t23,Q-HAS aborts at matched point,2.000000,2.000000,OK
-t23,classical replays at matched point,8.000000,8.000000,OK
-t23,classical aborts at matched point,0.000000,0.000000,OK
-t24/ot,leak-free canonical phys,0.599109,0.599100,OK
-t24/ot,leak-free canonical ratio vs frontier,1.635227,1.635200,OK
-t24/ot,leak-free unseen phys,0.504045,0.504100,OK
-t24/ot,leak-free unseen ratio vs frontier,1.366179,1.366100,OK
+t22/coalescence,dominated on unseen,,,MISSING
+t22/coalescence,separation z,,,MISSING
+t22/coalescence,classical / floor (unseen),,,MISSING
+t22/coalescence,Q-HAS / floor (unseen),,,MISSING
+t22/double_tearing,dominated on unseen,,,MISSING
+t22/double_tearing,separation z,,,MISSING
+t22/double_tearing,classical / floor (unseen),,,MISSING
+t22/double_tearing,Q-HAS / floor (unseen),,,MISSING
+t22/magnetic_twist,dominated on unseen,,,MISSING
+t22/magnetic_twist,separation z,,,MISSING
+t22/magnetic_twist,classical / floor (unseen),,,MISSING
+t22/magnetic_twist,Q-HAS / floor (unseen),,,MISSING
+t22/ot,dominated on unseen,4.000000,4.000000,OK
+t22/ot,separation z,0.024813,0.020000,OK
+t22/ot,classical / floor (unseen),9.532272,9.530000,OK
+t22/ot,Q-HAS / floor (unseen),14.275925,14.280000,OK
+t22/rotor,dominated on unseen,4.000000,4.000000,OK
+t22/rotor,separation z,1.778592,1.780000,OK
+t22/rotor,classical / floor (unseen),0.981068,0.980000,OK
+t22/rotor,Q-HAS / floor (unseen),1.439803,1.440000,OK
+t23/kh,paired trajectories,,,MISSING
+t23/kh,classical lower error,,,MISSING
+t23/kh,mean phys delta,,,MISSING
+t23/kh,CI low,,,MISSING
+t23/kh,CI high,,,MISSING
+t23/vortex,paired trajectories,,,MISSING
+t23/vortex,classical lower error,,,MISSING
+t23/vortex,mean phys delta,,,MISSING
+t23/vortex,CI low,,,MISSING
+t23/vortex,CI high,,,MISSING
+t23/tearing,paired trajectories,,,MISSING
+t23/tearing,classical lower error,,,MISSING
+t23/tearing,mean phys delta,,,MISSING
+t23/tearing,CI low,,,MISSING
+t23/tearing,CI high,,,MISSING
+t23/coalescence,paired trajectories,,,MISSING
+t23/coalescence,classical lower error,,,MISSING
+t23/coalescence,mean phys delta,,,MISSING
+t23/coalescence,CI low,,,MISSING
+t23/coalescence,CI high,,,MISSING
+t23/double_tearing,paired trajectories,,,MISSING
+t23/double_tearing,classical lower error,,,MISSING
+t23/double_tearing,mean phys delta,,,MISSING
+t23/double_tearing,CI low,,,MISSING
+t23/double_tearing,CI high,,,MISSING
+t23/magnetic_twist,paired trajectories,,,MISSING
+t23/magnetic_twist,classical lower error,,,MISSING
+t23/magnetic_twist,mean phys delta,,,MISSING
+t23/magnetic_twist,CI low,,,MISSING
+t23/magnetic_twist,CI high,,,MISSING
+t23/ot,paired trajectories,,,MISSING
+t23/ot,classical lower error,,,MISSING
+t23/ot,mean phys delta,,,MISSING
+t23/ot,CI low,,,MISSING
+t23/ot,CI high,,,MISSING
+t23/rotor,paired trajectories,,,MISSING
+t23/rotor,classical lower error,,,MISSING
+t23/rotor,mean phys delta,,,MISSING
+t23/rotor,CI low,,,MISSING
+t23/rotor,CI high,,,MISSING
 t24/kh,leak-free canonical phys,0.027449,0.027400,OK
 t24/kh,leak-free canonical ratio vs frontier,1.864314,1.864900,OK
 t24/kh,leak-free unseen phys,0.132725,0.132700,OK
 t24/kh,leak-free unseen ratio vs frontier,4.473121,4.473300,OK
-t24/rotor,leak-free canonical completed,0.000000,0.000000,OK
-t24/rotor,leak-free unseen phys,0.853492,0.853500,OK
+t24/vortex,leak-free canonical phys,,,MISSING
+t24/vortex,leak-free unseen phys,,,MISSING
 t24/tearing,leak-free canonical phys,3.735120,3.735100,OK
 t24/tearing,leak-free canonical ratio vs frontier,2.077112,2.077100,OK
 t24/tearing,leak-free unseen phys,2.560021,2.560000,OK
 t24/tearing,leak-free unseen ratio vs frontier,1.695367,1.695400,OK
+t24/coalescence,leak-free canonical phys,,,MISSING
+t24/coalescence,leak-free unseen phys,,,MISSING
+t24/double_tearing,leak-free canonical phys,,,MISSING
+t24/double_tearing,leak-free unseen phys,,,MISSING
+t24/magnetic_twist,leak-free canonical phys,,,MISSING
+t24/magnetic_twist,leak-free unseen phys,,,MISSING
+t24/ot,leak-free canonical phys,0.599109,0.599100,OK
+t24/ot,leak-free canonical ratio vs frontier,1.635227,1.635200,OK
+t24/ot,leak-free unseen phys,0.504045,0.504100,OK
+t24/ot,leak-free unseen ratio vs frontier,1.366179,1.366100,OK
+t24/rotor,leak-free canonical completed,0.000000,0.000000,OK
+t24/rotor,leak-free unseen phys,0.853492,0.853500,OK
 t25,attempted,7.000000,7.000000,OK
 t25,vacuous,2.000000,2.000000,OK
 t25,refused,3.000000,3.000000,OK

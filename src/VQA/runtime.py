@@ -62,7 +62,25 @@ class VQARuntime:
         self._init_backend()
 
     def _validate_mode(self):
-        """Reject execution modes that have no implemented backend."""
+        """Refuse un mode que le depot ne sait pas honorer.
+
+        `mode` etait STOCKE et lu NULLE PART : `_init_backend` ne
+        dispatche que sur `backend_name`, et rend le meme `AerSimulator`
+        pour `mode='simulator'` et pour `mode='hardware'`. Aucun chemin de
+        ce depot ne resout un backend IBM reel.
+
+        Le mode materiel ne levait donc pas : `execute` ouvrait
+        `Session(backend=AerSimulator)` — que qiskit-ibm-runtime ACCEPTE —
+        puis y construisait un estimateur avec decouplage dynamique et
+        twirling. Un run demande en `hardware` s'executait sur un
+        simulateur, avec des options qui n'y veulent rien dire, et rendait
+        des nombres parfaitement plausibles sans jamais le signaler.
+
+        Mesure : `VQARuntime(backend_name=b, mode='hardware')._backend`
+        rend `AerSimulator` pour state_vector / matrix_product_state / aer
+        et `FakeFez` pour estimator — identique a `mode='simulator'` dans
+        les quatre cas. Voir D-48.
+        """
         if self.mode not in self.SUPPORTED_MODES:
             raise ValueError(
                 f"Unsupported mode: {self.mode!r}. Expected one of "

@@ -455,11 +455,27 @@ def rows_t22(results_dir, folds):
 
 
 def rows_t23(results_dir, folds):
-    """Recompute trajectory-level headline counts and confidence bounds."""
+    """Recompute trajectory-level headline counts and confidence bounds.
+
+    D-158 : `fold_counts` leve `RuntimeError` (pas `None`) quand l'artefact
+    existe mais ne porte pas les donnees par-essai qu'exige le schema 2
+    (`budget_match`, graines) -- le cas des artefacts geles a l'ancien
+    schema. Cette fonction attendait deja `None` pour "rien a en tirer"
+    (branche `if r is None` juste apres) ; elle traite desormais les deux
+    de la meme facon, en ligne MISSING, plutot que de laisser l'exception
+    faire planter toute la table pour les ~176 autres nombres qui n'en
+    dependent pas. `fold_counts` elle-meme continue de lever pour son
+    usage direct (`closed_loop_headline_counts.py` en CLI) : c'est ce
+    site-ci, dont le contrat est "MISSING plutot que planter", qui doit
+    l'attraper.
+    """
     from closed_loop_headline_counts import fold_counts, totals
     out, got = [], []
     for f in folds:
-        r = fold_counts(results_dir, f)
+        try:
+            r = fold_counts(results_dir, f)
+        except RuntimeError:
+            r = None
         if r is None:
             for m in ("paired trajectories", "classical lower error",
                       "mean phys delta", "CI low", "CI high"):

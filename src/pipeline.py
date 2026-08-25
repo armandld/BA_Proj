@@ -19,13 +19,19 @@ from hyperparams_loader import load_hyperparams
 
 
 FREQUENCY = 1  # Fréquence d'affichage (en nombre de pas de temps)
-DIVERGENCE_PENALTY = 10.0  # Finite penalty for diverged trials.
+DIVERGENCE_PENALTY = 10.0  # Finite penalty for diverged trials (replaces inf)
+# Cette constante etait redefinie trois fois de plus, dans des portees
+# locales qui masquaient celle-ci : changer la valeur ici n'aurait eu
+# d'effet que dans un cas sur quatre. Definition unique desormais.
 
 # ══════════════════════════════════════════════════════════════════
 #  Configuration par scenario — la table qui fait foi
 # ══════════════════════════════════════════════════════════════════
 #
-# Cette table est la source unique de la configuration physique de la CLI.
+# Sortie du corps de `main()` pour etre TESTABLE : c'est de la donnee,
+# pas de la logique, et c'est elle qui decide ce qu'une campagne mesure.
+# Un test verifie que chaque entree porte T_MAX > T_START — l'invariant
+# dont la violation faisait D-66.
 
 N_TRAINING         = 256
 MAX_DEPTH_TRAINING = 4
@@ -162,7 +168,9 @@ def main():
     parser.add_argument("--out-dir", default="../data", help="Output directory for mapping")
     parser.add_argument("--in-file", default="../input/mapping_input.json", help="Input directory for mapping")
     parser.add_argument("--verbose", action="store_true")
-    # ``None`` means: use the selected scenario configuration.
+    # D-66 : ces sept options valent `None` par defaut et sont resolues
+    # depuis `PHASE[scenario]`. Elles valaient auparavant des constantes de
+    # CLI qui ECRASAIENT la configuration du scenario -- voir `_resolve`.
     parser.add_argument("--AdvAnomaliesEnable", action="store_true", default=None)
     parser.add_argument("--grid-size", type=int, default=2, help="Coarse grid dimension N (NxN)")
     parser.add_argument("--dns-resolution", type=int, default=None, help="High-Res Grid for Ground Truth (defaut : celle du scenario)")
@@ -170,6 +178,10 @@ def main():
     parser.add_argument("--dt", type=float, default=None, help="Time step size (defaut : celui du scenario)")
     parser.add_argument("--hybrid-dt", type=float, default=None, help="Hybrid simulation time step size (defaut : celui du scenario)")
     parser.add_argument("--reps", type=int, default=-1, required=False, help="Number of repetitions for the QAOA ansatz.")
+    # `hardware` retire des choix : aucun backend IBM reel n'est cable, et
+    # un run demande en materiel s'executait sur simulateur sans le signaler
+    # (D-48). L'annoncer dans l'aide de la CLI en faisait une option
+    # credible.
     parser.add_argument("--mode", default="simulator", choices=["simulator"])
     parser.add_argument(
         "--backend", default="state_vector",
@@ -188,7 +200,13 @@ def main():
         help="Completed campaign candidate or deploy export. Defaults to "
              "QHAS_HYPERPARAMS_PATH, then the reference artifact.")
     parser.add_argument("--eps", type=float, default=1e-2, help="Convergence tolerance for the optimizer.")
-    # CLI choices are derived from the authoritative table.
+    # Les choix sont DERIVES de `PHASE`, pas recopies a cote.
+    #
+    # La liste ecrite a la main en annoncait dix quand `PHASE` en porte
+    # sept : `magnetic_twist`, `noisy_uniform` et `double_tearing` etaient
+    # acceptes par la CLI puis levaient `KeyError` sur `PHASE[scenario]`.
+    # Meme famille que D-48 : une option affichee dans l'aide est une
+    # promesse.
     parser.add_argument("--scenario", default="orszag_tang",
                         choices=sorted(PHASE),
                         help="Initial condition scenario")
@@ -200,7 +218,32 @@ def main():
 
     cfg = PHASE[args.scenario]
 
-    # Explicit CLI values override the selected scenario configuration.
+    # ── D-66 : la configuration du scenario fait foi ──────────────────
+    #
+    # `main` precalculait le DNS avec `PHASE[scenario]` puis passait a
+    # `pipeline()` les DEFAUTS DE LA CLI. Sept des neuf cles etaient
+    # ignorees, et le DNS tournait sous une physique quand la boucle
+    # hybride tournait sous une autre :
+    #
+    #     T_MAX  2.8 (PHASE) contre 1.0 (CLI)
+    #     DT     1e-3        contre 1e-4
+    #     Re/Rm  800         contre 1000
+    #     shots  256         contre 1024
+    #     K_opt  30          contre 80
+    #     AdvAnomaliesEnable True contre False
+    #
+    # Le hot start place `t_current` a T_START = 2.3 ; avec T_MAX = 1.0 la
+    # condition `while t_current < T_MAX` est fausse d'entree. La boucle ne
+    # s'executait JAMAIS. L'etat final restait l'etat DNS, d'ou une erreur
+    # exactement nulle sur les cinq champs et un `combined = 0.333333`
+    # parfaitement plausible -- pour un run qui n'avait rien calcule.
+    #
+    # Mesure apres correction, orszag_tang, N=256, profondeur 4 :
+    #   Q-HAS      combined 0.228928  phys 0.140052  patch 0.4067
+    #   Classique  combined 0.212591  phys 0.117626  patch 0.4025
+    #
+    # `_resolve` : la valeur du scenario, sauf si la CLI l'a passee
+    # EXPLICITEMENT (defaut `None`).
     def _resolve(cli_value, cle, defaut=None):
         if cli_value is not None:
             return cli_value
@@ -239,7 +282,7 @@ def main():
             f"'{args.scenario}' : le hot start place t_current a T_START, "
             f"donc `while t_current < T_MAX` serait faux des l'entree et la "
             f"boucle ne tournerait pas. Le run rendrait une erreur nulle et "
-            "un score plausible sans rien calculer.")
+            f"un score plausible sans rien calculer. Voir D-66.")
 
     dns_trace, hot_start_state = precompute_dns(cfg)
 
@@ -393,12 +436,24 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus,
     threshold_amr   = hp.get('threshold_amr', _defaults['threshold_amr'])
 
     # ── Hamiltonian hyperparameters (Tier 2) ──
-    # ``sigma`` controls the ZZ uncertainty window. Record any fallback.
+    # sigma: uncertainty width for ZZ coupling (replaces beta_grad)
+    #
+    # `best_hyperparams.json` ne contient PAS sigma, alors que la campagne
+    # Optuna gelee l'echantillonne — son meilleur essai trouve 0.0230. Le
+    # repli sur 0.05 n'est donc pas un defaut raisonnable : c'est une valeur
+    # que rien n'a choisie, appliquee au parametre au coeur de D-9 (la
+    # largeur de la fenetre gaussienne). Voir D-22 dans docs/RESULTS.md.
+    #
+    # On ne leve pas — cela arreterait toute campagne en cours — mais le
+    # repli est signale une fois et consigne dans les details du run, pour
+    # qu'aucun artefact ne puisse laisser croire que sigma vient de
+    # l'entrainement.
     _sigma_defaulted = 'sigma' not in hp
     if _sigma_defaulted:
         warnings.warn(
-            "sigma absent des hyperparamètres chargés : repli sur 0.05. "
-            "La provenance du repli sera enregistrée dans le résultat.",
+            "sigma absent des hyperparametres charges : repli sur 0.05, une "
+            "valeur qu'aucun essai n'a choisie. La campagne gelee "
+            "l'echantillonne pourtant (meilleur essai : 0.0230). Voir D-22.",
             RuntimeWarning, stacklevel=2)
     sigma      = hp.get('sigma',       _defaults.get('sigma', 0.05))
     beta_curl  = hp.get('beta_curl',   _defaults['beta_curl'])
@@ -430,7 +485,17 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus,
         print(f"  Physics:     Re={argus.Re}, Rm={argus.Rm}, nu={nu:.6f}, eta_mhd={eta_mhd:.6f}, cs={c_s}")
 
     def _details(payload, scoring_error=None, completed=True, abort=None):
-        """Return one stable result schema on success and failure."""
+        """Sortie detaillee — TOUS les chemins passent par ici.
+
+        `pipeline` a quatre sorties `return_details`. Une seule portait la
+        provenance de sigma : celle du chemin de divergence. Autrement
+        dit, la trace exigee par D-22 n'existait que sur les runs qu'on
+        jette, et jamais sur ceux qu'on publie. Deux chemins censes
+        rendre le meme dictionnaire ne le rendaient pas.
+
+        (Champs `completed`/`abort`/`physics_seed`/`physics_noise_amplitude`
+        ajoutes depuis : meme principe de schema unique, etendu.)
+        """
         out = dict(payload)
         out['scoring_error'] = scoring_error
         out['sigma'] = float(sigma)
@@ -906,12 +971,17 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
 
     phys_score = total_error / len(variables)
 
-    # A run with no integrated step has no scientifically meaningful score.
+    # D-67 : `total_steps == 0` signifie qu'AUCUN pas n'a ete integre.
+    # Le repli `avg_pixel_used = N_square` transformait cela en
+    # `patch_ratio = 1.0`, donc en `combined = lambda/(1+lambda)` -- un
+    # nombre parfaitement plausible (0.333333 a lambda=0.5) pour un run qui
+    # n'avait rien calcule. C'est ainsi que D-66 est reste invisible.
+    # Un run vide doit crier, pas se noter.
     if total_steps <= 0:
         raise ValueError(
             f"score() appele avec total_steps={total_steps} : aucun pas de "
             f"temps n'a ete integre, il n'y a rien a noter. Verifier que "
-            "T_MAX doit être postérieur à T_START.")
+            f"T_MAX est posterieur a T_START (voir D-66 et D-67).")
 
     avg_pixel_used = total_pixel_used / total_steps
     patch_ratio = avg_pixel_used / N_square

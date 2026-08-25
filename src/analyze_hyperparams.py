@@ -982,6 +982,21 @@ def main():
     if args.show:
         matplotlib.use("TkAgg")
 
+    # D-50 : le `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
+    # code 1.
+    #
+    # Avant, deux gestionnaires enveloppaient tout le corps de `main` --
+    # chargement, resume, et les treize fonctions de trace :
+    #
+    #   except KeyError    -> « Skipping X: Study does not exist on Neon yet »
+    #   except Exception   -> « Error loading study: ... » puis `return`
+    #
+    # Mesure sur une base locale inexistante : le message accusait **Neon**,
+    # une base distante qui n'intervient pas, et le script rendait **0**.
+    # Pire, un `KeyError` leve par n'importe laquelle des treize figures --
+    # une cle d'attribut absente, un scenario manquant -- etait annonce
+    # comme une etude introuvable. Le diagnostic imprime designait la
+    # mauvaise cause dans les deux branches.
     storage_path = args.journal_path or args.db_path
     try:
         loader = load_journal if args.journal_path else load_study

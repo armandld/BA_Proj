@@ -187,6 +187,11 @@ class PhysicalMapperV2:
             # family. Each signal is made dimensionless independently, then
             # their sum is bounded by ``w_zzzz``. ``K_xpoint`` remains a
             # separate key so term ablations can address it explicitly.
+            # (Mesure liee a D-190 : voir RESULTS.md, section "Une
+            # normalisation dont l'equilibre ne depend plus de dim" — pas
+            # reportee ici verbatim, le mecanisme exact de la comparaison
+            # commune/separee n'a pas ete reverifie avec certitude contre
+            # ce code precis.)
             omega_floor = self._difference_roundoff_floor(vx, vy)
             current_floor = self._difference_roundoff_floor(Bx, By)
             signal_plaq = (_adim(omega_z, omega_floor)

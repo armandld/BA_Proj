@@ -271,7 +271,14 @@ REQUIRED_SCENARIO_KEYS = (
 
 
 def create_argus(scenario_config):
-    """Build solver arguments from a complete scenario configuration."""
+    """Build the argus namespace for a given scenario config.
+
+    LEVE si une cle manque, `AdvAnomaliesEnable` comprise. Elle etait lue
+    avec `.get(..., False)` : Orszag-Tang, seul scenario a ne pas la
+    porter, tournait donc sans anomalies avancees — donc sans terme de
+    point X — sans que rien ne le signale. Un repli silencieux sur une
+    valeur valide est exactement ce qu'on ne veut pas ici.
+    """
     missing = [k for k in REQUIRED_SCENARIO_KEYS if k not in scenario_config]
     if missing:
         raise KeyError(
@@ -531,7 +538,20 @@ def extract_top_params_from_rescore(phase_prefix, lambdas, top_k=2):
 #  COMPOSITE MULTI-SCENARIO OBJECTIVE (QAOA)
 # ============================================================
 
-# L'espace de recherche est une donnée inspectable avant la campagne.
+# ══════════════════════════════════════════════════════════════════════
+#  L'espace de recherche, declare — pas devine en relisant la base
+# ══════════════════════════════════════════════════════════════════════
+#
+# Les bornes etaient ecrites en dur a l'interieur de l'objectif, sous la
+# forme `if "x" not in frozen: HyperParams["x"] = <constante>`, qui fait
+# passer une constante pour un parametre conditionnel. Quatre valeurs
+# etaient dans ce cas ; la campagne gelee croyait explorer neuf
+# parametres et en explorait cinq. C'est l'origine de D-22 : trois des
+# valeurs deployees n'ont jamais ete echantillonnees par personne.
+#
+# Ici les bornes sont des donnees. `search_space()` les rend lisibles
+# AVANT de louer des coeurs pour une semaine, et un test verifie que ce
+# qu'Optuna a reellement propose coincide avec cette declaration.
 
 #: Meilleur essai de l'etude classique gelee (#42, perte 0.2148).
 CLASSICAL_BEST_THRESHOLD = 0.14959824837662078
@@ -587,14 +607,27 @@ FIXED_PARAMS = {
 
 
 def search_space(names_only=True):
-    """Return the parameters proposed by ``make_composite_objective``."""
+    """Les parametres que `make_composite_objective` proposera reellement.
+
+    Une campagne qui croit optimiser `kappa` doit pouvoir le verifier
+    avant de lancer, plutot que le decouvrir en relisant la base a
+    posteriori.
+    """
     if names_only:
         return tuple(SEARCH_SPACE)
     return dict(SEARCH_SPACE)
 
 
 def suggest_hyperparams(trial, frozen=None, tune_threshold=False):
-    """Return sampled, fixed and caller-frozen parameters as one mapping."""
+    """Propose les parametres de `SEARCH_SPACE` a Optuna et renvoie le
+    dictionnaire COMPLET.
+
+    Complet veut dire : parametres explores + parametres fixes + parametres
+    geles par l'appelant. C'est ce dictionnaire-la, et non
+    `trial.params`, qui decrit le run — `trial.params` ne contient que ce
+    qui a ete echantillonne, ce qui est exactement pourquoi le JSON
+    deploye a perdu `sigma` et invente `gamma_hydro`.
+    """
     frozen = frozen or {}
     hp = {}
     for name, (lo, hi, log) in SEARCH_SPACE.items():
@@ -664,7 +697,9 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
         trial.set_user_attr(f"patch_{scenario_key}", float(result.get('patch_ratio', 0)))
         for field, err in result.get('field_errors', {}).items():
             trial.set_user_attr(f"error_{field}_{scenario_key}", float(err))
-        # Record whether sigma was trained or supplied by a fallback.
+        # D-22 / D-35 : d'ou vient sigma, essai par essai. Un artefact ne
+        # doit jamais laisser croire qu'une valeur vient de l'entrainement
+        # alors qu'elle vient d'un repli.
         if result.get('sigma_source') is not None:
             trial.set_user_attr(f"sigma_source_{scenario_key}",
                                 result['sigma_source'])
@@ -1050,7 +1085,20 @@ def _run_classical_phase3(study_c2, seed=None):
 # ============================================================
 
 def deployable_params(study):
-    """Return the best trial's complete sampled and fixed parameter set."""
+    """Le jeu COMPLET d'hyperparametres du meilleur essai.
+
+    `study.best_params` ne contient que ce qu'Optuna a echantillonne. Un
+    JSON construit a partir de lui perd les parametres fixes et se
+    retrouve complete au deploiement par des replis — c'est le mecanisme
+    exact de D-22 : `sigma` disparu, `gamma_hydro` / `gamma_mag` /
+    `kappa` presents dans le fichier deploye sans qu'aucune base ne les
+    ait jamais echantillonnes.
+
+    L'essai porte le dictionnaire resolu en attribut ; on le relit. S'il
+    manque (essai d'une ancienne campagne), on le reconstruit et on le
+    signale, plutot que de renvoyer un dictionnaire incomplet qui
+    ressemble a un complet.
+    """
     resolved = study.best_trial.user_attrs.get("hyperparams_resolved")
     if resolved is not None:
         return dict(resolved), "trial_user_attr"

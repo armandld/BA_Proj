@@ -106,7 +106,27 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Bx varies only along y and By is constant, hence div(B)=0.
+        # B = (B0 cos alpha(y), B_guide) — solénoïdal PAR CONSTRUCTION :
+        # Bx ne dépend pas de x et By est constant, donc div B = 0 exactement.
+        #
+        # La version précédente posait B = (B0 cos alpha, B0 sin alpha). Ce
+        # champ a div B = alpha'(y) cos(alpha) != 0 — mesuré 2.62 — et toute
+        # la composante By y était un pur gradient. `enforce_incompressibility`
+        # l'annulait donc intégralement : |By| tombait de 0.707 à 1.6e-6, et
+        # la direction du champ ne tournait plus du tout (amplitude d'angle
+        # 6.4e-7 au lieu de pi/2). Le scénario ne posait aucune torsion.
+        # (D-6 : même défaut, même correction, que `init_ghost_twisting`
+        # portait avant sa retraite — la même fonction guide/transverse
+        # ci-dessous répare les deux.)
+        #
+        # En 2-D, un champ solénoïdal dont la direction tourne exige que la
+        # composante parallèle à la variation reste constante : c'est ce que
+        # fait le champ guide B_guide ci-dessous.
+        # La composante VARIABLE doit changer de signe pour que la direction
+        # balaie réellement `twist_angle` : avec Bx = B0 sin(alpha) et alpha
+        # parcourant [-twist/2, +twist/2], l'angle va de
+        # atan2(guide, -B0 sin(twist/2)) à atan2(guide, +B0 sin(twist/2)),
+        # soit exactement `twist_angle` pour guide = B0 cos(twist/2).
         b_guide = B0 * np.cos(twist_angle / 2.0)
         self.Bx = B0 * np.sin(alpha)
         self.By = np.full_like(X, b_guide)
@@ -119,15 +139,21 @@ class MHDSolver:
         self.enforce_incompressibility()
 
     # ----------------------------------------------------------------
-    #  Negative control — solenoidal Gaussian magnetic noise
+    #  Benchmark B — Noise Immunity (Topological Protection)
     #  Champ uniforme B0 = (1, 0) + bruit blanc gaussien.
     #  Évolution physique = diffusion pure. Tout raffinement est un
-    #  Tout raffinement est un faux positif dans ce contrôle de diffusion.
+    #  faux positif. L'AMR classique sur-raffine (∇²noise → ∞),
+    #  le VQA filtre topologiquement (∮ δB·dl ≈ 0 sur bruit incohérent).
     # ----------------------------------------------------------------
     def init_noisy_uniform(self, B0=1.0, noise_sigma=0.05, seed=42):
         X = self.grid.X
         rng = np.random.default_rng(seed)
-        # A normalised stream-function curl gives solenoidal magnetic noise.
+        # D-27 : bruit tiré d'une fonction de flux, donc solénoïdal par
+        # construction. La version précédente tirait Bx et By
+        # indépendamment : `enforce_incompressibility` n'en gardait que la
+        # moitié solénoïdale, et `noise_sigma` n'était pas la déviation
+        # obtenue. Ici on tire psi, on prend son rotationnel, puis on
+        # renormalise pour que l'écart-type demandé soit celui produit.
         psi = rng.standard_normal(X.shape)
         bx, by = self._curl_z_fd4(psi, self.dx)
         scale = noise_sigma / max(float(np.std(np.concatenate([bx.ravel(),
@@ -157,7 +183,10 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Solenoidal stream-function perturbation that seeds the tearing mode.
+        # Perturbation magnétique pour déclencher la tearing mode.
+        # D-27 : posée par fonction de flux, donc à divergence nulle par
+        # construction. La version précédente ne posait que `dBy` ; la
+        # projection en retirait 72.5 %.
         u1 = (Y - np.pi / 2) / shear_width
         u2 = (Y - 3 * np.pi / 2) / shear_width
         env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
@@ -240,10 +269,14 @@ class MHDSolver:
             - np.tanh((Y - (3 * np.pi / 2 + d)) / shear_width)
             - 2.0
         )
-        # Stream-function perturbation with a sine profile in dBy.
+        # Perturbation pour la tearing.
+        # D-27 : posée par fonction de flux. `_solenoidal_perturbation` pose
+        # `dBy ~ cos(kx)` ; ici la version historique était en `sin(kx)`, on
+        # décale donc la phase de -pi/(2k) pour retrouver le même profil.
         g1 = np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
         g2 = np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
         env = g1 + g2
+        # profil historique en sin(kx) : psi = (amp/k) cos(kx) f(y)
         psi = (perturbation / k_mode) * np.cos(k_mode * X) * env
         dBx, dBy = self._curl_z_fd4(psi, self.dx)
         self.Bx = self.Bx + dBx
@@ -337,7 +370,8 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Strong solenoidal perturbation drives island coalescence.
+        # Stronger perturbation to drive island coalescence.
+        # D-27 : posée par fonction de flux (voir harris_tearing).
         u1 = (Y - np.pi / 2) / shear_width
         u2 = (Y - 3 * np.pi / 2) / shear_width
         env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
@@ -358,7 +392,17 @@ class MHDSolver:
     # ----------------------------------------------------------------
     @staticmethod
     def _curl_z_fd4(psi, dx):
-        """Return rot(psi z) with the same commuting FD4 derivatives as RHS."""
+        """`rot(psi z)` avec le MEME stencil FD4 que le second membre.
+
+        `div(rot psi) = d_x d_y psi - d_y d_x psi` : exactement nul, parce
+        que les deux dérivées FD4 sont des combinaisons de `np.roll` et
+        commutent. Dériver `psi` analytiquement ne donnerait la contrainte
+        qu'à la précision de discrétisation — mesuré 2.1e-05 au lieu de
+        1e-16 sur `harris_tearing`.
+
+        La leçon vaut au-delà d'ici : une contrainte discrète ne se satisfait
+        que dans l'opérateur qui la mesure.
+        """
         g_x, g_y = MHDSolver._fd_grad(psi, dx)
         return g_y, -g_x
 
@@ -385,17 +429,74 @@ class MHDSolver:
         self.energy_history['magnetic'].append(Em)
         self.energy_history['total'].append(Ek + Em)
 
-    #: Optional spectral projection retained for explicit ablation only.
+    #: Projeter aussi le champ magnetique. Par defaut False : l'induction le
+    #: garde deja a divergence nulle, et la projection l'en ECARTE.
+    #: Voir `enforce_incompressibility` pour la mesure.
     PROJECT_B = False
 
     def enforce_incompressibility(self):
-        """Project velocity; rotational induction preserves FD4 div(B)=0."""
+        """Impose la contrainte de divergence nulle sur la vitesse.
+
+        LE CHAMP MAGNETIQUE N'EST PLUS PROJETE — et c'est une correction,
+        pas un oubli.
+
+        L'induction est ecrite en forme rotationnelle :
+        `rhs_B = (dEz/dy, -dEz/dx)`. Sa divergence AUX DIFFERENCES FINIES
+        vaut `d2Ez/dxdy - d2Ez/dydx`, exactement nulle puisque les decalages
+        de `np.roll` commutent. B est donc solenoidal par construction, dans
+        l'operateur meme qui construit le second membre.
+
+        La projection, elle, est SPECTRALE. Appliquee a un champ deja a
+        divergence FD nulle, elle ne le nettoie pas : elle y injecte le
+        desaccord entre les deux operateurs. Mesure sur Orszag-Tang N=64,
+        divergence FD4 du champ B :
+
+          second membre                        1.97e-14
+          etat, 50 pas SANS projection         1.00e-14
+          etat, 50 pas AVEC projection         4.63e-07
+
+          ordre en temps, T=0.05, 256 pas :
+            projection v et B    erreur 1.185e-05   div_FD B = 4.877e-06
+            projection de v seul erreur 1.185e-05   div_FD B = 2.818e-14
+
+        Huit ordres de grandeur sur la contrainte, pour une erreur identique
+        a la quatrieme decimale. La projection de B ne coutait rien en
+        precision et degradait la seule chose qu'elle etait censee garantir.
+
+        La vitesse, elle, en a besoin : `div_FD(rhs_v)` vaut 4.17 en relatif.
+
+        `PROJECT_B = True` reproduit le chemin historique bit a bit.
+        """
         self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
         if self.PROJECT_B:
             self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
 
     def is_diverged(self, max_value=1e8):
-        """Detect non-finite fields or magnitudes beyond the declared scale."""
+        """Check if any field has NaN, Inf, or has blown up beyond physical limits.
+
+        Le seuil valait 1e100, ce qui le rendait inerte : `float64` ne
+        deborde qu'au-dela de ~1e154, donc un champ a 1e50 — physiquement
+        mort, 1e49 fois l'echelle du probleme — passait sans un mot. Seuls
+        NaN et Inf etaient reellement attrapes, et ils n'arrivent qu'apres
+        que le run a cesse d'avoir un sens.
+
+        Mesure sur les quatre scenarios, 200 pas a CFL 0.4 :
+
+          orszag_tang       1.81      kelvin_helmholtz  1.50
+          mhd_rotor         3.85      harris_tearing    1.00
+
+        Pic a 3.85. Le seuil de 1e8 laisse donc une marge de 2.6e7 sur le
+        comportement observe — aucun transitoire legitime ne s'en approche —
+        tout en attrapant une divergence quatre-vingt-douze ordres de
+        grandeur plus tot qu'avant.
+
+        Une divergence MHD croit exponentiellement : elle traverse 1e8 en
+        route vers 1e100. Abreger plus tot ne perd donc aucun run viable, et
+        laisse le score partiel se calculer sur des champs moins corrompus.
+
+        `max_value` reste un parametre : un appelant qui travaille a une
+        autre echelle peut l'elargir explicitement.
+        """
         for field in [self.vx, self.vy, self.Bx, self.By]:
             if np.any(np.isnan(field)) or np.any(np.isinf(field)):
                 return True
@@ -488,8 +589,26 @@ class MHDSolver:
                 Bx + (dt / 2.0) * (k1[2] + k2[2]),
                 By + (dt / 2.0) * (k1[3] + k2[3]))
     
-    #: RHS projection is valid only for global periodic fields. It remains
-    #: disabled because layered patch updates are local and non-periodic.
+    #: Projeter le SECOND MEMBRE a chaque etage RK4 plutot que l'ETAT une
+    #: fois le pas fini. Voir `_rk4_step` pour la mesure d'ordre : 4.00 au
+    #: lieu de 1.22, a divergence egale.
+    #:
+    #: PAR DEFAUT False, malgre ce gain, parce que la correction n'est
+    #: VALIDE QUE SUR `step_full`. `_rk4_step` a trois appelants :
+    #:
+    #:   step_full       champ global periodique       -> projection valide
+    #:   step_layered/1  champ global sous-echantillonne -> periodique, mais
+    #:                   d'une autre TAILLE que self.grid : la projection
+    #:                   leve (operands could not be broadcast, (256,256)
+    #:                   contre (8,8))
+    #:   step_layered/2  patch LOCAL avec halo          -> pas periodique,
+    #:                   une projection spectrale periodique n'y est pas
+    #:                   definie
+    #:
+    #: Projeter les deux premiers et pas le troisieme romprait la garantie
+    #: « a max_depth, step_layered est identique a step_full ». Le choix
+    #: — projection par taille de grille, formulation a pression, ou autre —
+    #: est une decision de modelisation, pas une correction de defaut.
     PROJECT_RHS = False
 
     def _projected_rhs(self, vx, vy, Bx, By, dx, nu, eta):

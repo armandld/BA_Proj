@@ -8641,3 +8641,228 @@ déplace pas au premier pas. La première version concluait donc que le gel ne
 servait à rien — faux, et la mesure sur les vrais champs le dit (100 % des
 patches sur 3 scénarios sur 4). Le champ d'essai place désormais l'extremum
 global **dans** le patch grossi.
+
+---
+
+# D-192 — la provenance perdue de `src/` restaurée, sondage remplacé par un balayage complet
+
+`docs/DEFAUTS.md` notait D-192 le 25 août sur 3 sites trouvés par sondage
+(les tests qui les gardaient). Le même jour, un balayage complet de
+`git diff d047015..HEAD -- src/` a remplacé ce sondage : **62 lignes
+supprimées** citent un `D-NNN` ou un nombre mesuré ; **37** décrivent bien
+du code inchangé dont seul le commentaire a été raccourci — restaurées
+verbatim ci-dessous. Les autres se sont révélées être autre chose, et ne
+sont **pas** restaurées (détail plus bas).
+
+## Méthode
+
+```bash
+git diff d047015..HEAD -- src/ > /tmp/src_diff_full.txt
+grep -noE '^-.*D-[0-9]+' /tmp/src_diff_full.txt          # 36 lignes, 9 fichiers
+grep -nE '^-.*(D-[0-9]+|mesur[ée]|[0-9]+[.,][0-9]+e[+-]?[0-9]+|ordres? de grandeur)' \
+    /tmp/src_diff_full.txt                                # 62 lignes, angle plus large
+```
+
+Chaque hunk a été lu individuellement — pas seulement grep — pour trancher
+**avant** de restaurer : le code autour du commentaire est-il resté
+identique (perte de provenance, à restaurer) ou a-t-il changé (le
+commentaire décrivait alors du code qui n'existe plus, et le restaurer
+verbatim l'aurait rendu **faux**, pas seulement muet) ?
+
+## Restauré — 37 sites, 8 fichiers
+
+| fichier | sites | contenu |
+|---|---|---|
+| `Simulation/grid.py` | 4 | D-7 (Nyquist, ×2 : docstring + commentaire) ; D-175 (`curl_z`/`divergence`, mesure 1,1006/bit-identique) |
+| `Simulation/solver.py` | 16 | `enforce_incompressibility` (8 ordres de grandeur, Orszag-Tang N=64) ; `is_diverged` (table 4 scénarios, 1,81–3,85) ; `PROJECT_RHS` (ordre 4,00 vs 1,22) ; `PROJECT_B` ; `_curl_z_fd4` (2,1e-05 vs 1e-16) ; 4× D-27 (bruit/perturbations solénoïdales) ; `init_magnetic_twist` (dérivation complète + renvoi D-6, dont l'unique explication vivait dans `init_ghost_twisting`, retiré — voir plus bas) ; en-tête « Benchmark B » |
+| `VQA/cost_hamiltonian.py` | 3 | D-113 (échange `z_halo_right`/`z_halo_bottom`, 36 configurations bit-identiques) ; D-59 ×2 (dédoublement à `dim=2`, impact mesuré nul : 0/12) |
+| `VQA/runtime.py` | 1 | D-48 (`_validate_mode`, mesure sur les 4 backends) |
+| `pipeline.py` | 9 | le bloc D-66 complet (`_resolve`, table avant/après T_MAX/DT/Re/shots/K_opt/AdvAnomaliesEnable, mesure Q-HAS/Classique post-correction) ; D-67 (`score()`, message d'erreur) ; D-9/D-22 (`_sigma_defaulted`, warning complet) ; `_details` (D-22, schéma unique) ; en-tête table `PHASE` ; 3 commentaires CLI (`AdvAnomaliesEnable`/`mode`/`scenario`, D-48 et D-66) ; `DIVERGENCE_PENALTY` |
+| `train_hyperparams.py` | 5 | `create_argus` (repli silencieux) ; en-tête espace de recherche (D-22, 9 déclarés/5 explorés) ; `search_space()` ; `suggest_hyperparams()` (D-22, `trial.params` vs dict complet) ; `deployable_params` (D-22, mécanisme exact) ; commentaire `sigma_source` (D-22/D-35) |
+| `analyze_hyperparams.py` | 1 | D-50 (portée du `try`, message Neon trompeur) |
+| `Simulation/HamiltParams_v2.py` | 1 partiel | renvoi vers `RESULTS.md`/D-190 ajouté sans reconstruire le mécanisme exact (voir plus bas) |
+
+## Délibérément NON restauré — 4 cas, avec la raison vérifiée
+
+1. **`pre_compute_dns.py`, docstring de `precompute_dns`.** L'ancien texte
+   annonçait « deux conventions coexistent, et c'est voulu » (`fluxes` =
+   état AVANT le pas, sauf le dernier, corrigé par un patch a posteriori
+   « AJOUT CRITIQUE »). Le code environnant a changé : l'écriture de
+   `dns_trace[step]['fluxes']` a été déplacée après `step_full()`, et le
+   patch a posteriori a disparu. Le nouveau texte (« état APRÈS le pas,
+   uniformément ») décrit fidèlement le nouveau code. Restaurer l'ancien
+   texte aurait réintroduit une description **fausse**, pas seulement
+   moins riche.
+2. **`VQA/execute.py`, branche `mode='hardware'`.** Le bloc entier
+   (`if mode != "simulator": raise ...` puis `else: with Session(...)`)
+   a été supprimé, pas seulement son commentaire D-48. Vérifié que la
+   garde qu'il décrivait comme primaire est ailleurs et vivante :
+   `VQARuntime._validate_mode` lève toujours sur `mode` hors
+   `SUPPORTED_MODES` (site restauré séparément, voir table ci-dessus).
+   Code mort retiré avec son commentaire, pas une perte.
+3. **`Simulation/solver.py`, `init_ghost_twisting`.** Fonction entière
+   supprimée (46 lignes), avec les trois sites qui l'appelaient
+   (`pre_compute_dns.py`, `pipeline.py` ×2). Vérifié : absente de tout
+   `src/`/`study/`/`tests/` vivant, et
+   `tests/pipeline/test_analyze_hyperparams.py:226` **exige** que « Ghost
+   Twisting » n'apparaisse dans aucun résumé — retrait testé et
+   intentionnel, cohérent avec son propre docstring (« même défaut, même
+   correction, que D-6 sur `init_magnetic_twist` ») : les deux scénarios
+   partageaient un bug et un correctif, l'un des deux est resté.
+4. **`train_hyperparams.py`, docstring de module et `_get_storage`.** Le
+   docstring décrivait l'ancienne structure à 3 phases ; le nouveau décrit
+   fidèlement les phases actuelles (6/2/8 scénarios). `_get_storage`
+   perdait son commentaire D-136 (compatibilité Optuna < 4.0) en même
+   temps que le code qu'il expliquait : le chemin `DISTRIBUTED`/Postgres
+   et le repli SQLite ont été retirés, un seul chemin journal subsiste —
+   cohérent avec la consolidation single-machine de `CODE_REVIEW.md`.
+   Restaurer aurait décrit des branches qui n'existent plus.
+
+Pour `HamiltParams_v2.py`, un cinquième cas mérite d'être noté à part :
+l'ancien commentaire liait D-190 à une affirmation sur normalisation
+« séparée vs commune » que je n'ai pas pu reconstruire avec certitude
+contre le code actuel de `_adim` (chaque signal EST normalisé par son
+propre maximum dans le code présent, ce qui semble contredire la lecture
+littérale de l'ancien texte plutôt que la confirmer). Plutôt que de risquer
+d'écrire une affirmation technique fausse dans le code source, seul un
+renvoi vers `RESULTS.md` a été ajouté ; le mécanisme exact reste à
+vérifier par quelqu'un qui rejouera la mesure.
+
+## Vérifié
+
+Comment on distingue perte de provenance et évolution légitime, et
+comment on écarte les faux positifs, est décrit ci-dessus site par site —
+pas la mécanique d'un test automatisé. La garantie mesurable ici est plus
+modeste et plus dure : **aucune régression** sur les suites qui exercent
+les 8 fichiers touchés, toutes rejouées après les 37 restaurations :
+
+```bash
+python -m pytest tests/solver -q
+# 315 passed, 3 skipped
+
+python -m pytest tests/mapping/test_hamiltonian_v2.py \
+       tests/mapping/test_coefficient_families_contract.py \
+       tests/quantum/test_vqa_stack_analytic.py \
+       tests/quantum/test_qaoa_physics_decision.py -q
+# 98 passed, 1 failed — le seul échec est
+# test_the_vortex_contrast_is_not_reproducible_enough_to_conclude,
+# préexistant et documenté par D-191 (graine QAOA fixée par défaut),
+# sans rapport avec cette restauration
+
+python -m pytest tests/pipeline/test_train_hyperparams_smoke.py \
+       tests/pipeline/test_train_hyperparams_contracts.py \
+       tests/pipeline/test_relative_percentile_is_trainable.py \
+       tests/pipeline/test_analyze_hyperparams.py -q
+# 109 passed
+```
+
+522 tests rejoués sur les fichiers modifiés, 1 seul échec et déjà
+documenté ailleurs. Chaque fichier a aussi été validé syntaxiquement
+(`ast.parse`) avant les suites de tests.
+
+**Ce que ça ne prétend pas.** Les 25 lignes du sondage large (62 moins les
+37 restaurées) qui ne citaient qu'un nombre mesuré sans `D-NNN`, ou qui
+étaient une reformulation sans perte réelle (ex. le remaniement de
+`create_bounded_hamiltonian`/`create_period_hamiltonian` retirant
+`advanced_anomalies_enabled` — vérifié séparément : la garde s'est
+déplacée vers `HamiltParams`/`HamiltParams_v2`, `advanced_anomalies_
+enabled` y existe toujours et un test le pin —
+`tests/mapping/test_coefficient_families_contract.py`, « doit decider,
+seul, si la cle existe ») n'ont pas toutes été passées en revue une à
+une avec le même niveau de détail que les 37 restaurées. Le périmètre de
+D-192 — mesures et renvois `D-NNN` — est, lui, couvert par balayage
+complet et non plus par sondage.
+
+---
+
+# D-158 — l'agrégateur ne plante plus, et ce qu'il révèle
+
+**Cause exacte, trouvée par lecture, pas par essai-erreur.**
+`study/common/aggregate_master_table.py::rows_t23` appelle
+`closed_loop_headline_counts.fold_counts(results_dir, f)` puis teste
+`if r is None:` pour retomber sur des lignes MISSING — un chemin de repli
+qui existe déjà dans le code, écrit pour ça. Mais `fold_counts` ne rend
+`None` que si le fichier est **absent** ; si le fichier existe avec un
+schéma obsolète (`schema != 2`, pas de `budget_match` par essai), elle
+**lève** `RuntimeError` au lieu de rendre `None` — et rien n'attrapait
+cette exception avant qu'elle ne sorte de `rows_t23`, faisant planter les
+268 lignes de la table pour les 4 artefacts `t20_qhas_run_variance_
+{kh,ot,rotor,tearing}.json`, tous au schéma `None`. `rows_t20`, la
+fonction sœur juste au-dessus dans le même fichier, fait le même calcul
+sur les mêmes artefacts et **ne plante pas** : elle teste `schema != 2`
+elle-même avant d'y toucher, sans jamais appeler une fonction qui pourrait
+lever. C'est l'absence de ce même garde autour de l'appel externe, dans
+`rows_t23` seulement, qui manquait.
+
+**Corrigé** en enveloppant l'appel dans `rows_t23` :
+
+```python
+try:
+    r = fold_counts(results_dir, f)
+except RuntimeError:
+    r = None
+```
+
+`fold_counts` elle-même n'est pas touchée : elle continue de lever pour
+son usage direct (`closed_loop_headline_counts.py` en CLI), où planter
+fort sur un artefact cassé est le comportement voulu. C'est l'agrégateur
+— dont le contrat, écrit dans son propre docstring et dans `rows_t20`,
+est MISSING plutôt qu'un crash — qui devait l'attraper.
+
+## Vérifié
+
+```bash
+python study/common/aggregate_master_table.py
+# rows: 268  OK=142  DIFF=6  MISSING=120
+# refusing to write a master table with 120 MISSING rows; complete the
+# campaign or pass --allow-missing
+# exit code 1
+
+python study/common/aggregate_master_table.py --allow-missing
+# mêmes comptes, et cette fois :
+# saved: v4_master_table.md / v4_master_table.csv / v4_master.npz
+# exit code 0
+```
+
+Le chemin canonique (sans argument) ne plante plus, refuse proprement
+d'écrire tant que la campagne n'est pas complète (**code 1**, pas 0 —
+l'autre moitié du défaut d'origine, l'écrasement silencieux en code 0,
+reste donc corrigée elle aussi, par construction : rien n'écrit sans
+`--allow-missing` explicite), et écrit les trois artefacts attendus dès
+qu'on demande explicitement à voir l'état partiel.
+
+## Ce que la mesure révèle, et qui n'était pas visible tant que l'outil plantait
+
+**268 lignes, pas 180.** `CLAUDE.md` documente un état de référence à
+« 180 lignes, 164 OK / 16 DIFF / 0 MISSING » — mesuré avant l'élargissement
+du protocole confirmatoire de 4 à 8 scénarios (voir `COUVERTURE.md`).
+Les sections T15/T15b/T20/T22/T23 couvrent désormais 8 scénarios au lieu
+de 4-5, ce qui à lui seul explique la plus grande partie de l'écart : plus
+de lignes déclarées, dont beaucoup n'ont simplement pas encore d'artefact.
+
+**120 MISSING, répartis** : `t23` 40, `t20` 32, `t22` 16, `t15b` 12,
+`t15` 12, `t24` 8. Tous dans les sections de la campagne confirmatoire
+niveau 3, cohérent avec `docs/RESULTS.md` (« État au 25 août ») : *« La
+campagne finale n'a pas encore été exécutée »*. **Ce n'est pas une
+régression** — c'est la première fois que l'état réel (protocole élargi,
+campagne pas encore relancée dessus) devient lisible au lieu d'être masqué
+par un plantage.
+
+**6 DIFF, non expliqués ici** : `t11b` (×3), `t12/dim8`, `t15c` (×2, dont
+« folds completed : 4 mesuré contre 8 en référence » — cohérent avec
+seuls 4 des 8 artefacts `t20` existant). Résoudre le plantage rend ces
+six écarts visibles et vérifiables pour la première fois ; expliquer
+chacun individuellement (nombre à republier, ou véritable régression) est
+un travail séparé, pas fait ici — seul le mécanisme qui empêchait de les
+voir du tout est corrigé.
+
+**`docs/CLAUDE.md` a donc une section « tests de recette » désormais
+fausse** sur ce point précis : elle affirme *« Un `MISSING` non nul, lui,
+est toujours une régression »* — plus vrai depuis l'élargissement à 8
+scénarios, et en tension avec le drapeau `--allow-missing` que l'outil
+lui-même expose pour ce cas exact. Mise à jour dans le même mouvement que
+cette entrée (voir le fichier).
+
+```bash
+pytest tests/ -q -k "aggregate_master_table or headline_counts"
+```
