@@ -56,26 +56,13 @@ def patches_to_fine_mask(patches, N):
 def pixel_prf(patches, gt, N):
     """Pixel-level precision, recall, F1 against GT > mean.
 
-    D-98 — DEVIATION CONNUE, MESUREE, NON CORRIGEE (decision en attente,
-    voir docs/DEFAUTS.md). La reference `needs` est RELATIVE au champ
-    lui-meme : `gt > gt.mean()`. Elle ne porte donc aucune information
-    absolue — multiplier `gt` par 1000 laisse `needs` bit-a-bit identique.
-
-    Consequence sur la 4e ligne de la figure, `make_uniform_noise`, qui
-    s'annonce « negative control -> false positive rate » : sur un champ
-    SANS anomalie, `gt.mean()` coupe le bruit en deux et **46,6 % des
-    pixels** sont declares « a raffiner » (mesure N=256, 50 pas ; 47,1 %
-    a N=64). Il n'existe donc pas de faux positif a compter : la ligne ne
-    borne aucun taux de faux positifs, et ses barres P/R/F1 se lisent
-    pourtant a cote de celles des trois lignes a signal.
-
-    Les trois autres lignes ne sont PAS touchees : la reference relative y
-    sert a comparer deux bras sur le MEME champ, ou elle est defendable
-    (les deux bras voient le meme `needs`). C'est le controle negatif seul
-    qui demande une reference ABSOLUE — ou son retrait.
-
-    Ne pas « corriger » sans trancher : choisir un seuil absolu change les
-    quatre lignes de la figure.
+    La reference `needs` est RELATIVE au champ lui-meme : `gt > gt.mean()`.
+    Elle ne porte donc aucune information absolue — multiplier `gt` par
+    1000 laisse `needs` bit-a-bit identique. Defendable pour les TROIS
+    lignes a signal (vortex, current sheet, X-point) : les deux bras y
+    voient le MEME `needs`, la comparaison QA/CL reste valide. Pas
+    defendable pour le controle negatif (D-98) : voir `false_flag_rate`
+    ci-dessous, qui le remplace pour cette ligne-la.
     """
     refined = patches_to_fine_mask(patches, N)
     needs = gt > gt.mean()
@@ -84,6 +71,25 @@ def pixel_prf(patches, gt, N):
     rec = tp / max(np.sum(needs), 1)
     f1 = 2 * prec * rec / max(prec + rec, 1e-12)
     return prec, rec, f1
+
+
+def false_flag_rate(patches, N):
+    """Fraction des pixels declares « a raffiner » sur un champ SANS anomalie.
+
+    D-98 — CORRIGE. `pixel_prf` comparait patches et GT via `needs = gt >
+    gt.mean()`, une reference RELATIVE au champ lui-meme. Sur le controle
+    negatif (`make_uniform_noise`, aucune anomalie), cela coupait le bruit
+    en deux et affichait ~46,6 % de « faux positifs » structurels — pas un
+    taux de faux positifs, puisqu'il n'existe ici aucune vraie anomalie a
+    manquer, donc aucun `needs` valide contre lequel compter une precision
+    ou un rappel.
+
+    La seule quantite defendable sur un controle negatif est directe : la
+    fraction du champ que le bras marque comme a raffiner. Idealement
+    proche de 0 ; plus elle est haute, plus le bras sur-raffine du bruit
+    pur.
+    """
+    return float(np.mean(patches_to_fine_mask(patches, N)))
 
 
 def draw_patch_boundaries(ax, patches, N, color, lw=1.0):
@@ -199,10 +205,12 @@ for row, make_fn in enumerate(patterns):
 
     best_qa_thr = TRAINED_PARAMS['threshold_amr']
     best_cl_thr = CLASSICAL_PARAMS['threshold_amr']
+    is_negative_control = (make_fn is make_uniform_noise)
 
     qa_prec_all, cl_prec_all = [], []
     qa_rec_all, cl_rec_all = [], []
     qa_f1_all, cl_f1_all = [], []
+    qa_flag_all, cl_flag_all = [], []
     qa_patches_vis, cl_patches_vis = None, None
 
     for trial in range(N_TRIALS):
@@ -215,15 +223,25 @@ for row, make_fn in enumerate(patterns):
             qa_patches_vis = comp['qaoa_patches']
             cl_patches_vis = comp['classical_patches']
 
-        qa_p, qa_r, qa_f = pixel_prf(comp['qaoa_patches'], gt, N)
-        cl_p, cl_r, cl_f = pixel_prf(comp['classical_patches'], gt, N)
-        qa_prec_all.append(qa_p); qa_rec_all.append(qa_r); qa_f1_all.append(qa_f)
-        cl_prec_all.append(cl_p); cl_rec_all.append(cl_r); cl_f1_all.append(cl_f)
+        if is_negative_control:
+            # D-98 : pas de P/R/F1 ici, `needs` n'a pas de sens sur un
+            # champ sans anomalie — voir `false_flag_rate`.
+            qa_flag_all.append(false_flag_rate(comp['qaoa_patches'], N))
+            cl_flag_all.append(false_flag_rate(comp['classical_patches'], N))
+        else:
+            qa_p, qa_r, qa_f = pixel_prf(comp['qaoa_patches'], gt, N)
+            cl_p, cl_r, cl_f = pixel_prf(comp['classical_patches'], gt, N)
+            qa_prec_all.append(qa_p); qa_rec_all.append(qa_r); qa_f1_all.append(qa_f)
+            cl_prec_all.append(cl_p); cl_rec_all.append(cl_r); cl_f1_all.append(cl_f)
 
-    print(f"  QA: P={np.mean(qa_prec_all):.3f} R={np.mean(qa_rec_all):.3f} "
-          f"F1={np.mean(qa_f1_all):.3f}")
-    print(f"  CL: P={np.mean(cl_prec_all):.3f} R={np.mean(cl_rec_all):.3f} "
-          f"F1={np.mean(cl_f1_all):.3f}")
+    if is_negative_control:
+        print(f"  QA: flagged={np.mean(qa_flag_all):.3f}")
+        print(f"  CL: flagged={np.mean(cl_flag_all):.3f}")
+    else:
+        print(f"  QA: P={np.mean(qa_prec_all):.3f} R={np.mean(qa_rec_all):.3f} "
+              f"F1={np.mean(qa_f1_all):.3f}")
+        print(f"  CL: P={np.mean(cl_prec_all):.3f} R={np.mean(cl_rec_all):.3f} "
+              f"F1={np.mean(cl_f1_all):.3f}")
 
     # Col 0: Field visualization (|B| magnitude or vorticity)
     ax = axes[row, 0]
@@ -250,13 +268,21 @@ for row, make_fn in enumerate(patterns):
         Line2D([0], [0], color='#00FF00', lw=1.5, label='Classical'),
     ], fontsize=5, loc='upper right', framealpha=0.7)
 
-    # Col 2: Precision / Recall / F1 bars with value annotations
+    # Col 2 (controle negatif) : taux de pixels marques a raffiner, sans
+    # reference P/R/F1 — D-98, voir `false_flag_rate`.
     ax = axes[row, 2]
-    labels = ['Prec.', 'Rec.', 'F1']
-    qa_vals = [np.mean(qa_prec_all), np.mean(qa_rec_all), np.mean(qa_f1_all)]
-    cl_vals = [np.mean(cl_prec_all), np.mean(cl_rec_all), np.mean(cl_f1_all)]
-    qa_errs = [np.std(qa_prec_all), np.std(qa_rec_all), np.std(qa_f1_all)]
-    cl_errs = [np.std(cl_prec_all), np.std(cl_rec_all), np.std(cl_f1_all)]
+    if is_negative_control:
+        labels = ['Flagged']
+        qa_vals = [np.mean(qa_flag_all)]
+        cl_vals = [np.mean(cl_flag_all)]
+        qa_errs = [np.std(qa_flag_all)]
+        cl_errs = [np.std(cl_flag_all)]
+    else:
+        labels = ['Prec.', 'Rec.', 'F1']
+        qa_vals = [np.mean(qa_prec_all), np.mean(qa_rec_all), np.mean(qa_f1_all)]
+        cl_vals = [np.mean(cl_prec_all), np.mean(cl_rec_all), np.mean(cl_f1_all)]
+        qa_errs = [np.std(qa_prec_all), np.std(qa_rec_all), np.std(qa_f1_all)]
+        cl_errs = [np.std(cl_prec_all), np.std(cl_rec_all), np.std(cl_f1_all)]
 
     x = np.arange(len(labels))
     w = 0.32
@@ -273,17 +299,27 @@ for row, make_fn in enumerate(patterns):
                 f'{val:.2f}', ha='center', va='bottom', fontsize=5.5)
     ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=7)
     ax.set_ylim(0, 1.2)
-    ax.set_title('Decision Quality', fontsize=8)
+    ax.set_title('Negative control: over-refinement' if is_negative_control
+                 else 'Decision Quality', fontsize=8)
     ax.legend(fontsize=6, loc='upper right')
 
-    # Summary text box
-    delta_f1 = np.mean(qa_f1_all) - np.mean(cl_f1_all)
-    if abs(delta_f1) < 0.01:
-        verdict = "Equivalent"
-    elif delta_f1 > 0:
-        verdict = f"Q-HAS +{delta_f1:.3f}"
+    # Summary text box (sans objet sur le controle negatif : pas de F1)
+    if is_negative_control:
+        delta_flag = np.mean(qa_flag_all) - np.mean(cl_flag_all)
+        if abs(delta_flag) < 0.01:
+            verdict = "Equivalent"
+        elif delta_flag < 0:
+            verdict = f"Q-HAS -{-delta_flag:.3f}"
+        else:
+            verdict = f"Classical -{delta_flag:.3f}"
     else:
-        verdict = f"Classical +{-delta_f1:.3f}"
+        delta_f1 = np.mean(qa_f1_all) - np.mean(cl_f1_all)
+        if abs(delta_f1) < 0.01:
+            verdict = "Equivalent"
+        elif delta_f1 > 0:
+            verdict = f"Q-HAS +{delta_f1:.3f}"
+        else:
+            verdict = f"Classical +{-delta_f1:.3f}"
     ax.text(0.98, 0.02, verdict, transform=ax.transAxes,
             fontsize=6.5, ha='right', va='bottom',
             bbox=dict(boxstyle='round,pad=0.2', facecolor='lightyellow',

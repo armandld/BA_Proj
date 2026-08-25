@@ -31,14 +31,20 @@ correction — ni mesure avant/après, ni commande, ni date. C'est exactement
 la dette que `CLAUDE.md` interdit : un résultat sans sa mesure. Quiconque
 veut s'appuyer dessus doit remesurer avant de citer.
 
-**D-158, l'un des 9 « toujours ouvertes » ci-dessus, a lui aussi été
-refermé le 25 août** — même jour, passe séparée : la cause exacte du
-plantage était une exception non attrapée à un seul site d'appel
-(`aggregate_master_table.py::rows_t23`), corrigée sans toucher au contrat
-de la fonction levée. Voir `docs/RESULTS.md` pour la mesure complète ; la
-table maîtresse tourne désormais jusqu'au bout (268 lignes, 142 OK / 6
-DIFF / 120 MISSING — les MISSING sont attendus tant que la campagne
-confirmatoire élargie à 8 scénarios n'a pas tourné, pas une régression).
+**D-158, D-98 et D-100, trois des 9 « toujours ouvertes » ci-dessus, ont
+eux aussi été refermés le 25 août** — même jour, passes séparées.
+D-158 : la cause exacte du plantage était une exception non attrapée à un
+seul site d'appel (`aggregate_master_table.py::rows_t23`), corrigée sans
+toucher au contrat de la fonction levée ; la table maîtresse tourne
+désormais jusqu'au bout (268 lignes, 142 OK / 6 DIFF / 120 MISSING — les
+MISSING sont attendus tant que la campagne confirmatoire élargie à 8
+scénarios n'a pas tourné, pas une régression). D-98 : le contrôle négatif
+de fig9 utilise désormais une fraction de pixels marqués, sans référence
+relative au champ, au lieu d'un P/R/F1 qui ne pouvait pas échouer. D-100 :
+fig11 affiche désormais les deux poids d'incertitude par arête (h et v)
+que le mappeur calcule réellement, au lieu d'un panneau unique par
+cellule qui masquait leur anisotropie. Voir `docs/RESULTS.md` pour les
+trois mesures complètes.
 
 **Seconde passe, même jour** : la suite complète (`-m "not slow"`, 3102
 tests) a été rejouée pour remesurer la couverture de `COUVERTURE.md`. Elle
@@ -180,51 +186,6 @@ le schedule fait, mais ne touche pas à la fragilité du seuil de lecture.
 ```bash
 python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
 # a relancer plusieurs fois : la ligne READING n'est pas stable
-```
-
----
-
-## D-98 — le « contrôle négatif » de la figure 9 ne peut pas rendre de faux positif
-
-**Où ça bloque.** `figures/v1_legacy/fig9_synthetic_unit_tests.py` construit
-un motif de bruit uniforme annoncé comme contrôle négatif (« false positive
-rate »), mais `pixel_prf` définit sa vérité terrain **relativement au champ
-testé** (`gt > gt.mean()`) : le contrôle négatif déclare mécaniquement
-~47 % du domaine « à raffiner », quelle que soit l'absence de structure.
-Aucune valeur de `gt` ne peut y faire échouer le contrôle.
-
-**Vérifié le 25 août** : le fichier et son test de déviation existent
-toujours à l'identique, `pytest tests/study/test_fig9_negative_control.py`
-passe (7 tests) — c'est-à-dire que la déviation reste correctement
-**épinglée**, pas corrigée. Deux options non tranchées : seuil absolu
-commun pour `needs`, ou retirer la 4ᵉ ligne de la figure.
-
-```bash
-pytest tests/study/test_fig9_negative_control.py
-```
-
-Aucune figure `results/figures/fig9_*` n'est committée dans ce dépôt :
-aucun nombre publié n'en dépend.
-
----
-
-## D-100 — le panneau « Uncertainty w(s) » de la figure 11 n'affiche pas le poids que le hamiltonien applique
-
-**Où ça bloque.** `fig11_hamiltonian_design.py` recalcule le poids
-d'incertitude à partir du score **par cellule** ; le mappeur réel
-(`HamiltParams.py`) le calcule sur le score **moyenné par arête** et produit
-**deux** champs (horizontal/vertical), pas un. Sur `harris_tearing`, l'écart
-atteint +167 % (arêtes horizontales 4,3× plus actives que ce que le panneau
-montre) — l'anisotropie que le hamiltonien voit n'apparaît pas du tout sur
-un panneau unique.
-
-**Vérifié le 25 août** : fichier et test de déviation inchangés,
-`pytest tests/study/test_fig11_uncertainty_weight.py` passe. Choix de
-présentation non tranché (afficher `w_h`, `w_v`, leur moyenne, ou les deux
-cartes séparément).
-
-```bash
-pytest tests/study/test_fig11_uncertainty_weight.py
 ```
 
 ---

@@ -1,12 +1,17 @@
-"""D-100 — le poids d'incertitude du panneau D de fig11 n'est pas celui du hamiltonien.
+"""D-100 — CORRIGE. Le panneau d'incertitude de fig11 affiche h ET v.
 
-`fig11_hamiltonian_design.py:102` recalcule `w = exp(-((score - thr)/sigma)^2)`
-sur le score PAR CELLULE. `HamiltParams.py:469-473` le calcule sur le score
-moyenne PAR ARETE et en produit deux champs distincts (horizontal, vertical).
+`fig11_hamiltonian_design.py` recalculait `w = exp(-((score - thr)/sigma)^2)`
+sur le score PAR CELLULE, en un seul panneau. `HamiltParams.py:533-546` le
+calcule sur le score moyenne PAR ARETE, avec un axe de roulement different
+par direction, et en produit DEUX champs distincts (horizontal, vertical)
+qui pesent `C_horiz`/`C_vert` separement — l'anisotropie mesuree a la
+decouverte (aretes horizontales 4,3x plus actives que le panneau unique ne
+le montrait sur `harris_tearing`) n'apparaissait pas du tout.
 
-Defaut RAPPORTE, non corrige : choisir ce qu'on affiche (w_h, w_v, leur moyenne,
-leur max) est un choix de presentation. Ces tests verrouillent la DEVIATION —
-sa mesure et la mention qui la porte dans le code.
+Correction : fig11 reproduit exactement les deux moyennes par arete du
+mappeur (`uncertainty_h`, `uncertainty_v`) et affiche les deux comme deux
+panneaux separes (D et E) plutot que de choisir une seule combinaison qui
+masquerait l'anisotropie. Ces tests verifient la correction.
 """
 import ast
 import os
@@ -23,6 +28,12 @@ if _V1_LEGACY not in sys.path:
 
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")
+
+
+def _fig11_source():
+    path = os.path.join(_V1_LEGACY, "fig11_hamiltonian_design.py")
+    with open(path, encoding="utf-8") as f:
+        return f.read(), path
 
 
 def test_le_moyennage_par_arete_change_le_poids():
@@ -58,8 +69,8 @@ def test_le_moyennage_par_arete_change_le_poids():
 
 def test_le_mappeur_produit_bien_deux_champs_de_poids():
     """Interroge le module, pas le texte : `compute_coefficients` doit rendre
-    des aretes horizontales et verticales distinctes, ce que le panneau
-    unique de fig11 ne peut pas representer.
+    des aretes horizontales et verticales distinctes — ce que fig11 doit
+    reproduire pour ses deux panneaux.
     """
     from Simulation.HamiltParams import PhysicalMapper
     src = sys.modules["Simulation.HamiltParams"].__file__
@@ -67,72 +78,49 @@ def test_le_mappeur_produit_bien_deux_champs_de_poids():
         arbre = ast.parse(f.read())
     noms = {n.id for n in ast.walk(arbre) if isinstance(n, ast.Name)}
     assert {"uncertainty_h", "uncertainty_v"} <= noms, (
-        "le mappeur ne calcule plus deux poids d'arete : D-100 a peut-etre "
-        "ete tranche, mettre a jour DEFAUTS.md")
+        "le mappeur ne calcule plus deux poids d'arete : la correction "
+        "D-100 de fig11 n'a plus de reference a reproduire")
     assert PhysicalMapper is not None
 
 
-def test_la_deviation_reste_ecrite_dans_le_fichier_concerne():
-    """Une deviation connue non consignee la ou elle vit se fait recorriger."""
-    chemin = os.path.join(_V1_LEGACY, "fig11_hamiltonian_design.py")
-    with open(chemin, encoding="utf-8") as f:
-        src = f.read()
-    assert "D-100" in src, "la mention de la deviation D-100 a quitte fig11"
-
-
-def test_la_mention_de_la_deviation_accompagne_son_calcul():
-    """La mention de D-100 vit dans la fonction qui porte le calcul.
-
-    D-138 : ce test mesurait la proximite par une DISTANCE en caracteres
-    (`0 < i_calcul - i_mention < 1500`). C'est la fenetre de proximite que
-    `COUVERTURE.md` nomme depuis D-126, et elle mordait du mauvais cote :
-    la distance du jour vaut 1171 pour une borne de 1500, soit 329
-    caracteres de marge. Ajouter au bloc de deviation les lignes de mesure
-    que `VIGIL.md` EXIGE qu'il porte faisait rougir la suite sans qu'aucun
-    defaut n'existe -- mesure : +4 lignes -> 1479, vert ; +5 -> 1556,
-    ROUGE ; +6 -> 1633, ROUGE.
-
-    L'AST delimite ici par la STRUCTURE : la fonction englobante du calcul.
-    Un commentaire, jamais une chaine de code -- `tokenize` les distingue.
+def test_fig11_reproduit_les_deux_moyennes_par_arete_du_mappeur():
+    """Verifie que fig11 calcule bien `uncertainty_h`/`uncertainty_v` avec
+    les MEMES axes de roulement que `HamiltParams.py` (axis=1 horizontal,
+    axis=0 vertical) — pas juste des noms qui y ressemblent.
     """
-    chemin = os.path.join(_V1_LEGACY, "fig11_hamiltonian_design.py")
-    with open(chemin, encoding="utf-8") as f:
-        src = f.read()
+    src, path = _fig11_source()
+    assert "uncertainty_h" in src and "uncertainty_v" in src, (
+        f"{path} ne calcule plus deux poids d'incertitude separes : "
+        "D-100 rouvert")
+    assert "np.roll(score, -1, axis=1)" in src, (
+        f"{path} : la moyenne par arete horizontale ne suit plus la "
+        "convention de HamiltParams.py (axis=1)")
+    assert "np.roll(score, -1, axis=0)" in src, (
+        f"{path} : la moyenne par arete verticale ne suit plus la "
+        "convention de HamiltParams.py (axis=0)")
 
-    arbre = ast.parse(src)
-    parents = {}
-    for n in ast.walk(arbre):
-        for enfant in ast.iter_child_nodes(n):
-            parents[enfant] = n
 
-    cibles = [n for n in ast.walk(arbre)
-              if isinstance(n, ast.Assign)
-              and any(isinstance(t, ast.Name) and t.id == "uncertainty"
-                      for t in n.targets)
-              and isinstance(n.value, ast.Call)]
-    # Un balayage vide doit crier : sans cible, tout ce qui suit passerait.
-    assert cibles, ("aucune affectation `uncertainty = <appel>` trouvee dans "
-                    "fig11 : le calcul a ete renomme ou deplace, la mention "
-                    "de D-100 ne garde peut-etre plus rien")
+def test_fig11_affiche_les_deux_champs_comme_deux_panneaux():
+    """Le grief d'origine etait qu'un panneau UNIQUE ne peut pas montrer
+    l'anisotropie h/v. Verifie que la grille est passee a 5 colonnes et que
+    les deux champs sont bien affiches (deux `ax.imshow` sur les deux
+    variables), pas fusionnes en un seul avant affichage.
+    """
+    src, path = _fig11_source()
+    assert "n_scenarios, 5" in src, (
+        f"{path} n'a pas de cinquieme colonne : les deux poids ne peuvent "
+        "pas etre affiches separement")
+    assert "imshow(field" in src or (
+        "imshow(uncertainty_h" in src and "imshow(uncertainty_v" in src), (
+        f"{path} n'affiche plus explicitement uncertainty_h et "
+        "uncertainty_v")
 
-    import io
-    import tokenize
-    commentaires = [(t.start[0], t.string) for t in
-                    tokenize.generate_tokens(io.StringIO(src).readline)
-                    if t.type == tokenize.COMMENT]
 
-    for cible in cibles:
-        englobante, n = None, cible
-        while n in parents:
-            n = parents[n]
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                englobante = n
-                break
-        assert englobante is not None, (
-            f"le calcul ligne {cible.lineno} n'a pas de fonction englobante : "
-            f"la mention de D-100 ne peut plus etre rattachee a une structure")
-        assert any(englobante.lineno <= ligne < cible.lineno
-                   and "D-100" in texte for ligne, texte in commentaires), (
-            f"la mention de D-100 n'est plus dans `{englobante.name}` "
-            f"au-dessus du calcul ligne {cible.lineno} : une deviation "
-            f"connue non consignee la ou elle vit se fait recorriger")
+def test_la_correction_D100_reste_ecrite_dans_le_fichier_concerne():
+    """Une correction non consignee la ou elle vit se fait re-casser sans
+    que personne ne le remarque."""
+    src, path = _fig11_source()
+    assert "D-100" in src, "la mention de la correction D-100 a quitte fig11"
+    assert "CORRIGE" in src, (
+        "fig11 ne dit plus explicitement que D-100 est corrige, pas "
+        "seulement rapporte")

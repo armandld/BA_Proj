@@ -83,9 +83,9 @@ def main():
     SHORT = {'Kelvin-Helmholtz': 'KH', 'Harris Tearing': 'Tearing',
              'MHD Rotor': 'Rotor', 'Orszag-Tang': 'OT'}
 
-    # 4 panels: Score, |ZZ| always-on, |ZZ| weighted, Uncertainty weight
+    # 5 panels: Score, |ZZ| always-on, |ZZ| weighted, Uncertainty weight h/v
     # Removed Z-bias panel (nearly zero for all scenarios due to sigma suppression)
-    fig, axes = plt.subplots(n_scenarios, 4, figsize=(14, 3.2 * n_scenarios),
+    fig, axes = plt.subplots(n_scenarios, 5, figsize=(17, 3.2 * n_scenarios),
                               squeeze=False)
 
     for row, (label, cfg) in enumerate(SCENARIOS.items()):
@@ -99,23 +99,29 @@ def main():
         zz_trained, z_bias, _, _, _ = compute_zz_maps(sim, score, threshold, sigma_trained)
         zz_alwayson, _, _, _, _     = compute_zz_maps(sim, score, threshold, 100.0)
 
-        # D-100 — DEVIATION MESUREE, NON CORRIGEE (decision en attente, voir
-        # docs/DEFAUTS.md). Ce poids est recalcule ICI a partir du score
-        # PAR CELLULE. Ce n'est pas celui que le hamiltonien applique :
-        # `HamiltParams.py:469-473` le calcule sur le score moyenne PAR ARETE
-        # (`0.5 * (s + roll(s, -1, axis))`), et en produit DEUX champs
-        # distincts, horizontal et vertical. Mesure (N=64, sigma=0,0500,
-        # threshold=0,3044), part des cellules a w > 0,1 :
+        # D-100 — CORRIGE. Le poids affichait auparavant
+        # exp(-((score - thr)/sigma)^2) par CELLULE — pas celui que le
+        # hamiltonien applique. `HamiltParams.py:533-546` le calcule sur le
+        # score moyenne PAR ARETE (`0.5 * (s + roll(s, -1, axis))`), avec UN
+        # axe de roulement different par direction (axis=1 horizontal,
+        # axis=0 vertical), et en produit DEUX champs distincts qui pesent
+        # `C_horiz`/`C_vert` separement. Mesure a la decouverte (N=64,
+        # sigma=0,0500, threshold=0,3044), part des cellules a w > 0,1 :
         #   Kelvin-Helmholtz  panneau 9,89 %  |  aretes h 10,40 % / v 9,91 %
         #   Harris Tearing    panneau 1,27 %  |  aretes h  5,52 % / v 1,27 %
-        # Sur la nappe de tearing, les aretes horizontales sont donc 4,3x plus
-        # actives que ce que le panneau affiche, et l'anisotropie que le
-        # hamiltonien voit (h != v) n'apparait pas du tout ici.
-        # Ne PAS corriger sans trancher : afficher w_h, w_v, leur moyenne ou
-        # leur max est un choix de presentation, pas une correction mecanique.
+        # Sur la nappe de tearing les aretes horizontales sont 4,3x plus
+        # actives que l'ancien panneau unique ne le montrait. Corrige en
+        # reproduisant exactement les deux moyennes par arete du mappeur et
+        # en affichant les deux champs separement (panneaux D et E) plutot
+        # que de choisir une seule combinaison qui masquerait l'anisotropie
+        # que le hamiltonien voit reellement.
         # (Le nombre « ZZ reduced by X% » du panneau C, lui, vient bien du
-        # mappeur reel via compute_zz_maps : il n'est pas concerne.)
-        uncertainty = np.exp(-((score - threshold) / max(sigma_trained, 1e-6)) ** 2)
+        # mappeur reel via compute_zz_maps : il n'etait pas concerne.)
+        score_avg_h = 0.5 * (score + np.roll(score, -1, axis=1))
+        score_avg_v = 0.5 * (score + np.roll(score, -1, axis=0))
+        sigma_safe = max(sigma_trained, 1e-6)
+        uncertainty_h = np.exp(-((score_avg_h - threshold) / sigma_safe) ** 2)
+        uncertainty_v = np.exp(-((score_avg_v - threshold) / sigma_safe) ** 2)
 
         # ── Panel A: Classical score ──
         ax = axes[row, 0]
@@ -150,21 +156,25 @@ def main():
                 fontsize=8, color='white', fontweight='bold',
                 bbox=dict(facecolor='black', alpha=0.6, pad=2))
 
-        # ── Panel D: Uncertainty weight ──
-        ax = axes[row, 3]
-        im = ax.imshow(uncertainty, origin='lower', cmap='RdYlGn_r', vmin=0, vmax=1)
-        ax.set_title(f'{sn}: Uncertainty w(s)', fontsize=10)
-        cb = _add_colorbar(ax, im)
-        cb.ax.tick_params(labelsize=7)
-        ax.tick_params(labelsize=7)
-        pct_active = np.mean(uncertainty > 0.1) * 100
-        ax.text(0.02, 0.98, f'{pct_active:.0f}% of cells\nw > 0.1',
-                transform=ax.transAxes, ha='left', va='top',
-                fontsize=8, color='black',
-                bbox=dict(facecolor='white', alpha=0.8, pad=2))
+        # ── Panels D/E : poids d'incertitude, un par direction (D-100) ──
+        pct_active_h = np.mean(uncertainty_h > 0.1) * 100
+        pct_active_v = np.mean(uncertainty_v > 0.1) * 100
+        for col, (name, field, pct) in enumerate((
+                ('horizontal', uncertainty_h, pct_active_h),
+                ('vertical', uncertainty_v, pct_active_v))):
+            ax = axes[row, 3 + col]
+            im = ax.imshow(field, origin='lower', cmap='RdYlGn_r', vmin=0, vmax=1)
+            ax.set_title(f'{sn}: Uncertainty w_{name[0]}(s)', fontsize=10)
+            cb = _add_colorbar(ax, im)
+            cb.ax.tick_params(labelsize=7)
+            ax.tick_params(labelsize=7)
+            ax.text(0.02, 0.98, f'{pct:.0f}% of edges\nw > 0.1',
+                    transform=ax.transAxes, ha='left', va='top',
+                    fontsize=8, color='black',
+                    bbox=dict(facecolor='white', alpha=0.8, pad=2))
 
         print(f"  [{label}] ZZ reduction: {zz_reduction:.1%}, "
-              f"Active cells (w>0.1): {pct_active:.1f}%")
+              f"Active edges h/v (w>0.1): {pct_active_h:.1f}%/{pct_active_v:.1f}%")
 
     fig.suptitle('Hamiltonian Design: Uncertainty-Weighted ZZ Coupling',
                  fontsize=11, fontweight='bold')

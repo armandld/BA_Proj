@@ -8943,3 +8943,61 @@ fois par erreur (D-151) et dont il garde le souvenir explicite.
 ```bash
 pytest tests/test_launcher_paths_resolve.py -q   # 69 passed, 1 skipped
 ```
+
+---
+
+# D-98 — le contrôle négatif de fig9 mesure une fraction, pas un P/R/F1 sans référence
+
+**Cause.** `pixel_prf` comparait les patches raffinés à `needs = gt >
+gt.mean()` — une référence **relative** au champ mesuré. Sur les trois
+lignes à signal (vortex, current sheet, X-point), c'est défendable : les
+deux bras (Q-HAS, classique) voient le même `needs`, la comparaison reste
+valide. Sur la 4ᵉ ligne — `make_uniform_noise`, annoncée « negative
+control → false positive rate » — un champ **sans** anomalie a quand même
+une moyenne, qui coupe le bruit en deux : ~46,6 % du domaine (N=256) est
+mécaniquement déclaré « à raffiner », sans qu'aucune vraie anomalie existe
+à côté. Il n'y avait donc pas de faux positif à compter — la ligne ne
+bornait rien.
+
+**Corrigé** en ajoutant `false_flag_rate(patches, N)` — sans paramètre
+`gt`, structurellement incapable de retomber dans le même défaut — qui
+rend directement la fraction du champ que chaque bras marque « à
+raffiner » sur le contrôle négatif. `pixel_prf` reste inchangée pour les
+trois lignes à signal ; `fig9_synthetic_unit_tests.py` route désormais la
+4ᵉ ligne vers `false_flag_rate` (variable `is_negative_control`), avec un
+panneau et une annotation dédiés (« Flagged » plutôt que Prec./Rec./F1).
+
+```bash
+pytest tests/study/test_fig9_negative_control.py -q   # 4 passed
+```
+
+Toujours aucune figure `results/figures/fig9_*` committée dans ce dépôt :
+aucun nombre publié n'était concerné, avant comme après.
+
+---
+
+# D-100 — fig11 affiche désormais les deux poids d'incertitude par arête
+
+**Cause.** Le panneau D de `fig11_hamiltonian_design.py` recalculait
+`w = exp(-((score - thr)/sigma)^2)` sur le score **par cellule**. Le
+mappeur réel (`HamiltParams.py:533-546`) le calcule sur le score
+**moyenné par arête**, avec un axe de roulement différent par direction
+(`axis=1` horizontal, `axis=0` vertical), et en tire **deux** champs
+distincts qui pèsent `C_horiz`/`C_vert` séparément. Mesure à la
+découverte (N=64, σ=0,0500, seuil=0,3044), part des cellules à w > 0,1 :
+`harris_tearing` panneau unique 1,27 % contre arêtes horizontales 5,52 %
+— 4,3× plus actives que ce que l'ancien panneau montrait, et
+l'anisotropie que le hamiltonien voit (h ≠ v) n'apparaissait pas du tout.
+
+**Corrigé** en reproduisant exactement les deux moyennes par arête du
+mappeur (`uncertainty_h`/`uncertainty_v`, mêmes formules et mêmes axes
+que `HamiltParams.py`) et en les affichant comme **deux panneaux
+séparés** plutôt qu'une combinaison choisie qui masquerait l'anisotropie
+— la grille passe de 4 à 5 colonnes.
+
+```bash
+pytest tests/study/test_fig11_uncertainty_weight.py -q   # 5 passed
+```
+
+Toujours aucune figure `results/figures/fig11_*` committée dans ce
+dépôt : aucun nombre publié n'était concerné, avant comme après.
