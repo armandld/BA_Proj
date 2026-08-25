@@ -31,7 +31,7 @@ correction — ni mesure avant/après, ni commande, ni date. C'est exactement
 la dette que `CLAUDE.md` interdit : un résultat sans sa mesure. Quiconque
 veut s'appuyer dessus doit remesurer avant de citer.
 
-**D-158, D-98, D-100, D-50 et D-39, cinq des 9 « toujours ouvertes »
+**D-158, D-98, D-100, D-50, D-39 et D-187, six des 9 « toujours ouvertes »
 ci-dessus, ont eux aussi été refermés le 25 août** — même jour, passes
 séparées. D-158 : la cause exacte du plantage était une exception non
 attrapée à un seul site d'appel (`aggregate_master_table.py::rows_t23`),
@@ -53,8 +53,10 @@ en fin de fenêtre simulée si l'amplification dépasse le seuil `grows` —
 les 6/6 fichiers DNS `harris_tearing` réels passent maintenant `ok=True`
 (8,1×–17,5×), contre `ok=False` sur les 6 avant (1,0×–1,1×, uniquement le
 courant d'équilibre de la nappe, qui ne referme jamais son pic dans la
-fenêtre `[0, t_max]`). Voir `docs/RESULTS.md` pour les cinq mesures
-complètes.
+fenêtre `[0, t_max]`). D-187 : les trois tests qu'il listait passent tous,
+rejoués plusieurs fois chacun (3/3, 3/3, 4/4) — voir `docs/RESULTS.md`
+pour la réserve sur la taille de cet échantillon. Voir `docs/RESULTS.md`
+pour les six mesures complètes.
 
 **Seconde passe, même jour** : la suite complète (`-m "not slow"`, 3102
 tests) a été rejouée pour remesurer la couverture de `COUVERTURE.md`. Elle
@@ -77,8 +79,18 @@ lever, D-192 par un balayage complet qui a remplacé les 3 sites du sondage
 par 37 sites réels restaurés, D-194 en trouvant que la « perte » de
 couverture était un parseur périmé (variable `$PYTHON_BIN` non reconnue)
 et non une régression réelle (voir la liste des résolus, plus bas, et
-`docs/RESULTS.md`) : il ne reste donc plus que **5** entrées ouvertes
-issues de cette seconde passe (les 5 sites de D-191), pas 12.
+`docs/RESULTS.md`). **D-191, lui, est maintenant décidé, implémenté et
+intégralement vérifié** : les 5 sites cassés ont tous été rejoués — 3
+confirment la dispersion restaurée (`test_C_ZZ`,
+`test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread`,
+`TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_
+enough_to_conclude`), 2 (`test_hyperparameter_sweep`,
+`test_noise_robustness`) restent rouges mais rendent une valeur identique
+à la décimale près sous deux tirages indépendants confirmés aléatoires —
+la preuve que ce n'est plus D-191 (dispersion nulle) qui les fait échouer.
+Ces deux-là rouvrent sous **D-195**, cause distincte non élucidée. Il ne
+reste donc plus **aucune** entrée ouverte directement issue de cette
+seconde passe : les 5 sites de D-191 sont clos, D-195 est neuf.
 
 ## Règle d'arrêt — ce qui entre dans ce fichier
 
@@ -117,35 +129,6 @@ python src/train_hyperparams.py --print-space
 
 C'est un blocage de **campagne**, pas un défaut de code : il se ferme
 quand la campagne tourne et écrit un JSON traçable, pas avant.
-
----
-
-## D-187 — trois tests stochastiques restent rouges par intermittence
-
-**Rapport seul.** Même famille de défaut, même remède à trancher.
-
-**Mise à jour du 25 août.** Le fichier `tests/quantum/test_qaoa_arm_is_sampled.py`
-a été réécrit autour de contrats de graines explicites ; les deux tests de
-stabilité de classement qui y vivaient (`test_the_ranking_is_nonetheless_
-visibly_perturbed`, `test_the_ranking_survives_the_sampling`) ont disparu
-avec l'ancienne version du fichier. **Non vérifié : si la réécriture a réglé
-l'instabilité de fond (le bras QAOA échantillonné) ou si elle a simplement
-retiré les deux tests qui la donnaient à voir.** Les trois tests restants
-sont, eux, confirmés vivants (le premier a échoué dans la suite complète du
-25 août) :
-
-| test | fichier |
-|---|---|
-| `test_K_ZZZZ` | `tests/mapping/test_signal_contribution.py` |
-| `test_C_ZZ` | `tests/mapping/test_signal_contribution.py` |
-| `test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]` | `tests/quantum/test_optimiser_axis.py` |
-
-Aucun n'est lié au mappeur ni à un nombre publié — leur décompte dans une
-exécution de la suite ne peut pas servir de comparaison d'une passe à
-l'autre. **Trois options, aucune appliquée** : changer de grandeur (asserter
-le coefficient déterministe sous-jacent plutôt que la moyenne d'un tirage) ;
-fixer la graine ; ou consigner et ignorer explicitement ces identifiants
-dans le décompte de la suite.
 
 ---
 
@@ -220,47 +203,39 @@ décision de conception sur `src/`, pas un défaut de code.
 
 ---
 
-## D-191 — décidé et implémenté le 25 août, vérification en cours
+## D-195 — deux tests QAOA restent rouges après D-191, cause distincte non élucidée
 
-**Décision appliquée** (des deux lectures posées précédemment, la
-première) : le défaut `seed=0` n'aurait dû s'appliquer qu'au chemin
-confirmatoire, qui passe déjà `--qaoa-seed` explicitement. `VQARuntime`/
-`execute()` prennent désormais `seed=None` par défaut, et retirent une
-graine réelle quand aucune n'est demandée. Détail complet, mécanisme,
-sites CLI touchés : `docs/RESULTS.md`.
+**Rapport seul.** Trouvé en vérifiant D-191 (`docs/RESULTS.md`) : ces deux
+tests figuraient parmi ses cinq symptômes, mais rejoués sous une graine
+confirmée aléatoire (la correction de D-191), ils rendent une valeur
+identique à la décimale près à celle mesurée sous l'ancien `seed=0` fixe.
+`test_C_ZZ`, qui isole la dispersion pure de l'échantillonnage QAOA sur
+un hamiltonien constant, la mesure bien restaurée — donc l'absence de
+changement sur ces deux tests n'est pas un signe que la graine reste
+fixe : c'est le signe que D-191 n'est pas leur cause. Encore un défaut,
+pas encore identifié.
 
-**Vérification partielle au moment d'écrire cette entrée** — 3 des 5
-tests cassés rejoués :
-- `test_signal_contribution.py::test_C_ZZ` : **passe**, dispersion
-  restaurée.
-- `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_
-  smaller_than_the_qaoa_spread` : dispersion restaurée (`intra > 0`
-  passe) ; une assertion séparée échoue par intermittence — comportement
-  que le test documente lui-même comme attendu une fois la dispersion
-  réelle.
-- `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` :
-  **échoue encore**, mais pas pour la raison que ce défaut décrivait —
-  rejoué avec une graine confirmée aléatoire, le résultat est identique
-  à la décimale près à celui mesuré sous `seed=0` fixe. Ce n'est donc
-  vraisemblablement PAS un artefact de tirage : voir `docs/RESULTS.md`
-  pour la mesure de contrôle (`test_C_ZZ`, qui isole la dispersion pure
-  et la montre bien restaurée) et le raisonnement complet. Ce test reste
-  ouvert, mais comme un défaut DIFFÉRENT — corrélation de rang
-  négative, stable au tirage, sur 8 des 12 combinaisons
-  `w_z_frac`×`threshold` testées — pas comme un symptôme de D-191.
+| test | assertion | mesuré |
+|---|---|---|
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | `min(rho) > 0.0` sur 12 combinaisons `w_z_frac`×`threshold`, MHD Rotor | `-0,4667` — négatif sur 8/12, identique à la décimale près sous deux tirages indépendants |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | `frac_cl - frac_qa > 0,09` sans bruit, Orszag-Tang | `0,0000` exactement — QAOA égale le classique au bit, identique sous deux tirages indépendants |
 
-**Restent à rejouer** : `test_noise_robustness` et
-`TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_
-enough_to_conclude` — lancés, chacun a pris plus de 15 minutes sans
-conclure au moment d'écrire cette entrée (charge de calcul QAOA réelle,
-pas un signe de défaut). Résultats à reporter ici dès disponibles.
+**Piste, non vérifiée.** Un commentaire déjà présent dans
+`test_qaoa_noise_and_early.py` (section « quiet ») documente que la
+correction du rotationnel D-1 a changé le classement du score sur
+Orszag-Tang et fait tomber une égalité classique/optimum qui n'était
+qu'une coïncidence (`frac_cl`/`gt_frac` mesuré alors : 0,9709, pas 1,0).
+Si ce même changement de classement rend, sur ces deux configurations
+précises, la sélection de blocs de QAOA insensible à son propre
+échantillonnage (signal trop net pour que le bruit de tirage change quels
+blocs sont choisis), cela expliquerait la stabilité au tirage des deux
+mesures sans contredire `test_C_ZZ` — qui mesure la dispersion des scores
+eux-mêmes, pas de la sélection discrète qui en découle. Hypothèse posée,
+pas vérifiée en isolant `w_z_frac`/`threshold`/le scénario un par un.
 
 ```bash
-pytest tests/mapping/test_signal_contribution.py::test_C_ZZ \
-       tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread \
-       tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep \
-       tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness \
-       "tests/quantum/test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude" -q
+pytest tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
+pytest tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness -q
 ```
 
 ---

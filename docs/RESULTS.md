@@ -9117,8 +9117,8 @@ Sur les cinq tests que D-191 documentait cassés :
 | `test_signal_contribution.py::test_C_ZZ` | écart-type 0,0 exactement | **passe** — dispersion restaurée sur un hamiltonien constant (aucune source de bruit hors QAOA) |
 | `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread` | `intra == 0.0` (le bras est devenu déterministe) | `intra > 0.0` **passe** (dispersion restaurée) ; l'assertion suivante (`ecart < intra`) échoue par intermittence — **comportement documenté par le test lui-même** : « la comparaison tranche désormais, refaire la mesure de D-119 pour de bord (campagne, pas 3 tirages) ». C'est le retour du comportement original du test, masqué depuis que `seed=0` le rendait toujours vert sur `intra=0` |
 | `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | `min(rho) = -0,467` (négatif sur 8/12) | **échoue encore, mêmes valeurs à la décimale près sur un tirage vérifié indépendant** (voir ci-dessous — pas résolu par ce défaut, cause différente) |
-| `test_qaoa_noise_and_early.py::test_noise_robustness` | — | vérification en cours au moment d'écrire cette entrée, résultat à ajouter |
-| `test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | — | vérification en cours au moment d'écrire cette entrée, résultat à ajouter |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | `gap == 0,0000` exactement (Orszag-Tang, sans bruit) | **échoue encore, même valeur exacte qu'avant ce défaut** (voir ci-dessous — pas résolu par ce défaut, cause probablement différente) |
+| `test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | écart-type 0,0 exactement sur 10 tirages répétés | **passe** — dispersion restaurée |
 
 **`test_hyperparameter_sweep`, plus précisément.** Rejoué avec une
 graine confirmée aléatoire (voir ci-dessus), la corrélation de rang
@@ -9141,10 +9141,46 @@ artefact de tirage. Ce n'est pas un défaut que ce correctif résout ; ce
 défaut n'était pas le bon diagnostic pour cette assertion précise. Voir
 `docs/DEFAUTS.md` pour la suite.
 
+**`test_noise_robustness`, plus précisément.** Rejoué en entier (2
+scénarios × 6 niveaux de bruit × 5 tirages, 33 min), échoue toujours sur
+la même assertion qu'avant ce défaut (`gap = frac_cl - frac_qa >
+MIN_NOISELESS_GAP`, exigé `> 0,09`) — table complète imprimée par le
+test, ligne Orszag-Tang sans bruit : `frac_cl = 0,3189`, `frac_qa =
+0,3189`, `gap = 0,0000`. **Cette valeur est identique, décimale pour
+décimale, à celle déjà consignée dans la table de découverte de D-191
+ci-dessus** — mesurée sous l'ancien `seed=0` fixe. Une graine
+véritablement aléatoire (ce correctif) reproduit exactement le même
+résultat qu'une graine fixée : c'est la signature inverse de
+`test_hyperparameter_sweep` ci-dessus, mais la conclusion est la même —
+**pas un artefact du tirage**, sinon un second tirage indépendant
+n'aurait aucune raison de retomber pile sur la même valeur. Le
+commentaire déjà présent dans le fichier de test
+(`test_qaoa_noise_and_early.py`, section « quiet », voir son historique
+git) documente qu'un correctif antérieur non lié à ce défaut — la
+correction du rotationnel D-1 — a changé le classement du score sur
+Orszag-Tang et fait tomber une égalité qui n'était qu'une coïncidence
+(`frac_cl`/`gt_frac` mesuré à l'époque : 0,9709, pas 1,0). L'hypothèse la
+plus probable, non vérifiée ici en détail, est que ce même changement de
+classement fait désormais sélectionner à QAOA les deux mêmes blocs que
+l'arme classique sur cette configuration précise — indépendamment de la
+graine QAOA, parce que le signal (bruit d'entrée nul) est trop net pour
+que l'échantillonnage change la sélection — pas parce que la dispersion
+QAOA a disparu (`test_C_ZZ`, ci-dessus, la mesure directement et la
+trouve restaurée). **Pas résolu par ce correctif : cause distincte de
+D-191, symptôme identique avant/après, à consigner séparément dans
+`docs/DEFAUTS.md`.**
+
+`TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_
+enough_to_conclude` : **passe**, dispersion restaurée sur les 10 tirages
+répétés — comportement attendu, rien à ajouter au-delà du symptôme déjà
+décrit dans la table ci-dessus.
+
 ```bash
 pytest tests/mapping/test_signal_contribution.py::test_C_ZZ -q
 pytest "tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread" -q
 pytest tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
+pytest tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness -q
+pytest "tests/quantum/test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude" -q
 ```
 
 Régression, sur les fichiers touchés hors des cinq tests ciblés :
@@ -9157,6 +9193,35 @@ trois), `tests/pipeline/test_train_hyperparams_smoke.py` +
 `test_analyze_hyperparams.py` (109 passed), `tests/solver` (315 passed,
 3 skipped, inchangé — fichiers non touchés par ce défaut mais rejoués
 par prudence après les corrections D-192 du même jour).
+
+## D-187 — les trois tests intermittents redeviennent stables
+
+Re-vérifiés après ce défaut, chacun rejoué plusieurs fois de suite (pas
+une campagne complète — un échantillon, honnêtement limité) :
+
+| test | exécutions | résultat |
+|---|---|---|
+| `test_signal_contribution.py::test_C_ZZ` | 3 | 3/3 passe |
+| `test_signal_contribution.py::test_K_ZZZZ` | 3 | 3/3 passe |
+| `test_optimiser_axis.py::test_the_other_optimisers_spend_a_multiple_of_that_budget[L-BFGS-B]` | 4 | 4/4 passe |
+
+```bash
+pytest tests/mapping/test_signal_contribution.py::test_K_ZZZZ -q
+pytest "tests/quantum/test_optimiser_axis.py::test_the_other_optimisers_spend_a_multiple_of_that_budget" -k "L-BFGS-B" -q
+```
+
+`docs/DEFAUTS.md` attribuait D-187 à une cause encore non identifiée
+(« aucun n'est lié au mappeur ni à un nombre publié »), pas explicitement
+à `seed=0` — mais les trois tests appellent `execute()`/`VQARuntime` sans
+graine explicite, exactement le chemin que ce défaut change. Un
+échantillon de 3-4 exécutions par test ne prouve pas l'absence
+d'intermittence résiduelle (les trois options que `docs/DEFAUTS.md`
+posait — changer de grandeur, fixer la graine, consigner et ignorer —
+restent valables si l'intermittence revient), mais c'est la meilleure
+preuve disponible aujourd'hui, et elle pointe dans une seule direction :
+plus aucun échec sur 10 exécutions cumulées, contre au moins un échec
+connu (`test_K_ZZZZ`) dans la suite complète du 25 août avant ce
+correctif.
 
 ---
 
