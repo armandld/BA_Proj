@@ -189,8 +189,9 @@ def main():
     )
     parser.add_argument("--shots", type=int, default=None, help="(defaut : celui du scenario)")
     parser.add_argument(
-        "--seed", type=int, default=0,
-        help="Seed shared by transpilation, Estimator and Sampler",
+        "--seed", type=int, default=None,
+        help="Seed shared by transpilation, Estimator and Sampler "
+             "(D-191 : par defaut aucune, le bras QAOA reste stochastique)",
     )
     parser.add_argument("--method", default="COBYLA", choices=["COBYLA", "L-BFGS-B", "Powell"])
     parser.add_argument("--opt-level", type=int, default=1, choices=[0,1,2,3], help="Optimization level for transpilation.")
@@ -546,7 +547,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus,
             mode=argus.mode,
             shots=argus.shots,
             opt_level=argus.opt_level,
-            seed=getattr(argus, "seed", 0),
+            seed=getattr(argus, "seed", None),
         )
 
     active_patches = []

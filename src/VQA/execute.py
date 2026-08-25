@@ -21,7 +21,7 @@ def _validated_seed(seed):
 
 def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt,
             eps, E_max, verbose, vqa_runtime=None, method="COBYLA",
-            warm_start_params=None, seed=0):
+            warm_start_params=None, seed=None):
 
     if mode != "simulator":
         raise ValueError(
@@ -30,7 +30,29 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt,
         raise ValueError(
             f"Unsupported backend: {backend_name!r}. Expected one of "
             f"{SUPPORTED_BACKENDS}.")
-    seed = _validated_seed(seed)
+
+    # D-191 : `seed=None` ne veut pas dire "0" -- il veut dire "aucune
+    # graine demandee". Avec un runtime, on herite silencieusement de la
+    # graine QU'IL a deja resolue (fixe si on lui en a donne une, tiree
+    # une fois s'il n'en avait pas) : c'est lui, pas cet appel, qui
+    # possede l'etat partage entre les appels QAOA d'une meme execution.
+    # Sans runtime -- le chemin des appels directs, y compris les tests
+    # qui mesurent la dispersion propre du bras QAOA -- une graine neuve
+    # est tiree a CHAQUE appel, pour que la dispersion reste mesurable.
+    # Un `seed` explicite reste verifie contre celle du runtime : c'est
+    # la seule incoherence que cette fonction ne peut pas trancher seule.
+    if vqa_runtime is not None:
+        if seed is not None:
+            seed = _validated_seed(seed)
+            if vqa_runtime.seed != seed:
+                raise ValueError(
+                    f"runtime seed {vqa_runtime.seed} does not match "
+                    f"requested seed {seed}")
+        seed = vqa_runtime.seed
+    elif seed is None:
+        seed = int(np.random.default_rng().integers(0, 2**32))
+    else:
+        seed = _validated_seed(seed)
 
     if verbose:
         for pauli, coeff in cost_hamiltonian.to_list():
@@ -48,10 +70,8 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt,
             raise ValueError(
                 f"runtime backend {vqa_runtime.backend_name!r} does not "
                 f"match requested backend {backend_name!r}")
-        if vqa_runtime.seed != seed:
-            raise ValueError(
-                f"runtime seed {vqa_runtime.seed} does not match requested "
-                f"seed {seed}")
+        # `seed` est deja celle du runtime (resolue plus haut) : rien a
+        # revalider ici, la seule incoherence possible l'a ete avant.
         estimator = vqa_runtime.estimator
         sampler = vqa_runtime.sampler
         backend = vqa_runtime._backend

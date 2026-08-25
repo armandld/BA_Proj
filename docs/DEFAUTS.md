@@ -157,39 +157,6 @@ for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
 
 ---
 
-## D-50 — le verdict imprimé de T11b bascule d'une exécution à l'autre
-
-**Où ça bloque.** `h0_qaoa_displacement.main()` imprime l'une de deux
-phrases opposées selon `abs(progress_moyen) < READING_THRESHOLD (0,1)` — un
-seuil codé en dur appliqué à une grandeur mesurée non reproductible à cette
-précision (dispersion inter-exécutions 0,018, contre 0,0146 de marge au
-seuil).
-
-**Vérifié le 25 août** — le mécanisme est identique à la découverte :
-
-```python
-READING_FLAT = "the circuit stays at the classical encoding; ..."
-READING_MOVES = "the circuit moves substantially toward its own optimum."
-READING_THRESHOLD = 0.1
-def reading_message(prog_all):
-    return READING_FLAT if abs(prog_all) < READING_THRESHOLD else READING_MOVES
-```
-
-(`study/h0_selection/h0_qaoa_displacement.py`, lignes 133-162). Toujours un
-seul tirage comparé à un seuil ponctuel, aucune des trois options
-envisagées (répéter et publier une dispersion ; changer pour une grandeur
-déterministe comme `slope_paired` ; retirer la phrase) n'est appliquée.
-Composé avec D-48 (résolu depuis, voir ci-dessous) : le renommage de
-`classical_warm_start_params` en `constant_initial_params` clarifie ce que
-le schedule fait, mais ne touche pas à la fragilité du seuil de lecture.
-
-```bash
-python study/h0_selection/h0_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2
-# a relancer plusieurs fois : la ligne READING n'est pas stable
-```
-
----
-
 ## D-187 — trois tests stochastiques restent rouges par intermittence
 
 **Rapport seul.** Même famille de défaut, même remède à trancher.
@@ -245,6 +212,12 @@ sur `t_x = 2π/(dim·(v+b)_rms)`, pas sur un nombre de pas hybrides.
 pytest tests/study/test_dynamic_patch_labels.py -q -m slow
 ```
 
+**Re-vérifié le 25 août, décision toujours en attente.** Rien dans les
+passes de ce jour n'a touché `dynamic_patch_labels.py` ni régénéré les
+artefacts `d_patches_*.npz` dont ce défaut dépend ; le test `-m slow` n'a
+pas été rejoué (coût, sans changement de code source à vérifier). Reste
+un blocage de décision de campagne, pas de code.
+
 ---
 
 ## D-189 — sous `norm="max"`, `EPS` sert de seuil physique et peut promouvoir la poussière numérique
@@ -275,94 +248,56 @@ que les pics nuls du corpus sont exactement nuls.
 pytest tests/mapping/test_plaquette_signal_negligeable.py -q -m slow
 ```
 
+**Re-vérifié le 25 août** (partiellement) : la garde non-`slow`
+(`pytest tests/mapping/test_plaquette_signal_negligeable.py -q -m "not slow"`,
+10 tests) passe toujours. Le balayage complet des 24 artefacts DNS
+(`-m slow`) n'a pas été rejoué ; rien dans les passes de ce jour n'a
+touché `HamiltParams_v2.py` ni régénéré de DNS. Reste un blocage de
+décision de conception sur `src/`, pas un défaut de code.
+
 ---
 
-## D-191 — le bras QAOA est désormais déterministe PAR DÉFAUT partout, pas seulement où le protocole le documente
+## D-191 — décidé et implémenté le 25 août, vérification en cours
 
-**Rapport seul. Décision requise, rien n'est corrigé.**
+**Décision appliquée** (des deux lectures posées précédemment, la
+première) : le défaut `seed=0` n'aurait dû s'appliquer qu'au chemin
+confirmatoire, qui passe déjà `--qaoa-seed` explicitement. `VQARuntime`/
+`execute()` prennent désormais `seed=None` par défaut, et retirent une
+graine réelle quand aucune n'est demandée. Détail complet, mécanisme,
+sites CLI touchés : `docs/RESULTS.md`.
 
-**Où ça bloque.** `VQARuntime.__init__` et `VQA/execute.execute()` prennent
-désormais un paramètre `seed`, **par défaut `0`** — pas `None`, pas un
-tirage. Ce défaut est threadé à `AerSimulator(seed_simulator=seed)`,
-`estimator.options.simulator.seed_simulator`,
-`sampler.options.simulator.seed_simulator` et
-`seed_transpiler=self.seed`. Tous les appelants réels
-(`src/pipeline.py:484`, `src/call_vqa_shell.py:93,102`) le lisent via
-`getattr(argus, "seed", 0)` — **un seul `--seed` CLI pour toute une
-campagne**, transmis identique à chaque appel QAOA, quel que soit le
-patch, le pas de temps ou le scénario. Cinq tests dont l'unique raison
-d'être est de mesurer la dispersion propre du bras QAOA (l'échantillonnage
-shot-à-shot, indépendamment des conditions physiques) rougissent parce que
-cette dispersion est tombée à zéro **exactement** :
+**Vérification partielle au moment d'écrire cette entrée** — 3 des 5
+tests cassés rejoués :
+- `test_signal_contribution.py::test_C_ZZ` : **passe**, dispersion
+  restaurée.
+- `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_
+  smaller_than_the_qaoa_spread` : dispersion restaurée (`intra > 0`
+  passe) ; une assertion séparée échoue par intermittence — comportement
+  que le test documente lui-même comme attendu une fois la dispersion
+  réelle.
+- `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` :
+  **échoue encore**, mais pas pour la raison que ce défaut décrivait —
+  rejoué avec une graine confirmée aléatoire, le résultat est identique
+  à la décimale près à celui mesuré sous `seed=0` fixe. Ce n'est donc
+  vraisemblablement PAS un artefact de tirage : voir `docs/RESULTS.md`
+  pour la mesure de contrôle (`test_C_ZZ`, qui isole la dispersion pure
+  et la montre bien restaurée) et le raisonnement complet. Ce test reste
+  ouvert, mais comme un défaut DIFFÉRENT — corrélation de rang
+  négative, stable au tirage, sur 8 des 12 combinaisons
+  `w_z_frac`×`threshold` testées — pas comme un symptôme de D-191.
 
-| test | mesure | avant (attendu) | maintenant |
-|---|---|---|---|
-| `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread` | écart intra-méthode sur 3 tirages | `> 0.0` | **`0.0` exactement** |
-| `test_qaoa_noise_and_early.py::test_noise_robustness` | écart QAOA/classique sans bruit, Orszag-Tang | doit perdre de `> 0,09` | **`0,0000` exactement** — QAOA égale le classique au bit |
-| `test_qaoa_physics_decision.py::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | écart-type de 10 tirages répétés | `> 1e-6` | **`0,0` exactement** — les 10 valeurs sont identiques à la dernière décimale |
-| `test_signal_contribution.py::test_C_ZZ` | 20 tirages, même hamiltonien `np.full(...)` (aucune source de bruit dans l'entrée) | écart-type non nul, **0,0270** mesuré et écrit dans la docstring | **écart-type `0,00000` exactement** — les 20 tirages sont un seul tirage recopié. La moyenne (`+0,03159`) franchit son seuil (`< 0,03`), mais n'est plus une moyenne de 20 échantillons : c'est un point unique, pas de sens statistique à en tirer |
-| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | corrélation de rang QAOA/vérité sur 12 combinaisons `w_z_frac`×`threshold`, un seul tirage chacune | `min(rho) > 0.0` | `min(rho) = -0,467` — négatif sur 8 des 12 combinaisons. Peut-être un vrai effet du seuil ; ne peut pas être distingué d'un artefact de CE tirage précis sans en rejouer un second à une autre graine |
-
-Les commentaires que ces tests portent encore affirment le contraire du
-code actuel : « `aucune graine n'est fixée dans src/VQA/` » (les trois
-premiers). Ce ne sont pas des faux positifs — c'est le contrat qui a
-changé sous eux sans que le texte qui l'annonce ait suivi, exactement la
-forme que ce dépôt appelle question 4. Les deux derniers ne portent pas
-cette phrase, mais souffrent du même mécanisme : sans graine qui varie, un
-« balayage » ou une moyenne sur *n* tirages n'en couvre plus qu'un seul —
-`test_hyperparameter_sweep` ne peut aujourd'hui pas dire si le rho négatif
-mesuré est un fait sur `w_z_frac`/`threshold` ou un accident du tirage à
-`seed=0`.
-
-**Ce n'est pas une régression accidentelle.** `docs/protocol_v3_evaluation.md:61-62` :
-*« Trois graines physiques distinctes sont évaluées avec une graine QAOA
-fixe »* — c'est le design délibéré du protocole confirmatoire
-(`study/closed_loop/closed_loop_run_variance.py`, docstring : « the QAOA
-seed remains fixed, so the statistical unit is the trajectory »), pour
-isoler la variance due aux conditions physiques de celle due à
-l'échantillonnage QAOA. `docs/RESULTS.md` liste « graines QAOA explicites »
-parmi les corrections en place, et `docs/CODE_REVIEW.md` (§ « Décisions
-appliquées ») : « graine QAOA fixe **pour isoler la variance physique** » —
-trois sources concordantes, aucune ne dit que le défaut vaut hors de ce
-cadre.
-
-**Ce qui n'est écrit nulle part : que ce défaut vaut aussi pour TOUT le
-reste du dépôt, pas seulement pour le protocole confirmatoire qui le
-motive.** `docs/protocol_deviations.md` — le registre formel des écarts
-autorisés — ne mentionne que l'amplitude de perturbation Kelvin-Helmholtz
-et dit explicitement *« Aucun autre écart n'est autorisé à ce stade »*.
-Un `--seed` par défaut à `0`, partagé par construction entre toutes les
-questions qui consomment `execute()`/`VQARuntime` sans le surcharger
-explicitement — les cinq tests ci-dessus, mais aussi potentiellement
-`figures/`, `study/h0_selection/`, `study/h3_representation/`, tout ce que
-`COUVERTURE.md` documente comme mesurant la dispersion QAOA — n'y figure
-pas. La revendication centrale du dépôt (`COUVERTURE.md` § 4, « Le bras
-QAOA n'est pas déterministe », dispersion 1,79e-1 à 3,61e-1) a été mesurée
-sous l'ancien régime non-seedé ; personne n'a vérifié si elle tient encore
-sous celui-ci pour les chemins qui ne sont pas le protocole confirmatoire.
-
-**Où on en est.** Deux lectures possibles, aucune tranchée :
-
-1. Le défaut par `seed=0` n'aurait dû s'appliquer qu'au chemin
-   confirmatoire (`closed_loop_run_variance.py`, qui passe déjà
-   `--qaoa-seed` explicitement) — tout le reste devrait recevoir une
-   graine `None`/tirée par défaut, et les cinq tests ci-dessus sont
-   corrects tels quels.
-2. Le défaut déterministe est voulu partout pour la reproductibilité, et
-   ce sont les cinq tests (et toute mesure de dispersion QAOA hors
-   protocole confirmatoire) qui doivent désormais fixer explicitement des
-   graines **distinctes** par tirage pour continuer à mesurer ce qu'ils
-   prétendent mesurer.
-
-Aucune des deux n'est appliquée ici : c'est un changement de comportement
-de `src/`, non consigné dans `RESULTS.md` au-delà d'une ligne sans portée,
-et il touche une affirmation déjà publiée.
+**Restent à rejouer** : `test_noise_robustness` et
+`TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_
+enough_to_conclude` — lancés, chacun a pris plus de 15 minutes sans
+conclure au moment d'écrire cette entrée (charge de calcul QAOA réelle,
+pas un signe de défaut). Résultats à reporter ici dès disponibles.
 
 ```bash
-git diff d047015..HEAD -- src/VQA/execute.py src/VQA/runtime.py
-pytest tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread \
-       tests/mapping/test_signal_contribution.py::test_C_ZZ \
-       tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
+pytest tests/mapping/test_signal_contribution.py::test_C_ZZ \
+       tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread \
+       tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep \
+       tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness \
+       "tests/quantum/test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude" -q
 ```
 
 ---

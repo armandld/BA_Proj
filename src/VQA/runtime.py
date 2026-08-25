@@ -38,15 +38,25 @@ class VQARuntime:
     SUPPORTED_BACKENDS = ("state_vector", "matrix_product_state", "aer")
     SUPPORTED_MODES = ("simulator",)
 
-    def __init__(self, backend_name, mode, shots, opt_level, seed=0):
+    def __init__(self, backend_name, mode, shots, opt_level, seed=None):
         self.backend_name = backend_name
         self.mode = mode
         self.shots = shots
         self.opt_level = opt_level
-        if isinstance(seed, (bool, np.bool_)) or not isinstance(
+        if seed is None:
+            # D-191 : aucune graine demandee -> le bras QAOA doit rester
+            # stochastique (protocole confirmatoire mis a part, qui passe
+            # toujours --qaoa-seed explicitement). Un `seed=0` par defaut
+            # rendait tout appelant deterministe sans le demander ; ici on
+            # tire une graine reelle, une fois, a la construction du
+            # runtime — les appels qui reutilisent CE runtime (une seule
+            # execution de `pipeline()`) restent coherents entre eux,
+            # tandis que deux executions independantes en tirent deux.
+            seed = int(np.random.default_rng().integers(0, 2**32))
+        elif isinstance(seed, (bool, np.bool_)) or not isinstance(
                 seed, (int, np.integer)):
             raise TypeError("seed must be an integer")
-        if not 0 <= int(seed) <= 2**32 - 1:
+        elif not 0 <= int(seed) <= 2**32 - 1:
             raise ValueError("seed must be between 0 and 2**32 - 1")
         self.seed = int(seed)
 

@@ -130,35 +130,42 @@ MAX_FRAC_UNDEFINED = 0.50   # au-dela, la moyenne ne decrit plus l'ensemble
 MIN_PAIRED = 1              # une pente sans paire appariee n'est pas une pente
 
 
-READING_FLAT = ("the circuit stays at the classical encoding; the deployed "
-                "decision is not a minimiser of its declared cost.")
-READING_MOVES = "the circuit moves substantially toward its own optimum."
+READING_FLAT = ("progress toward the optimum does not grow with circuit "
+                "depth; the deployed decision may not be attributable to "
+                "the QAOA minimisation itself.")
+READING_MOVES = ("progress toward the optimum grows with circuit depth, "
+                  "consistent with the circuit minimising its declared cost.")
 READING_THRESHOLD = 0.1
 
 
-def reading_message(prog_all):
+def reading_message(slope):
     """La phrase de conclusion de T11b, extraite pour etre testable.
 
-    D-50 — texte et seuil INCHANGES, seule l'extraction est nouvelle : la
-    logique vivait dans un `print` de `main()`, donc elle n'etait pas
-    verifiable sans rejouer tout le balayage. Meme geste que D-46 sur
-    `label_percentile_sensitivity.interpretation_message`.
+    D-50 — CORRIGE (decision USER, 25 aout : option 2 des trois listees
+    dans docs/DEFAUTS.md). Le verdict lisait `prog_all`, la moyenne d'UN
+    tirage QAOA par instantane : trois executions de la commande publiee
+    (`--N 256 --dim 2 --n-snaps 2`, reps 1-4) rendaient 0.1034 / 0.0850 /
+    0.0859 contre le seuil de 0.1 — une execution sur trois imprimait la
+    conclusion inverse.
 
-    Le seuil `0.1` n'a aucune provenance ecrite, et il s'applique a une
-    grandeur qui n'est PAS reproductible a cette precision. Mesure : trois
-    executions de la commande publiee (`--N 256 --dim 2 --n-snaps 2`,
-    reps 1-4) rendent 0.1034 / 0.0850 / 0.0859. La premiere est au-dessus du
-    seuil et les deux autres en dessous : **une execution sur trois imprime la
-    conclusion inverse**. La valeur publiee, 0.0854, est a 0.0146 du seuil
-    pour une dispersion mesuree de 0.018.
+    Il lit desormais `slope` (`slope_paired` dans l'artefact) : la pente
+    APPARIEE progress(reps=max) - progress(reps=min), sur les memes
+    instantanes aux deux profondeurs (voir `main`, juste au-dessus de
+    l'appel). Question differente, plus proche de la motivation du
+    fichier : pas seulement decide -- e.g. le progres BOUGE-T-IL avec
+    la profondeur, ce qui distingue directement une perturbation de
+    l'encodage classique (pente ~ 0) d'une minimisation reelle du cout
+    (pente qui croit avec la profondeur).
 
-    NON CORRIGE : retoucher le seuil ferait passer la suite sans rien mesurer
-    de plus, et `VIGIL.md` demande de changer de GRANDEUR, pas de seuil. Les
-    trois options chiffrees sont dans `docs/DEFAUTS.md` D-50 ; le choix
-    change ce que le script publie, donc il revient a USER.
-    `tests/study/test_t11b_reading_verdict_unstable.py` epingle l'instabilite.
+    Le seuil 0.1 est INCHANGE et reste sans provenance ecrite propre a
+    `slope` : sa nature a change (d'une moyenne de tirage a une pente
+    appariee), sa reproductibilite n'a pas ete remesuree sur plusieurs
+    executions independantes -- seulement verifiee sur UNE execution que
+    la logique s'applique sans planter. Une inversion de conclusion d'une
+    execution a l'autre reste possible ; personne ne l'a mesuree pour
+    cette grandeur.
     """
-    return (READING_FLAT if abs(prog_all) < READING_THRESHOLD
+    return (READING_FLAT if abs(slope) < READING_THRESHOLD
             else READING_MOVES)
 
 
@@ -305,7 +312,7 @@ def main():
     print(f"  change in progress from reps={p_min} to {p_max}: {slope:+.4f}"
           f"   [apparie sur {len(paired)} instantanes definis aux deux "
           f"profondeurs]")
-    print("\n  READING: " + reading_message(prog_all))
+    print("\n  READING: " + reading_message(slope))
 
     out = os.path.join(
         RESULTS_DIR, f"h0_qaoa_displacement_N{args.N}_dim{args.dim}"

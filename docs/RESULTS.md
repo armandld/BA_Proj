@@ -9001,3 +9001,159 @@ pytest tests/study/test_fig11_uncertainty_weight.py -q   # 5 passed
 
 Toujours aucune figure `results/figures/fig11_*` committée dans ce
 dépôt : aucun nombre publié n'était concerné, avant comme après.
+
+---
+
+# D-50 — le verdict T11b lit désormais une pente déjà calculée, pas une moyenne de tirage
+
+**Décision USER (25 août), parmi les trois options listées dans la
+version précédente de ce défaut** : basculer `reading_message` de
+`progress moyen` (`prog_all`, la moyenne d'UN tirage QAOA par instantané —
+mesurée instable : trois exécutions identiques rendaient 0,1034 / 0,0850 /
+0,0859, deux conclusions opposées) vers `slope` (`slope_paired`), la pente
+**appariée** `progress(reps=max) − progress(reps=min)` sur les mêmes
+instantanés — déjà calculée pour `check_expected_behaviour`, réutilisée
+sans nouveau calcul.
+
+**Ce que ça change, au-delà du seuil.** La question posée change de
+nature : plus « où en est le progrès à une profondeur donnée » (position
+absolue), mais « le progrès croît-il avec la profondeur du circuit » —
+plus proche de la motivation écrite en tête du fichier (« Une progression
+qui n'augmente pas avec la profondeur [...] signifie que l'objectif
+déclaré n'est pas l'objectif optimisé »). Les deux phrases `READING_FLAT`/
+`READING_MOVES` sont réécrites en conséquence (elles parlaient de
+position, elles parlent maintenant de croissance avec la profondeur) ;
+le seuil `0,1` reste inchangé, sur la valeur absolue.
+
+**Ce qui n'a PAS été refait.** Le changement est mécanique — `slope`
+existait déjà, aucun nouveau calcul introduit — mais sa reproductibilité
+sur plusieurs exécutions indépendantes n'a pas été mesurée, contrairement
+à l'étude qui avait révélé l'instabilité de `prog_all`. Rien ne garantit
+que `slope` ne bascule pas, lui aussi, d'une exécution à l'autre ; personne
+ne l'a encore mesuré à cette précision.
+
+```bash
+pytest tests/study/test_t11b_reading_verdict_unstable.py -q   # 12 passed
+```
+
+`tests/study/test_t11b_reading_verdict_unstable.py` est réécrit dans le
+même mouvement : les tests qui épinglaient l'instabilité de `prog_all`
+sont remplacés par des tests qui vérifient le branchement sur `slope`
+(signature de `reading_message`, appel réel dans `main`, texte des deux
+phrases) ; le fait historique qui motivait la correction (les trois
+`prog_all` mesurés) reste écrit, mais comme fait, plus comme test de la
+fonction — elle ne prend plus cette grandeur.
+
+---
+
+# D-191 — la graine QAOA redevient aléatoire par défaut, sauf demande explicite
+
+**Décision.** Entre les deux lectures que `docs/DEFAUTS.md` posait sans
+trancher, la première est retenue : le défaut `seed=0` n'aurait dû
+s'appliquer qu'au chemin confirmatoire (`closed_loop_run_variance.py`, qui
+passe déjà `--qaoa-seed` explicitement) — tout le reste doit recevoir une
+graine aléatoire, tirée une fois par construction, sauf demande explicite.
+C'est la lecture cohérente avec les trois sources qui documentent le
+design délibéré du protocole confirmatoire (`protocol_v3_evaluation.md`,
+`closed_loop_run_variance.py`, `CODE_REVIEW.md`) : aucune des trois ne dit
+que le défaut vaut hors de ce cadre, et `protocol_deviations.md` — le
+registre formel — ne mentionne que l'amplitude de bruit Kelvin-Helmholtz.
+
+## Ce qui a changé
+
+`VQARuntime.__init__` et `execute()` (`src/VQA/runtime.py`,
+`src/VQA/execute.py`) prennent désormais `seed=None` par défaut. Quand
+`None` :
+- `VQARuntime` tire une graine réelle une seule fois, à la construction —
+  les appels QAOA qui réutilisent CE runtime (toute une exécution de
+  `pipeline()`) restent cohérents entre eux, deux exécutions
+  indépendantes en tirent deux ;
+- `execute()`, appelé SANS runtime (le chemin direct, celui des cinq
+  tests cassés), tire une graine neuve à CHAQUE appel — la dispersion
+  reste mesurable tirage par tirage ;
+- `execute()`, appelé AVEC un runtime et sans `seed=` explicite, hérite
+  silencieusement de celle du runtime plutôt que d'en tirer une seconde
+  et de faire échouer la vérification de cohérence
+  (`vqa_runtime.seed != seed`) qui existait déjà — un `seed=` explicite
+  reste vérifié contre celle du runtime, seule incohérence que cette
+  fonction ne peut pas trancher seule.
+
+Quatre sites CLI mis à jour dans le même mouvement, pour que le défaut
+`--seed` ne redevienne pas `0` un cran plus haut : `src/pipeline.py`
+(`--seed`, aide mise à jour), `src/call_vqa_shell.py` (deux lectures de
+`args.seed`), `src/compare_rotor_budget.py` (`--seed` et sa lecture).
+`src/VQA/optimize.py::optimize` (le chemin de transpilation SANS
+runtime) garde volontairement `seed=0` comme défaut de SA PROPRE
+signature — aucun appelant réel ne s'appuie sur ce défaut (`call_vqa_
+shell.py` passe toujours `seed=` explicitement), et le changer cassait
+deux tests sans rapport (`test_vqa_chain_contracts.py`, D-174) qui
+vérifient le forçage du niveau d'optimisation, pas la graine.
+
+Les scripts de `study/h0_selection/` et `study/h3_representation/`, qui
+ont chacun leur PROPRE `--seed default=0` et le passent TOUJOURS
+explicitement à `execute()`/`VQARuntime`, ne sont **pas** touchés :
+défaut indépendant de celui-ci, hors du périmètre mesuré par les cinq
+tests cassés, et changer une dizaine de fichiers non audités
+individuellement aurait dépassé ce qui a été vérifié ici.
+
+## Vérifié
+
+```bash
+python3 -c "
+from VQA.runtime import VQARuntime
+r1 = VQARuntime(backend_name='state_vector', mode='simulator', shots=1024, opt_level=1)
+r2 = VQARuntime(backend_name='state_vector', mode='simulator', shots=1024, opt_level=1)
+assert r1.seed != r2.seed
+"
+```
+
+confirme que deux constructions indépendantes tirent deux graines
+distinctes (mesuré : 1536506728 / 4066463920).
+
+Sur les cinq tests que D-191 documentait cassés :
+
+| test | avant | après |
+|---|---|---|
+| `test_signal_contribution.py::test_C_ZZ` | écart-type 0,0 exactement | **passe** — dispersion restaurée sur un hamiltonien constant (aucune source de bruit hors QAOA) |
+| `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread` | `intra == 0.0` (le bras est devenu déterministe) | `intra > 0.0` **passe** (dispersion restaurée) ; l'assertion suivante (`ecart < intra`) échoue par intermittence — **comportement documenté par le test lui-même** : « la comparaison tranche désormais, refaire la mesure de D-119 pour de bord (campagne, pas 3 tirages) ». C'est le retour du comportement original du test, masqué depuis que `seed=0` le rendait toujours vert sur `intra=0` |
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | `min(rho) = -0,467` (négatif sur 8/12) | **échoue encore, mêmes valeurs à la décimale près sur un tirage vérifié indépendant** (voir ci-dessous — pas résolu par ce défaut, cause différente) |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | — | vérification en cours au moment d'écrire cette entrée, résultat à ajouter |
+| `test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | — | vérification en cours au moment d'écrire cette entrée, résultat à ajouter |
+
+**`test_hyperparameter_sweep`, plus précisément.** Rejoué avec une
+graine confirmée aléatoire (voir ci-dessus), la corrélation de rang
+minimale rend `-0,4667` — la **même valeur** qu'avant ce défaut, à la
+décimale près, sur plusieurs des 12 combinaisons. `test_C_ZZ`, qui isole
+la dispersion PURE de l'échantillonnage QAOA sur un hamiltonien
+constant, montre que cette dispersion est bien réelle et bien restaurée
+— donc l'insensibilité de `test_hyperparameter_sweep` à un second tirage
+indépendant n'est pas un signe que la graine reste fixe : c'est un signe
+que sur CETTE grille de `(w_z_frac, threshold)`, la corrélation de rang
+QAOA/vérité est **stable au tirage**, dominée par le signal physique et
+la configuration du mappeur plutôt que par le bruit d'échantillonnage.
+
+C'est exactement la question que `docs/DEFAUTS.md` posait sans trancher
+— « peut-être un vrai effet du seuil ; ne peut pas être distingué d'un
+artefact de CE tirage précis sans en rejouer un second à une autre
+graine » — et la réponse, maintenant qu'un second tirage indépendant est
+possible et a été rejoué, penche pour **un vrai effet**, pas un
+artefact de tirage. Ce n'est pas un défaut que ce correctif résout ; ce
+défaut n'était pas le bon diagnostic pour cette assertion précise. Voir
+`docs/DEFAUTS.md` pour la suite.
+
+```bash
+pytest tests/mapping/test_signal_contribution.py::test_C_ZZ -q
+pytest "tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread" -q
+pytest tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
+```
+
+Régression, sur les fichiers touchés hors des cinq tests ciblés :
+`tests/quantum/test_vqa_chain_contracts.py` (42 passed),
+`tests/quantum/test_qaoa_arm_is_sampled.py` +
+`tests/quantum/test_vqa_stack_analytic.py` (91 passed sur l'ensemble des
+trois), `tests/pipeline/test_train_hyperparams_smoke.py` +
+`test_train_hyperparams_contracts.py` +
+`test_relative_percentile_is_trainable.py` +
+`test_analyze_hyperparams.py` (109 passed), `tests/solver` (315 passed,
+3 skipped, inchangé — fichiers non touchés par ce défaut mais rejoués
+par prudence après les corrections D-192 du même jour).

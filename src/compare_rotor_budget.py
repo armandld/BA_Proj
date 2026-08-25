@@ -176,7 +176,7 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
         mode=argus.mode,
         shots=argus.shots,
         opt_level=argus.opt_level,
-        seed=getattr(argus, "seed", 0),
+        seed=getattr(argus, "seed", None),
     )
 
     physics_state = sim.get_fluxes()
@@ -366,7 +366,7 @@ def main():
     parser.add_argument("--backend", default="state_vector",
                         choices=["aer", "state_vector"])
     parser.add_argument("--shots", type=int, default=1024)
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--K-opt", type=int, default=50,
                         help="Max QAOA optimizer iterations")
     parser.add_argument("--verbose", action="store_true")

@@ -90,7 +90,7 @@ def call_vqa_shell(angles_tuple, hamilt_params, verbose, args, period_bound=True
         from VQA.optimize import optimize
         qc = optimize(
             qc, args.backend, args.opt_level, verbose,
-            seed=getattr(args, "seed", 0),
+            seed=getattr(args, "seed", None),
         )
 
     probs_list, optimal_params = execute(
@@ -99,7 +99,7 @@ def call_vqa_shell(angles_tuple, hamilt_params, verbose, args, period_bound=True
         vqa_runtime=vqa_runtime,
         method=args.method,
         warm_start_params=warm_start_params,
-        seed=getattr(args, "seed", 0),
+        seed=getattr(args, "seed", None),
     )
 
     probs_list = postprocess(probs_list, qc.num_qubits, verbose)
