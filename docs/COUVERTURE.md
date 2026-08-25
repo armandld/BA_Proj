@@ -80,6 +80,21 @@ Les deux fichiers `h2b_prediction` n'ont pas de successeur aussi net :
 `h2b_loso_bootstrap.py` en particulier était un module audité, pas du code
 mort, et sa disparition n'est expliquée nulle part.
 
+**Un cas plus ancien de la même famille, mais correctement tracé sur le
+moment : `src/import_Neon_data_to_local.py`** (§ 1a ter ci-dessous, D-64 et
+D-65 — suppression silencieuse d'étude Optuna, identifiant Neon complet
+publié). Le fichier a disparu le **15 août** (`fdc7b03`, 77 lignes), soit
+**avant** `d047015` — donc pendant la période que ce document couvre déjà,
+sans que la section qui le décrit (datée du 13 août) n'ait été mise à jour
+en conséquence. `tests/pipeline/test_import_never_destroys_destination.py`
+documente la raison — « décision de USER, `docs/RESULTS.md` §
+"Architecture Neon supprimée" » — mais cette section de `RESULTS.md` n'est
+plus lisible aujourd'hui : `RESULTS.md` porte la même suppression du
+24 août que `DEFAUTS.md`/`COUVERTURE.md`, et n'a pas encore été restauré.
+D-64 et D-65 n'apparaissent plus dans `DEFAUTS.md` (cohérent avec
+« résolu »), mais comme les six entrées listées ci-dessus, sans mesure
+avant/après retrouvable.
+
 **`src/Simulation/HamiltParams_v2.py`** a été retravaillé en profondeur
 après `d047015` (146 insertions, 263 suppressions sur ce seul fichier) —
 mais revérifié, pas juste recopié : `norm="max"` reste le défaut, et la
@@ -110,12 +125,86 @@ qu'ils ont été mis à jour avec la correction, pas simplement supprimés ;
 le détail vit dans `DEFAUTS.md`, pas ici.
 
 **Couverture de ligne — remesurée le 25 août**, selon la commande que ce
-document prescrit lui-même (§ « Tenir ce document à jour ») : lancée en
-tâche de fond au moment de cette reconstruction (~3 100 tests, plus long
-que les « 36 min » de la dernière mesure connue). Le résultat n'était pas
-disponible à l'heure de ce commit ; il suit dans une entrée séparée dès
-qu'il l'est, avec la même règle que le document s'impose : dire ce qui a
-changé, le code ou le périmètre de mesure.
+document prescrit lui-même (§ « Tenir ce document à jour »), même
+périmètre que la mesure du 13 août (`--source=src`, suites QAOA comprises,
+seul `slow` exclu) : **1h15** (4542 s), contre les « 36 min » de la mesure
+précédente — attendu, la suite est passée de 1971 à 3102 tests sur le même
+intervalle de commits.
+
+**Total sur tout `src/` : 68 %** (4354 instructions, 1393 jamais
+exécutées), contre 56 % le 13 août. Périmètre identique des deux côtés :
+c'est un vrai gain, pas un artefact de mesure.
+
+| module | 13 août | 25 août | écart |
+|---|---|---|---|
+| `cost_hamiltonian`, `init_qbits_state`, `mapping`, `call_vqa_shell`, `PhysToAngle`, `utils` | 100 % | **100 %** | — |
+| `HamiltParams_v2.py` | 100 % | **94 %** | retravaillé en profondeur (voir ci-dessus) ; 9 instructions non exécutées, pas mesurées en détail ici |
+| `Simulation/solver.py` | 99 % | **99 %** | — |
+| `HamiltParams.py` | 99 % | **98 %** | — |
+| `pre_compute_dns.py` | 98 % | **98 %** | — |
+| `VQA/runtime.py` | 98 % | **98 %** | — |
+| `RescaleArrays.py` | 97 % | **97 %** | — |
+| `VQA/optimize.py` | 88 % | **95 %** | + |
+| `VQA/postprocess.py` | 95 % | **95 %** | — |
+| `train_hyperparams.py` | 90 % | **92 %** | + |
+| `Simulation/grid.py` | 90 % | **90 %** | — |
+| `Simulation/refinement.py` | 82 % | **82 %** | — |
+| `hyperparams_loader.py` | 55 % | **68 %** | + |
+| `VQA/execute.py` | 64 % | **68 %** | + |
+| `pipeline.py` | 52 % | **65 %** | + — le corps de `main()`/sa CLI reste hors du chemin déployé, comme noté le 13 août |
+| `visual.py` | 12 % | **54 %** | + |
+| `analyze_hyperparams.py` | 0 % | **29 %** | + — D-49/D-50/D-60 à D-65 l'ont fait sortir de « jamais audité », voir §1a |
+| `recompute_lambda_scores.py` | 0 % | **28 %** | + — D-49/D-61/D-62, voir §1a bis |
+| `compare_rotor_budget.py` | *(non tabulé le 13 août)* | **22 %** | audité en entier depuis (§ ci-dessous), 202 instructions non exécutées — c'est le tracé et le script complet, jamais rejoués en test |
+| `help_visual.py` | 7 % | **7 %** | — |
+| `import_Neon_data_to_local.py` | 0 % | **supprimé** | voir la note ci-dessus |
+
+Les cinq fichiers que le 13 août listait comme « jamais audités » ne le
+sont plus au sens de la couverture : les quatre restants (`analyze_hyperparams.py`,
+`recompute_lambda_scores.py`, `compare_rotor_budget.py`, `help_visual.py`)
+portent tous des tests maintenant, même partiels. `help_visual.py` seul n'a
+pas bougé — cohérent avec §1a quater, qui documente déjà que 239 de ses
+327 lignes sont mortes par construction (aucun appelant).
+
+**La suite n'est pas verte, et ce n'est pas nouveau.** La mesure du 25 août
+donne **20 failed, 3000 passed, 69 skipped, 2 xfailed**. Un seul de ces
+échecs vient de cette reconstruction — `test_live_documentation_has_no_
+removed_versioned_study_path[COUVERTURE.md]`, parce que le texte original
+restauré ci-dessous citait littéralement l'ancien chemin versionné de T14
+(§ D-71) en expliquant qu'il n'existe plus ; reformulé sans changer le
+sens, pour ne pas affaiblir un garde qui fait exactement son travail.
+**Les 19 autres sont préexistants sur cette branche**, confirmé en
+comparant à une exécution complète capturée avant les deux commits de
+cette reconstruction — diff exact, aucun de plus, aucun de moins :
+
+```
+tests/lint/test_scripts_point_somewhere.py::test_chaque_chemin_dun_lanceur_existe[run_study_v3.sh]
+tests/mapping/test_signal_contribution.py::test_C_ZZ
+tests/pipeline/test_relative_percentile_is_trainable.py::test_le_bloc_mort_existe_encore
+tests/pipeline/test_relative_percentile_is_trainable.py::test_le_bloc_mort_ne_compte_pas
+tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread
+tests/quantum/test_qaoa_arm_is_sampled.py::test_study_result_names_and_payload_separate_quantum_seeds
+tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness
+tests/quantum/test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude
+tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep
+tests/solver/test_solver_convergence.py::test_the_corrected_path_is_the_default_and_the_reason_is_written
+tests/solver/test_solver_convergence.py::test_the_correction_is_off_by_default_and_the_reason_is_written
+tests/solver/test_solver_guards_and_objective.py::test_the_pipeline_warns_when_sigma_has_to_be_defaulted
+tests/study/test_h0_certified_dim3_contradicts_criterion.py::test_la_decision_de_ne_pas_corriger_D53_reste_ecrite
+tests/study/test_h0_panel_guards.py::test_four_parallel_runs_would_not_collide
+tests/study/test_t17_uncertainty_window.py::test_deployed_params_are_read_from_the_pipeline_not_hardcoded
+tests/test_launcher_paths_resolve.py::test_each_exemption_still_names_a_real_dead_path
+tests/test_launcher_paths_resolve.py::test_the_sweep_is_not_empty
+tests/test_launcher_paths_resolve.py::test_the_sweep_still_sees_every_invocation_it_saw_before
+tests/test_suite_integrity.py::test_aucun_test_n_est_incapable_d_echouer
+```
+
+Aucun n'est mentionné comme ouvert dans `DEFAUTS.md` reconstruit — donc soit
+un défaut de plus à y ajouter après diagnostic, soit un artefact
+d'environnement (dépendance, graine, ressource absente) à distinguer d'un
+vrai défaut avant de conclure. Ni l'un ni l'autre n'est fait ici : cette
+reconstruction s'arrête à la mesure, pas au diagnostic — c'est le prochain
+travail, pas celui de ce document.
 
 **Ce que cette reconstruction n'a PAS fait, écrit pour ne pas être supposé
 fait.** Le texte original ci-dessous, à partir de la section 1, **n'est
@@ -714,7 +803,7 @@ d'entraînement, et localisation temporelle de l'ordre 1 (D-25).
 | `evolve_to` — `sim.dt = min(sim.adapt_dt(cfl_target=cfl), t_end - t)` puis `sim.step_full()` | **sain** — question 4, forme « variable locale non réécrite » vérifiée explicitement : `adapt_dt` écrit `self.dt` ET le retourne, la ré-affectation qui suit (clip sur `t_end - t`) est bien relue par `step_full`, qui lit `self.dt` (pas un argument séparé). Pas le défaut-modèle de `VIGIL.md` |
 | `to_common_grid`, `relative_l2`, `observed_order` | **sains** — coarsening par bloc réutilisé de la phase 2 (pas réimplémenté), norme L2 relative symétrique, `log2` protégé contre une erreur nulle ou négative (`NaN` explicite) |
 | `splitting_order_diagnostic` | **sain** — rejoue `_rk4_step` et `enforce_incompressibility` de V1 sans réimplémentation ; le diagnostic (ordre ≈4 sans projection, ≈1 avec) confirme mécaniquement D-25, déjà mesuré et corrigé ailleurs |
-| **la commande de reproduction elle-même**, ainsi que celle de 15 autres scripts `study/` et 2 lanceurs `scripts/` | **D-71** — `study/v4/t14_numerical_validation.py` (et 15 chemins frères) n'existent plus depuis la réorganisation `17d983d` ; corrigé, `RESULTS.md` |
+| **la commande de reproduction elle-même**, ainsi que celle de 15 autres scripts `study/` et 2 lanceurs `scripts/` | **D-71** — `t14_numerical_validation.py` et 15 chemins frères, sous l'ancienne arborescence versionnée de `study/` (`v4`), n'existent plus depuis la réorganisation `17d983d` ; corrigé, `RESULTS.md` |
 | l'**opérateur** qui mesure `max\|div B\|/rms\|B\|` dans `evolve_to` | **D-72** — `dns_validation.div_B` est spectrale ; depuis D-25 le solveur ne projette plus B et le garantit **en FD4**. La ligne avait été lue, l'opérateur non : mesuré 3,9029e−02 contre 2,0266e−14 sur la configuration publiée, `all_checks_pass` True → False. Corrigé, `RESULTS.md` |
 
 **Vérifié et trouvé sain : le reste de T14 se reproduit à HEAD.** L'artefact
