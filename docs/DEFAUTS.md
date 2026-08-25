@@ -31,20 +31,30 @@ correction — ni mesure avant/après, ni commande, ni date. C'est exactement
 la dette que `CLAUDE.md` interdit : un résultat sans sa mesure. Quiconque
 veut s'appuyer dessus doit remesurer avant de citer.
 
-**D-158, D-98 et D-100, trois des 9 « toujours ouvertes » ci-dessus, ont
-eux aussi été refermés le 25 août** — même jour, passes séparées.
-D-158 : la cause exacte du plantage était une exception non attrapée à un
-seul site d'appel (`aggregate_master_table.py::rows_t23`), corrigée sans
-toucher au contrat de la fonction levée ; la table maîtresse tourne
-désormais jusqu'au bout (268 lignes, 142 OK / 6 DIFF / 120 MISSING — les
-MISSING sont attendus tant que la campagne confirmatoire élargie à 8
-scénarios n'a pas tourné, pas une régression). D-98 : le contrôle négatif
-de fig9 utilise désormais une fraction de pixels marqués, sans référence
-relative au champ, au lieu d'un P/R/F1 qui ne pouvait pas échouer. D-100 :
-fig11 affiche désormais les deux poids d'incertitude par arête (h et v)
-que le mappeur calcule réellement, au lieu d'un panneau unique par
-cellule qui masquait leur anisotropie. Voir `docs/RESULTS.md` pour les
-trois mesures complètes.
+**D-158, D-98, D-100, D-50 et D-39, cinq des 9 « toujours ouvertes »
+ci-dessus, ont eux aussi été refermés le 25 août** — même jour, passes
+séparées. D-158 : la cause exacte du plantage était une exception non
+attrapée à un seul site d'appel (`aggregate_master_table.py::rows_t23`),
+corrigée sans toucher au contrat de la fonction levée ; la table maîtresse
+tourne désormais jusqu'au bout (268 lignes, 142 OK / 6 DIFF / 120 MISSING
+— les MISSING sont attendus tant que la campagne confirmatoire élargie à
+8 scénarios n'a pas tourné, pas une régression). D-98 : le contrôle
+négatif de fig9 utilise désormais une fraction de pixels marqués, sans
+référence relative au champ, au lieu d'un P/R/F1 qui ne pouvait pas
+échouer. D-100 : fig11 affiche désormais les deux poids d'incertitude par
+arête (h et v) que le mappeur calcule réellement, au lieu d'un panneau
+unique par cellule qui masquait leur anisotropie. D-50 : décision USER —
+le verdict imprimé de T11b lit désormais `slope_paired` (une pente déjà
+calculée) plutôt que `prog_all` (un tirage unique mesuré instable :
+0,1034/0,0850/0,0859 sur trois exécutions identiques, deux conclusions
+opposées). D-39 : `check_tearing` lit désormais une observable fluctuante
+(`J2_fluct`, fond homogène-en-x retiré) et accepte un pic encore montant
+en fin de fenêtre simulée si l'amplification dépasse le seuil `grows` —
+les 6/6 fichiers DNS `harris_tearing` réels passent maintenant `ok=True`
+(8,1×–17,5×), contre `ok=False` sur les 6 avant (1,0×–1,1×, uniquement le
+courant d'équilibre de la nappe, qui ne referme jamais son pic dans la
+fenêtre `[0, t_max]`). Voir `docs/RESULTS.md` pour les cinq mesures
+complètes.
 
 **Seconde passe, même jour** : la suite complète (`-m "not slow"`, 3102
 tests) a été rejouée pour remesurer la couverture de `COUVERTURE.md`. Elle
@@ -107,53 +117,6 @@ python src/train_hyperparams.py --print-space
 
 C'est un blocage de **campagne**, pas un défaut de code : il se ferme
 quand la campagne tourne et écrit un JSON traçable, pas avant.
-
----
-
-## D-39 — le check de tearing n'a plus de signal
-
-**Où ça bloque.** `check_tearing` classe **harris_tearing comme `ok=False`
-sur les 6/6 artefacts DNS** (Re 400/800/1200/1600, N 64/96/256). C'est le
-seul des trois checks de validation phase 1b qui porte sur la reconnexion
-magnétique.
-
-**Vérifié le 25 août**, rejoué de bout en bout sur le code actuel :
-
-```
-Re1200_N96  ok=False  amplification=1.086
-Re1600_N96  ok=False  amplification=1.103
-Re400_N256  ok=False  amplification=1.000
-Re400_N64   ok=False  amplification=1.016
-Re400_N96   ok=False  amplification=1.000
-Re800_N96   ok=False  amplification=1.077
-```
-
-Toujours le même symptôme qu'à la découverte : `mean_sq_current` moyenne
-`J_z²` sur **tout le domaine**, y compris le courant d'équilibre de la
-nappe (uniforme, non nul dès t=0), qui domine la moyenne spatiale et
-n'évolue presque pas. Le module a été réécrit depuis (`mean_sq_current_fixed`
-n'existe plus, remplacé par une seule `mean_sq_current`), mais la
-composante fluctuante (retrait du fond stationnaire) n'a pas été branchée :
-un test exploratoire antérieur avait montré qu'elle récupère un vrai signal
-de reconnexion (amplification creux→fin de 8,3× à 17,6× sur les 6 fichiers)
-mais ne suffit pas seule — la fenêtre temporelle ne referme jamais le pic.
-
-**Deux corrections à composer, aucune appliquée** : (a) observable
-fluctuante plutôt que moyenne pleine grille, **et** (b) revoir la fenêtre
-`[0, t_max]` ou le critère de pic. Ne pas rebrancher sur les fonctions
-gelées d'avant D-21 : ce serait réintroduire le défaut D3 pour faire
-retomber `ok=True` sans corriger l'observable.
-
-```bash
-python3 -c "
-import sys, glob, re, numpy as np
-sys.path.insert(0, 'study/pipeline'); sys.path.insert(0, 'src')
-import dns_validation as dv
-for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
-    res = dv.analyse_one(path)
-    print(re.search(r'Re(\d+)_N(\d+)', path).group(0), dv.check_tearing(res))
-"
-```
 
 ---
 

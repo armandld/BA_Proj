@@ -13,6 +13,23 @@ docs/RESULTS.md, D-42) : cablage gele (`mean_sq_current`), le pic tombe sur
 le dernier echantillon (i_peak=19/20) sur 6/6 fichiers ; `check_tearing`
 rendait `ok=True` (amplification 1.53-2.65x) sur les 6, uniquement a cause
 de ce defaut.
+
+D-39, ensuite : une fois D-42 applique seul, les 6/6 fichiers reels
+rendaient `ok=False` (amplification 1.00-1.10x, voir docs/DEFAUTS.md) --
+parce que `J2` moyenne le courant d'equilibre de la nappe sur tout le
+domaine, qui noie le signal de reconnexion. `check_tearing` lit maintenant
+`J2_fluct` (`fluctuating_mean_sq_current`, fond homogene-en-x retire) et
+accepte un pic encore montant en fin de fenetre (`still_rising`) SI
+l'amplification depasse le seuil `grows` (1.2x) -- ce n'est plus le rejet
+inconditionnel introduit par D-42 : les 6 fichiers reels ne referment
+jamais leur pic dans la fenetre simulee (reconnexion encore en cours a
+t_max), et les rejeter tous reviendrait a rendre le check structurellement
+insatisfiable par toute donnee reelle. `test_peak_pinned_at_the_last_
+sample_is_rejected` d'origine testait une amplification (5x) qui, avec le
+recul empirique des 6 fichiers reels (8.3x-17.6x), n'a plus de raison
+d'etre rejetee -- il est remplace par deux tests qui isolent ce qui
+distingue encore un signal accepte d'un signal rejete : l'amplification
+mesuree contre le seuil `grows`, pas la seule position du pic.
 """
 import os
 import sys
@@ -56,15 +73,46 @@ def test_old_behaviour_accepted_a_peak_pinned_at_the_last_sample():
     assert np.argmax(j_monotone_runaway) == len(j_monotone_runaway) - 1
 
 
-def test_peak_pinned_at_the_last_sample_is_rejected():
-    """Correction : la meme trace, jamais retombee dans la fenetre
-    simulee, doit maintenant echouer -- ce n'est pas un pic observe."""
+def test_peak_pinned_at_the_last_sample_with_weak_growth_is_rejected():
+    """D-39 : la position du pic seule ne suffit plus a rejeter (voir
+    le test _strong_growth_ ci-dessous) -- mais une trace qui ne fait que
+    deriver, sans jamais depasser le seuil `grows` (1.2x), doit rester
+    rejetee : rien ne distingue alors ce cas d'un bruit numerique sans
+    reconnexion. C'est ce seuil, pas la position du pic, qui porte
+    desormais le critere de rejet."""
     t = np.linspace(0, 2, 20)
-    j_monotone_runaway = np.linspace(1.0, 5.0, 20)
-    res = dict(t=t, J2=j_monotone_runaway)
+    j_weak_drift = np.linspace(1.0, 1.1, 20)  # +10 %, sous le seuil 1.2x
+    res = dict(t=t, J2=j_weak_drift, J2_fluct=j_weak_drift)
 
     new = check_tearing(res)
+    assert np.argmax(j_weak_drift) == len(j_weak_drift) - 1
     assert new["ok"] is False
+
+
+def test_peak_pinned_at_the_last_sample_with_strong_growth_is_now_accepted():
+    """D-39 : la MEME trace que `test_old_behaviour_accepted_...` ci-dessus
+    -- jamais retombee dans la fenetre, pic au dernier echantillon --
+    est maintenant ACCEPTEE, a rebours du rejet impose par D-42.
+
+    Ce n'est pas un retour en arriere : D-42 rejetait TOUTE trace dont le
+    pic tombe en fin de fenetre, en assumant qu'une vraie reconnexion se
+    referme forcement dans la fenetre simulee. Les 6 fichiers DNS
+    harris_tearing reels (docs/RESULTS.md, D-39) montrent que cette
+    hypothese etait fausse : ils ne referment JAMAIS leur pic (reconnexion
+    encore en cours a t_max) tout en montrant une amplification franche
+    (8.3x-17.6x). Rejeter systematiquement ce cas rendait le check
+    insatisfiable par toute donnee reelle. `saturated=False` distingue ce
+    cas -- pic encore montant, accepte sur la seule force du signal -- d'un
+    pic qui a reellement redescendu (`test_genuine_interior_peak_still_
+    accepted` ci-dessous)."""
+    t = np.linspace(0, 2, 20)
+    j_monotone_runaway = np.linspace(1.0, 5.0, 20)
+    res = dict(t=t, J2=j_monotone_runaway, J2_fluct=j_monotone_runaway)
+
+    new = check_tearing(res)
+    assert np.argmax(j_monotone_runaway) == len(j_monotone_runaway) - 1
+    assert new["ok"] is True
+    assert new["saturated"] is False
 
 
 def test_genuine_interior_peak_still_accepted():
@@ -74,19 +122,23 @@ def test_genuine_interior_peak_still_accepted():
     t = np.linspace(0, 2, 20)
     j_peaked = np.concatenate([np.linspace(1.0, 5.0, 10),
                                np.linspace(5.0, 2.0, 10)])
-    res = dict(t=t, J2=j_peaked)
+    res = dict(t=t, J2=j_peaked, J2_fluct=j_peaked)
 
     old = _old_check_tearing(res)
     new = check_tearing(res)
     assert old["ok"] is True
     assert new["ok"] is True
+    assert new["saturated"] is True
 
 
 def test_real_harris_tearing_diagnostic_is_finite():
-    """The diagnostic is defined without assuming where a real peak lies."""
+    """Le diagnostic reste defini sur les 6 fichiers reels, sans supposer
+    ou tombe le pic -- et D-39 doit y rendre `ok=True` sur les 6/6 : c'est
+    la mesure meme qui justifie le changement de critere ci-dessus, pas
+    seulement une garantie de non-crash."""
     import glob
 
-    from dns_validation import mean_sq_current
+    from dns_validation import fluctuating_mean_sq_current
 
     results_dir = os.path.join(_REPO_ROOT, "results")
     paths = sorted(glob.glob(
@@ -101,9 +153,15 @@ def test_real_harris_tearing_diagnostic_is_finite():
         By = d["By"].astype(np.float64)
         t = d["t"].astype(np.float64)
         n = Bx.shape[0]
-        J2 = np.array([mean_sq_current(Bx[i], By[i]) for i in range(n)])
-        res = dict(t=t, J2=J2)
+        J2_fluct = np.array(
+            [fluctuating_mean_sq_current(Bx[i], By[i]) for i in range(n)])
+        res = dict(t=t, J2_fluct=J2_fluct)
 
         diagnostic = check_tearing(res)
-        assert np.isfinite(diagnostic["amplification"]), os.path.basename(path)
-        assert 0 <= diagnostic["t_peak"] <= t[-1], os.path.basename(path)
+        name = os.path.basename(path)
+        assert np.isfinite(diagnostic["amplification"]), name
+        assert 0 <= diagnostic["t_peak"] <= t[-1], name
+        assert diagnostic["ok"] is True, (
+            f"{name}: attendu ok=True (D-39, amplification mesuree "
+            f"{diagnostic['amplification']:.2f}x), obtenu ok=False -- "
+            "le signal de reconnexion ne passe plus le critere")

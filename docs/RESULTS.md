@@ -9157,3 +9157,105 @@ trois), `tests/pipeline/test_train_hyperparams_smoke.py` +
 `test_analyze_hyperparams.py` (109 passed), `tests/solver` (315 passed,
 3 skipped, inchangé — fichiers non touchés par ce défaut mais rejoués
 par prudence après les corrections D-192 du même jour).
+
+---
+
+# D-39 — `check_tearing` retrouve un signal de reconnexion sur les 6/6 fichiers réels
+
+**Cause, deux défauts composés** (cf. `docs/DEFAUTS.md` avant résolution,
+et D-42 ci-dessus pour le premier). (1) `J2` (`mean_sq_current`) moyenne
+`Jz²` sur **tout le domaine**, y compris le courant d'équilibre de la
+nappe — uniforme le long de x pour les trois scénarios `TEARING_LIKE`
+(profil `tanh(y)`, voir `MHDSolver.init_harris_tearing` et les deux
+scénarios sœurs), quasi constant dans le temps, qui domine la moyenne
+spatiale et noie le signal de reconnexion. (2) Une fois (1) corrigé seul —
+D-42 appliqué isolément, mesuré ci-dessus — le critère `interior` (le pic
+doit avoir un point après lui dans la fenêtre) n'est satisfait par
+**aucune** des 6 trajectoires réelles : le pic tombe systématiquement sur
+le **dernier** pas enregistré, parce que la reconnexion n'a pas fini de
+saturer avant la fin de la fenêtre simulée `[0, t_max]`. Exiger un pic
+intérieur qui redescend rejetait alors toujours un signal réel, quel que
+soit l'observable utilisé.
+
+## Ce qui a changé
+
+`study/pipeline/dns_validation.py` :
+- `fluctuating_mean_sq_current(Bx, By, dx)` (nouvelle fonction) retire le
+  fond homogène-en-x (`Jz.mean(axis=0)`) avant de moyenner `Jz²` — même
+  geste que `fluctuating_KE` pour la perturbation KH, appliqué au courant.
+- `analyse_one` calcule `J2_fluct` en plus de `J2` (`J2` conservé,
+  inchangé, lu ailleurs — voir `tests/study/test_t8_dns_extension.py`,
+  `test_no_private_curl_survives.py`, qui n'appellent que `mean_sq_current`
+  directement et ne sont pas affectés).
+- `check_tearing` lit maintenant `J2_fluct` et accepte soit un pic qui
+  redescend dans la fenêtre (`saturated`, comportement D-42 inchangé), soit
+  un pic encore montant en fin de fenêtre avec une amplification franche
+  (`still_rising` ET `grows`, seuil `1.2×` inchangé). Le retour porte un
+  nouveau champ `saturated` qui distingue explicitement les deux cas.
+
+`validate_one` ne change pas d'issue pass/fail sur ce check :
+`check_tearing` y est **diagnostic seul** (logué comme
+`J2_amp=...x(resolved|unresolved,diagnostic)`, jamais ajouté à
+`failures` — voir `study/pipeline/dns_validation.py` autour de
+`elif scenario in TEARING_LIKE:`), donc `dns_sweep.py` ne change pas de
+comportement de gate ; seule l'étiquette du diagnostic dans le journal du
+sweep passe de `unresolved` à `resolved` pour les 6 fichiers réels.
+
+## Vérifié
+
+```bash
+python3 -c "
+import sys, glob, re, numpy as np
+sys.path.insert(0, 'study/pipeline'); sys.path.insert(0, 'src')
+import dns_validation as dv
+for path in sorted(glob.glob('results/dns_harris_tearing_Re*_N*.npz')):
+    res = dv.analyse_one(path)
+    c = dv.check_tearing(res)
+    tag = re.search(r'Re(\d+)_N(\d+)', path).group(0)
+    print(f\"{tag}  ok={c['ok']}  amplification={c['amplification']:.2f}x  saturated={c['saturated']}  t_peak={c['t_peak']:.3f}\")
+"
+```
+
+| fichier | amplification | saturated | ok |
+|---|---|---|---|
+| Re400_N64 | 8.07× | False | True |
+| Re400_N96 | 10.75× | False | True |
+| Re400_N256 | 11.84× | False | True |
+| Re800_N96 | 14.86× | False | True |
+| Re1200_N96 | 16.50× | False | True |
+| Re1600_N96 | 17.45× | False | True |
+
+Les 6/6 fichiers passent maintenant `ok=True` (contre `ok=False` sur les
+6/6 avant ce défaut, amplification alors mesurée 1,00–1,10× — voir D-42
+ci-dessus), avec `saturated=False` sur les 6 : le pic n'est jamais observé
+redescendre dans la fenêtre simulée, la reconnexion est encore en cours à
+`t_max` sur les 6 trajectoires disponibles. Ce n'est pas un cycle complet
+observé — seulement une preuve suffisante de reconnexion en cours, au sens
+que le critère `grows`/`still_rising` définit désormais.
+
+```bash
+pytest tests/study/test_check_tearing_end_pinned_peak.py -v   # 5 passed
+```
+
+Le fichier de test est réécrit dans le même mouvement : les quatre tests
+existants sont mis à jour pour lire `J2_fluct` (la clé que `check_tearing`
+consomme désormais), et le test qui épinglait le rejet catégorique d'un
+pic en fin de fenêtre (`test_peak_pinned_at_the_last_sample_is_rejected`)
+est remplacé par deux tests qui isolent ce qui distingue encore un signal
+accepté d'un signal rejeté — l'amplification mesurée contre le seuil
+`grows` (1,2×), pas la seule position du pic :
+`test_peak_pinned_at_the_last_sample_with_weak_growth_is_rejected` (+10 %,
+sous le seuil, rejeté) et `test_peak_pinned_at_the_last_sample_with_
+strong_growth_is_now_accepted` (la même trace 5× qu'avant, désormais
+acceptée — revirement assumé et justifié dans sa docstring par
+l'amplification 8,3×–17,6× mesurée sur les 6 fichiers réels ci-dessus).
+`test_real_harris_tearing_diagnostic_is_finite` porte maintenant
+l'assertion `ok is True` par fichier — c'est elle qui casserait si ce
+correctif régressait.
+
+Régression, sur les autres consommateurs de `dns_validation.py`
+(recherchés par grep, aucun ne lit `check_tearing` ni `J2_fluct`) :
+`tests/study/test_dns_gate_accepts_a_solenoidal_trajectory.py`,
+`test_empty_sweep_never_silent.py`, `test_no_private_curl_survives.py`,
+`test_t14_divb_uses_matched_operator.py`, `test_t8_dns_extension.py`
+— tous rejoués après ce correctif, verdict inchangé.
