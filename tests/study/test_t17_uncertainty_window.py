@@ -107,7 +107,7 @@ def test_deployed_params_are_read_from_the_pipeline_not_hardcoded():
     import config
     dep = PARAM_SETS["deployed_openloop"]
     assert dep["sigma"] == pytest.approx(float(config.TRAINED_SIGMA))
-    assert dep["threshold_amr"] == pytest.approx(float(p5.TRAINED_THRESHOLD))
+    assert dep["threshold_amr"] == pytest.approx(float(config.TRAINED_THRESHOLD))
     # et il ne doit pas etre confondu avec celui de la boucle fermee
     assert dep["sigma"] != PARAM_SETS["level3_trained"]["sigma"]
     # les quatre classes des folds Level-3, sous leurs noms V1 exacts

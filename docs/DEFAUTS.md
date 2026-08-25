@@ -31,6 +31,17 @@ correction — ni mesure avant/après, ni commande, ni date. C'est exactement
 la dette que `CLAUDE.md` interdit : un résultat sans sa mesure. Quiconque
 veut s'appuyer dessus doit remesurer avant de citer.
 
+**Seconde passe, même jour** : la suite complète (`-m "not slow"`, 3102
+tests) a été rejouée pour remesurer la couverture de `COUVERTURE.md`. Elle
+n'est pas verte — **20 failed**, dont 19 préexistants sur cette branche
+(diff exact contre une exécution capturée avant cette reconstruction) et 1
+introduit par elle-même (corrigé, voir `COUVERTURE.md`). Sur les 19,
+**15 étaient des tests devenus obsolètes** (chemin renommé, constante
+non remise à jour après l'élargissement à 8 scénarios, canarie dont le
+bloc mort a été nettoyé, import fantôme) — corrigés directement dans
+`tests/`, aucun ne touchait `src/`. Les **4 restants dépassent la
+correction mécanique** et entrent ici : D-191, D-192, D-193, D-194.
+
 ## Règle d'arrêt — ce qui entre dans ce fichier
 
 Écrite parce que le taux de découverte a dépassé le taux de résolution.
@@ -317,6 +328,226 @@ que les pics nuls du corpus sont exactement nuls.
 
 ```bash
 pytest tests/mapping/test_plaquette_signal_negligeable.py -q -m slow
+```
+
+---
+
+## D-191 — le bras QAOA est désormais déterministe PAR DÉFAUT partout, pas seulement où le protocole le documente
+
+**Rapport seul. Décision requise, rien n'est corrigé.**
+
+**Où ça bloque.** `VQARuntime.__init__` et `VQA/execute.execute()` prennent
+désormais un paramètre `seed`, **par défaut `0`** — pas `None`, pas un
+tirage. Ce défaut est threadé à `AerSimulator(seed_simulator=seed)`,
+`estimator.options.simulator.seed_simulator`,
+`sampler.options.simulator.seed_simulator` et
+`seed_transpiler=self.seed`. Tous les appelants réels
+(`src/pipeline.py:484`, `src/call_vqa_shell.py:93,102`) le lisent via
+`getattr(argus, "seed", 0)` — **un seul `--seed` CLI pour toute une
+campagne**, transmis identique à chaque appel QAOA, quel que soit le
+patch, le pas de temps ou le scénario. Trois tests dont l'unique raison
+d'être est de mesurer la dispersion propre du bras QAOA (l'échantillonnage
+shot-à-shot, indépendamment des conditions physiques) rougissent parce que
+cette dispersion est tombée à zéro **exactement** :
+
+| test | mesure | avant (attendu) | maintenant |
+|---|---|---|---|
+| `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread` | écart intra-méthode sur 3 tirages | `> 0.0` | **`0.0` exactement** |
+| `test_qaoa_noise_and_early.py::test_noise_robustness` | écart QAOA/classique sans bruit, Orszag-Tang | doit perdre de `> 0,09` | **`0,0000` exactement** — QAOA égale le classique au bit |
+| `test_qaoa_physics_decision.py::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | écart-type de 10 tirages répétés | `> 1e-6` | **`0,0` exactement** — les 10 valeurs sont identiques à la dernière décimale |
+
+Les commentaires que ces tests portent encore affirment le contraire du
+code actuel : « `aucune graine n'est fixée dans src/VQA/` » (les deux
+premiers). Ce ne sont pas des faux positifs — c'est le contrat qui a
+changé sous eux sans que le texte qui l'annonce ait suivi, exactement la
+forme que ce dépôt appelle question 4.
+
+**Ce n'est pas une régression accidentelle.** `docs/protocol_v3_evaluation.md:61-62` :
+*« Trois graines physiques distinctes sont évaluées avec une graine QAOA
+fixe »* — c'est le design délibéré du protocole confirmatoire
+(`study/closed_loop/closed_loop_run_variance.py`, docstring : « the QAOA
+seed remains fixed, so the statistical unit is the trajectory »), pour
+isoler la variance due aux conditions physiques de celle due à
+l'échantillonnage QAOA. `docs/RESULTS.md` liste « graines QAOA explicites »
+parmi les corrections en place — une ligne, sans portée ni mesure.
+
+**Ce qui n'est écrit nulle part : que ce défaut vaut aussi pour TOUT le
+reste du dépôt, pas seulement pour le protocole confirmatoire qui le
+motive.** `docs/protocol_deviations.md` — le registre formel des écarts
+autorisés — ne mentionne que l'amplitude de perturbation Kelvin-Helmholtz
+et dit explicitement *« Aucun autre écart n'est autorisé à ce stade »*.
+Un `--seed` par défaut à `0`, partagé par construction entre toutes les
+questions qui consomment `execute()`/`VQARuntime` sans le surcharger
+explicitement — les trois tests ci-dessus, mais aussi potentiellement
+`figures/`, `study/h0_selection/`, `study/h3_representation/`, tout ce que
+`COUVERTURE.md` documente comme mesurant la dispersion QAOA — n'y figure
+pas. La revendication centrale du dépôt (`COUVERTURE.md` § 4, « Le bras
+QAOA n'est pas déterministe », dispersion 1,79e-1 à 3,61e-1) a été mesurée
+sous l'ancien régime non-seedé ; personne n'a vérifié si elle tient encore
+sous celui-ci pour les chemins qui ne sont pas le protocole confirmatoire.
+
+**Où on en est.** Deux lectures possibles, aucune tranchée :
+
+1. Le défaut par `seed=0` n'aurait dû s'appliquer qu'au chemin
+   confirmatoire (`closed_loop_run_variance.py`, qui passe déjà
+   `--qaoa-seed` explicitement) — tout le reste devrait recevoir une
+   graine `None`/tirée par défaut, et les trois tests ci-dessus sont
+   corrects tels quels.
+2. Le défaut déterministe est voulu partout pour la reproductibilité, et
+   ce sont les trois tests (et toute mesure de dispersion QAOA hors
+   protocole confirmatoire) qui doivent désormais fixer explicitement des
+   graines **distinctes** par tirage pour continuer à mesurer ce qu'ils
+   prétendent mesurer.
+
+Aucune des deux n'est appliquée ici : c'est un changement de comportement
+de `src/`, non consigné dans `RESULTS.md` au-delà d'une ligne sans portée,
+et il touche une affirmation déjà publiée.
+
+```bash
+git diff d047015..HEAD -- src/VQA/execute.py src/VQA/runtime.py
+pytest tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread -q
+```
+
+---
+
+## D-192 — un nettoyage de commentaires a fait disparaître des mesures et des renvois D-NNN de `src/`, sondage seulement
+
+**Rapport seul. Décision requise : restaurer la provenance perdue, ou
+adapter les gardes qui la lisent.**
+
+**Où ça bloque.** Le même commit `d3d7573` a raccourci de nombreux
+commentaires de `src/` — comparé au français détaillé d'avant (mesures,
+renvois `D-NNN`), plusieurs sont devenus une phrase anglaise sans nombre.
+Deux sites trouvés par les tests qui les gardaient, pas par balayage
+complet :
+
+| fichier | avant (`d047015`) | maintenant | test qui le voit |
+|---|---|---|---|
+| `Simulation/solver.py`, `enforce_incompressibility` | docstring citant `rotationnelle`, `SPECTRALE`, et les deux mesures **4,63e-07** / **2,818e-14** qui ont motivé le choix | `"Project velocity; rotational induction preserves FD4 div(B)=0."` — aucun nombre | `test_solver_convergence.py::test_the_corrected_path_is_the_default_and_the_reason_is_written` |
+| `Simulation/solver.py`, `PROJECT_RHS` | commentaire citant `step_full`, `step_layered`, `patch LOCAL`, `pas periodique` | `"RHS projection is valid only for global periodic fields. It remains disabled because layered patch updates are local and non-periodic."` — sens conservé, jeton `step_full` perdu | `test_solver_convergence.py::test_the_correction_is_off_by_default_and_the_reason_is_written` |
+| `pipeline.py`, garde `_sigma_defaulted` | renvoi `D-22` dans le commentaire | renvoi disparu, comportement (le `RuntimeWarning`) intact | `test_solver_guards_and_objective.py::test_the_pipeline_warns_when_sigma_has_to_be_defaulted` |
+
+**Ce que ça n'est PAS.** Aucune des trois valeurs/comportements gardés
+n'a changé — `PROJECT_RHS`/`PROJECT_B` restent `False`, le `RuntimeWarning`
+se lève toujours. Ce n'est pas un défaut de calcul.
+
+**Ce que c'est.** Une perte de provenance : les deux mesures spectrales
+(4,63e-07, 2,818e-14) qui justifiaient `enforce_incompressibility` ne sont
+plus écrites nulle part dans le code qu'elles justifient, et le renvoi
+`D-22` qui reliait le garde sigma à sa découverte a disparu. C'est
+exactement la règle que `VIGIL.md`/ce dépôt appliquent partout ailleurs
+(« un résultat sans sa mesure ») — retournée contre le dépôt lui-même.
+
+**Portée non mesurée.** Deux sites trouvés parce qu'un test les gardait ;
+combien d'autres commentaires de `src/` ont perdu un chiffre ou un
+`D-NNN` sans qu'aucun test ne le lise n'est pas su — sondage, pas
+balayage.
+
+```bash
+git diff d047015..HEAD -- src/Simulation/solver.py | grep -B3 -A1 "^-.*D-\|^-.*[0-9]e[+-][0-9]"
+pytest tests/solver/test_solver_convergence.py -q -k "reason_is_written"
+```
+
+---
+
+## D-193 — le résultat central de H0a n'existe dans aucun document vivant
+
+**Rapport seul. Décision requise : où republier ce défaut.**
+
+*(Ce titre évite volontairement d'écrire le numéro du défaut discuté :
+`test_la_decision_de_ne_pas_corriger_D53_reste_ecrite` reconnaît une
+entrée à son TITRE, et un renvoi dans la prose d'un autre défaut ne doit
+pas compter comme l'entrée elle-même — exactement ce que D-146 a déjà
+appris à ce dépôt. Le numéro est cité une fois, en corps de texte, dans
+le paragraphe « Où ça bloque » ci-dessous.)*
+
+**Où ça bloque.** `CLAUDE.md` — le document que toute session lit en
+premier — écrit noir sur blanc : *« À dim = 3 [...] le QAOA atteint
+l'optimum sur 0,062–0,156 des instantanés contre 1,000 exigé [...] Voir
+D-53. »* C'est la mesure sur laquelle repose tout H0a. **`D-53` n'existe
+dans aucun fichier lisible du dépôt** — ni `DEFAUTS.md` (vérifié : absent
+aussi de la version pré-suppression, `d047015`, donc ce n'est pas un oubli
+de cette reconstruction), ni `RESULTS.md` (39 lignes actuelles, aucune
+mention).
+
+**Comment on est tombé dessus.**
+`tests/study/test_h0_certified_dim3_contradicts_criterion.py::test_la_decision_de_ne_pas_corriger_D53_reste_ecrite`
+rougit : *« aucune ENTREE D-53 dans DEFAUTS.md ni RESULTS.md »*. Son propre
+docstring explique pourquoi il cherche dans les deux : *« un défaut clos
+SORT de `DEFAUTS.md` et entre dans `RESULTS.md` — c'est la règle des six
+documents »*. D-53 est donc censé vivre dans `RESULTS.md`, pas dans
+`DEFAUTS.md` — cohérent avec le fait qu'il n'était déjà plus dans
+`DEFAUTS.md` avant la suppression du 24 août.
+
+**Où c'est réellement passé.** `RESULTS.md` a subi la même suppression du
+24 août que `DEFAUTS.md`/`COUVERTURE.md` (voir leurs sections de
+reconstruction respectives) et n'a, à ce jour, **pas** été restauré —
+seul un état courant à 39 lignes existe, sans historique. Le texte complet
+de D-53 (mesure, seuils, méthode) reste lisible dans l'historique Git via
+`git show d047015:docs/COUVERTURE.md`, section `h0_optimiser_equivalence.py`.
+
+**Ce que ça coûte.** Le test lui-même le dit : sans une entrée D-53 quelque
+part, *« le critère MIN_HIT=1.0 se relit comme valide à toute taille »* —
+c'est-à-dire que rien n'empêche une lecture future de croire que le critère
+d'acceptation de `h0_optimiser_equivalence.py` est toujours satisfait
+partout, alors que la décision documentée de ne PAS le corriger à `dim=3`
+(parce que le classement des solveurs n'y a jamais été exercé avant que
+D-53 ne le fasse lever) a disparu du seul endroit où un lecteur la
+trouverait.
+
+**Où on en est.** Non corrigé : republier D-53 demande de restaurer
+`RESULTS.md` (hors périmètre de cette passe, qui portait sur
+`COUVERTURE.md`), pas seulement d'ajouter une ligne.
+
+```bash
+pytest tests/study/test_h0_certified_dim3_contradicts_criterion.py -q
+git show d047015:docs/COUVERTURE.md | grep -n "D-53" 
+```
+
+---
+
+## D-194 — le balayage des invocations de lanceurs a perdu plus de la moitié de sa surface, et personne n'a dit si c'est voulu
+
+**Rapport seul. Décision requise : le plancher a-t-il raison de rester
+haut, ou la perte est-elle acceptée ?**
+
+**Où ça bloque.** `tests/test_launcher_paths_resolve.py` porte trois
+planchers datés, chacun avec le hash du commit qui l'a mesuré
+(`COUVERTURE.md` les cite déjà comme « le bon patron » : daté, marge
+mesurée). Les trois rougissent aujourd'hui :
+
+| plancher | mesuré à | aujourd'hui |
+|---|---|---|
+| `>= 45` | — | **35** |
+| `>= 79` (`766d289`) | 79 | **35** |
+| `>= 80` (`f8edebf`) | 80 | **35** |
+
+**Ce que la mesure elle-même dit être correcte** : ces trois gardes
+existent précisément pour détecter ce cas — *« le balayage a rétréci, il
+ne prouve plus ce qu'il prouvait »*. Ils font leur travail.
+
+**Cause identifiée, cohérente avec `COUVERTURE.md`** : six des neuf
+scripts supprimés dans `d3d7573` (voir `COUVERTURE.md`, section
+« Reconstruction ») étaient des `.sh` — `inventaire_campagne.py` et
+`nettoyer_essais_fantomes.py` mis à part, `run_leak_free_campaign.sh`,
+`run_study_v2_phases.sh`, `run_study_v2b.sh`, `soumettre_campagne.sh`
+portaient chacun un nombre substantiel d'invocations (12 à 54 selon la
+mesure du 18 août citée dans `COUVERTURE.md`). Leur suppression réduit
+mécaniquement ce que le balayage peut voir.
+
+**Ce qui n'est PAS établi** : que la surface perdue était redondante. Les
+scripts supprimés ont-ils été consolidés dans les quatre nouveaux
+(`run_confirmatory_campaign.sh`, `run_dns_campaign.sh`,
+`run_rented_campaign.sh` plus les lanceurs existants), auquel cas les
+mêmes invocations survivent sous une autre plume et les planchers doivent
+simplement être abaissés à la nouvelle valeur mesurée — ou une partie du
+comportement qu'ils enrobaient a disparu avec eux sans que rien ne le
+remplace. Non tranché ici : abaisser un plancher sans le savoir serait
+exactement la faute que ce fichier a déjà commise une fois (D-151) et que
+`COUVERTURE.md` documente comme corrigée.
+
+```bash
+pytest tests/test_launcher_paths_resolve.py -q -k "sweep or exemption"
 ```
 
 ---

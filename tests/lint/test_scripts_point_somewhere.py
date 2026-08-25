@@ -58,7 +58,11 @@ _SORTIES = ("logs", "results/logs_v3", "results/figures",
             # ecrit par soumettre_campagne.sh : le fichier de job, derive de
             # l'ordonnanceur choisi. Il est dans .gitignore -- il se
             # regenere, il ne se versionne pas.
-            "scripts/job_campagne_")
+            "scripts/job_campagne_",
+            # QHAS_RESULTS_DIR par defaut de run_confirmatory_campaign.sh,
+            # run_dns_campaign.sh, run_fold.sh, run_study_v3.sh : cree au
+            # lancement de la campagne, pas une entree versionnee.
+            "results/campaigns/current")
 
 
 def _shell_scripts():

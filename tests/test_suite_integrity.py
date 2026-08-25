@@ -158,6 +158,12 @@ SANS_ASSERTION_LEGITIMES = {
     "tests/quantum/test_qaoa_physics_decision.py::test_k_opt_30_with_psi_zero_limited":
         "diagnostic assume : son propre commentaire dit « we just measure "
         "and report ». A convertir en mesure epinglee ou a sortir de tests/",
+    "tests/study/test_phase10a_argmax_is_not_a_grid_edge.py::"
+    "test_degenerate_edge_does_not_trigger_the_edge_guard":
+        "`require_interior_optima` EST la verification : elle leve sur un "
+        "bord non resolu (nom hors du prefixe assert/check/verifie que ce "
+        "detecteur reconnait) ; l'absence de levee sur une courbe plate "
+        "degeneree est le comportement attendu par ce test.",
 }
 
 

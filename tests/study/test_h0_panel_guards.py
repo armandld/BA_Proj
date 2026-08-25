@@ -170,9 +170,13 @@ def test_a_single_scenario_gets_its_own_file(scen):
 
 
 def test_four_parallel_runs_would_not_collide():
-    """Le defaut lui-meme : les quatre noms doivent etre deux a deux distincts."""
+    """Le defaut lui-meme : les huit noms doivent etre deux a deux distincts.
+
+    `_ALL` porte les 8 scenarios du protocole elargi (config.py, voir
+    `docs/COUVERTURE.md` -- "protocole s'est elargi") depuis le 25 aout ;
+    seul le nombre attendu ici (4 -> 8) n'avait pas suivi."""
     names = [_out_name(scenario=[s], **_BASE) for s in _ALL]
-    assert len(set(names)) == 4, f"collision entre {names}"
+    assert len(set(names)) == 8, f"collision entre {names}"
 
 
 def test_a_partial_sweep_is_distinct_from_the_full_one():

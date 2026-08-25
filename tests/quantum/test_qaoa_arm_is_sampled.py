@@ -97,14 +97,17 @@ def test_study_result_names_and_payload_separate_quantum_seeds(tmp_path):
             "exact": {"f1": 0.6},
             "classical": {"f1": 0.4},
             "qaoa_exact_agreement": 0.5,
+            "qaoa_exact_agreement_raw": 0.5,
+            "exact_ground_degeneracy": 1,
         },
     }
     meta = {
         "scenario": "case", "Re": 400, "N": 32, "n_patches": 1,
-        "reps": 1, "K_opt": 2, "seed": 9, "suffix": "_v2",
+        "reps": 1, "K_opt": 2, "backend": "state_vector", "seed": 9,
+        "suffix": "_v2",
     }
     path = save_results([row], meta, outdir=tmp_path)
-    assert path.endswith("_seed9_v2.npz")
+    assert path.endswith("_state_vector_seed9_v2.npz")
     with np.load(path) as artifact:
         assert int(artifact["seed"]) == 9
         np.testing.assert_array_equal(artifact["seeds"], [9])

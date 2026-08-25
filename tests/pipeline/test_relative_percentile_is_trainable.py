@@ -145,40 +145,22 @@ def _cles_des_blocs_morts():
     return cles
 
 
-def test_le_bloc_mort_existe_encore():
-    """Sans bloc mort, la canarie ci-dessous ne prouve rien : un balayage
-    vide doit crier."""
-    assert _cles_des_blocs_morts(), (
-        "aucun litteral de chaine de `pipeline.py` ne contient de `hp.get(` : "
-        "le bloc mort a disparu. Le test suivant deviendrait vide -- le "
-        "relire avant de le laisser passer.")
-
-
-def test_le_bloc_mort_ne_compte_pas():
-    """Garde-fou du garde-fou, par le COMPORTEMENT du balayage.
-
-    Mesure (D-149) : l'ancienne version comptait
-    `source.count("w_z_frac    = hp.get(") == 2`. Le bloc mort transforme en
-    CODE -- son texte laisse intact, donc le compte inchange -- laissait le
-    fichier a **21 passed**, alors que c'est exactement ce que la docstring
-    d'origine annoncait detecter. La cle qui tranche est celle qui n'existe
-    QUE dans le bloc mort : `beta_grad`. Si elle apparait parmi les cles
-    vivantes, le bloc est devenu du code, et le balayage anti-D-31 peut
-    desormais etre satisfait par des lectures que le bloc vivant reecrit
-    quinze lignes plus bas -- D-31 exactement.
-    """
-    mortes = _cles_des_blocs_morts()
-    vivantes = _cles_hp_get_vivantes()
-    canaries = mortes - vivantes
-    assert canaries, (
-        f"toutes les cles du bloc mort {sorted(mortes)} sont aussi lues par "
-        f"le code vivant : plus aucune canarie ne distingue les deux, revoir "
-        f"`_cles_hp_get_vivantes`.")
-    assert "beta_grad" in canaries, (
-        f"`beta_grad` n'est plus la canarie attendue (canaries : "
-        f"{sorted(canaries)}) : soit le bloc mort a change, soit le code "
-        f"vivant lit maintenant `beta_grad`. Les deux demandent une relecture.")
-    assert "w_z_frac" in vivantes
+#: Retires le 25 aout : le litteral triple-quote que `_cles_des_blocs_morts`
+#: cherchait a ete retire de `pipeline.py` (nettoyage de code mort, hors
+#: perimetre de cette reconstruction -- voir `docs/DEFAUTS.md`). Les deux
+#: tests qui vivaient ici (`test_le_bloc_mort_existe_encore`,
+#: `test_le_bloc_mort_ne_compte_pas`) ne protegeaient pas D-31 lui-meme --
+#: c'est `test_chaque_parametre_optimise_est_lu_par_la_pipeline` ci-dessous,
+#: toujours vivant et toujours vert sur du code reel, qui le fait. Ils
+#: prouvaient seulement que CE garde-la savait echouer, par une bait vivant
+#: dans `pipeline.py`. Sans bloc mort a lire, `_cles_des_blocs_morts()` rend
+#: legitimement un ensemble vide ; les deux tests rougissaient sur un fait
+#: correct, pas sur une regression. Reintroduire le bloc mort dans `src/`
+#: uniquement pour nourrir ce garde n'a pas ete fait -- `src/` est l'objet
+#: d'etude, pas un terrain d'amorces. La capacite « le detecteur peut
+#: vraiment echouer » n'est donc plus demontree ; elle le redeviendrait via
+#: une source AST synthetique passee a `_cles_des_blocs_morts`, pas ecrite
+#: ici faute de perimetre.
 
 
 @pytest.mark.parametrize("nom", sorted(TH.SEARCH_SPACE))
