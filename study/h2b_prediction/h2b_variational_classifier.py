@@ -83,7 +83,7 @@ def stratified_subsample(X, Y, n, rng):
 def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
             maxiter, seed):
     """Train a VQC and return (f1, auc, thr, fit_s, model)."""
-    from qiskit.circuit.library import ZZFeatureMap, RealAmplitudes
+    from qiskit.circuit.library import real_amplitudes, zz_feature_map
     from qiskit_machine_learning.algorithms.classifiers import VQC
     from qiskit.primitives import StatevectorSampler
 
@@ -94,10 +94,10 @@ def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
     Xva_s = (Xva - lo) / span * np.pi - np.pi / 2
     Xva_s = np.clip(Xva_s, -np.pi, np.pi)
 
-    fm  = ZZFeatureMap(feature_dimension=d_q, reps=reps_fm,
+    fm = zz_feature_map(feature_dimension=d_q, reps=reps_fm,
                         entanglement="linear")
-    ans = RealAmplitudes(num_qubits=d_q, reps=reps_ansatz,
-                         entanglement="linear")
+    ans = real_amplitudes(num_qubits=d_q, reps=reps_ansatz,
+                          entanglement="linear")
 
     from qiskit_machine_learning.optimizers import COBYLA
     opt = COBYLA(maxiter=maxiter)
@@ -143,7 +143,8 @@ def run_vqc(Xtr, Ytr, Xva, Yva, d_q, reps_fm, reps_ansatz,
 
 def run_qke(Xtr, Ytr, Xva, Yva, d_q, reps_fm, seed):
     """Quantum kernel + SVC."""
-    from qiskit.circuit.library import ZZFeatureMap
+    from qiskit.circuit.library import zz_feature_map
+    from scipy.special import expit
     try:
         from qiskit_machine_learning.kernels import FidelityQuantumKernel
     except ImportError:
@@ -156,19 +157,24 @@ def run_qke(Xtr, Ytr, Xva, Yva, d_q, reps_fm, seed):
     Xva_s = (Xva - lo) / span * np.pi - np.pi / 2
     Xva_s = np.clip(Xva_s, -np.pi, np.pi)
 
-    fm = ZZFeatureMap(feature_dimension=d_q, reps=reps_fm,
-                      entanglement="linear")
+    fm = zz_feature_map(feature_dimension=d_q, reps=reps_fm,
+                        entanglement="linear")
     qk = FidelityQuantumKernel(feature_map=fm)
 
     t0 = time.time()
     K_tr = qk.evaluate(x_vec=Xtr_s)
     K_va = qk.evaluate(x_vec=Xva_s, y_vec=Xtr_s)
-    svc = SVC(kernel="precomputed", probability=True,
-              class_weight="balanced", random_state=seed).fit(K_tr, Ytr)
+    # `probability=True` fits Platt scaling via une 5-fold CV interne a
+    # chaque appel -- couteux et inutile ici : seul l'ORDRE induit par
+    # `decision_function` compte pour choisir un seuil par grille (question
+    # 4 : `best_threshold_f1` ne lit qu'un rang, pas une probabilite
+    # calibree). `expit` en est une transformation monotone.
+    svc = SVC(kernel="precomputed", class_weight="balanced",
+              random_state=seed).fit(K_tr, Ytr)
     fit_s = time.time() - t0
 
-    p_va = svc.predict_proba(K_va)[:, 1]
-    p_tr = svc.predict_proba(K_tr)[:, 1]
+    p_va = expit(svc.decision_function(K_va))
+    p_tr = expit(svc.decision_function(K_tr))
     # D-81 : le seuil se choisit sur le TRAIN, comme `fit_eval` le fait pour
     # les bras classiques auxquels ce F1 est compare. Il etait choisi sur
     # `(p_va, Yva)` — les labels de validation — ce qui donnait au bras

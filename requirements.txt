@@ -1,23 +1,20 @@
-# Dependances pip de Q-HAS. La campagne doit toujours etre lancee depuis un
-# commit exact ; ses artefacts enregistrent ce commit et les arguments CLI.
+# Environnement de campagne valide (Python 3.11). La campagne doit
+# toujours etre lancee depuis un commit exact ; ses artefacts enregistrent
+# ce commit et les arguments CLI.
 
-# --- numerique et donnees ---
-numpy>=2.0
-scipy>=1.14
-scikit-learn>=1.5
-pandas>=2.2
-matplotlib>=3.9
-networkx>=3.3
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.0
+pandas==3.0.5
+matplotlib==3.11.1
+networkx==3.6.1
 
-# --- optimisation (campagne) ---
-optuna>=4.0
-cma>=3.3
+optuna==4.9.0
+cma==4.4.4
 
-# --- pile quantique ---
-qiskit>=2.0
-qiskit-aer>=0.15
-qiskit-ibm-runtime>=0.30
-qiskit-machine-learning>=0.8   # importe au niveau module par tests/study/
+qiskit==2.5.2
+qiskit-aer==0.17.2
+qiskit-ibm-runtime==0.49.0
+qiskit-machine-learning==0.9.0
 
-# --- tests ---
-pytest>=8.0
+pytest==9.1.1

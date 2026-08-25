@@ -110,8 +110,8 @@ def test_deployed_params_are_read_from_the_pipeline_not_hardcoded():
     assert dep["threshold_amr"] == pytest.approx(float(config.TRAINED_THRESHOLD))
     # et il ne doit pas etre confondu avec celui de la boucle fermee
     assert dep["sigma"] != PARAM_SETS["level3_trained"]["sigma"]
-    # les quatre classes des folds Level-3, sous leurs noms V1 exacts
-    assert len(SCENARIOS) == 4
+    # les huit scenarios du protocole elargi, sous leurs noms V1 exacts
+    assert len(SCENARIOS) == 8
     assert all(s.startswith("init_") for s in SCENARIOS)
 
 

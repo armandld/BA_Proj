@@ -36,11 +36,17 @@ tests) a été rejouée pour remesurer la couverture de `COUVERTURE.md`. Elle
 n'est pas verte — **20 failed**, dont 19 préexistants sur cette branche
 (diff exact contre une exécution capturée avant cette reconstruction) et 1
 introduit par elle-même (corrigé, voir `COUVERTURE.md`). Sur les 19,
-**15 étaient des tests devenus obsolètes** (chemin renommé, constante
+**7 étaient des tests devenus obsolètes** (chemin renommé, constante
 non remise à jour après l'élargissement à 8 scénarios, canarie dont le
 bloc mort a été nettoyé, import fantôme) — corrigés directement dans
-`tests/`, aucun ne touchait `src/`. Les **4 restants dépassent la
-correction mécanique** et entrent ici : D-191, D-192, D-193, D-194.
+`tests/`, aucun ne touchait `src/`. Les **12 restants dépassent la
+correction mécanique** et entrent ici : D-191 (5 sites), D-192 (3 sites),
+D-193 (1), D-194 (3). Deux des cinq sites de D-191
+(`test_signal_contribution.py::test_C_ZZ`,
+`test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep`) n'ont été
+attribués à ce défaut qu'à une passe ultérieure, le 25 août également —
+consignés ici pour ne pas laisser croire que le premier passage les avait
+tranchés.
 
 ## Règle d'arrêt — ce qui entre dans ce fichier
 
@@ -345,7 +351,7 @@ tirage. Ce défaut est threadé à `AerSimulator(seed_simulator=seed)`,
 (`src/pipeline.py:484`, `src/call_vqa_shell.py:93,102`) le lisent via
 `getattr(argus, "seed", 0)` — **un seul `--seed` CLI pour toute une
 campagne**, transmis identique à chaque appel QAOA, quel que soit le
-patch, le pas de temps ou le scénario. Trois tests dont l'unique raison
+patch, le pas de temps ou le scénario. Cinq tests dont l'unique raison
 d'être est de mesurer la dispersion propre du bras QAOA (l'échantillonnage
 shot-à-shot, indépendamment des conditions physiques) rougissent parce que
 cette dispersion est tombée à zéro **exactement** :
@@ -355,12 +361,19 @@ cette dispersion est tombée à zéro **exactement** :
 | `test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread` | écart intra-méthode sur 3 tirages | `> 0.0` | **`0.0` exactement** |
 | `test_qaoa_noise_and_early.py::test_noise_robustness` | écart QAOA/classique sans bruit, Orszag-Tang | doit perdre de `> 0,09` | **`0,0000` exactement** — QAOA égale le classique au bit |
 | `test_qaoa_physics_decision.py::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude` | écart-type de 10 tirages répétés | `> 1e-6` | **`0,0` exactement** — les 10 valeurs sont identiques à la dernière décimale |
+| `test_signal_contribution.py::test_C_ZZ` | 20 tirages, même hamiltonien `np.full(...)` (aucune source de bruit dans l'entrée) | écart-type non nul, **0,0270** mesuré et écrit dans la docstring | **écart-type `0,00000` exactement** — les 20 tirages sont un seul tirage recopié. La moyenne (`+0,03159`) franchit son seuil (`< 0,03`), mais n'est plus une moyenne de 20 échantillons : c'est un point unique, pas de sens statistique à en tirer |
+| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | corrélation de rang QAOA/vérité sur 12 combinaisons `w_z_frac`×`threshold`, un seul tirage chacune | `min(rho) > 0.0` | `min(rho) = -0,467` — négatif sur 8 des 12 combinaisons. Peut-être un vrai effet du seuil ; ne peut pas être distingué d'un artefact de CE tirage précis sans en rejouer un second à une autre graine |
 
 Les commentaires que ces tests portent encore affirment le contraire du
-code actuel : « `aucune graine n'est fixée dans src/VQA/` » (les deux
+code actuel : « `aucune graine n'est fixée dans src/VQA/` » (les trois
 premiers). Ce ne sont pas des faux positifs — c'est le contrat qui a
 changé sous eux sans que le texte qui l'annonce ait suivi, exactement la
-forme que ce dépôt appelle question 4.
+forme que ce dépôt appelle question 4. Les deux derniers ne portent pas
+cette phrase, mais souffrent du même mécanisme : sans graine qui varie, un
+« balayage » ou une moyenne sur *n* tirages n'en couvre plus qu'un seul —
+`test_hyperparameter_sweep` ne peut aujourd'hui pas dire si le rho négatif
+mesuré est un fait sur `w_z_frac`/`threshold` ou un accident du tirage à
+`seed=0`.
 
 **Ce n'est pas une régression accidentelle.** `docs/protocol_v3_evaluation.md:61-62` :
 *« Trois graines physiques distinctes sont évaluées avec une graine QAOA
@@ -369,7 +382,10 @@ fixe »* — c'est le design délibéré du protocole confirmatoire
 seed remains fixed, so the statistical unit is the trajectory »), pour
 isoler la variance due aux conditions physiques de celle due à
 l'échantillonnage QAOA. `docs/RESULTS.md` liste « graines QAOA explicites »
-parmi les corrections en place — une ligne, sans portée ni mesure.
+parmi les corrections en place, et `docs/CODE_REVIEW.md` (§ « Décisions
+appliquées ») : « graine QAOA fixe **pour isoler la variance physique** » —
+trois sources concordantes, aucune ne dit que le défaut vaut hors de ce
+cadre.
 
 **Ce qui n'est écrit nulle part : que ce défaut vaut aussi pour TOUT le
 reste du dépôt, pas seulement pour le protocole confirmatoire qui le
@@ -378,7 +394,7 @@ autorisés — ne mentionne que l'amplitude de perturbation Kelvin-Helmholtz
 et dit explicitement *« Aucun autre écart n'est autorisé à ce stade »*.
 Un `--seed` par défaut à `0`, partagé par construction entre toutes les
 questions qui consomment `execute()`/`VQARuntime` sans le surcharger
-explicitement — les trois tests ci-dessus, mais aussi potentiellement
+explicitement — les cinq tests ci-dessus, mais aussi potentiellement
 `figures/`, `study/h0_selection/`, `study/h3_representation/`, tout ce que
 `COUVERTURE.md` documente comme mesurant la dispersion QAOA — n'y figure
 pas. La revendication centrale du dépôt (`COUVERTURE.md` § 4, « Le bras
@@ -391,10 +407,10 @@ sous celui-ci pour les chemins qui ne sont pas le protocole confirmatoire.
 1. Le défaut par `seed=0` n'aurait dû s'appliquer qu'au chemin
    confirmatoire (`closed_loop_run_variance.py`, qui passe déjà
    `--qaoa-seed` explicitement) — tout le reste devrait recevoir une
-   graine `None`/tirée par défaut, et les trois tests ci-dessus sont
+   graine `None`/tirée par défaut, et les cinq tests ci-dessus sont
    corrects tels quels.
 2. Le défaut déterministe est voulu partout pour la reproductibilité, et
-   ce sont les trois tests (et toute mesure de dispersion QAOA hors
+   ce sont les cinq tests (et toute mesure de dispersion QAOA hors
    protocole confirmatoire) qui doivent désormais fixer explicitement des
    graines **distinctes** par tirage pour continuer à mesurer ce qu'ils
    prétendent mesurer.
@@ -405,7 +421,9 @@ et il touche une affirmation déjà publiée.
 
 ```bash
 git diff d047015..HEAD -- src/VQA/execute.py src/VQA/runtime.py
-pytest tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread -q
+pytest tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread \
+       tests/mapping/test_signal_contribution.py::test_C_ZZ \
+       tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
 ```
 
 ---

@@ -60,9 +60,13 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from h2b_feature_selection import git_commit_hash
 
-# les quatre classes des folds Level-3, sous leurs noms V1 exacts
+# les huit scenarios du protocole elargi (config.SCENARIOS), sous leurs
+# noms V1 exacts -- portait quatre classes (les seuls folds Level-3) avant
+# l'elargissement a 8 scenarios x 5 graines physiques (docs/protocol_v3_evaluation.md)
 SCENARIOS = ("init_kelvin_helmholtz", "init_orszag_tang",
-             "init_mhd_rotor", "init_harris_tearing")
+             "init_mhd_rotor", "init_harris_tearing",
+             "init_lamb_oseen_vortex", "init_island_coalescence",
+             "init_double_tearing", "init_magnetic_twist")
 
 # ATTENTION : il existe DEUX sigma « entraines » distincts, et les
 # confondre fausse la lecture.
