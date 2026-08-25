@@ -8866,3 +8866,80 @@ cette entrée (voir le fichier).
 ```bash
 pytest tests/ -q -k "aggregate_master_table or headline_counts"
 ```
+
+---
+
+# D-194 — le balayage des invocations de lanceurs : parseur périmé, pas perte de couverture
+
+**Question posée le 25 août.** Les trois planchers datés de
+`tests/test_launcher_paths_resolve.py` (`>= 45`, `>= 79` à `766d289`,
+`>= 80` à `f8edebf`) rougissaient tous à **35** invocations balayées. Deux
+lectures possibles : la consolidation single-machine (`CODE_REVIEW.md`) a
+authentiquement réduit le nombre de commandes que les lanceurs émettent,
+ou le balayage ne voit plus tout ce qui existe réellement.
+
+## La réponse, trouvée par lecture des lanceurs eux-mêmes
+
+Les scripts qui portaient l'essentiel des invocations comptaient **zéro**
+ou quasi zéro dans le balayage — `repetition_campagne.sh` (0),
+`run_reoptimisation.sh` (0), `run_fold.sh` (0), `run_dns_campaign.sh` (0),
+`run_confirmatory_campaign.sh` (1), `run_rented_campaign.sh` (1),
+`run_study_v3.sh` (0) — alors qu'ils invoquent chacun plusieurs scripts
+réels. Cause : tous résolvent leur interpréteur via une variable
+
+```bash
+PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"   # ou python3
+```
+
+puis appellent `"$PYTHON_BIN" fichier.py` ou (forme enrobée)
+`run_step t1 "$PYTHON_BIN" fichier.py`. `_INVOKE`/`_WRAPPED`, les deux
+regex du balayage, ne reconnaissaient que le jeton littéral `python`/
+`python3` — jamais écrit sur ces lignes, puisque c'est une variable. La
+cible n'était donc jamais extraite : ni vue, ni comptée. Même famille de
+défaut, dans le même fichier, que **D-151** (le `cd` seul sur sa ligne) et
+`_DIRNAME_DE_SOI` (`$(dirname "$0")`) — un style d'écriture légitime,
+plus récent que le motif qui devait le reconnaître.
+
+## Corrigé
+
+`_INVOKE` et `_WRAPPED` reconnaissent désormais `"$PYTHON_BIN"`/
+`${PYTHON_BIN}` comme une alternative à `python`/`python3` :
+
+```bash
+git diff -- tests/test_launcher_paths_resolve.py | grep -A2 "PYTHON_BIN"
+pytest tests/test_launcher_paths_resolve.py -q
+```
+
+**35 → 61 invocations balayées.** Vérifié que 61 est un plancher complet
+et non simplement plus haut que 35 par une correction partielle : sur
+`run_study_v3.sh`, l'écart le plus large (0 → 10), un comptage indépendant
+(`grep -nE '\.(py|sh)\b'`, hors lignes commentaires) trouve exactement 10
+lignes non-commentaire portant une cible réelle — les 4 lignes en trop du
+grep brut sont des commentaires (`# ... dns_sweep.py`, exemples d'usage
+`bash scripts/run_study_v3.sh --all`), correctement exclus par le
+balayage. Les autres lanceurs recoupent de même à ±1 ligne près (une
+invocation `pytest <répertoire>`, sans extension `.py`/`.sh`, hors du
+périmètre déclaré de ce test).
+
+**Pourquoi pas 79-83 : les deux mesures portent sur des lanceurs
+différents.** `766d289`/`f8edebf` mesuraient un jeu qui n'existe plus —
+`run_leak_free_campaign.sh`, `run_study_v2_phases.sh`, `run_study_v2b.sh`,
+`soumettre_campagne.sh` (4 scripts, 728 lignes à eux quatre) ont été
+supprimés par la consolidation single-machine et remplacés par 3 plus
+petits (`run_confirmatory_campaign.sh`, `run_dns_campaign.sh`,
+`run_rented_campaign.sh`, 238 lignes à eux trois). Une partie de l'écart
+79→61 est donc une réduction réelle et voulue de surface — moins de
+lanceurs, chacun plus court — pas une perte masquée : ce que ce défaut
+devait trancher (perte réelle ou consolidation) a sa réponse : les deux
+à la fois, mais seule la première moitié (le `$PYTHON_BIN` non reconnu)
+était un défaut ; la seconde (moins de scripts) est la consolidation
+documentée, attendue.
+
+Les trois planchers du fichier de test portent désormais 61 comme
+nouvelle valeur mesurée, avec la mesure et sa date écrites à côté —
+pas une valeur abaissée en silence, ce que ce fichier a déjà fait une
+fois par erreur (D-151) et dont il garde le souvenir explicite.
+
+```bash
+pytest tests/test_launcher_paths_resolve.py -q   # 69 passed, 1 skipped
+```

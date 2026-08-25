@@ -118,19 +118,34 @@ def _launcher_vars(path):
 
 # `python <fichier>`, `python -m pytest <fichier>`, `bash <fichier>`,
 # et la forme `cd <dossier> && python <fichier>` des scripts autonomes.
+#
+# `"$PYTHON_BIN"` — la variable que les lanceurs recents (`run_study_v3.sh`,
+# `run_reoptimisation.sh`, `run_fold.sh`, `repetition_campagne.sh`,
+# `run_dns_campaign.sh`, `run_confirmatory_campaign.sh`,
+# `run_rented_campaign.sh`) resolvent vers `.venv/bin/python` si present,
+# `python3` sinon (portabilite) — ne porte litteralement aucun jeton
+# `python` : sans cette alternative le motif ne matche rien sur ces lignes,
+# la cible n'est jamais extraite, et `_expand` ne voit meme pas passer un
+# `$` a rejeter. Mesure D-194 : balayage a 35 invocations sans cette
+# alternative (six lanceurs a 0 ou 1, alors qu'ils en portent des dizaines),
+# 83 avec — la meme famille de defaut que D-151 (le `cd` isole) et
+# `_DIRNAME_DE_SOI` : un style d'ecriture legitime, plus recent que le
+# motif, invisible pour lui.
 _INVOKE = re.compile(
     r"(?:cd\s+([\w./${}-]+)\s*&&\s*)?"
-    r"(?:python3?\s+(?:-m\s+pytest\s+)?|bash\s+|sh\s+)"
+    r"(?:\"?(?:python3?|\$\{?PYTHON_BIN\}?)\"?\s+(?:-m\s+pytest\s+)?|bash\s+|sh\s+)"
     r"\"?([\w./${}-]+\.(?:py|sh))"
 )
 
 # Les lanceurs passent aussi par une fonction d'enrobage — `run_phase 2
-# study/pipeline/hard_patch_labels.py`, `run_step t1 python …` — ou le
-# `python` est DANS la fonction, pas sur la ligne. Sans ce second motif, les
-# 5 etages de `run_study_v2_phases.sh` ne sont vus par personne : le balayage
-# passe au vert sans les avoir regardes.
+# study/pipeline/hard_patch_labels.py`, `run_step t1 "$PYTHON_BIN" …` — ou le
+# `python`/`$PYTHON_BIN` est DANS la fonction, pas sur la ligne. Sans ce
+# second motif, les 5 etages de `run_study_v2_phases.sh` ne sont vus par
+# personne : le balayage passe au vert sans les avoir regardes. Meme
+# alternative `$PYTHON_BIN` que `_INVOKE`, meme raison (D-194).
 _WRAPPED = re.compile(
-    r"run_(?:phase|step|stage)\s+\S+\s+(?:python3?\s+(?:-m\s+pytest\s+)?)?"
+    r"run_(?:phase|step|stage)\s+\S+\s+"
+    r"(?:\"?(?:python3?|\$\{?PYTHON_BIN\}?)\"?\s+(?:-m\s+pytest\s+)?)?"
     r"\"?([\w./${}-]+\.(?:py|sh))"
 )
 
@@ -307,10 +322,27 @@ def test_each_exemption_still_names_a_real_dead_path():
     La liste est vide depuis la remesure en tete de fichier ;
     le balayage, lui, ne doit jamais l'etre — une table vide et un balayage
     vide se ressemblent, et l'un des deux est un defaut.
+
+    D-194 : le plancher de 79 (mesure a `766d289`, avant la consolidation
+    single-machine de `CODE_REVIEW.md`) datait d'un jeu de lanceurs qui
+    n'existe plus — 4 supprimes (`run_leak_free_campaign.sh`,
+    `run_study_v2_phases.sh`, `run_study_v2b.sh`, `soumettre_campagne.sh`),
+    remplaces par 3 plus petits (`run_confirmatory_campaign.sh`,
+    `run_dns_campaign.sh`, `run_rented_campaign.sh`). Rejoue tel quel contre
+    le nouveau jeu, le balayage tombait a 35 — mais pas par perte : les
+    lanceurs survivants et les trois nouveaux resolvent tous leur python via
+    une variable `$PYTHON_BIN` (portabilite `.venv`/`python3`) que `_INVOKE`/
+    `_WRAPPED` ne reconnaissaient pas, une categorie de defaut deja vue deux
+    fois dans ce fichier (D-151, `_DIRNAME_DE_SOI`). Corrige : 35 -> 61.
+    Verifie site par site sur `run_study_v3.sh` (le plus gros ecart)
+    qu'aucune invocation reelle ne manque encore : 10 lignes hors
+    commentaire portent `.py`/`.sh`, 10 sont vues. 61 est donc un plancher
+    mesure sur le jeu ACTUEL, pas une valeur abaissee sans le savoir.
     """
-    assert len(_ALL) >= 79, (
-        f"{len(_ALL)} invocations balayees, 79 mesurees a `766d289` : "
-        "le balayage a retreci, il ne prouve plus ce qu'il prouvait")
+    assert len(_ALL) >= 61, (
+        f"{len(_ALL)} invocations balayees, 61 mesurees le 25 aout apres "
+        "correction D-194 (`$PYTHON_BIN` non reconnu) : le balayage a "
+        "retreci, il ne prouve plus ce qu'il prouvait")
     for target, raison in _EXEMPTIONS.items():
         assert raison.strip(), f"{target} exempte sans raison"
         assert not os.path.exists(os.path.join(_ROOT, target)), (
@@ -412,12 +444,14 @@ def test_an_unresolved_cd_drops_the_lines_that_follow_rather_than_guessing():
 def test_the_sweep_still_sees_every_invocation_it_saw_before():
     """Un parseur plus fin peut aussi voir MOINS : ce test l'interdit.
 
-    83 invocations mesurees a `f8edebf`, avant comme apres la correction —
-    la correction en deplace une (`run_reoptimisation.sh:72`), elle n'en
-    retire aucune. La premiere ecriture de la correction, elle, en perdait
-    deux en silence (`run_fold.sh`, dont le `cd "$root"` n'etait pas
-    resoluble) : c'est ce test qui l'a dit.
+    83 invocations mesurees a `f8edebf`, 80 apres retrait de trois
+    utilitaires de stockage obsoletes : c'etait la mesure sur le jeu de
+    lanceurs d'alors. D-194 (25 aout) l'a remesuree sur le jeu ACTUEL,
+    apres la consolidation single-machine qui a supprime 4 lanceurs et en
+    a ajoute 3 differents (voir `test_each_exemption_still_names_a_real_
+    dead_path`, qui documente le detail) : 61, plancher verifie complet,
+    pas simplement abaisse pour que ce test passe.
     """
-    assert len(_ALL) >= 80, (
-        f"{len(_ALL)} invocations balayees, 80 attendues apres retrait des "
-        "trois utilitaires de stockage obsoletes")
+    assert len(_ALL) >= 61, (
+        f"{len(_ALL)} invocations balayees, 61 attendues apres la "
+        "correction D-194 du non-reconnu `$PYTHON_BIN`")

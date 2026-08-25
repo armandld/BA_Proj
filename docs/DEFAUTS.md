@@ -55,12 +55,14 @@ D-193 (1), D-194 (3). Deux des cinq sites de D-191
 `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep`) n'ont été
 attribués à ce défaut qu'à une passe ultérieure, le 25 août également —
 consignés ici pour ne pas laisser croire que le premier passage les avait
-tranchés. **D-193 et D-192, eux, ont été refermés le même jour** — D-193
-par la restauration de `RESULTS.md` qui manquait précisément pour le lever,
-D-192 par un balayage complet qui a remplacé les 3 sites du sondage par 37
-sites réels restaurés (voir la liste des résolus, plus bas, et
-`docs/RESULTS.md`) : il ne reste donc plus que 8 entrées ouvertes issues de
-cette seconde passe, pas 12.
+tranchés. **D-192, D-193 et D-194, eux, ont été refermés le même jour** —
+D-193 par la restauration de `RESULTS.md` qui manquait précisément pour le
+lever, D-192 par un balayage complet qui a remplacé les 3 sites du sondage
+par 37 sites réels restaurés, D-194 en trouvant que la « perte » de
+couverture était un parseur périmé (variable `$PYTHON_BIN` non reconnue)
+et non une régression réelle (voir la liste des résolus, plus bas, et
+`docs/RESULTS.md`) : il ne reste donc plus que **5** entrées ouvertes
+issues de cette seconde passe (les 5 sites de D-191), pas 12.
 
 ## Règle d'arrêt — ce qui entre dans ce fichier
 
@@ -404,51 +406,6 @@ pytest tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimi
 
 ---
 
-## D-194 — le balayage des invocations de lanceurs a perdu plus de la moitié de sa surface, et personne n'a dit si c'est voulu
-
-**Rapport seul. Décision requise : le plancher a-t-il raison de rester
-haut, ou la perte est-elle acceptée ?**
-
-**Où ça bloque.** `tests/test_launcher_paths_resolve.py` porte trois
-planchers datés, chacun avec le hash du commit qui l'a mesuré
-(`COUVERTURE.md` les cite déjà comme « le bon patron » : daté, marge
-mesurée). Les trois rougissent aujourd'hui :
-
-| plancher | mesuré à | aujourd'hui |
-|---|---|---|
-| `>= 45` | — | **35** |
-| `>= 79` (`766d289`) | 79 | **35** |
-| `>= 80` (`f8edebf`) | 80 | **35** |
-
-**Ce que la mesure elle-même dit être correcte** : ces trois gardes
-existent précisément pour détecter ce cas — *« le balayage a rétréci, il
-ne prouve plus ce qu'il prouvait »*. Ils font leur travail.
-
-**Cause identifiée, cohérente avec `COUVERTURE.md`** : six des neuf
-scripts supprimés dans `d3d7573` (voir `COUVERTURE.md`, section
-« Reconstruction ») étaient des `.sh` — `inventaire_campagne.py` et
-`nettoyer_essais_fantomes.py` mis à part, `run_leak_free_campaign.sh`,
-`run_study_v2_phases.sh`, `run_study_v2b.sh`, `soumettre_campagne.sh`
-portaient chacun un nombre substantiel d'invocations (12 à 54 selon la
-mesure du 18 août citée dans `COUVERTURE.md`). Leur suppression réduit
-mécaniquement ce que le balayage peut voir.
-
-**Ce qui n'est PAS établi** : que la surface perdue était redondante. Les
-scripts supprimés ont-ils été consolidés dans les quatre nouveaux
-(`run_confirmatory_campaign.sh`, `run_dns_campaign.sh`,
-`run_rented_campaign.sh` plus les lanceurs existants), auquel cas les
-mêmes invocations survivent sous une autre plume et les planchers doivent
-simplement être abaissés à la nouvelle valeur mesurée — ou une partie du
-comportement qu'ils enrobaient a disparu avec eux sans que rien ne le
-remplace. Non tranché ici : abaisser un plancher sans le savoir serait
-exactement la faute que ce fichier a déjà commise une fois (D-151) et que
-`COUVERTURE.md` documente comme corrigée.
-
-```bash
-pytest tests/test_launcher_paths_resolve.py -q -k "sweep or exemption"
-```
-
----
 
 ## Résolus depuis la dernière version de ce fichier — vérifiés le 25 août, non restaurés en tant que défauts
 
@@ -493,6 +450,21 @@ signalé, puis ce paragraphe doit être retiré au prochain nettoyage.
   qui avait détecté l'absence. Contrairement aux cinq entrées ci-dessous,
   celui-ci porte sa mesure de confirmation ci-dessus (commande, résultat) —
   pas seulement une affirmation.
+- **D-194** (le balayage des invocations de lanceurs était tombé à 35,
+  contre 79-80 mesurés sur l'ancien jeu de scripts — perte réelle ou
+  parseur périmé, non tranché) — **parseur périmé, pas perte.** Les
+  lanceurs actuels (`run_study_v3.sh`, `run_reoptimisation.sh`,
+  `run_fold.sh`, et les 3 nouveaux `run_confirmatory_campaign.sh`/
+  `run_dns_campaign.sh`/`run_rented_campaign.sh`) résolvent tous leur
+  interpréteur via une variable `$PYTHON_BIN` (portabilité `.venv`/
+  `python3`) que `_INVOKE`/`_WRAPPED` ne reconnaissaient pas — même
+  catégorie de défaut que D-151 et `_DIRNAME_DE_SOI`, déjà documentée
+  deux fois dans le même fichier. `tests/test_launcher_paths_resolve.py`
+  corrigé : 35 → **61** invocations balayées, vérifié complet ligne à
+  ligne sur `run_study_v3.sh` (le plus gros écart : 10 lignes hors
+  commentaire portant `.py`/`.sh`, 10 vues). Les trois planchers datés du
+  fichier mis à jour avec la nouvelle mesure et sa justification, pas
+  simplement abaissés.
 - **D-186** (l'optimum du balayage `c_bias` tombait au bord de la grille) —
   **résolu avec soin.** `h2b_analytical_solution.py` porte désormais
   `c_bias_grid` par défaut sur `[0,1 ; 1e5]` (contre `[0,1 ; 100]` à la
@@ -509,7 +481,7 @@ signalé, puis ce paragraphe doit être retiré au prochain nettoyage.
 **Aucun des cinq premiers n'a de mesure avant/après écrite quelque part** —
 ni date, ni commande, ni chiffre publié dans `RESULTS.md`. C'est la dette
 que la suppression du 24 août a créée : le prochain qui doit s'appuyer sur
-l'un de ces faits doit d'abord le remesurer lui-même. D-192, D-193 et
+l'un de ces faits doit d'abord le remesurer lui-même. D-192, D-193, D-194 et
 D-186 font exception : chacun porte sa mesure de confirmation (ci-dessus,
 ou dans `docs/RESULTS.md` pour D-192, trop volumineuse pour une puce),
 avec sa commande.
