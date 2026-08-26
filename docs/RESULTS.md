@@ -9549,3 +9549,94 @@ confirmation, et ne vérifie pas que la campagne a produit un résultat
 distinguer un résultat « meilleur » d'un résultat « différent » est une
 question pour après la campagne, pas une condition à son déploiement.
 `--no-deploy` reste disponible si un opérateur veut inspecter avant.
+
+---
+
+# D-188 — vérité terrain dynamique remesurée à l'horizon `t_x`, verdict mixte
+
+**Ce que USER a demandé le 26 août** : régénérer la vérité terrain
+dynamique à l'horizon physique `t_x = 2π/(dim·(v+b)_rms)` (le temps de
+traversée d'un patch), au lieu du `δt = 0,1` que le protocole imposait et
+que D-188 dénonçait comme mesurant deux fois la même chose que le label
+statique.
+
+## Ce qui existait déjà, trouvé en lisant avant d'écrire
+
+`study/pipeline/dynamic_patch_labels.py` calcule déjà `t_x` par défaut —
+`delta_t=None` déclenche `crossing_multiple * patch_crossing_time(...)`,
+et un `--delta-t` explicite n'est qu'une option d'ablation. **Mais les 8
+artefacts `d_patches_*.npz` déjà présents dans `results/` ont tous été
+produits avec `--delta-t` explicite** (`_dt0.1` et `_dt2` dans leur nom) —
+aucun n'utilise l'horizon par défaut du script. Le script porte même son
+propre garde-fou : `label_diagnostics` refuse d'écrire un artefact
+redondant (`rho(d,e) ≥ 0,95` ET amplitude peu variable) sauf
+`--allow-redundant` explicite — mécanisme jamais déclenché puisque aucune
+exécution à l'horizon par défaut n'avait eu lieu.
+
+## Régénéré
+
+```bash
+python study/pipeline/dynamic_patch_labels.py --scenario <s> --re 400 --N 96 \
+    --dim 8 --snaps 5 --seed 0 --allow-redundant
+```
+sur les 4 scénarios canoniques, git `1c57a14` (`--allow-redundant` pour
+obtenir la mesure même si redondante, plutôt qu'un refus sans mesure).
+`t_x` mesuré : 0,41 (orszag_tang) à 0,88 (harris_tearing) — 4 à 9× le
+`δt = 0,1` du protocole.
+
+| scénario | ρ(d, e), 5 instantanés | plage |
+|---|---|---|
+| harris_tearing | 0,9656 · 0,9692 · 1,0000 · 1,0000 · 1,0000 | quasi inchangé |
+| kelvin_helmholtz | 0,9955 · 0,9965 · 0,9968 · 0,9969 · 0,9976 | quasi inchangé |
+| mhd_rotor | **0,8167** · 0,9909 · 0,9918 · 0,9935 · 0,9951 | 1 instantané sous le seuil de redondance |
+| orszag_tang | **0,6577** · **0,9185** · 0,9325 · 0,9453 · 0,9675 | 3 des 5 sous le seuil |
+
+(seuil de redondance du module : `REDUNDANCY_RHO_LIMIT = 0,95`)
+
+## Ce que ça dit — verdict mixte, pas un renversement
+
+**`harris_tearing` et `kelvin_helmholtz` restent essentiellement
+redondants avec le label statique**, même à l'horizon physiquement motivé
+— `ρ` colle à 1,0 sur les 5 instantanés des deux scénarios. Corriger
+l'horizon ne change rien pour ces deux-là : la conclusion D-188 d'origine
+(« changer de label ne suffit pas ») **tient** pour eux.
+
+**`mhd_rotor` et surtout `orszag_tang` divergent réellement**, au moins à
+certains instantanés — `ρ` tombe à 0,66 (orszag_tang, premier instantané)
+et 0,82 (mhd_rotor, premier instantané), nettement sous le seuil de
+redondance. C'est cohérent avec ce que `DEFAUTS.md` notait déjà à
+`δt = 2,0` (« un seul scénario décolle, orszag_tang ») — mais ici, à
+l'horizon physique et sans pousser `δt` artificiellement haut, **deux**
+scénarios sur quatre montrent une vraie divergence, à l'instantané le
+plus précoce en particulier.
+
+**Le drapeau `informatif` du script est `True` sur les 20 lignes (4 × 5),
+y compris pour harris_tearing/KH — ça ne contredit pas ce qui précède.**
+`label_diagnostics` combine DEUX critères par un OU : `ρ < 0,95` (le
+classement diverge) OU `log-IQR(amplification) ≥ log(1,10)` (l'AMPLITUDE
+de l'erreur, pas son classement, varie assez d'un patch à l'autre). Même
+quand le classement reste identique au statique (`ρ ≈ 1`), la vitesse à
+laquelle l'erreur grandit diffère selon les patches — une information
+que le label statique, instantané par construction, ne porte pas. Les
+deux questions (classement et vitesse) sont distinctes ; D-188 posait la
+première, celle-ci reste tranchée « non réparé » pour 2 scénarios sur 4.
+
+## Conséquence pour le protocole
+
+**La correction d'horizon était nécessaire mais pas suffisante partout.**
+Toute tâche future consommant `d_i` (protocole, tâche 7) doit fixer son
+horizon sur `t_x` — confirmé juste, ça expose un vrai signal sur 2
+scénarios sur 4 qu'un horizon fixe à `δt = 0,1` masquait entièrement.
+Mais elle ne doit pas présumer que ce signal existe partout : sur
+harris_tearing et kelvin_helmholtz, le label dynamique reste, même à `t_x`,
+une renumérotation du label statique.
+
+```bash
+pytest tests/study/test_dynamic_patch_labels.py -q -m "not slow"   # 25 passed
+```
+rejoué : le fichier teste bien le mode par défaut
+(`test_le_defaut_evolue_pendant_un_temps_de_traversee`, vérifie
+`horizon_mode == "patch_crossing"`) et l'ablation explicite
+séparément (`test_un_horizon_fixe_reste_une_ablation_explicite`) — les
+deux passent, rien n'a changé sous ces tests. Le seul test `-m slow` du
+fichier n'a pas été rejoué (coût).

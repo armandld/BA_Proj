@@ -83,9 +83,11 @@ moins qu'il ne le semblait à `d047015`. Le 25 août a rouvert et refermé six
 défauts de plus (D-39, D-50, D-98, D-100, D-158, D-191), en a laissé un
 nouveau ouvert (D-195, une corrélation de rang QAOA/vérité négative et une
 égalité QAOA=classique sans bruit, toutes deux stables sous deux tirages
-indépendants — cause non élucidée), et a confirmé que deux défauts restent
-bloqués sur une décision humaine, pas sur du code (D-22, D-188). Un
-troisième, D-189, a été retiré une seconde fois le 26 août : la
+indépendants — cause non élucidée). Un défaut reste bloqué sur une
+décision humaine, pas sur du code — D-22, la campagne de réoptimisation
+elle-même. D-188 a été décidé et remesuré le 26 août plutôt que laissé
+en attente (§3, §4 ci-dessous). Un troisième, D-189, a été retiré une
+seconde fois le 26 août : la
 description restaurée depuis `d047015` décrivait un défaut que `d3d7573`
 avait déjà corrigé le 24, dans le même geste que la suppression des
 documents — erreur de vérification (le test qui l'entourait avait
@@ -128,7 +130,7 @@ d'entraînement, label, score de référence.
 | QH2a / H2b | **RÉFUTÉ** | modèle libre testé (`study/h2b_prediction/`), ne bat pas la baseline |
 | H3a / H3b | **À REPRENDRE** | D-58 a retiré l'explication causale des ablations nulles de T13 et de la stagnation de T11b (« ZZ is numerically dead » était faux) ; la courbe de cône elle-même (T1b, `dim = 8`/`16`) n'est pas retirée par cette rétractation mais reste bornée par un pli dégénéré non expliqué (`harris_tearing`) |
 | H4 | **CONJECTURE** | pas d'expérience dédiée qui l'isole du reste |
-| H5 | **NON RÉPARÉ PAR LE LABEL DYNAMIQUE** | `ρ(d, e) ≥ 0,98` sur les quatre scénarios à l'horizon du protocole (D-188) — changer de label ne suffit pas |
+| H5 | **MIXTE, remesuré à `t_x`** | à l'horizon physique (D-188, 26 août) : `harris_tearing`/`kelvin_helmholtz` restent redondants (ρ≈1,0), `mhd_rotor`/`orszag_tang` divergent réellement à certains instantanés (ρ jusqu'à 0,66) — corriger l'horizon expose un signal sur la moitié des scénarios, pas sur tous |
 
 ## 4. Comment V1 marche — et pourquoi ça, intuitivement
 
@@ -215,17 +217,28 @@ sa mesure appartient au manuscrit :
   dont la perturbation **amplifie** (1,38×), et le seul où la tâche statique
   n'était pas déjà résolue.
 
-Ce que la section doit dire : **changer de label ne suffit pas à réparer la
-spécification de la tâche.** Là où la tâche était triviale, elle le reste ;
-elle ne cesse de l'être que là où l'écoulement est turbulent. C'est une
-contrainte sur ce que ce corpus peut établir, et elle se dit avant les
-résultats, pas après.
+Ce que la section doit dire, **avant révision** : à l'horizon imposé par le
+protocole, changer de label ne suffit pas à réparer la spécification de la
+tâche.
 
-**Mis à jour le 26 août.** Ce constat est toujours l'état de l'art (D-188,
-`docs/DEFAUTS.md`) : re-vérifié le 25 août, rien ne l'a fait bouger depuis
-`d047015`. Ce qui reste ouvert n'est pas la mesure elle-même mais la
-décision de campagne qu'elle appelle (fixer l'horizon sur `t_x`, pas sur un
-compte de pas hybrides) — non tranchée.
+**Mis à jour le 26 août — remesuré à l'horizon physique, décidé par
+USER.** `δt = 0,1` était le mauvais horizon pour poser cette question : à
+cette échelle, la perturbation ne parcourt que 0,11–0,25 d'une largeur de
+patch, il n'y a presque rien à propager. Régénéré aux 4 scénarios
+canoniques à `t_x = 2π/(dim·(v+b)_rms)` (le temps de traversée réel d'un
+patch, 4 à 9× `δt = 0,1`) : **le verdict est mixte, pas uniforme.**
+`harris_tearing` et `kelvin_helmholtz` restent redondants avec le label
+statique même à cet horizon (ρ ≈ 1,0 sur les 5 instantanés des deux) —
+pour eux, la phrase d'origine tient. `mhd_rotor` et `orszag_tang`
+divergent réellement à certains instantanés (ρ jusqu'à 0,66 pour
+Orszag-Tang, 0,82 pour le rotor, au premier instantané) — pour ces
+deux-là, l'horizon corrigé expose un signal que `δt = 0,1` masquait
+entièrement. La phrase à écrire dans le manuscrit n'est donc plus « ça ne
+répare rien » mais : **corriger l'horizon est nécessaire et expose un
+vrai signal sur la moitié du panel canonique — pas plus.** Toute tâche
+future consommant `d_i` (tâche 7 du protocole) doit fixer son horizon sur
+`t_x`, sans présumer que le label devient informatif partout. Détail
+complet, table par scénario : `docs/RESULTS.md`.
 
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 

@@ -136,37 +136,40 @@ code : il se ferme quand la campagne tourne, pas avant.
 
 ---
 
-## D-188 — le critère d'acceptation de la tâche 6 (vérité terrain dynamique) est passé par un label redondant
+## D-188 — la tâche 7 doit lire `t_x` par scénario, pas un horizon unique
 
-**Rapport seul. Rien n'est corrigé** — changer l'horizon du protocole est
-une décision de campagne.
+**Décidé et mesuré le 26 août** (`docs/RESULTS.md`, « D-188 — vérité
+terrain dynamique remesurée à l'horizon `t_x`, verdict mixte »). L'horizon
+`δt = 0,1` du protocole v3 §1.2 rendait `ρ(d_i, e_i) ≥ 0,98` sur les
+quatre scénarios — un label dynamique redondant avec le statique. Les 8
+artefacts `d_patches_*.npz` déjà présents n'utilisaient que `δt = 0,1` et
+`δt = 2,0` (ablations explicites) ; l'horizon par défaut du script
+lui-même (`t_x`, déjà implémenté, jamais utilisé) n'avait jamais tourné.
 
-**Où ça bloque.** Le protocole v3 §1.2 fixe `δt = 0,1` (« one hybrid step »)
-et pose comme seul critère d'acceptation *« Spearman(d_i, e_i) > 0 »*.
-Mesuré (N=96, `dim=8`, 5 instantanés/scénario, relu depuis les 8 artefacts
-`d_patches_*.npz`) : **ρ ≥ 0,98 sur les quatre scénarios** à cet horizon —
-le label dynamique est une renumérotation monotone du label statique, et le
-critère du protocole le laisse passer sans rien détecter.
+**Régénéré aux 4 scénarios canoniques, N=96, dim=8, 5 instantanés, à
+`t_x`** (0,41 à 0,88 selon le scénario — 4 à 9× `δt = 0,1`) :
 
-À `δt = 2,0` un seul scénario décolle (`orszag_tang`, ρ = 0,596, le seul
-dont la perturbation **amplifie** au lieu de décroître) — cohérent avec le
-fait que c'est aussi le seul scénario où le label statique n'était pas déjà
-quasi gratuit (AUC du score classique seul : 0,592 contre 1,000/0,997/0,948).
+| scénario | ρ(d, e) à `t_x` |
+|---|---|
+| harris_tearing | 0,97–1,00 — reste redondant |
+| kelvin_helmholtz | 0,995–0,998 — reste redondant |
+| mhd_rotor | 0,82–1,00 — 1 instantané sous le seuil de redondance (0,95) |
+| orszag_tang | 0,66–0,97 — 3 des 5 instantanés sous le seuil |
 
-**Ce qui bloque** : la tâche 7 du protocole prévoit de consommer `d_i(t+h)`
-comme cible — à l'horizon prescrit, elle mesurerait deux fois la même chose
-que `e_i(t+h)`. Toute tâche consommant `d_i` doit d'abord fixer son horizon
-sur `t_x = 2π/(dim·(v+b)_rms)`, pas sur un nombre de pas hybrides.
+**Verdict mixte, pas un renversement.** Corriger l'horizon expose un vrai
+signal sur `mhd_rotor` et `orszag_tang` (2 scénarios sur 4), surtout à
+l'instantané le plus précoce, mais `harris_tearing`/`kelvin_helmholtz`
+restent essentiellement une renumérotation du label statique même à
+l'horizon physique. **Toute tâche future consommant `d_i` (tâche 7) doit
+fixer son horizon sur `t_x` — confirmé nécessaire — mais ne doit pas
+présumer que le label devient informatif partout : il ne l'est, par le
+classement, que sur la moitié des scénarios canoniques.**
 
 ```bash
-pytest tests/study/test_dynamic_patch_labels.py -q -m slow
+python study/pipeline/dynamic_patch_labels.py --scenario <s> --re 400 --N 96 \
+    --dim 8 --snaps 5 --seed 0 --allow-redundant   # les 4 scenarios
+pytest tests/study/test_dynamic_patch_labels.py -q -m "not slow"   # 25 passed
 ```
-
-**Re-vérifié le 25 août, décision toujours en attente.** Rien dans les
-passes de ce jour n'a touché `dynamic_patch_labels.py` ni régénéré les
-artefacts `d_patches_*.npz` dont ce défaut dépend ; le test `-m slow` n'a
-pas été rejoué (coût, sans changement de code source à vérifier). Reste
-un blocage de décision de campagne, pas de code.
 
 ---
 

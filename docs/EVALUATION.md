@@ -193,7 +193,7 @@ hypothèse, plutôt que reconduite en bloc.**
 | H3a, H3b | **rétrogradées en dessous de B, voir note** | D-58 (déjà connu à `d047015`, jamais reporté ici) retire l'explication causale de T13/T11b ; ces deux résultats restent à expliquer, pas seulement à reconfirmer. La courbe de cône (T1b) reste en A bis, non touchée |
 | H1 | reste en B | partiel — les défauts numériques comptent, mais rien ne dit qu'ils suffisent seuls |
 | H4 | reste en B, au sens faible | aucune expérience dédiée ne l'isole ; conjecture, pas mesure en attente d'un refresh |
-| H5 | **négatif, stable, hors de ce tableau** | ρ(d, e) ≥ 0,98 (D-188) — le label dynamique ne répare pas la spécification de la tâche ; re-vérifié le 25 août, rien n'a bougé |
+| H5 | **mixte, remesuré à `t_x`, hors de ce tableau** | D-188 (26 août) — redondant sur harris_tearing/KH (ρ≈1,0), informatif sur mhd_rotor/orszag_tang (ρ jusqu'à 0,66) à l'horizon physique |
 
 **Note sur H3 — pourquoi « à reprendre » n'est pas la même chose que « en
 attente ».** Les autres lignes de B attendent une réexécution sur du code
@@ -451,10 +451,18 @@ Conséquence pratique : toute tâche du protocole qui devait consommer `d_i`
 comme label alternatif doit d'abord fixer l'horizon sur `t_x`, le temps de
 traversée d'un patch. Sans quoi elle mesurerait deux fois la même chose.
 
-**Mis à jour le 26 août.** Statut inchangé (D-188, `DEFAUTS.md`) :
-re-vérifié le 25 août, ni le code ni les artefacts `d_patches_*.npz` n'ont
-bougé depuis. Toujours une décision de campagne en attente, pas un défaut de
-code.
+**Mis à jour le 26 août — tranché et remesuré, plus une décision en
+attente.** USER a confirmé le principe (fixer `t_x`) et demandé la
+remesure. Régénéré aux 4 scénarios canoniques à `t_x` (`docs/RESULTS.md`,
+D-188) : `ρ(d, e)` reste ≥ 0,97 pour harris_tearing/kelvin_helmholtz
+(toujours redondant), mais tombe à 0,66–0,92 pour orszag_tang et
+0,82–0,99 pour mhd_rotor sur certains instantanés — **sous le seuil de
+redondance du module (0,95) pour la moitié du panel**. Le label dynamique
+ne répare donc pas H5 partout, mais il n'échoue plus partout non plus :
+c'est une mesure plus fine que « ρ ≥ 0,98 uniforme », pas la même
+conclusion redite. `--allow-redundant` a permis d'obtenir la mesure même
+pour les scénarios redondants, plutôt que le refus silencieux que le
+garde-fou du script aurait produit par défaut.
 
 Ce que tout ceci autorise : poser proprement la question « un hamiltonien dont
 les deux structures pèsent également décide-t-il mieux ? ». **Cette question
