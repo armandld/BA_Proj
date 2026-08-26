@@ -9640,3 +9640,126 @@ rejoué : le fichier teste bien le mode par défaut
 séparément (`test_un_horizon_fixe_reste_une_ablation_explicite`) — les
 deux passent, rien n'a changé sous ces tests. Le seul test `-m slow` du
 fichier n'a pas été rejoué (coût).
+
+---
+
+# D-195 — une moitié expliquée et confirmée, l'autre bornée mais pas close
+
+**Ce que USER a demandé le 26 août** : investiguer la cause et régler le
+problème. Les deux symptômes n'ont **pas** la même cause : l'un est
+expliqué et confirmé empiriquement, l'autre a deux hypothèses éliminées
+mais pas de troisième confirmée — écrit tel quel, pas présenté comme clos
+en bloc.
+
+## `test_hyperparameter_sweep` (MHD Rotor) — expliqué et confirmé
+
+**Le motif qui a mis sur la piste** : sur les 12 lignes du balayage
+`w_z_frac × threshold`, 5 rendaient exactement la même valeur —
+`captured=0,1769`, `ρ=-0,467` — pour des `w_z_frac` différents
+(0,05/0,10/0,15/0,30). Une coïncidence numérique à cette précision, sur
+des Hamiltoniens différents, n'est pas un hasard de tirage : c'est un
+signe de convergence vers le **même** optimum local, quel que soit le
+poids du biais Z.
+
+**Vérifié directement** (script isolé, hors suite, même graine de
+construction sim que le test) : à `w_z_frac=0,15`, `threshold=0,3`,
+`K_opt=80` (le budget déployé par le test) — la cellule centrale du
+rotor, celle qui porte de loin la plus grande erreur de vérité terrain
+(1,767 contre 0,571 pour la deuxième), reçoit le score QAOA **le plus
+bas** des neuf cellules (0,065 à 0,17 selon le tirage). `captured=0,1769`
+: QAOA n'attrape pas la cellule qui compte.
+
+**Le test décisif** : rejouer la même cellule, même graine de
+construction, en montant seulement `K_opt` :
+
+| `K_opt` | score cellule centrale | `captured` |
+|---|---|---|
+| 80 (déployé) | 0,17 (le plus bas des 9) | 0,1769 |
+| 300 | 0,16 (toujours le plus bas) | 0,1769 |
+| **800** | **0,53 (le plus haut des 9)** | **0,6033 — correct** |
+
+**Dix fois plus d'itérations COBYLA, sans changer une seule ligne de
+Hamiltonien, fait passer QAOA de « rate la cellule qui compte » à
+« la trouve ».** Ce n'est pas un défaut de code — `qaoa_block_scores`,
+`HamiltParams.compute_coefficients`, le mappeur : rien de tout ça n'a
+changé entre les deux lignes du tableau. C'est l'optimiseur variationnel
+qui, au budget réellement déployé (`K_opt=80`), reste piégé dans un
+optimum local qui évite systématiquement la cellule dominante — pour
+certaines combinaisons `(w_z_frac, threshold)`, pas pour d'autres (`0,05`
+échappe au piège, `≥0,10` y tombe, indépendamment du seuil).
+
+**C'est exactement H0a, observé une troisième fois, dans un contexte
+différent.** D-53 (`docs/RESULTS.md` ci-dessus) l'a établi par énumération
+exhaustive à `dim=3` : QAOA atteint l'optimum de son propre hamiltonien
+sur 6,2 %–15,6 % des instantanés, contre 100 % exigé. Ici, sans
+énumération exhaustive (ce budget de calcul n'a pas été dépensé), le
+même mécanisme se manifeste directement et se répare directement en
+augmentant le budget d'optimisation — la signature d'un optimiseur qui
+n'a pas convergé, pas d'une formulation Ising qui donnerait la mauvaise
+réponse. Ce n'est donc **pas** un défaut distinct de D-191 à documenter
+indéfiniment comme « cause non élucidée » : c'est une instance
+corroborante de H0a, avec sa propre mesure.
+
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'src'); sys.path.insert(0, 'tests/quantum')
+import numpy as np
+from Simulation.grid import PeriodicGrid
+from Simulation.solver import MHDSolver
+from Simulation.PhysToAngle import AngleMapper
+import test_qaoa_scaling_and_hparams as T
+sim = MHDSolver(PeriodicGrid(resolution_N=64), dt=1e-3, Re=800, Rm=800)
+sim.init_mhd_rotor()
+_mapper = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
+Phi_prev = None
+for i in range(200):
+    if i == 199: Phi_prev = _mapper.compute_stress_flux(sim.get_fluxes())
+    sim.adapt_dt(cfl_target=0.4); sim.step_full(record_stats=False)
+gt = T.ground_truth_errors(sim, 64, 3)
+for K_opt in (80, 800):
+    qa = T.qaoa_block_scores(sim, 64, 3, 0.3, 0.15, K_opt=K_opt, Phi_prev=Phi_prev)
+    print(K_opt, T.captured_fraction(T.select_top_k(qa, 2), gt))
+"
+```
+
+## `test_noise_robustness` (Orszag-Tang, sans bruit) — deux hypothèses éliminées, pas de troisième confirmée
+
+Le second symptôme — QAOA égale exactement le classique
+(`frac_qa=frac_cl=0,3189`) sur Orszag-Tang sans bruit — **n'a pas la même
+explication**, vérifié en éliminant les deux candidats les plus probables
+avant d'en chercher un troisième :
+
+1. **Budget d'optimiseur insuffisant : éliminé.** `K_opt=80` contre
+   `K_opt=800`, même configuration : `captured` reste **exactement**
+   `0,3189` aux deux budgets. Les scores continus bougent bien entre les
+   deux tirages (donc l'optimiseur n'est pas figé) mais le classement des
+   9 cellules — et donc la sélection budget=2 — ne bouge pas. Contrairement
+   au rotor, plus d'itérations ne change rien ici.
+2. **Fenêtre d'incertitude qui supprimerait le couplage ZZ/ZZZZ (le
+   mécanisme D-58/T17) : éliminé aussi.** Calculé directement sur les
+   scores classiques par blocs de cette configuration
+   (`threshold=0,3`, `σ=0,05` — le défaut, non surchargé par ce test) :
+   la fenêtre `exp(-((score-seuil)/σ)²)` vaut **0,68 à 0,93** sur 6 des 9
+   cellules — pas near-zero. Le couplage n'est pas noyé ici comme il
+   l'était dans le cas que D-58 mesurait.
+
+**Ce qui reste, non vérifié** : le motif observé (le score QAOA continu
+suit presque cellule à cellule le score classique, écarts de 0,01 à
+0,05) est cohérent avec une lecture où l'optimum du hamiltonien, pour
+CETTE configuration précise, coïncide réellement avec la décision
+classique — parce que l'encodage de départ (`mini_score`, dérivé du score
+classique) est déjà proche de cet optimum, pas parce que le couplage est
+inactif ou l'optimiseur bloqué. C'est une hypothèse plausible, cohérente
+avec les deux éliminations ci-dessus, **mais non confirmée** : la
+trancher demanderait une énumération exhaustive du hamiltonien de cette
+configuration précise (méthode de D-53), pas encore faite ici — budget de
+calcul non dépensé sur cette question précise.
+
+## Conséquence pour `docs/DEFAUTS.md`
+
+D-195 se referme pour sa moitié `test_hyperparameter_sweep`
+(expliquée, confirmée, rattachée à H0a — pas un défaut à part).
+`test_noise_robustness` reste ouvert, mais sous une forme plus précise
+qu'avant : deux causes plausibles éliminées par la mesure, une troisième
+posée et non vérifiée — pas « cause non élucidée » au sens où rien
+n'aurait été tenté.

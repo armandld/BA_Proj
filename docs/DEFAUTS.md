@@ -173,38 +173,37 @@ pytest tests/study/test_dynamic_patch_labels.py -q -m "not slow"   # 25 passed
 
 ---
 
-## D-195 — deux tests QAOA restent rouges après D-191, cause distincte non élucidée
+## D-195 — `test_noise_robustness` (Orszag-Tang) : deux causes éliminées, pas de troisième confirmée
 
-**Rapport seul.** Trouvé en vérifiant D-191 (`docs/RESULTS.md`) : ces deux
-tests figuraient parmi ses cinq symptômes, mais rejoués sous une graine
-confirmée aléatoire (la correction de D-191), ils rendent une valeur
-identique à la décimale près à celle mesurée sous l'ancien `seed=0` fixe.
-`test_C_ZZ`, qui isole la dispersion pure de l'échantillonnage QAOA sur
-un hamiltonien constant, la mesure bien restaurée — donc l'absence de
-changement sur ces deux tests n'est pas un signe que la graine reste
-fixe : c'est le signe que D-191 n'est pas leur cause. Encore un défaut,
-pas encore identifié.
+**`test_hyperparameter_sweep` (MHD Rotor) est refermé le 26 août**
+(`docs/RESULTS.md`, « D-195 — une moitié expliquée et confirmée ») : ce
+n'était pas un défaut distinct — augmenter `K_opt` de 80 (déployé) à 800
+sur la même cellule fait passer `captured` de 0,1769 à 0,6033 (correct),
+sans toucher au Hamiltonien. C'est H0a (D-53 : l'optimiseur variationnel
+n'atteint pas l'optimum de son propre Hamiltonien), observé une troisième
+fois et confirmé par la même méthode (rejouer à budget plus grand).
 
-| test | assertion | mesuré |
-|---|---|---|
-| `test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep` | `min(rho) > 0.0` sur 12 combinaisons `w_z_frac`×`threshold`, MHD Rotor | `-0,4667` — négatif sur 8/12, identique à la décimale près sous deux tirages indépendants |
-| `test_qaoa_noise_and_early.py::test_noise_robustness` | `frac_cl - frac_qa > 0,09` sans bruit, Orszag-Tang | `0,0000` exactement — QAOA égale le classique au bit, identique sous deux tirages indépendants |
+**`test_qaoa_noise_and_early.py::test_noise_robustness` reste ouvert.**
+QAOA égale exactement le classique sur Orszag-Tang sans bruit
+(`frac_qa=frac_cl=0,3189`), stable sous deux tirages indépendants
+confirmés aléatoires. Deux causes plausibles, **éliminées par la
+mesure** :
+1. Budget d'optimiseur insuffisant — `K_opt=80` contre `800` : `captured`
+   reste exactement `0,3189` aux deux budgets (contrairement au rotor).
+2. Fenêtre d'incertitude (mécanisme D-58/T17) qui noierait le couplage
+   ZZ/ZZZZ — calculée directement sur les scores classiques de cette
+   configuration (`threshold=0,3`, `σ=0,05`) : `0,68`–`0,93` sur 6 des 9
+   cellules, pas près de zéro.
 
-**Piste, non vérifiée.** Un commentaire déjà présent dans
-`test_qaoa_noise_and_early.py` (section « quiet ») documente que la
-correction du rotationnel D-1 a changé le classement du score sur
-Orszag-Tang et fait tomber une égalité classique/optimum qui n'était
-qu'une coïncidence (`frac_cl`/`gt_frac` mesuré alors : 0,9709, pas 1,0).
-Si ce même changement de classement rend, sur ces deux configurations
-précises, la sélection de blocs de QAOA insensible à son propre
-échantillonnage (signal trop net pour que le bruit de tirage change quels
-blocs sont choisis), cela expliquerait la stabilité au tirage des deux
-mesures sans contredire `test_C_ZZ` — qui mesure la dispersion des scores
-eux-mêmes, pas de la sélection discrète qui en découle. Hypothèse posée,
-pas vérifiée en isolant `w_z_frac`/`threshold`/le scénario un par un.
+**Piste restante, non vérifiée** : le score QAOA continu suit presque
+cellule à cellule le score classique (écarts 0,01–0,05), cohérent avec un
+optimum du Hamiltonien qui coïncide réellement avec la décision classique
+sur cette configuration précise — pas une panne de l'optimiseur ni un
+couplage inerte, juste un cas où la physique ne change rien. Trancher
+demanderait une énumération exhaustive du Hamiltonien de cette
+configuration (méthode de D-53), pas faite ici.
 
 ```bash
-pytest tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep -q
 pytest tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness -q
 ```
 

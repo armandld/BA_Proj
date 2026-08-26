@@ -274,7 +274,10 @@ est bien restaurée. Ce contrôle a servi à trancher un cas ambigu :
 `test_hyperparameter_sweep`, rejoué sous une graine indépendante confirmée
 aléatoire, rend une corrélation de rang **identique à la décimale près** à
 celle mesurée sous l'ancien `seed=0` — donc **pas** un artefact de tirage,
-un vrai effet, stable, non expliqué (D-195, `DEFAUTS.md`). La leçon
+un vrai effet, stable — expliqué depuis (D-195, `docs/RESULTS.md`) : un
+budget d'optimiseur 10× plus grand (`K_opt=800` contre 80) répare la
+sélection sans toucher au Hamiltonien, la signature d'une instance de plus
+de H0a, pas d'un défaut distinct. La leçon
 « mesurer la variance avant de conclure » a donc, une fois appliquée pour de
 bon, produit un nouveau résultat non concluant plutôt qu'd'effacer les
 anciens.
@@ -469,15 +472,26 @@ les deux structures pèsent également décide-t-il mieux ? ». **Cette question
 est ouverte, et seule une campagne peut y répondre** — les mesures d'avant
 campagne ne le peuvent pas, par construction.
 
-**Mis à jour le 26 août, pour clore.** Cette phrase de fermeture, écrite à
-`d047015`, reste la bonne réponse à la question que USER a posée le 26 août
-(« la campagne peut être lancée, les résultats interprétés, je peux écrire
-le papier ? ») : **non**, pour trois raisons indépendantes, pas une seule —
-(1) D-22 bloque toujours le lancement de la campagne elle-même ; (2) H3
-(T13/T11b) est à reprendre, pas seulement à reconfirmer, depuis D-58 ; (3)
-D-195, trouvé le 25 août en vérifiant D-191, est un effet réel et non
-expliqué qui n'a pas encore de niveau A/B/C/D parce qu'il n'a pas encore
-d'explication à évaluer. Ce que ce document permet, en revanche, c'est de
-savoir exactement *quoi* faire tourner et *quoi* laisser de côté quand la
-campagne partira : la liste A/A bis ci-dessus est ce sur quoi le papier peut
-déjà s'appuyer sans attendre.
+**Mis à jour le 26 août.** La réponse à la question que USER a posée ce
+jour-là (« la campagne peut être lancée, les résultats interprétés, je
+peux écrire le papier ? ») a changé de forme au fil de la journée, à
+mesure que chaque point listé a été traité plutôt que seulement décrit :
+
+- **D-22** : le trou de code (le résultat d'une campagne n'atteignait
+  jamais `study/`) est **corrigé** — `_deploy()`, `docs/RESULTS.md`. Ce
+  qui reste n'est plus un défaut : c'est que la campagne, plusieurs jours
+  de calcul, **n'a pas encore tourné**.
+- **D-188** : décidé et remesuré à l'horizon physique `t_x` plutôt que
+  laissé en attente — verdict mixte (ci-dessus), pas un blocage.
+- **D-189** : n'était plus un défaut du tout — corrigé dans le commit qui
+  a vidé les six documents le 24 août, jamais reporté depuis.
+- **D-195** : moitié expliquée et rattachée à H0a (`test_hyperparameter_
+  sweep`), moitié encore ouverte mais avec deux causes déjà éliminées par
+  la mesure (`test_noise_robustness`).
+- **H3 (T13/T11b)** reste à reprendre depuis D-58 — non traité par ce qui
+  précède, toujours une raison de répondre non pour l'instant.
+
+Ce que ce document permet, en tout état de cause : savoir exactement
+*quoi* faire tourner et *quoi* laisser de côté quand la campagne partira —
+la liste A/A bis ci-dessus est ce sur quoi le papier peut déjà s'appuyer
+sans attendre.

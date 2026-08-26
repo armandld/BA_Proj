@@ -81,10 +81,13 @@ part entière. → `DEFAUTS.md`
 **Mis à jour le 26 août.** Ce préalable n'est toujours pas clos : il l'est
 moins qu'il ne le semblait à `d047015`. Le 25 août a rouvert et refermé six
 défauts de plus (D-39, D-50, D-98, D-100, D-158, D-191), en a laissé un
-nouveau ouvert (D-195, une corrélation de rang QAOA/vérité négative et une
-égalité QAOA=classique sans bruit, toutes deux stables sous deux tirages
-indépendants — cause non élucidée). Un défaut reste bloqué sur une
-décision humaine, pas sur du code — D-22, la campagne de réoptimisation
+nouveau ouvert (D-195). Sa moitié `test_hyperparameter_sweep` a depuis été
+expliquée et refermée le 26 août — une instance de plus de H0a, confirmée
+en montrant qu'un budget d'optimiseur 10× plus grand répare la sélection
+sans toucher au Hamiltonien ; sa moitié `test_noise_robustness` reste
+ouverte, deux causes plausibles éliminées par la mesure, une troisième
+posée et non vérifiée. Un défaut reste bloqué sur une décision humaine,
+pas sur du code — D-22, la campagne de réoptimisation
 elle-même. D-188 a été décidé et remesuré le 26 août plutôt que laissé
 en attente (§3, §4 ci-dessous). Un troisième, D-189, a été retiré une
 seconde fois le 26 août : la
