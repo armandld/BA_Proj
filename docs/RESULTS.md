@@ -9324,3 +9324,122 @@ Régression, sur les autres consommateurs de `dns_validation.py`
 `test_empty_sweep_never_silent.py`, `test_no_private_curl_survives.py`,
 `test_t14_divb_uses_matched_operator.py`, `test_t8_dns_extension.py`
 — tous rejoués après ce correctif, verdict inchangé.
+
+---
+
+# D-189 — déjà corrigé le 24 août, jamais documenté : erreur de vérification à corriger
+
+**Ce que USER a demandé le 26 août** : sous `norm="max"`, remplacer la
+division par `EPS` pour un signal trop faible par une suppression pure
+(« elle ne contribue pas »), plutôt que de laisser `EPS` jouer les deux
+rôles — garde de division par zéro et seuil physique implicite.
+
+**Ce qui s'est passé en vérifiant, avant d'écrire une ligne de code** :
+cette suppression existe déjà, dans le code déployé, depuis le commit
+`d3d7573` (24 août — le même commit qui a vidé `DEFAUTS.md`,
+`COUVERTURE.md`, `RESULTS.md`, `EVALUATION.md` et `PLAN_PREPRINT.md`).
+`git log -- src/Simulation/HamiltParams_v2.py` ne montre que trois
+commits : `d047015` (où le défaut est réel, `_adim` compare `pic` à
+`self.EPS = 1e-10` et divise dès que `pic > EPS`), `d3d7573` (qui réécrit
+le mécanisme ET le docstring ET le fichier de test dans le même geste),
+et `7924ce0` (ce dépôt, D-158/D-192/D-193, qui n'a pas touché ce fichier).
+
+**D-189, tel que restauré dans `DEFAUTS.md` le 25 août, décrivait donc un
+défaut qui n'existait déjà plus** — restauré depuis `d047015`
+(l'état d'avant `d3d7573`) sans vérifier si les « corrections sur le code
+source » que le message de `d3d7573` annonce avaient déjà réglé la
+question. Le « re-vérifié le 25 août (partiellement) » de `DEFAUTS.md`
+confirmait que la suite non-`slow` passait (10 tests), mais sans
+relire le mécanisme qu'elle teste : ces 10 tests eux-mêmes ont été
+réécrits par `d3d7573` pour vérifier le **nouveau** comportement, pas
+pour épingler l'ancien. Passer ne distinguait donc pas « corrigé » de
+« pas encore corrigé » — exactement l'erreur inverse de celle que ce
+dépôt a corrigée cinq fois plus tôt cette session (D-98, D-100, D-194,
+D-50, D-39 : des tests qui épinglaient un défaut connu, réécrits en
+tests de correction). Ici le test avait déjà été réécrit ; c'est ma
+propre lecture qui ne l'avait pas remarqué.
+
+## Le mécanisme réellement en place
+
+`_adim(signal, noise_floor)` (et son équivalent pour `jump_h`/`jump_v`)
+ne divise plus jamais par `EPS` sous `norm="max"` :
+
+```python
+def _adim(signal, noise_floor):
+    """Normalize a resolved signal and discard round-off residue."""
+    pic = float(np.max(np.abs(signal)))
+    if pic <= noise_floor:
+        return np.zeros_like(signal, dtype=float)
+    return np.abs(signal) / pic
+```
+
+`noise_floor` n'est plus une constante — c'est
+`_difference_roundoff_floor(*fields)` /
+`_determinant_roundoff_floor(...)`, calculé à partir de l'échelle réelle
+des champs d'ENTRÉE (`ROUND_OFF_FACTOR(128) × epsilon flottant du dtype ×
+max|champ|`) : le seuil suit la précision atteignable **pour ce calcul
+précis**, plutôt qu'une constante universelle. `self.EPS = 1e-10` existe
+toujours, mais seulement dans les branches `else:` (`norm="legacy"`), où
+le docstring de classe dit explicitement qu'il doit le rester : « retained
+only to reproduce frozen historical artifacts ».
+
+## Une nuance trouvée en vérifiant, à consigner pour ne pas la reperdre
+
+Le mécanisme corrige le round-off — une différence de deux grands nombres
+presque égaux (`vx = 1.0 + 1e-14·sin(y)`) ne se fait plus passer pour un
+signal résolu. Il ne rend PAS pour autant tout petit nombre nul : un champ
+**globalement petit mais sans grand offset** (`vx = 1e-9·sin(y)`, aucune
+composante dominante à soustraire) reste normalisé à poids plein — vérifié
+directement :
+
+```bash
+python3 -c "
+import sys, numpy as np
+sys.path.insert(0, 'src')
+from Simulation.HamiltParams_v2 import PhysicalMapperV2
+N = 16; DX = 2*np.pi/N
+Y = np.meshgrid(np.linspace(0,2*np.pi,N,endpoint=False), np.linspace(0,2*np.pi,N,endpoint=False), indexing='ij')[1]
+Z = np.zeros((N,N)); S = np.full((N,N), 0.5)
+def K(vx):
+    return PhysicalMapperV2(dx=DX, norm='max').compute_coefficients(
+        None, S, {'vx': vx, 'vy': Z, 'Bx': Z, 'By': Z, 'Jz': Z}, 0.15)['K_plaquettes']
+print(np.max(np.abs(K(1e-9 * np.sin(Y)))))   # 1.0, pas 0.0
+"
+```
+
+**Ce n'est pas un défaut résiduel** : c'est la conséquence directe,
+délibérée et testée de l'invariance d'échelle que D-190 établit
+(« Uniform rescaling of the fields leaves the default `max` coefficients
+unchanged », docstring de classe ; `test_normalisation_max_invariante.py`).
+Le mappeur ne connaît pas d'échelle physique absolue — reformater tous les
+champs par un facteur 1e-9 laisse les coefficients identiques par
+construction. Ce que corrige `noise_floor`, c'est uniquement « ce pic
+est-il distinguable du bruit d'arrondi **du calcul qui l'a produit** »,
+pas « cette structure est-elle physiquement grande en unités SI » — la
+seconde question n'a pas de sens pour un mappeur scale-invariant par
+conception. `test_a_small_but_resolved_structure_keeps_full_relative_
+weight` teste explicitement ce cas (amplitude `1e-14`, poids plein) et
+documente que c'est voulu.
+
+## Vérifié
+
+```bash
+pytest tests/mapping/test_plaquette_signal_negligeable.py -v   # 10 passed
+```
+
+Les 10 tests couvrent : round-off près d'un grand offset supprimé
+(vitesse et champ magnétique), une petite structure réellement résolue
+qui garde son poids plein, le seuil du signal X-point (supprimé à
+`1e-14`, plein poids à `1e-12`), l'échelle du biais Z, le rejet des
+paramètres non physiques, et — explicitement — que `norm="legacy"` garde
+son ancien garde additif `EPS` gelé (`test_legacy_mode_keeps_its_frozen_
+additive_guard`, comparé analytiquement à `omega_peak / (omega_peak +
+EPS)`).
+
+## Ce que ça change dans les autres documents
+
+`docs/DEFAUTS.md` retire l'entrée D-189 (elle décrivait un état antérieur
+à `d3d7573`, pas l'état actuel). `docs/PLAN_PREPRINT.md` §3 et son
+paragraphe « mis à jour le 26 août » citaient D-189 parmi les décisions
+humaines encore bloquantes — corrigé dans le même mouvement que cette
+entrée.

@@ -83,10 +83,16 @@ moins qu'il ne le semblait à `d047015`. Le 25 août a rouvert et refermé six
 défauts de plus (D-39, D-50, D-98, D-100, D-158, D-191), en a laissé un
 nouveau ouvert (D-195, une corrélation de rang QAOA/vérité négative et une
 égalité QAOA=classique sans bruit, toutes deux stables sous deux tirages
-indépendants — cause non élucidée), et a confirmé que trois défauts restent
-bloqués sur une décision humaine, pas sur du code (D-22, D-188, D-189). Le
-préalable est une contribution qui continue, pas un socle acquis une fois
-pour toutes.
+indépendants — cause non élucidée), et a confirmé que deux défauts restent
+bloqués sur une décision humaine, pas sur du code (D-22, D-188). Un
+troisième, D-189, a été retiré une seconde fois le 26 août : la
+description restaurée depuis `d047015` décrivait un défaut que `d3d7573`
+avait déjà corrigé le 24, dans le même geste que la suppression des
+documents — erreur de vérification (le test qui l'entourait avait
+lui-même été réécrit pour vérifier le nouveau comportement, sa réussite
+ne distinguait donc plus « corrigé » de « pas encore corrigé »), pas une
+nouvelle correction de code. Le préalable est une contribution qui
+continue, pas un socle acquis une fois pour toutes.
 
 ## 3. Mise en place des hypothèses
 

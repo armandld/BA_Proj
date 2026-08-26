@@ -31,9 +31,9 @@ correction — ni mesure avant/après, ni commande, ni date. C'est exactement
 la dette que `CLAUDE.md` interdit : un résultat sans sa mesure. Quiconque
 veut s'appuyer dessus doit remesurer avant de citer.
 
-**D-158, D-98, D-100, D-50, D-39 et D-187, six des 9 « toujours ouvertes »
-ci-dessus, ont eux aussi été refermés le 25 août** — même jour, passes
-séparées. D-158 : la cause exacte du plantage était une exception non
+**D-158, D-98, D-100, D-50, D-39, D-187 et D-189, sept des 9 « toujours
+ouvertes » ci-dessus, ont eux aussi été refermés — six le 25 août, D-189
+le 26 après une correction d'erreur.** D-158 : la cause exacte du plantage était une exception non
 attrapée à un seul site d'appel (`aggregate_master_table.py::rows_t23`),
 corrigée sans toucher au contrat de la fonction levée ; la table maîtresse
 tourne désormais jusqu'au bout (268 lignes, 142 OK / 6 DIFF / 120 MISSING
@@ -163,43 +163,6 @@ passes de ce jour n'a touché `dynamic_patch_labels.py` ni régénéré les
 artefacts `d_patches_*.npz` dont ce défaut dépend ; le test `-m slow` n'a
 pas été rejoué (coût, sans changement de code source à vérifier). Reste
 un blocage de décision de campagne, pas de code.
-
----
-
-## D-189 — sous `norm="max"`, `EPS` sert de seuil physique et peut promouvoir la poussière numérique
-
-**Rapport seul. Rien n'est corrigé** — le corpus n'entre pas dans la bande
-dangereuse aujourd'hui, et choisir un plancher physique est une décision de
-conception sur `src/`.
-
-**Où ça bloque.** La plaquette (`HamiltParams_v2.py`, `norm="max"`) divise
-chaque magnitude (vorticité, courant, point X) par **son propre** maximum.
-Le seul garde est `EPS = 1e-10`, un garde de division par zéro, pas un
-seuil physique : une vorticité de 1e-9 pèse alors **autant** qu'une
-vorticité de 1,0 (marche mesurée : 0,000000 sous `EPS`, 0,999998 juste
-au-dessus). C'est le revers exact de la correction du 21 août : ce qui
-protégeait `legacy` de la poussière numérique était le dénominateur commun
-qu'on a précisément retiré.
-
-**Pourquoi ça ne bloque pas aujourd'hui** : balayage des 24 artefacts DNS
-(480 instantanés) — aucun `max|ω|` ni `max|J|` ne tombe dans `(1e-10,
-1e-6)`. Les valeurs sont soit exactement nulles, soit ≥ 4,9e-02.
-
-**Épinglé par** `tests/mapping/test_plaquette_signal_negligeable.py` (5
-tests) — la marche dans les deux modes, un balayage du corpus qui fait
-rougir la suite si un futur artefact entre dans la bande, et la vérification
-que les pics nuls du corpus sont exactement nuls.
-
-```bash
-pytest tests/mapping/test_plaquette_signal_negligeable.py -q -m slow
-```
-
-**Re-vérifié le 25 août** (partiellement) : la garde non-`slow`
-(`pytest tests/mapping/test_plaquette_signal_negligeable.py -q -m "not slow"`,
-10 tests) passe toujours. Le balayage complet des 24 artefacts DNS
-(`-m slow`) n'a pas été rejoué ; rien dans les passes de ce jour n'a
-touché `HamiltParams_v2.py` ni régénéré de DNS. Reste un blocage de
-décision de conception sur `src/`, pas un défaut de code.
 
 ---
 
