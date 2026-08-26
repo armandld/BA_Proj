@@ -1242,6 +1242,37 @@ def _save_results(study_p1, study_p2, study_p3,
     return output_path
 
 
+def _deploy(staged_path):
+    """Copy a just-completed campaign result to where `study/` reads it.
+
+    D-22 : `_save_results` ecrit dans `CAMPAIGN_DIR`
+    (`results/hyperparams/reoptimisation/`), un registre permanent, jamais
+    ecrase. `hyperparams_loader.resolve_hyperparams_path()` lit un chemin
+    DIFFERENT (`results/hyperparams/best_hyperparams.json`) par defaut, et
+    rien ne copiait l'un vers l'autre avant cette fonction : une campagne
+    pouvait tourner jusqu'au bout et son resultat n'atteignait jamais
+    `pipeline.py`/`study/` sans qu'un humain se souvienne d'une etape
+    manuelle. Provenance de l'ancien fichier deploye desormais sans objet
+    (il va etre retrace ci-dessous) : ce n'est plus la question qui
+    compte, celle qui compte est que CE resultat-ci soit bien celui que
+    tout le reste consomme.
+
+    Appelee uniquement depuis `main()`, apres un `--phase all` complet
+    (les deux bras, les trois phases) : `staged_path` est donc toujours un
+    resultat termine, jamais un candidat partiel.
+    """
+    from hyperparams_loader import resolve_hyperparams_path
+    deploy_path = resolve_hyperparams_path()
+    if os.path.abspath(deploy_path) == os.path.abspath(staged_path):
+        return deploy_path
+    with open(staged_path, "r", encoding="utf-8") as stream:
+        payload = json.load(stream)
+    _atomic_write_json(deploy_path, payload)
+    print(f"Deploye vers {deploy_path} "
+          f"(chemin que `hyperparams_loader` lit par defaut).")
+    return deploy_path
+
+
 # ============================================================
 #  MAIN
 # ============================================================
@@ -1271,6 +1302,11 @@ def parse_args(argv=None):
                    help="prepare/reprend la phase 1 avant de lancer les workers")
     p.add_argument("--finalize-only", action="store_true",
                    help="valide et exporte le candidat de phase 1 sans calcul")
+    p.add_argument(
+        "--no-deploy", action="store_true",
+        help="n'ecrit pas vers le chemin que hyperparams_loader lit par "
+             "defaut (D-22) ; le resultat final reste dans "
+             "CAMPAIGN_DIR seulement, a deployer a la main")
     args = p.parse_args(argv)
     if args.n_trials is not None and args.n_trials < 1:
         p.error("--n-trials doit etre >= 1")
@@ -1366,7 +1402,12 @@ def main(argv=None):
         c1 = _run_classical_phase1(dns, args.seed)
         c2 = _run_classical_phase2(c1, args.seed)
         c3 = _run_classical_phase3(c2, args.seed)
-        _save_results(p1, p2, p3, c1, c2, c3)
+        staged_path = _save_results(p1, p2, p3, c1, c2, c3)
+        if args.no_deploy:
+            print(f"--no-deploy : reste dans {staged_path}, "
+                  f"pas copie vers le chemin lu par defaut.")
+        else:
+            _deploy(staged_path)
         print("\n" + "=" * 60)
         print("ALL TRAINING COMPLETE")
         print("=" * 60)

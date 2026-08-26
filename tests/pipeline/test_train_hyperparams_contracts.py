@@ -33,6 +33,7 @@ if os.path.join(_REPO_ROOT, "src") not in sys.path:
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 import train_hyperparams as TH
+from hyperparams_loader import load_hyperparams, resolve_hyperparams_path
 
 
 #: Le perimetre decide pour la reoptimisation. Ecrit ici en toutes
@@ -704,8 +705,17 @@ def test_run_phase_reads_only_those_two_keys(tmp_path, monkeypatch):
 # l'enchainement des etudes restent le vrai code.
 
 @pytest.fixture
-def cheap_phases(monkeypatch):
-    """Remplace le DNS et l'execution d'essais. Enregistre les appels."""
+def cheap_phases(monkeypatch, tmp_path):
+    """Remplace le DNS et l'execution d'essais. Enregistre les appels.
+
+    D-22 : `--phase all` atteint desormais `_deploy()` apres
+    `_save_results()`, qui ecrit vers le chemin par defaut de
+    `hyperparams_loader` (`results/hyperparams/best_hyperparams.json`)
+    si `QHAS_HYPERPARAMS_PATH` n'est pas fixe. Isole ici pour que les
+    tests qui font tourner `--phase all` avec ce fixture n'ecrasent
+    jamais le fichier reellement deploye du depot."""
+    monkeypatch.setenv(
+        "QHAS_HYPERPARAMS_PATH", str(tmp_path / "deployed_best_hyperparams.json"))
     calls = {"dns": [], "phases": []}
 
     def fake_dns(scenario_list, label="scenarios"):
@@ -806,6 +816,32 @@ def test_the_full_run_writes_its_json(cheap_phases, tmp_path, monkeypatch):
     saved = json.load(open(tmp_path / "best_hyperparams.json"))
     assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_9) | {"threshold_amr"}
     assert set(saved["deploy"]["classical"]) == set(PERIMETRE_9) | {"threshold_amr"}
+
+
+def test_the_full_run_also_deploys_where_study_reads_by_default(
+        cheap_phases, tmp_path, monkeypatch):
+    """D-22 : un `--phase all` complet doit atteindre le chemin que
+    `load_hyperparams()` lit par defaut, pas seulement `CAMPAIGN_DIR` — sans
+    quoi la campagne tourne jusqu'au bout et son resultat n'atteint jamais
+    `pipeline.py`/`study/`. Round-trip par le vrai `load_hyperparams`."""
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "_DIRS_READY", True)
+    TH.main(["--phase", "all", "--seed", "3"])
+
+    deployed = load_hyperparams(method="quantum")
+    assert set(deployed) == set(PERIMETRE_9) | {"threshold_amr"}
+
+
+def test_no_deploy_flag_leaves_the_default_path_untouched(
+        cheap_phases, tmp_path, monkeypatch):
+    monkeypatch.setattr(TH, "data_dir", str(tmp_path))
+    monkeypatch.setattr(TH, "_DIRS_READY", True)
+    deploy_path = resolve_hyperparams_path()
+    assert not os.path.exists(deploy_path)
+
+    TH.main(["--phase", "all", "--seed", "3", "--no-deploy"])
+
+    assert not os.path.exists(deploy_path)
 
 
 def test_phase1_cli_writes_an_explicit_candidate(

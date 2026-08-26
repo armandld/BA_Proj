@@ -101,34 +101,38 @@ haute : un rapport, pas une inquiétude.
 
 ---
 
-## D-22 — les hyperparamètres déployés n'ont aucune provenance
+## D-22 — la campagne à venir doit encore tourner
 
 **Ne se corrige pas par du code seul. Seule la campagne le règle.**
 
-**Où ça bloque.** Réoptimiser demande de savoir d'où l'on part. Aucun
-chiffre de performance n'est attribuable à un réglage dont on ignore
-l'origine. Le JSON déployé (`best_hyperparams.json`) ne correspond à
-**aucune** ligne des 13 CSV Optuna du dépôt — l'essai qu'il déclare a une
-perte de 0,3213 dans la base contre 0,2215 annoncée, et aucun de ses
-paramètres communs ne coïncide.
-
-**État vérifié le 25 août.** `w_z_frac` reste borné à `[0.1, 1000.0]` (log)
-dans `train_hyperparams.py --print-space` — la borne haute jamais tranchée
-que D-22 signalait. Le mécanisme qui produit un JSON traçable existe
-(`_save_results` écrit désormais le jeu complet, le hash du commit et
-`sys.argv`), mais **le fichier actuellement déployé reste orphelin** : ce
-mécanisme ne s'applique qu'à une campagne qui n'a pas encore tourné.
+**Décision USER du 26 août : la provenance du fichier ACTUELLEMENT
+déployé n'est plus la question.** Les hyperparamètres vont être
+réentraînés — savoir d'où vient l'ancien essai (perte 0,3213 dans la base
+contre 0,2215 annoncée, aucun paramètre commun) ne change plus rien à ce
+qu'il faut faire. Ce qui compte : que le résultat de la **prochaine**
+campagne soit conservé et effectivement utilisé par `study/` et par le
+papier. Ce dernier point est **réglé** (voir `docs/RESULTS.md`,
+« D-22 — le résultat d'une campagne ne rejoignait jamais `study/` ») —
+`_save_results` écrit un JSON traçable (jeu complet, hash du commit,
+`sys.argv`) et `_deploy`, appelée automatiquement en fin de `--phase all`,
+le copie vers le chemin exact que `pipeline.py`/`study/` lisent par
+défaut. Ce que ce défaut recouvre encore, c'est uniquement le fait que la
+campagne **n'a pas tourné** — pas un manque de code.
 
 **Périmètre tranché.** 8 paramètres à réoptimiser : `beta`, `w_z_frac`,
 `sigma`, `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`.
-`threshold_amr` reste gelé au meilleur essai classique.
+`threshold_amr` reste gelé au meilleur essai classique. `w_z_frac` reste
+borné à `[0.1, 1000.0]` (log) dans `train_hyperparams.py --print-space` —
+vérifié le 25 août, la borne haute jamais tranchée que D-22 signalait à
+l'origine.
 
 ```bash
-python src/train_hyperparams.py --print-space
+python src/train_hyperparams.py --print-space   # verifie l'espace, ne calcule rien
+python src/train_hyperparams.py --phase all --seed <graine>   # la campagne elle-meme
 ```
 
-C'est un blocage de **campagne**, pas un défaut de code : il se ferme
-quand la campagne tourne et écrit un JSON traçable, pas avant.
+C'est un blocage de **campagne** (jours de calcul), pas un défaut de
+code : il se ferme quand la campagne tourne, pas avant.
 
 ---
 

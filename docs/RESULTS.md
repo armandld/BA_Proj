@@ -9443,3 +9443,109 @@ EPS)`).
 paragraphe « mis à jour le 26 août » citaient D-189 parmi les décisions
 humaines encore bloquantes — corrigé dans le même mouvement que cette
 entrée.
+
+---
+
+# D-22 — le résultat d'une campagne ne rejoignait jamais `study/`
+
+**Ce que USER a demandé le 26 août** : la provenance des hyperparamètres
+*actuellement* déployés ne compte plus — ils vont être réentraînés. Ce
+qui compte, c'est que le résultat de la **prochaine** campagne soit
+conservé et effectivement consommé par `study/` et par la rédaction du
+papier.
+
+## Le trou trouvé en vérifiant
+
+`src/train_hyperparams.py::_save_results` écrit le JSON final dans
+`CAMPAIGN_DIR` — `results/hyperparams/reoptimisation/` par défaut, ou
+`$QHAS_CAMPAIGN_DIR`. `src/hyperparams_loader.py::resolve_hyperparams_path`
+— celui que `pipeline.py` et tout `study/` lisent par défaut — pointe sur
+`results/hyperparams/best_hyperparams.json`, **un répertoire différent,
+sans rapport**. Recherché dans tout le dépôt (`grep -rn` sur
+`reoptimisation.*best_hyperparams`, `shutil.copy.*hyperparams`, etc.) :
+**aucun mécanisme ne copiait l'un vers l'autre.** Une campagne aurait pu
+tourner jusqu'au bout — trois phases, deux bras, plusieurs jours — et son
+résultat serait resté orphelin dans `reoptimisation/`, tandis que
+`pipeline.py` aurait continué à lire le même `best_hyperparams.json` que
+D-22 dénonce déjà comme sans provenance vérifiée, indéfiniment, sans
+qu'aucune erreur ne le signale.
+
+## Le correctif
+
+`_deploy(staged_path)` (`src/train_hyperparams.py`), appelée depuis
+`main()` immédiatement après `_save_results()`, sur le chemin `--phase
+all` uniquement (le seul qui produit un résultat complet, les deux bras,
+les trois phases) : copie le JSON fraîchement écrit vers
+`hyperparams_loader.resolve_hyperparams_path()` — le chemin exact que
+`pipeline.py`/`study/` lisent par défaut, respectant `$QHAS_HYPERPARAMS_PATH`
+si fixé. `CAMPAIGN_DIR` reste un registre permanent, jamais écrasé, pour
+l'audit ; le déploiement est un second geste, explicite, mais automatique.
+Un drapeau `--no-deploy` permet de garder l'ancien comportement (rien
+n'est copié) si un opérateur veut inspecter avant de déployer.
+
+```python
+def _deploy(staged_path):
+    from hyperparams_loader import resolve_hyperparams_path
+    deploy_path = resolve_hyperparams_path()
+    if os.path.abspath(deploy_path) == os.path.abspath(staged_path):
+        return deploy_path
+    with open(staged_path, "r", encoding="utf-8") as stream:
+        payload = json.load(stream)
+    _atomic_write_json(deploy_path, payload)
+    return deploy_path
+```
+
+## Presque une casse en écrivant le test — consigné pour ne pas la refaire
+
+En rejouant la suite existante pour vérifier que rien n'était cassé
+(`tests/pipeline/test_extract_best_hyperparams_columns.py`,
+`test_relative_percentile_is_trainable.py`,
+`test_hyperparams_provenance_break.py`, `test_train_hyperparams_smoke.py`,
+`test_train_hyperparams_contracts.py`,
+`tests/study/test_hyperparams_two_sources.py`, ensemble), 3 tests de ce
+dernier fichier ont rougi. Cause trouvée par `git stash` : **un test
+existant, `test_the_full_run_writes_its_json`
+(`test_train_hyperparams_contracts.py`), appelle `TH.main(["--phase",
+"all", ...])` en isolant `data_dir` (la sortie de `_save_results`) via
+`monkeypatch`, mais sans isoler `QHAS_HYPERPARAMS_PATH`.** Avant ce
+correctif, ça ne changeait rien — `main()` n'atteignait jamais le chemin
+par défaut. Avec `_deploy()` ajoutée, ce même test a réellement écrasé
+`results/hyperparams/best_hyperparams.json`, le fichier réel et suivi par
+git, avec un résultat de test factice — et les 3 échecs observés étaient
+exactement ce à quoi s'attendre d'un fichier remplacé par une structure
+différente. **Restauré immédiatement (`git checkout --`) avant toute
+autre action**, cause isolée avant de rejouer quoi que ce soit.
+
+Corrigé à la source plutôt qu'au symptôme : la fixture partagée
+`cheap_phases` (utilisée par tous les tests qui invoquent `--phase all`
+dans ce fichier) isole désormais `QHAS_HYPERPARAMS_PATH` vers un chemin
+temporaire, une fois, pour tous ses appelants — pas seulement le test qui
+avait révélé le trou. Deux tests ajoutés pour couvrir le nouveau
+comportement explicitement plutôt que par accident :
+`test_the_full_run_also_deploys_where_study_reads_by_default` (round-trip
+par le vrai `load_hyperparams()`, pas une comparaison de chemins) et
+`test_no_deploy_flag_leaves_the_default_path_untouched`.
+
+## Vérifié
+
+```bash
+pytest tests/pipeline/test_campagne_noms_et_fantomes.py -v   # 7 passed
+pytest tests/pipeline/test_train_hyperparams_contracts.py -q # 71 passed
+pytest tests/pipeline/test_extract_best_hyperparams_columns.py \
+       tests/pipeline/test_relative_percentile_is_trainable.py \
+       tests/pipeline/test_hyperparams_provenance_break.py \
+       tests/pipeline/test_train_hyperparams_smoke.py \
+       tests/pipeline/test_train_hyperparams_contracts.py \
+       tests/study/test_hyperparams_two_sources.py \
+       tests/pipeline/test_campagne_noms_et_fantomes.py -q
+# 149 passed, 1 xfailed
+git status --short results/hyperparams/best_hyperparams.json   # vide : intact
+```
+
+**Ce que ça ne couvre pas.** `_deploy` copie le JSON tel quel — il ne
+compare pas le nouveau résultat à l'ancien, ne demande aucune
+confirmation, et ne vérifie pas que la campagne a produit un résultat
+*meilleur*. C'est délibéré et correspond à la demande : USER a dit que
+distinguer un résultat « meilleur » d'un résultat « différent » est une
+question pour après la campagne, pas une condition à son déploiement.
+`--no-deploy` reste disponible si un opérateur veut inspecter avant.
