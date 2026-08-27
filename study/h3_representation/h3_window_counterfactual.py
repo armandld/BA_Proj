@@ -77,19 +77,27 @@ def prepare_both_arms(vx, vy, Bx, By, N, dim, re):
     La seule difference entre les deux appels est sigma. On substitue la
     constante de module utilisee a la construction du mappeur, puis on la
     restaure inconditionnellement.
+
+    La substitution porte sur `config.TRAINED_SIGMA`, pas sur
+    `qaoa_inputs.TRAINED_SIGMA` : depuis que `qaoa_inputs.py` importe la
+    fonction groupee `trained_mapper_params()` au lieu des constantes
+    `TRAINED_*` individuelles (refactor du 24 aout, D-195), celle-ci resout
+    `TRAINED_SIGMA` par portee lexicale dans le namespace de `config`, ou
+    elle est definie -- `qaoa_inputs` ne porte plus cet attribut du tout.
     """
+    import config
     import qaoa_inputs as p5
 
     _, hp_w, _ = p5.prepare_qaoa_inputs(vx, vy, Bx, By, N, dim, re,
                                         use_v2=False)
-    saved = p5.TRAINED_SIGMA
+    saved = config.TRAINED_SIGMA
     try:
-        p5.TRAINED_SIGMA = HUGE_SIGMA
+        config.TRAINED_SIGMA = HUGE_SIGMA
         _, hp_nw, _ = p5.prepare_qaoa_inputs(vx, vy, Bx, By, N, dim, re,
                                              use_v2=False)
     finally:
-        p5.TRAINED_SIGMA = saved
-    assert p5.TRAINED_SIGMA == saved, "sigma not restored"
+        config.TRAINED_SIGMA = saved
+    assert config.TRAINED_SIGMA == saved, "sigma not restored"
 
     # verification de la substitution : sans fenetre, le couplage ne peut
     # pas etre plus faible qu'avec. Si l'egalite est stricte, la fenetre

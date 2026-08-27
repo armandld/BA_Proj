@@ -81,9 +81,7 @@ VQA_DIMS = [2, 4, 8]                     # coarse grid sizes to test
 L2_PERCENTILE_HARD = 75                   # top 25% L2 error = "hard"
 
 # -- V1 parameter source -------------------------------------------------
-# The built-in values reproduce the reference configuration. Setting
-# QHAS_HYPERPARAMS_PATH makes every study module import the completed campaign
-# candidate instead, without editing source code after the campaign.
+# The built-in values reproduce the reference configuration.
 _REFERENCE_TRAINED = {
     "threshold_amr": 0.1496,
     "sigma": 0.023,
@@ -96,14 +94,56 @@ _REFERENCE_TRAINED = {
     "kappa": 10.0,
     "relative_percentile": 90.0,
 }
+
+# D-195 (audit H1/H3/H4, 26 aout) : ce module et `src/hyperparams_loader.py`
+# resolvaient deux chemins DIFFERENTS par defaut -- `pipeline.py` lisait deja
+# automatiquement `results/hyperparams/best_hyperparams.json`
+# (`resolve_hyperparams_path()`), mais CE module ne le faisait QUE si
+# `QHAS_HYPERPARAMS_PATH` etait explicitement exporte, sinon retombait
+# silencieusement sur `_REFERENCE_TRAINED` -- une campagne pouvait tourner et
+# se deployer (D-22) sans qu'aucun script de `study/h1_solver`/
+# `study/h3_representation` (mapper v1) n'en voie jamais le resultat. Ce
+# module suit maintenant EXACTEMENT la meme resolution que `pipeline.py` :
+# `QHAS_HYPERPARAMS_PATH` si fixe, sinon le chemin par defaut de
+# `hyperparams_loader`, silencieusement s'il existe. Garde-fou : un fichier
+# incomplet (il manque `sigma`/`relative_percentile` au fichier
+# actuellement deploye, cf. D-22 avant campagne) retombe sur
+# `_REFERENCE_TRAINED` EN ENTIER plutot que de melanger deux jeux de
+# parametres incompatibles -- avec un avertissement, pour que ce ne soit
+# jamais silencieux.
+from hyperparams_loader import (  # noqa: E402
+    _REQUIRED_QUANTUM, load_hyperparams, resolve_hyperparams_path)
+
 CAMPAIGN_HYPERPARAMS_PATH = os.environ.get("QHAS_HYPERPARAMS_PATH")
-if CAMPAIGN_HYPERPARAMS_PATH:
-    from hyperparams_loader import load_hyperparams, resolve_hyperparams_path
-    _TRAINED = load_hyperparams(path=CAMPAIGN_HYPERPARAMS_PATH)
-    CAMPAIGN_HYPERPARAMS_PATH = resolve_hyperparams_path(
-        CAMPAIGN_HYPERPARAMS_PATH)
-else:
+_candidate_path = resolve_hyperparams_path(CAMPAIGN_HYPERPARAMS_PATH)
+_TRAINED = None
+if CAMPAIGN_HYPERPARAMS_PATH or os.path.isfile(_candidate_path):
+    try:
+        _loaded = load_hyperparams(path=CAMPAIGN_HYPERPARAMS_PATH)
+    except (FileNotFoundError, ValueError, KeyError, RuntimeError) as exc:
+        _loaded = None
+        if CAMPAIGN_HYPERPARAMS_PATH:
+            raise  # explicit override that fails to load must not go silent
+        import warnings
+        warnings.warn(
+            f"{_candidate_path} existe mais ne s'est pas charge "
+            f"({exc!r}) ; repli sur _REFERENCE_TRAINED.",
+            RuntimeWarning, stacklevel=2)
+    if _loaded is not None:
+        missing = sorted(_REQUIRED_QUANTUM - set(_loaded))
+        if missing:
+            import warnings
+            warnings.warn(
+                f"{_candidate_path} charge mais incomplet (manque "
+                f"{missing}) ; repli sur _REFERENCE_TRAINED plutot que de "
+                "melanger deux jeux de parametres.",
+                RuntimeWarning, stacklevel=2)
+        else:
+            _TRAINED = _loaded
+            CAMPAIGN_HYPERPARAMS_PATH = _candidate_path
+if _TRAINED is None:
     _TRAINED = dict(_REFERENCE_TRAINED)
+    CAMPAIGN_HYPERPARAMS_PATH = os.environ.get("QHAS_HYPERPARAMS_PATH")
 
 TRAINED_THRESHOLD = float(_TRAINED["threshold_amr"])
 TRAINED_SIGMA = float(_TRAINED["sigma"])

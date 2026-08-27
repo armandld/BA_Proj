@@ -92,6 +92,52 @@ Ces deux-là rouvrent sous **D-195**, cause distincte non élucidée. Il ne
 reste donc plus **aucune** entrée ouverte directement issue de cette
 seconde passe : les 5 sites de D-191 sont clos, D-195 est neuf.
 
+## D-197 — H4 n'est répondable qu'à moitié : la campagne LOSO niveau 3 n'a que 4 des 8 folds
+
+**Trouvé en auditant si H1/H3/H4 sont bien implémentées dans `study/`
+contre la sortie de la campagne** (26 août, sur demande USER). H4
+(transfert sur conditions inédites) répond exclusivement sur
+`study/closed_loop/` — structurellement **séparé** de
+`results/hyperparams/best_hyperparams.json` : `closed_loop_campaign.py`
+mène sa propre recherche Optuna LOSO par fold (voir
+`test_the_closed_loop_covers_every_key_the_pipeline_reads`,
+`docs/RESULTS.md`) et n'importe jamais le JSON de la campagne D-22. Ce
+n'est donc pas un défaut de câblage — corriger D-22 ne fait rien pour H4.
+
+**Les artefacts réels sont périmés.** Seuls 4 des 8 folds attendus
+existent (`kh`, `ot`, `rotor`, `tearing` ; manquent `vortex`,
+`coalescence`, `double_tearing`, `magnetic_twist` — `FOLD_KEYS` dans
+`study/pipeline/config.py`), et les 4 présents datent de `17d983d`
+(« reorganise the repository around the hypotheses », une réorganisation
+de fichiers, pas une campagne) : `n_trials=4` (échelle fumée, pas les
+170 essais/fold requis) et aucun `campaign_contract_sha256`. Le code actuel
+de `closed_loop_campaign.py` (lignes 275–278, 509–510) **lève
+`RuntimeError`** si ce champ est absent ou ne correspond pas au contrat
+courant — ces 4 folds ne peuvent donc pas être complétés par une reprise
+incrémentale : les 8 doivent être (re)joués sous le contrat actuel.
+
+**Conséquence directe sur `docs/v4_master_table.csv`** (voir D-196) :
+`t15c | folds completed = 4/8`, `budget-matched folds = 4/8`, et les 3
+lignes de verdict (`folds where Q-HAS better`, `Pareto-dominated`, `mean
+delta phys`) sont désormais `MISSING` plutôt que d'afficher un nombre non
+représentatif. Le protocole L3 exige `>= 3/4` folds gagnants pour trancher
+— avec 4/8 (dont la moitié seulement dans l'échantillon actuel), la règle
+de décision pré-enregistrée ne peut être appliquée sans un biais de
+sélection sur QUELS folds ont tourné.
+
+**Pas corrigé ici** : compléter les 4 folds manquants demande de relancer
+`closed_loop_campaign.py` pour chacun — un ordre de grandeur d'heures par
+fold (170 essais Optuna), du même ordre que la campagne D-22 mais
+structurellement distinct d'elle. Décision USER nécessaire avant de
+lancer : ce n'est pas un correctif de code autonome.
+
+```bash
+ls results/t15_level3_fold_*.json                 # 4 presents, 4 manquants
+python -c "import json; d=json.load(open('results/t15_level3_fold_kh.json')); \
+print(d['n_trials'], 'campaign_contract_sha256' in d)"   # 4 False
+python study/common/aggregate_master_table.py --allow-missing | grep t15c
+```
+
 ## Règle d'arrêt — ce qui entre dans ce fichier
 
 Écrite parce que le taux de découverte a dépassé le taux de résolution.

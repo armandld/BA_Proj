@@ -62,7 +62,19 @@ def test_every_existing_row_carries_a_reference():
 # decrivaient le defaut corrige par `107c1cf` (D-9), pas son resultat.
 # Restent 4 ecarts : 3 de T11b (D-48, non reproductible) et 1 sur
 # `t12/dim8`, dans le plancher de reproductibilite publie (0,3613).
-KNOWN_DIFF = 4
+#
+# REMESURE (D-196, audit H1/H3/H4, 26 aout). Ce pin etait reste a 4 alors
+# que la table committee en portait deja 6 depuis la fermeture de D-158
+# (25 aout, voir DEFAUTS.md) -- personne n'avait recroise les deux apres
+# coup. Les 2 supplementaires sont `t15c | folds completed` et
+# `t15c | budget-matched folds` : la campagne LOSO du niveau 3 n'a fourni
+# que 4 des 8 folds attendus (voir l'audit H4, DEFAUTS.md). Ce ne sont pas
+# des nombres publies qui divergent de leur artefact comme les 4 lignes
+# ci-dessus : ce sont des compteurs de completude comparant le present au
+# complet, DIFF par construction tant que la campagne n'a pas tourne au
+# complet -- attendus au meme titre que les MISSING de la meme table, pas
+# une regression.
+KNOWN_DIFF = 6
 
 
 @pytest.mark.xfail(strict=True, reason=(

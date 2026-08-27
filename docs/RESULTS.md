@@ -9763,3 +9763,174 @@ D-195 se referme pour sa moitié `test_hyperparameter_sweep`
 qu'avant : deux causes plausibles éliminées par la mesure, une troisième
 posée et non vérifiée — pas « cause non élucidée » au sens où rien
 n'aurait été tenté.
+
+# D-196 — le pin `KNOWN_DIFF` de la table maîtresse était resté à 4 alors que la table en portait déjà 6
+
+**Trouvé en vérifiant l'implémentation H1/H3/H4 par la suite complète**
+(`pytest tests/ -q -m "not slow"`, lancée en fond après D-22/D-188/D-189/
+D-195) : `tests/study/test_master_table_is_pinned.py` échouait sur 2 de
+ses 4 tests, ni l'un ni l'autre causé par les changements du jour.
+
+**Ligne du temps reconstituée** :
+- D-58 (17 août, `c3e88a2`) ferme le pin à `KNOWN_DIFF=4` sur une table de
+  180 lignes.
+- Entre `c3e88a2` et `6f255eb` (210 commits), la table s'élargit à
+  268 lignes — `t15c` (synthèse inter-folds du niveau 3) y entre.
+- D-158 (25 août) répare le crash de l'agrégateur et **redit** l'état
+  vrai dans `DEFAUTS.md` : « 268 lignes, 142 OK / **6 DIFF** /
+  120 MISSING ». Le texte est juste. Mais personne ne recroise ce
+  6 contre le `KNOWN_DIFF=4` resté inchangé dans le test — resté rouge en
+  silence depuis, jusqu'à ce que la suite complète le rejoue aujourd'hui.
+
+**Recoupé contre l'artefact, pas supposé** : régénérer la table aujourd'hui
+(`python study/common/aggregate_master_table.py`, sans aucun changement de
+`src/`) reproduit exactement les 268/142/6/120 déjà committés — aucune
+correction de la session (D-39, D-191, D-188, D-195) ne déplace ces
+lignes. La dette est donc antérieure à cette session, pas causée par elle.
+
+**Les 2 DIFF en trop, nommés** : `t15c | folds completed` (4,0 contre 8,0)
+et `t15c | budget-matched folds` (4,0 contre 8,0) — la campagne LOSO du
+niveau 3 n'a fourni que 4 des 8 folds attendus (voir l'audit H4 ci-dessous
+et `docs/DEFAUTS.md`). Un deuxième défaut, plus fin, cohabitait avec
+celui-là : 3 AUTRES lignes `t15c` (`folds where Q-HAS better (combined)`,
+`folds where Q-HAS Pareto-dominated at equal budget`,
+`mean delta phys at equal budget`) n'avaient **aucune référence** —
+`status="OK"` quelle que soit la valeur, le motif exact que
+`test_master_table_is_pinned.py` a été écrit pour interdire (« folds where
+Q-HAS Pareto-dominated at equal budget = 4 », la forme sous laquelle la
+revendication E circule).
+
+**Fix** (`study/common/aggregate_master_table.py::rows_t15c`) : tant que
+`len(recs) < len(folds)` (campagne LOSO incomplète), les 3 lignes de
+VERDICT deviennent explicitement `MISSING` au lieu d'afficher un nombre
+sans contrôle — impossible de dire aujourd'hui ce qu'elles DOIVENT valoir
+à 8/8 folds, donc impossible de leur donner une référence non circulaire.
+Les 2 compteurs de complétude (`folds completed`, `budget-matched folds`)
+gardent leur référence réelle (8) et restent `DIFF` : c'est une
+information de complétude, pas une revendication scientifique, et elle
+doit rester visible.
+
+`KNOWN_DIFF` passe de 4 à 6 dans `test_master_table_is_pinned.py`, avec
+les 2 nouvelles lignes nommées une par une (même discipline que D-58).
+Table régénérée : **268 lignes, 139 OK / 6 DIFF / 123 MISSING** (+3
+MISSING, -3 OK, DIFF inchangé — exactement les 3 lignes reclassées).
+
+```bash
+python study/common/aggregate_master_table.py --allow-missing
+pytest tests/study/test_master_table_is_pinned.py -v
+pytest tests/study/test_t15c_missing_while_campaign_incomplete.py -q
+```
+
+Résultat : 3 passed + 1 xfailed (comme prévu) pour le premier fichier ;
+4 passed pour le second (nouveau, teste `rows_t15c` isolément : cas
+partiel avec/sans budget-matched, cas complet, cas vide — non-régression
+du comportement déjà géré avant D-196).
+
+# H1/H3/H4 — audit de l'implémentation contre la sortie de campagne
+
+**Demande USER, 26 août** : « vérifier que H1, H3 et H4 sont bien
+vérifiés dans `study` et les implémenter pour pouvoir répondre à ces
+hypothèses en se basant sur les résultats de la campagne ». Audité par
+sous-agent (13 scripts, 3 hypothèses) puis vérifié directement. Deux
+défauts de câblage trouvés et corrigés, un troisième (données, pas code)
+documenté séparément en D-197.
+
+## H1/H3 — `study/pipeline/config.py` ne voyait pas la campagne déployée
+
+**Cause commune à H1 et H3** (`h1_solver_convergence.py`,
+`h1_curl_convention_gap.py`, tout `h3_representation/` qui passe par le
+mappeur v1) : `src/hyperparams_loader.py::resolve_hyperparams_path()` —
+utilisé par `src/pipeline.py`, le pipeline **déployé** — lit déjà
+automatiquement `results/hyperparams/best_hyperparams.json` par défaut.
+`study/pipeline/config.py::_TRAINED` ne le faisait QUE si
+`QHAS_HYPERPARAMS_PATH` était explicitement exporté ; sinon repli
+silencieux sur `_REFERENCE_TRAINED`, une constante figée dans le fichier.
+Une campagne pouvait tourner et se déployer (D-22) sans qu'aucun script
+de `study/h1_solver`/`study/h3_representation` (mappeur v1) n'en voie
+jamais le résultat — H1 et H3 auraient continué à évaluer une
+configuration figée, jamais celle réellement entraînée.
+
+**Fix** : `config.py` suit maintenant EXACTEMENT la même résolution que
+`pipeline.py` — `QHAS_HYPERPARAMS_PATH` si fixé, sinon le chemin par
+défaut de `hyperparams_loader`, silencieusement s'il existe. Garde-fou :
+un fichier incomplet (le fichier actuellement déployé n'a que 8 des 10
+clés requises — il manque `sigma`, `relative_percentile`, cf. D-22 avant
+campagne) retombe sur `_REFERENCE_TRAINED` **en entier** plutôt que de
+mélanger deux jeux de paramètres incompatibles, avec un `RuntimeWarning`
+explicite pour que ce ne soit jamais silencieux.
+
+**Vérifié directement** (pas seulement lu) :
+- avec le fichier incomplet actuel : le repli se déclenche, `RuntimeWarning`
+  émis, `TRAINED_THRESHOLD`/`TRAINED_SIGMA` restent à `0,1496`/`0,023`
+  (`_REFERENCE_TRAINED`, inchangés) ;
+- avec un faux JSON complet de campagne via `QHAS_HYPERPARAMS_PATH` : les
+  10 valeurs sont adoptées de bout en bout ;
+- non-régression : `test_fig15_sigma_narration.py`,
+  `test_t17_uncertainty_window.py`, `test_hyperparams_two_sources.py`,
+  `test_phase6_sigma_has_a_provenance.py`,
+  `test_sanity_check_params_track_config.py` — 44 passed, 1 warning
+  attendu.
+
+```bash
+python3 -c "
+import sys; sys.path.insert(0, 'study/pipeline')
+import config
+print(config.TRAINED_SIGMA, config.CAMPAIGN_HYPERPARAMS_PATH)"
+```
+
+## H3 — `h3_window_counterfactual.py` (tâche 18) plantait à chaque appel
+
+`prepare_both_arms` substituait `qaoa_inputs.TRAINED_SIGMA` pour
+neutraliser la fenêtre d'incertitude (`sigma -> 1e9`). Depuis que
+`qaoa_inputs.py` importe la fonction groupée `trained_mapper_params()`
+au lieu des constantes `TRAINED_*` individuelles (refactor du 24 août),
+`qaoa_inputs` ne porte plus cet attribut du tout —
+`AttributeError: module 'qaoa_inputs' has no attribute 'TRAINED_SIGMA'`
+à chaque appel. Aucun test existant n'appelait cette fonction (les tests
+de `test_t18_window_counterfactual.py` n'exerçaient que `_c_amplitude` et
+`ablate_all`), donc rien ne le disait.
+
+**Fix** : substitution portée sur `config.TRAINED_SIGMA` — c'est là que
+`trained_mapper_params()` (définie dans `config.py`) résout `TRAINED_SIGMA`
+par portée lexicale (son `__globals__` est le namespace de `config`, pas
+celui de `qaoa_inputs`).
+
+**Vérifié** avec de vraies données DNS (`dns_harris_tearing_Re400_N96.npz`) :
+plus de crash, `sigma` restauré après l'appel (`0,023` avant/après), et la
+neutralisation a un effet réel — `max|C|` windowed = `5,49e-255`,
+no-window = `29,79` (le couplage est numériquement mort SOUS la fenêtre
+et significatif sans elle, sur ce snapshot). Script complet rejoué de bout
+en bout (`--scenario harris_tearing --re 400 --N 96 --dim 2 --n-snaps 1`) :
+termine sans erreur, le contrôle `full` rend exactement 0 dans les deux
+bras.
+
+Nouveau test (`tests/study/test_t18_window_counterfactual.py::
+test_prepare_both_arms_runs_without_crashing_and_restores_sigma`) : champ
+synthétique minimal, pas de DNS requise. 8 passed (était 7).
+
+```bash
+pytest tests/study/test_t18_window_counterfactual.py -q       # 8 passed
+python study/h3_representation/h3_window_counterfactual.py \
+    --scenario harris_tearing --re 400 --N 96 --dim 2 --n-snaps 1
+```
+
+## H4 — pas un défaut de câblage, un défaut de données : voir D-197
+
+H4 (`study/h4_transfer/`) répond exclusivement sur les artefacts de
+`study/closed_loop/` (`results/t15_level3_fold_*.json`), un système LOSO
+Optuna **structurellement séparé** de `best_hyperparams.json` — corriger
+D-22 ne fait rien pour H4, et il n'y a rien à câbler différemment. Le
+problème réel : seuls 4 des 8 folds attendus existent, à l'échelle fumée
+(`n_trials=4`) et sans le champ de contrat que le code actuel exige pour
+toute reprise. Documenté en détail en D-197 (`docs/DEFAUTS.md`) plutôt
+qu'ici, parce que ce n'est pas corrigé : compléter les 4 folds manquants
+est une campagne à part entière (heures par fold), pas un correctif de
+code, et attend une décision USER avant d'être lancée.
+
+## Bilan
+
+| hypothèse | câblage `study/` -> sortie de campagne | statut |
+|---|---|---|
+| H1 | corrigé (config.py suit `hyperparams_loader`) | répondable une fois la campagne déployée |
+| H3 | corrigé (config.py + crash `t18` réparé) | répondable une fois la campagne déployée |
+| H4 | jamais câblé sur `best_hyperparams.json` (par construction, correct) | **pas répondable** avant de compléter les 4 folds manquants (D-197) |

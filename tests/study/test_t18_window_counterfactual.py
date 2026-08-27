@@ -24,7 +24,8 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 from h3_term_ablation import ABLATIONS
-from h3_window_counterfactual import HUGE_SIGMA, _c_amplitude, ablate_all
+from h3_window_counterfactual import (HUGE_SIGMA, _c_amplitude, ablate_all,
+                                      prepare_both_arms)
 
 
 def _hp(dim=2, c=0.0, k=0.0, z=None):
@@ -95,6 +96,35 @@ def test_every_declared_ablation_is_reported():
     for r in res:
         assert 0.0 <= r["changed"] <= 1.0
         assert 0.0 <= r["refined"] <= 1.0
+
+
+def test_prepare_both_arms_runs_without_crashing_and_restores_sigma():
+    """D-195 (audit H1/H3/H4, 26 aout) : `prepare_both_arms` substituait
+    `qaoa_inputs.TRAINED_SIGMA`, qui n'existe plus depuis que
+    `qaoa_inputs.py` importe la fonction groupee `trained_mapper_params()`
+    au lieu des constantes `TRAINED_*` individuelles (refactor du
+    24 aout) -- chaque appel levait `AttributeError`. Aucun test existant
+    n'appelait cette fonction (les autres tests de ce fichier n'exercent
+    que `_c_amplitude` et `ablate_all`) ; celui-ci la couvre directement,
+    avec un champ synthetique minimal (pas de DNS reelle necessaire), et
+    verifie a la fois l'absence de crash et que `config.TRAINED_SIGMA`
+    (la ou `trained_mapper_params()` la lit reellement) revient a sa
+    valeur d'origine apres l'appel."""
+    import config
+
+    rng = np.random.default_rng(0)
+    N, dim = 8, 2
+    vx, vy, Bx, By = (rng.standard_normal((N, N)) for _ in range(4))
+    saved = config.TRAINED_SIGMA
+
+    hp_w, hp_nw, a_w, a_nw = prepare_both_arms(vx, vy, Bx, By, N, dim, 400)
+
+    assert config.TRAINED_SIGMA == saved, "sigma leaked past the call"
+    assert a_nw >= a_w * (1.0 - 1e-9), (
+        "neutralisation n'a pas eu d'effet mesurable : le contrefactuel "
+        "serait vide de sens")
+    for hp in (hp_w, hp_nw):
+        assert "C_edges" in hp
 
 
 def test_reported_fields_are_present_and_finite():

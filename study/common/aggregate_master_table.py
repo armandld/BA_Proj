@@ -652,17 +652,42 @@ def rows_t15c(results_dir, folds):
     out = [
         make_row("t15c", "folds completed", float(pri["n_folds"]),
                  float(len(folds)), tol=0.5),
-        make_row("t15c", "folds where Q-HAS better (combined)",
-                 float(pri["n_qhas_better"])),
         make_row("t15c", "budget-matched folds",
                  float(sec["n_folds"]), float(len(folds)), tol=0.5),
-        make_row("t15c", "folds where Q-HAS Pareto-dominated "
-                 "at equal budget", float(sec["n_qhas_dominated"])),
     ]
-    if sec["n_folds"]:
-        out.append(make_row("t15c", "mean delta phys at equal budget "
-                            "(>0 = Q-HAS worse)",
-                            sec["mean_delta_phys_matched"]))
+    # D-196 (audit H1/H3/H4, 26 aout) : les trois lignes de VERDICT (pas de
+    # comptage de completude) restaient sans reference meme apres le fix
+    # ci-dessus -- un ecart precis : "folds completed"/"budget-matched
+    # folds" ont une cible connue (le nombre de folds demande), mais
+    # personne ne peut dire aujourd'hui ce que "folds where Q-HAS better"
+    # DOIT valoir a 8/8 folds. Leur donner une reference maintenant serait
+    # soit circulaire (= la valeur mesuree, un controle qui ne peut pas
+    # echouer), soit arbitraire. Tant que la campagne LOSO n'a pas fourni
+    # tous les folds, ces trois lignes sont MISSING -- pas un affichage OK
+    # sans reference, exactement le defaut que ce fichier corrige plus
+    # haut, applique a la moitie qui restait non corrigee.
+    complete = len(recs) == len(folds)
+    if complete:
+        out.append(make_row("t15c", "folds where Q-HAS better (combined)",
+                            float(pri["n_qhas_better"])))
+        out.append(make_row("t15c", "folds where Q-HAS Pareto-dominated "
+                            "at equal budget", float(sec["n_qhas_dominated"])))
+        if sec["n_folds"]:
+            out.append(make_row("t15c", "mean delta phys at equal budget "
+                                "(>0 = Q-HAS worse)",
+                                sec["mean_delta_phys_matched"]))
+    else:
+        # Rendue MISSING explicitement plutot que simplement omise : sinon
+        # le nombre de lignes de la table varie avec l'etat de la
+        # campagne, et une ligne qui disparait est plus facile a ne pas
+        # remarquer qu'une ligne MISSING.
+        missing = ["folds where Q-HAS better (combined)",
+                  "folds where Q-HAS Pareto-dominated at equal budget"]
+        if sec["n_folds"]:
+            missing.append("mean delta phys at equal budget "
+                           "(>0 = Q-HAS worse)")
+        for m in missing:
+            out.append(make_row("t15c", m, None, None))
     return out
 
 

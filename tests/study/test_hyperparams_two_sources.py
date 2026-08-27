@@ -15,7 +15,19 @@ d'un facteur 100 sur `w_z_frac`, et rien dans le depot ne le disait :
 
 Qui lit quoi :
 
-  - tout `study/` lit les constantes de `config.py` ;
+  - tout `study/` lit les constantes de `config.py` — qui, depuis D-195
+    (audit H1/H3/H4, 26 aout), suit la MEME resolution que `pipeline.py`
+    ci-dessous plutot qu'une valeur figee a part : `QHAS_HYPERPARAMS_PATH`
+    si fixe, sinon le chemin par defaut de `hyperparams_loader`,
+    silencieusement s'il existe ET porte les 10 cles requises (repli sur
+    la reference figee sinon, avec avertissement -- voir
+    `test_config_follows_hyperparams_loader.py`). Le tableau ci-dessus
+    reste vrai AUJOURD'HUI seulement parce que le fichier deploye est
+    INCOMPLET (il manque `sigma`, `relative_percentile` : D-22, avant
+    reoptimisation) ; une fois la campagne redeployee au complet, les deux
+    colonnes convergeront et `test_the_two_sources_really_disagree`
+    ci-dessous est concu pour rougir ce jour-la — pas un regression, le
+    signal que la convergence attendue par D-22 a eu lieu ;
   - `src/pipeline.py` — le pipeline DEPLOYE — lit le JSON via
     `load_hyperparams()`, puis fusionne le dict de l'appelant par-dessus.
 

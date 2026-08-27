@@ -1,4 +1,4 @@
-# git_hash=6f255eb5715d949fc65a86b48504be3d2a3588f2
+# git_hash=b3ab414371c447fec429ff2f4ab23c8ba295cf96
 task,metric,value,reference,status
 t11,diagonal Hamiltonian,1.000000,1.000000,OK
 t11,exhaustive hit-optimum,1.000000,1.000000,OK
@@ -91,10 +91,10 @@ t15b/rotor,budget-matched classical phys,0.053645,0.053600,OK
 t15b/rotor,budget-matched patch,0.356199,0.356200,OK
 t15b/rotor,delta phys at equal budget,0.114127,0.114100,OK
 t15c,folds completed,4.000000,8.000000,DIFF
-t15c,folds where Q-HAS better (combined),2.000000,,OK
 t15c,budget-matched folds,4.000000,8.000000,DIFF
-t15c,folds where Q-HAS Pareto-dominated at equal budget,4.000000,,OK
-t15c,mean delta phys at equal budget (>0 = Q-HAS worse),0.061224,,OK
+t15c,folds where Q-HAS better (combined),,,MISSING
+t15c,folds where Q-HAS Pareto-dominated at equal budget,,,MISSING
+t15c,mean delta phys at equal budget (>0 = Q-HAS worse),,,MISSING
 t17,ZZ mass kept (kelvin_helmholtz; level3_trained),0.435660,0.435700,OK
 t17,ZZ mass kept (harris_tearing; level3_trained),0.337923,0.337900,OK
 t17,ZZ mass kept (mhd_rotor; level3_trained),0.594049,0.594000,OK
