@@ -986,7 +986,7 @@ Le contrefactuel de T13/T17 : la fenêtre gaussienne neutralisée
 
 | lu | verdict |
 |---|---|
-| `prepare_both_arms`, substitution de `TRAINED_SIGMA` | **saine** — la valeur est relue depuis le module (`qaoa_inputs.py:244`, `sigma=TRAINED_SIGMA` à l'intérieur du corps de fonction, pas un défaut par défaut) à chaque appel, donc la substitution du module-global prend effet ; restauration **assertée**, pas seulement faite dans un `finally` |
+| `prepare_both_arms`, substitution de `TRAINED_SIGMA` | **était fausse, corrigée le 26 août (D-195, audit H1/H3/H4)** — cette ligne décrivait `qaoa_inputs.py:244`, `sigma=TRAINED_SIGMA` lu dans le corps de fonction : exact pour l'ancien `qaoa_inputs.py`, mais celui-ci importe `trained_mapper_params()` depuis le 24 août (retrait des constantes `TRAINED_*` individuelles) et ne porte plus `TRAINED_SIGMA` du tout. `prepare_both_arms` substituait donc `qaoa_inputs.TRAINED_SIGMA` — un attribut qui n'existe plus — et **plantait** (`AttributeError`) à CHAQUE appel ; le verdict « saine » avait été porté sur un mécanisme jamais rejoué. Corrigé : la substitution porte maintenant sur `config.TRAINED_SIGMA`, la cible réelle que `trained_mapper_params()` (définie dans `config.py`) résout par portée lexicale. Revérifié avec de vraies données DNS : plus de crash, `sigma` restauré à l'identique après l'appel, substitution à effet mesurable (`max\|C\|` windowed 5,49e−255 contre no-window 29,79 sur le snapshot testé). Voir `docs/RESULTS.md` |
 | l'assertion de neutralisation (`a_nw >= a_w·(1 − 1e−9)`) | **saine, et elle mord** — vérifie que la substitution a réellement affaibli la fenêtre plutôt que de le supposer |
 | le contrôle `full` (`ctrl != 0.0` → WARNING) | **compare le Hamiltonien à lui-même, comme D-54 avant sa correction** — mais `tests/study/test_t18_window_counterfactual.py` le documente explicitement comme un contrôle de chaîne de mesure (« il doit rendre exactement 0 »), pas comme une validation du mécanisme d'ablation, et porte un vrai contrôle positif (`test_ablation_detects_a_real_change`) à côté. Moins sévère que la forme originale de D-54 : signalé, pas rouvert |
 | lecture finale (« ZZ existe et la fenêtre le détruit » / « ZZ reste inerte ») | **conforme à la mesure** — `zz_nw` (ZZ ablation, fenêtre neutralisée) tranche entre les deux branches sans ambiguïté |
@@ -1076,12 +1076,24 @@ Dernier fichier non relu de `study/common/` ; exécuté à chaque passe
 (`180 / 164 / 16 / 0`) mais jamais relu fonction par fonction avant cette
 passe.
 
+**Mis à jour le 26 août (D-196, audit H1/H3/H4).** Le `180 / 164 / 16 / 0`
+ci-dessus est le décompte à la fermeture de D-58 (17 août) sur une table
+de 180 lignes ; la table a grandi depuis (`t15c`, `t26` notamment) et
+personne n'avait recroisé le compteur `KNOWN_DIFF` du test contre l'état
+réel de la table. Décompte courant, recoupé contre l'artefact et
+reproductible aujourd'hui : **268 lignes, 139 OK / 6 DIFF / 123 MISSING**
+(`python study/common/aggregate_master_table.py --allow-missing`) — les
+MISSING sont attendus tant que la campagne confirmatoire à 8 scénarios
+(dont la boucle fermée niveau 3, D-197) n'a pas tourné au complet, pas
+une régression.
+
 | lu | verdict |
 |---|---|
 | `_mean_where`, `collect`, `to_markdown`, sorties `.md`/`.csv`/`.npz` | **sains** — délèguent `status_of`/`make_row` à `aggregate_v3` (déjà audité), pas de logique de comparaison réimplémentée ici |
 | `TOL = 0.002` en tête de fichier | **mort, sans conséquence** — jamais référencé ailleurs dans le module ; `make_row` importé utilise son propre défaut (`aggregate_v3.TOL`, également 0,002). Les deux valeurs coïncidant, aucune ligne n'en dépend ; noté, pas corrigé |
 | les 12 lignes T17 (`spearman C/w`, `ZZ mass kept`), dictionnaires `ref` codés en dur | **D-58** — recopient le défaut que D-9 a corrigé, pas son résultat : la moitié des lignes `DIFF` du master table (12 sur 16) vient de ces deux dictionnaires, jamais mis à jour après `107c1cf` |
-| les autres extracteurs (`rows_t11`, `rows_t11b`, `rows_t12`, `rows_t13`, `rows_t13_degeneracy`, `rows_t14`, `rows_level3`, `rows_t18`, `rows_t20`, `rows_t22`, `rows_t23`, `rows_t24`, `rows_t25`, `rows_t26`, `rows_t15c`) | **sains** — rejoués contre les artefacts réels de `results/`, chacun retombe sur la valeur affichée par le master table (164 OK sur 180, dont les 4 explicables par D-48/T12-dim8/D-58 restent DIFF pour la raison déjà connue) |
+| les autres extracteurs (`rows_t11`, `rows_t11b`, `rows_t12`, `rows_t13`, `rows_t13_degeneracy`, `rows_t14`, `rows_level3`, `rows_t18`, `rows_t20`, `rows_t22`, `rows_t23`, `rows_t24`, `rows_t25`, `rows_t26`) | **sains** — rejoués contre les artefacts réels de `results/`, chacun retombe sur la valeur affichée par le master table (139 OK sur 268 aujourd'hui, dont les 6 DIFF explicables par D-48/T12-dim8/D-58/D-196 le restent pour une raison déjà connue) |
+| `rows_t15c` | **était fausse, corrigée le 26 août (D-196)** — 3 de ses 5 lignes (`folds where Q-HAS better`, `Pareto-dominated`, `mean delta phys`) n'avaient **aucune référence** : `status="OK"` quelle que soit la valeur, y compris « 4/4 folds dominés », la forme sous laquelle la revendication E circule (le motif exact que `tests/study/test_master_table_is_pinned.py` a été écrit pour interdire). Corrigé : ces 3 lignes deviennent `MISSING` tant que `len(recs) < len(folds)` (campagne LOSO niveau 3 incomplète — 4/8 folds aujourd'hui, D-197) au lieu d'afficher un nombre non représentatif. Les 2 compteurs de complétude (`folds completed`, `budget-matched folds`) gardent une vraie référence (8) et restent `DIFF`, à bon droit |
 
 **Axes empruntés.** Aucun — ce module ne construit ni circuit ni décision,
 il relit des artefacts déjà produits par 15 tâches différentes et compare à
@@ -1288,7 +1300,7 @@ ou `study/common/`, seulement des appels à la fonction vivante.
 | fichier | verdict |
 |---|---|
 | `closed_loop_status.py` | **sain** — lecture Optuna en mode `?mode=ro` explicite (ne peut ni bloquer ni corrompre un writer concurrent), erreur SQLite consignée plutôt qu'avalée |
-| `closed_loop_campaign.py` | **sain** — `fold_scenarios` dé-doublonne `SCENARIOS_ALL` par garde, mais la correction amont (D-33 lignée, `SCENARIOS_ISOLATED` restaurée à 4 scénarios distincts) fait qu'elle ne retire plus rien aujourd'hui ; vérifié en relisant `train_hyperparams.py:820-874` que les 6 clés sont bien distinctes. `FROZEN_DEFAULTS` (`gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0`) vérifié **identique à l'octet** à `config.TRAINED_GAMMA_HYDRO/MAG/KAPPA` et à `PHASE1_SEED_GRID` — même « valeur V1 de référence » partout, pas de fourche silencieuse. `summarise()` construit `q`/`c` non filtrés et `delta` filtré par `np.isfinite` sous la même clé `s[k]` : question 4 posée explicitement (un appelant qui indexerait `delta[i]` en pensant lire `q[i]-c[i]` lirait la mauvaise paire dès qu'un NaN a été filtré) — vérifié, `main()` recalcule `q[i]-c[i]` directement pour l'affichage par fold et ne lit `delta` que pour la statistique globale, qui n'a pas besoin de l'alignement par fold |
+| `closed_loop_campaign.py` | **sain** — `fold_scenarios` dé-doublonne `SCENARIOS_ALL` par garde, mais la correction amont (D-33 lignée, `SCENARIOS_ISOLATED` restaurée à 4 scénarios distincts) fait qu'elle ne retire plus rien aujourd'hui ; vérifié en relisant `train_hyperparams.py:820-874` que les 6 clés sont bien distinctes. `FROZEN_DEFAULTS` (`gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0`) vérifié **identique à l'octet** à `config.TRAINED_GAMMA_HYDRO/MAG/KAPPA` et à `PHASE1_SEED_GRID` — même « valeur V1 de référence » partout, pas de fourche silencieuse. Revérifié le 26 août (D-195, audit H1/H3/H4) après que `config.py` a changé de mécanisme de résolution : ces trois grandeurs restent robustes à ce changement — elles ne font jamais partie de l'espace de recherche Optuna (`SEARCH_SPACE`, confirmé par `test_closed_loop_searches_the_current_hamiltonian_parameters`), donc `_REFERENCE_TRAINED` et toute future campagne complète les portent identiques par construction, quelle que soit la source que `config.py` adopte. `summarise()` construit `q`/`c` non filtrés et `delta` filtré par `np.isfinite` sous la même clé `s[k]` : question 4 posée explicitement (un appelant qui indexerait `delta[i]` en pensant lire `q[i]-c[i]` lirait la mauvaise paire dès qu'un NaN a été filtré) — vérifié, `main()` recalcule `q[i]-c[i]` directement pour l'affichage par fold et ne lit `delta` que pour la statistique globale, qui n'a pas besoin de l'alignement par fold |
 | `closed_loop_budget_matched.py` | **D-74** — seul fichier des 9 sans `assert` ni `raise` ; ses deux gardes d'entrée rendaient la main code 0 sans artefact. Corrigé. Le reste est sain : la bissection suppose `patch_ratio` décroissant en `threshold_amr` — vérifié contre `refinement.py:369,401` (`local_prob >= effective_threshold` → raffiner, donc seuil haut ⇒ moins de raffinement) sur les deux chemins (`_run_level` VQA et `_run_level_classical`), même sens des deux côtés |
 | `closed_loop_divergence_audit.py` | **sain** — `parse_abort` cherche la marque `[ABORT]` que `pipeline.py:621` émet uniquement `if verbose`, et `audit_arm` appelle bien `run_arm(..., verbose=True)` : pas de garde muette côté source. `DIVERGENCE_PENALTY = 10.0` recopié localement plutôt qu'importé de `src/pipeline.py` (repli sans provenance en puissance) — **vérifié identique** aux deux endroits aujourd'hui, donc pas un défaut mesuré ; à réimporter si un jour ça diverge. La fusion `merged[...]` en fin de script relit l'audit existant avant d'écrire, en commentaire explicite contre le défaut D9 (perte silencieuse d'un sous-ensemble déjà audité) |
 | `closed_loop_endpoint_wellposedness.py` | **sain** — `crossover_lambda` vérifié analytiquement (`combined_q(λ)=combined_c(λ)` résolu en λ, formule assortie au code) ; `combined()` est affine en λ à `patch` et `phys` fixés, donc un seul point testé au-delà de `lambda*` suffit à trancher le signe pour tout λ plus grand — vérifié algébriquement, pas supposé |
@@ -4227,7 +4239,13 @@ Elle compte maintenant les fichiers réellement écrits par deux appels.
   vérifiée.
 - **Aucun consommateur ne lit encore `d_errors`.** Le label existe, aucune
   tâche du protocole ne le consomme : brancher les tâches 7 et suivantes
-  dessus reste à faire, et demande d'abord de fixer l'horizon sur `t_x`.
+  dessus reste à faire. **Mis à jour le 26 août (D-188)** : l'horizon
+  `t_x` qui manquait ici a été fixé et mesuré — régénéré aux 4 scénarios
+  canoniques, verdict mixte (`ρ(d,e)` reste redondant sur harris_tearing/
+  kelvin_helmholtz, expose un vrai signal sur mhd_rotor/orszag_tang à
+  certains instantanés). Toute tâche future consommant `d_i` doit fixer
+  son horizon sur `t_x`, pas sur `δt=0,1` — voir `docs/DEFAUTS.md`
+  (D-188) et `docs/RESULTS.md` pour la mesure complète.
 - **Le choix « le patch grossi est remplacé par sa moyenne »** reproduit la
   définition de la phase 2, donc les deux labels sont comparables. Un vrai
   AMR ferait une restriction/prolongation d'ordre supérieur : l'écart entre
@@ -4292,6 +4310,91 @@ table historique de l'entrée supersédée le garde, annoté.
 épingle la marche de D-189 dans les deux modes, balaye les 480 instantanés du
 corpus, vérifie que les pics nuls sont **exactement** nuls, et teste son
 propre plancher de balayage sur un répertoire vide.
+
+**Mis à jour le 26 août — cette description est celle du 22 août, plus
+vraie depuis `d3d7573` (24 août).** Le mécanisme d'origine (`_adim`
+compare le pic d'un signal à `self.EPS=1e-10`, garde de division par zéro
+faisant aussi office de seuil physique — la « marche » ci-dessus) et le
+fichier de test qui l'épinglait (5 tests, dont 2 `slow` balayant les 480
+instantanés) ont tous deux été **réécrits dans le même commit qui a vidé
+ce document** : `_adim(signal, noise_floor)` lit désormais un seuil
+calculé par champ (`_difference_roundoff_floor`/
+`_determinant_roundoff_floor`, échelle réelle des champs d'entrée et
+précision flottante du dtype), pas `EPS`. Le fichier de test compte
+maintenant **10 tests, aucun `slow`** — round-off près d'un grand offset
+supprimé, petite structure réellement résolue gardant son poids plein,
+seuil du signal X-point, `norm="legacy"` gardant son ancien garde gelé.
+Ni la « marche à `EPS` » ni le balayage DNS `-m slow` de cette section ne
+décrivent le code actuel. Détail complet, mesure avant/après :
+`docs/RESULTS.md`, « D-189 — déjà corrigé le 24 août ».
+
+---
+
+## Passe du 26 août — H1/H3/H4 répondables depuis la campagne ? Deux défauts de câblage, un de données
+
+Demande USER : vérifier que H1, H3 et H4 sont bien câblées dans `study/`
+pour répondre à leurs hypothèses depuis la sortie de la campagne
+(`train_hyperparams.py --phase all`, D-22), avant de la lancer. Audité par
+sous-agent (13 scripts) puis chaque trouvaille vérifiée directement, jamais
+prise sur parole.
+
+| vérification | résultat |
+|---|---|
+| H1/H3 lisent-elles la campagne déployée, ou une constante figée ? | **non, corrigé** — `config.py` ne suivait `hyperparams_loader` que si `QHAS_HYPERPARAMS_PATH` était exporté à la main → D-195 |
+| `h3_window_counterfactual.py` (tâche 18) tourne-t-il vraiment ? | **non, plantait à chaque appel** (`AttributeError`), aucun test ne l'exerçait → corrigé |
+| H4 lit-elle `best_hyperparams.json` ? | non, à bon droit — LOSO structurellement séparé. Mais ses artefacts réels : **4 des 8 folds**, à l'échelle fumée → D-197, pas corrigé (campagne à part) |
+| la table maîtresse elle-même, recroisée contre son propre pin | **`KNOWN_DIFF` périmé depuis D-58** (17 août) : 4 pointé, 6 réel depuis la fermeture de D-158 (25 août) — personne n'avait recroisé → D-196 |
+| 3 affirmations de ce document citées par l'audit comme suspectes | 2 étaient réellement fausses (corrigées ci-dessus, sections `h3_window_counterfactual.py` et `aggregate_master_table.py`), 1 vérifiée robuste (`FROZEN_DEFAULTS`, ci-dessus) |
+
+### Le motif commun à H1/H3 : deux fonctions de résolution, une seule utilisée en pratique
+
+`src/hyperparams_loader.py::resolve_hyperparams_path()` — dont
+`src/pipeline.py`, le pipeline **déployé**, se sert déjà par défaut — et
+`study/pipeline/config.py::_TRAINED` répondaient à la même question
+(« où sont les hyperparamètres entraînés ? ») par deux chemins
+**différents** par défaut. Le second ne regardait le premier que sur
+variable d'environnement explicite ; sinon repli muet sur une constante
+figée dans le fichier. Une campagne pouvait tourner et se déployer (D-22)
+sans qu'aucun script de `h1_solver`/`h3_representation` (mappeur v1, tout
+ce qui passe par `trained_mapper_params()`) ne le voie jamais — H1 et H3
+auraient continué, silencieusement, à évaluer une configuration figée.
+`config.py` suit maintenant la même résolution, avec repli loud+total (pas
+de mélange partiel) si le fichier déployé est incomplet — le cas réel
+aujourd'hui, `sigma`/`relative_percentile` manquants (D-22).
+
+### `h3_window_counterfactual.py` : un verdict « sain » jamais rejoué
+
+La ligne de ce document qui couvrait `prepare_both_arms` (voir plus haut)
+décrivait un mécanisme exact pour l'ancien `qaoa_inputs.py`, mais celui-ci
+a changé le 24 août (import de `trained_mapper_params()` au lieu des
+constantes individuelles) sans que la description soit revérifiée : le
+script plantait donc à CHAQUE appel depuis cette date, sur un verdict de
+couverture qui disait « sain ». Aucun test ne couvrait `prepare_both_arms`
+lui-même (seuls `_c_amplitude` et `ablate_all` l'étaient) : rien ne
+pouvait le dire. Corrigé, testé (`tests/study/test_t18_window_
+counterfactual.py`, 8 passed, était 7), rejoué de bout en bout avec de
+vraies données DNS.
+
+**La leçon, la même que celle du 22 août plus haut :** un verdict « sain »
+porté sur la LECTURE du code se périme quand le code change ailleurs
+(ici, le module importé) sans que la ligne de couverture soit revisitée.
+Deux des trois affirmations que l'audit du jour a mises en doute
+partageaient exactement ce défaut.
+
+### H4 : pas un défaut à réparer ici
+
+`study/h4_transfer/` répond exclusivement sur `study/closed_loop/`
+(`results/t15_level3_fold_*.json`), un système LOSO Optuna par fold,
+**structurellement séparé** de `best_hyperparams.json` — c'est le design
+voulu, pas un défaut de câblage, et corriger D-22 ne change rien pour H4.
+Le problème est en amont : seuls 4 des 8 folds attendus existent
+(`kh`, `ot`, `rotor`, `tearing` ; manquent `vortex`, `coalescence`,
+`double_tearing`, `magnetic_twist`), à l'échelle fumée (`n_trials=4`,
+sans `campaign_contract_sha256` — le code actuel refuse de les reprendre
+en l'état, `RuntimeError`). Compléter les 4 folds manquants est une
+campagne à part entière (heures par fold), documentée en D-197,
+**pas lancée** : décision USER nécessaire, hors du périmètre d'un
+correctif de code autonome.
 
 ---
 
