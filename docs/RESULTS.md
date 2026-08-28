@@ -9967,15 +9967,31 @@ python study/h2b_prediction/h2b_psi_feature_loso.py --re 400 --phys-seed 0 \
 | **plafond GBT / mean-field (`f1_site`, `upper_bound_loso_N256_dim4.npz`)** | **0,316** |
 | **plafond GBT / voisinage (`f1_sten`, même artefact)** | **0,287** |
 
-**Comparé équitablement** : les deux artefacts partagent les **mêmes 4
-folds** (`held = [orszag_tang, harris_tearing, kelvin_helmholtz,
-mhd_rotor]`), le même label, le même `dim=4`/`N=256`. Sous LOSO, le score
-classique/Hamiltonien V1 (0,52–0,55) domine largement le plafond GBT
-(0,29–0,32) — **pas un artefact de comparaison inéquitable** : GBT est
-ici évalué exactement comme le score V1, fold par fold, sans qu'aucun des
-deux ne voie le scénario tenu. Cohérent avec le verdict RÉFUTÉ de H2b :
-sous un protocole qui protège contre le surapprentissage des deux côtés,
-un modèle ML libre reste net en dessous du score physique.
+**Comparé équitablement au sens du PROTOCOLE** : les deux artefacts
+partagent les **mêmes 4 folds** (`held = [orszag_tang, harris_tearing,
+kelvin_helmholtz, mhd_rotor]`), le même label, le même `dim=4`/`N=256`.
+Sous LOSO, le score classique/Hamiltonien V1 (0,52–0,55) domine largement
+le plafond GBT (0,29–0,32) — comme mesure, ce n'est pas un artefact de
+comparaison inéquitable : GBT est évalué exactement comme le score V1,
+fold par fold.
+
+**Mais l'INTERPRÉTATION « cohérent avec RÉFUTÉ, la physique bat le ML »
+ne tient pas — voir D-198 (`docs/DEFAUTS.md`), trouvé en réagissant à un
+doute USER sur ce chiffre même.** Vérifié : `score_classical` est
+littéralement une des 9 features du GBT (`np.allclose` confirmé). Même
+restreint à CETTE SEULE feature, GBT reste ~4× pire qu'un seuil brut
+dessus sur le fold `mhd_rotor` (0,163 contre 0,636). Cause mesurée : la
+moyenne du score par classe **s'inverse de scénario en scénario**
+(positive < négative sur `kelvin_helmholtz` et `orszag_tang`, quasi égale
+sur `harris_tearing`, nettement séparée seulement sur `mhd_rotor`). Un
+seuil brut transfère quand même ; un GBT qui **apprend** la relation
+score→probabilité sur 3 pools d'entraînement où elle est plate ou
+inversée apprend mal et transfère pire au 4ᵉ. Ce que cette comparaison
+mesure surtout, c'est que ce GBT précis généralise mal à un changement de
+signe scénario-à-scénario — pas que l'information n'est pas apprenable.
+Le verdict RÉFUTÉ de H2b ne repose pas sur cette seule comparaison (19
+scripts dans `study/h2b_prediction/`), donc il n'est pas remis en cause
+en bloc — mais **ce tableau-ci ne doit pas être cité comme la preuve**.
 
 **Réserves, à ne pas taire** :
 1. `f1_class` de l'artefact plafond (0,465 moyen) et `v1/v2-classical` de

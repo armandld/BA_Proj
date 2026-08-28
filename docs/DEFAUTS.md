@@ -92,6 +92,82 @@ Ces deux-là rouvrent sous **D-195**, cause distincte non élucidée. Il ne
 reste donc plus **aucune** entrée ouverte directement issue de cette
 seconde passe : les 5 sites de D-191 sont clos, D-195 est neuf.
 
+## D-198 — le plafond GBT sous LOSO est saboté par un signe qui s'inverse d'un scénario à l'autre, pas par la physique
+
+**Trouvé en réagissant à un doute USER** (« cette histoire de F1 reste
+étrange ») sur T5 (`docs/RESULTS.md`) : le score classique domine
+largement (F1 0,52–0,55) le plafond GBT (0,29–0,32) sous LOSO apparié.
+Le titre est correct comme mesure ; l'interprétation « la physique bat le
+ML » ne l'est pas.
+
+**Vérifié directement, pas supposé.** `score_classical` est littéralement
+la feature n°0 des 9 du GBT (`FEATURE_NAMES[0]`,
+`h2b_ceiling_random_split.py`) — vérifié `np.allclose(X_site[:,0], S)`
+sur les 4 scénarios, vrai partout. GBT devrait donc au pire égaler un
+simple seuil sur cette feature. Sur le fold `mhd_rotor` tenu (celui qui
+porte presque tout l'avantage classique) :
+
+| méthode | F1 |
+|---|---|
+| seuil brut sur le score classique | 0,636 |
+| GBT (HistGradientBoosting), les 9 features | 0,005 |
+| GBT, **la même feature seule** | 0,163 |
+
+Même restreint à LA MÊME feature que le seuil, GBT reste ~4× pire. Ce
+n'est pas un excès de features qui nuit — c'est le mécanisme
+d'apprentissage.
+
+**La cause, mesurée** : la moyenne du score classique par classe,
+scénario par scénario (`--re 400 --N 256 --dim 4`, 30 instantanés/config) :
+
+| scénario | moyenne, classe positive | moyenne, classe négative |
+|---|---|---|
+| harris_tearing | 0,677 | 0,649 (quasi égal) |
+| kelvin_helmholtz | 0,732 | **0,740 (inversé)** |
+| mhd_rotor | 0,647 | 0,057 (séparation nette) |
+| orszag_tang | 0,381 | **0,485 (inversé)** |
+
+Sur 3 scénarios sur 4, un score classique plus haut ne prédit **pas**
+mieux « à raffiner » — sur deux, la relation est inversée. Seul
+`mhd_rotor` sépare franchement les deux classes. Un seuil brut,
+peu sensible à un entraînement bruité, transfère quand même
+raisonnablement sur ce dernier. Un GBT, qui **apprend** la relation
+score→probabilité sur les scénarios d'entraînement, apprend une relation
+plate ou inversée sur 3 des 4 pools d'entraînement LOSO et la transfère
+mal au 4ᵉ, où la vraie relation est forte et positive.
+
+**Conséquence pour H2b** : le verdict RÉFUTÉ ne repose pas sur cette seule
+comparaison (voir les 19 scripts de `study/h2b_prediction/`), donc il
+n'est pas remis en cause en bloc. Mais **la comparaison T5 spécifiquement
+ne doit pas être citée comme preuve que la physique bat le ML** — elle
+mesure surtout que ce GBT particulier généralise mal à travers un
+changement de signe scénario-à-scénario, pas que l'information n'est pas
+apprenable.
+
+**Pas corrigé ici** : trancher demanderait soit une normalisation par
+scénario avant le pooling d'entraînement (retirer l'effet de signe),
+soit un modèle qui ne suppose pas une relation monotone globale, soit
+d'établir si ce changement de signe est un artefact de label (le seuil
+`l2_threshold`/`V2_THRESHOLD` est-il calibré cohéremment entre
+scénarios ?) ou une vraie propriété physique. Aucune des trois n'est une
+correction minimale.
+
+```bash
+python -c "
+import sys, os
+sys.path.insert(0, 'src')
+for d in ('pipeline','h2b_prediction','common'):
+    sys.path.insert(0, os.path.join('study', d))
+from h2b_loso_transfer import _gather_scenario
+from config import RESULTS_DIR
+for sc in ('harris_tearing','kelvin_helmholtz','mhd_rotor','orszag_tang'):
+    dp = os.path.join(RESULTS_DIR, f'dns_{sc}_Re400_N256.npz')
+    pp = os.path.join(RESULTS_DIR, f'patches_{sc}_Re400_N256_dim4.npz')
+    _, _, Y, S = _gather_scenario([(400, dp, pp)], 4, 30)
+    print(sc, S[Y==1].mean(), S[Y==0].mean())
+"
+```
+
 ## D-197 — H4 n'est répondable qu'à moitié : la campagne LOSO niveau 3 n'a que 4 des 8 folds
 
 **Trouvé en auditant si H1/H3/H4 sont bien implémentées dans `study/`
