@@ -9934,3 +9934,62 @@ code, et attend une décision USER avant d'être lancée.
 | H1 | corrigé (config.py suit `hyperparams_loader`) | répondable une fois la campagne déployée |
 | H3 | corrigé (config.py + crash `t18` réparé) | répondable une fois la campagne déployée |
 | H4 | jamais câblé sur `best_hyperparams.json` (par construction, correct) | **pas répondable** avant de compléter les 4 folds manquants (D-197) |
+
+# T5 (`h2b_psi_feature_loso.py`) — premier run réel, et le plafond GBT perd sous LOSO apparié
+
+**Demande USER, 26 août** : avant de lancer la campagne de réoptimisation,
+comparer équitablement le Hamiltonien V1 réglé et le plafond GBT — sous le
+même protocole, pour ne pas attribuer à la physique un écart qui ne
+serait que du surapprentissage côté GBT. La machinerie existait déjà
+(`h2b_psi_feature_loso.py`, T5, protocole v3 §5, réécriture corrigée de
+la phase 11E) mais n'avait **jamais tourné** : aucun artefact
+`t5_v1_psi_loso_*.npz` dans `results/` avant aujourd'hui.
+
+**Lancé sur les données réellement disponibles** — le panel complet
+(8 scénarios × 4 Re × 5 graines) que `data_catalog.dns_trajectory_paths`
+exige par défaut n'existe pas encore (160 manquent) ; restreint aux 4
+scénarios canoniques, Re=400, graine physique 0, dim=4, N=256, seed=0 —
+exactement les mêmes 4 scénarios que le fold LOSO de la comparaison GBT
+ci-dessous :
+
+```bash
+python study/h2b_prediction/h2b_psi_feature_loso.py --re 400 --phys-seed 0 \
+    --dim 4 --N 256 --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang
+```
+
+**Résultat, F1 LOSO moyen sur les 4 folds (block_avg)** :
+
+| variante | F1 LOSO moyen |
+|---|---|
+| `v2-classical` (Löhner+RMS, réduction max) | 0,552 |
+| `v1-classical` (sans psi) | 0,548 |
+| `v1+psi` (meilleure variante, legacy-abs β=9,94) | 0,518 |
+| **plafond GBT / mean-field (`f1_site`, `upper_bound_loso_N256_dim4.npz`)** | **0,316** |
+| **plafond GBT / voisinage (`f1_sten`, même artefact)** | **0,287** |
+
+**Comparé équitablement** : les deux artefacts partagent les **mêmes 4
+folds** (`held = [orszag_tang, harris_tearing, kelvin_helmholtz,
+mhd_rotor]`), le même label, le même `dim=4`/`N=256`. Sous LOSO, le score
+classique/Hamiltonien V1 (0,52–0,55) domine largement le plafond GBT
+(0,29–0,32) — **pas un artefact de comparaison inéquitable** : GBT est
+ici évalué exactement comme le score V1, fold par fold, sans qu'aucun des
+deux ne voie le scénario tenu. Cohérent avec le verdict RÉFUTÉ de H2b :
+sous un protocole qui protège contre le surapprentissage des deux côtés,
+un modèle ML libre reste net en dessous du score physique.
+
+**Réserves, à ne pas taire** :
+1. `f1_class` de l'artefact plafond (0,465 moyen) et `v1/v2-classical` de
+   T5 (0,548–0,552) portent des noms voisins mais **ne sont pas la même
+   grandeur** — `h2b_ceiling_random_split.py` et `h2b_psi_feature_loso.py`
+   construisent chacun leur propre colonne « classique », pas encore
+   recroisées terme à terme. À faire avant de citer ce chiffre dans le
+   manuscrit.
+2. **Hyperparamètres de référence, pas de campagne.** `config.TRAINED_*`
+   vaut encore `_REFERENCE_TRAINED` (le fichier déployé est incomplet,
+   D-22) : ce résultat compare le plafond GBT à la configuration V1
+   **avant** réoptimisation, pas après. À rejouer une fois la campagne
+   déployée — la commande ci-dessus suffit, aucun changement de code.
+3. **4 scénarios, 1 Re, 1 graine.** Aucune conclusion de généralisation
+   au-delà de ce panel : c'est exactement le trou que la refonte
+   train/val proposée par USER doit combler, des deux côtés de la
+   comparaison (GBT et Hamiltonien).
