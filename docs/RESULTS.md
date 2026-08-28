@@ -10082,3 +10082,78 @@ VRAIE campagne (aucune n'a encore été relancée depuis D-22). Le premier
 pratique — c'est-à-dire si le surapprentissage qu'elle vise à empêcher
 est un risque réel sur ce périmètre, ou une précaution qui ne mord
 jamais.
+
+# D-200 — D-53 (H0b) étendu à V1, le mappeur réellement entraîné : même pathologie
+
+**Demande USER, 26 août** : avant de lancer la campagne, vérifier qu'il
+existe une « zone intéressante » où le quantique peut apporter un
+avantage — pas la peine d'optimiser un terrain où, structurellement, ça
+n'a aucun sens. Question précise : le résultat H0b de D-53 (ρ(E_gap,F1)
+= +0,870, « l'optimum de H est une mauvaise décision ») s'applique-t-il
+au mappeur que la campagne règle réellement ?
+
+**Non vérifié jusqu'ici.** Les trois artefacts `dim=3` de D-53
+(`h0_optimiser_equivalence_N96_dim3*.npz`) portent tous
+`cli_args["mapper"] = "v2"` — le mappeur **sans paramètre** (poids figés
+`V2_W_ZZ=2.0`, `V2_W_ZZZZ=1.0`, `V2_THRESHOLD=0.15`), hors de portée de
+`train_hyperparams.py`. Le mappeur que la campagne règle et que le
+pipeline déploie est **V1**. Le critère pré-enregistré de
+`rho_gap_f1.py` (« ρ reste positif → c'est la forme de l'hamiltonien
+qu'il faut revoir, aucune campagne Optuna ne trouvera ça ») était donc,
+jusqu'ici, vrai **par construction** pour V2 (rien à chercher) et n'avait
+jamais été posé sur V1.
+
+**Mesuré directement**, mêmes conditions que D-53 (4 scénarios
+canoniques, Re=400, N=96, dim=3 — 18 qubits, `--qaoa-reps 1 2 3`,
+`k_opt=60`, `--n-snaps 3`), `--mapper v1` au lieu de `v2`, hyperparamètres
+de **référence** (`_REFERENCE_TRAINED`, la campagne n'a pas encore
+tourné) :
+
+| solveur | hit optimum | E_gap | F1 |
+|---|---|---|---|
+| exhaustive / sa / sa_warm | 1,000 | ~0 | 0,437 |
+| greedy | 0,750 | 3,08e−3 | 0,420 |
+| classical_init | 0,500 | 0,186 | 0,468 |
+| qaoa_p1 / p2 / p3 | **0,000** | 0,405–0,411 | **0,519 / 0,519 / 0,503** |
+
+```
+python study/common/rho_gap_f1.py results/h0_optimiser_equivalence_N96_dim3_harris_tearing-kelvin_helmholtz-mhd_rotor-orszag_tang_v1.npz
+    rho = +0.891   p = 0.0013   (9 solveurs)
+    meilleur F1 : qaoa_p1 (F1=0.519, E_gap=0.4052)
+    pire     F1 : greedy (F1=0.420, E_gap=0.0031)
+    -> l'optimum de H N'EST PAS la bonne decision
+```
+
+**ρ = +0,891 (p=0,0013) pour V1 — quasi identique à V2 (+0,870), et même
+sens.** Le solveur qui atteint EXACTEMENT le fondamental (F1=0,437) est
+dominé par celui qui en est le plus loin (QAOA, F1=0,519, qui ne touche
+JAMAIS l'optimum sur les 12 instantanés — 0/12, pire que V2 à cette même
+taille). H0a se confirme aussi pour V1, et plus nettement que pour V2.
+
+**Ce que ça dit, honnêtement, sur la « zone intéressante »** : au réglage
+de référence — celui d'où la campagne va partir (`PHASE1_SEED_GRID`) —
+**la pathologie H0b existe déjà sur V1**. Ça ne prouve pas qu'aucun point
+du domaine de recherche à 9 dimensions ne fait basculer ρ au négatif
+(un seul point a été mesuré), mais ça retire l'hypothèse implicite que
+« V1, contrairement à V2, pourrait déjà être dans une zone favorable » —
+il ne l'est pas, à son point de départ.
+
+**Suite recommandée, pas faite ici** : le calcul (~12 min pour cette
+configuration réduite, contre ~54 min pour la config complète de D-53)
+est un post-traitement, pas un objectif d'entraînement — il ne peut donc
+pas guider Optuna directement (`rho_gap_f1.py` le dit dans son propre
+docstring : « option A », hors boucle). Mais rien n'empêche de
+l'appliquer, après coup, à un échantillon des meilleurs essais de la
+phase 3 (comme `select_by_holdout_validation` le fait déjà pour la perte
+tenue à l'écart) : si ρ reste positif sur cet échantillon, la lecture
+« c'est la forme, pas le réglage » devient beaucoup plus difficile à
+écarter. Décision USER avant de l'automatiser — coût non négligeable
+multiplié par la taille de l'échantillon choisi.
+
+```bash
+python study/h0_selection/h0_optimiser_equivalence.py \
+    --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang \
+    --re 400 --N 96 --dim 3 --mapper v1 --qaoa-reps 1 2 3 --n-snaps 3 \
+    --k-opt 60 --seed 0
+python study/common/rho_gap_f1.py results/h0_optimiser_equivalence_N96_dim3_harris_tearing-kelvin_helmholtz-mhd_rotor-orszag_tang_v1.npz
+```
