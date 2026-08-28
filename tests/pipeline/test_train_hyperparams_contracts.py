@@ -586,7 +586,11 @@ def test_saved_json_carries_everything_needed_to_redeploy(tmp_path, monkeypatch)
     monkeypatch.setattr(TH, "_DIRS_READY", True)
     p1, p2, p3 = (_study_with_one_trial(n) for n in ("p1", "p2", "p3"))
 
-    path = TH._save_results(p1, p2, p3, filename="out.json")
+    # D-199 : sans ce drapeau, select_by_holdout_validation ferait tourner
+    # pipeline() a l'echelle de production (SCENARIOS_ALL) sur l'unique
+    # essai synthetique de p3.
+    path = TH._save_results(p1, p2, p3, filename="out.json",
+                            run_holdout_validation=False)
     saved = json.load(open(path))
 
     assert set(saved["deploy"]["quantum"]) == set(PERIMETRE_9) | {"threshold_amr"}
@@ -606,7 +610,8 @@ def test_saved_json_survives_a_phase_where_nothing_completed(tmp_path, monkeypat
     empty = optuna.create_study(study_name="empty")
     ok = _study_with_one_trial("ok")
 
-    path = TH._save_results(ok, empty, ok, filename="partial.json")
+    path = TH._save_results(ok, empty, ok, filename="partial.json",
+                            run_holdout_validation=False)
     saved = json.load(open(path))
     assert saved["quantum"]["phase2"]["best_score"] is None
 
@@ -744,8 +749,30 @@ def cheap_phases(monkeypatch, tmp_path):
         study.optimize(wrapped, n_trials=1)
         return study
 
+    def fake_holdout(study, scenario_list, top_k=15, classical_only=False,
+                     label=""):
+        """D-199 : `select_by_holdout_validation` appelle `_composite_loop`
+        directement, jamais `run_phase` -- le mock de `run_phase`
+        ci-dessus ne le couvre pas. Sans ce faux, ces tests feraient
+        tourner `pipeline()` pour de vrai, a l'echelle de production
+        (`SCENARIOS_ALL`, N=256), autant de fois que `top_k` x 8
+        scenarios : c'est exactement ce que ce fixture existe pour
+        empecher."""
+        candidates = TH._top_completed_candidates(study, 1)
+        if not candidates:
+            return {"winner": None, "candidates": [],
+                    "train_winner_differs": None}
+        number, value, params = candidates[0]
+        winner = {"trial": number, "train_value": value,
+                  "holdout_value": value, "params": params}
+        return {"winner": winner, "candidates": [winner],
+                "train_winner_trial": number, "train_winner_differs": False,
+                "holdout_re": TH.HOLDOUT_RE,
+                "holdout_phys_seed": TH.HOLDOUT_PHYS_SEED, "top_k": top_k}
+
     monkeypatch.setattr(TH, "_precompute_dns_for", fake_dns)
     monkeypatch.setattr(TH, "run_phase", fake_run_phase)
+    monkeypatch.setattr(TH, "select_by_holdout_validation", fake_holdout)
     monkeypatch.setattr(TH, "_load_study",
                         lambda key: optuna.create_study(study_name=key))
     return calls

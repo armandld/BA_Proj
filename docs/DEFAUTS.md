@@ -144,13 +144,28 @@ mesure surtout que ce GBT particulier généralise mal à travers un
 changement de signe scénario-à-scénario, pas que l'information n'est pas
 apprenable.
 
-**Pas corrigé ici** : trancher demanderait soit une normalisation par
-scénario avant le pooling d'entraînement (retirer l'effet de signe),
-soit un modèle qui ne suppose pas une relation monotone globale, soit
-d'établir si ce changement de signe est un artefact de label (le seuil
-`l2_threshold`/`V2_THRESHOLD` est-il calibré cohéremment entre
-scénarios ?) ou une vraie propriété physique. Aucune des trois n'est une
-correction minimale.
+**Une cause contributive corrigée, la dominante non.** USER (26 août) :
+« il faut être absolument sûrs qu'ils ne surapprennent pas ». Vérifié :
+`make_model("gbt", seed)` utilisait `early_stopping="auto"` (le défaut
+sklearn, jamais explicité) — qui ne se déclenche que si `n_samples >
+10000`. Sur un fold LOSO réel (`n_train=1280`), `do_early_stopping_`
+reste **Faux** et le modèle va au bout de ses 300 itérations avec
+`l2_regularization=0.0` : aucune protection réelle, quel que soit le nom
+du paramètre. `make_model` accepte maintenant `early_stopping` (défaut
+`"auto"`, bit-à-bit inchangé pour les 11 autres consommateurs de la
+fonction) ; `h2b_loso_transfer.py` passe désormais `early_stopping=True`
+(10 % de validation interne, 10 itérations sans progrès, L2=1,0).
+
+**Effet mesuré, modeste** : `upper_bound_loso_N256_dim4.npz` régénéré —
+`f1_site` moyen 0,278 (était 0,316), `f1_sten` 0,307 (était 0,287) ;
+`f1_class` moyen 0,403 (était 0,465 — variation qui ne vient PAS de ce
+correctif, `f1_class` ne passe jamais par `make_model` ; l'ancien
+artefact datait d'une version antérieure du dépôt, provenance non
+tracée). Sur `mhd_rotor` spécifiquement, `f1_site` reste catastrophique
+(0,013) : la régularisation ne répare pas la panne dominante décrite
+ci-dessus. **La normalisation par scénario, le modèle non-monotone, et
+la calibration du seuil de label restent tous les trois non corrigés** —
+trancher la cause du changement de signe demanderait l'un des trois.
 
 ```bash
 python -c "

@@ -201,7 +201,21 @@ def best_threshold_f1(scores, gt, grid=None):
 # Model factory
 # -------------------------------------------------------------------
 
-def make_model(name, seed):
+def make_model(name, seed, early_stopping="auto"):
+    """`early_stopping` ne s'applique qu'a `"gbt"` (D-198/D-199, USER
+    26 aout : "il faut etre absolument surs qu'ils ne surapprennent
+    pas"). Par defaut `"auto"` — LITTERALEMENT le defaut sklearn
+    d'avant cette fonction, comportement bit-a-bit inchange pour les
+    appelants existants — ce module a 12 consommateurs de `make_model`,
+    dont les nombres publies de H2b ne sont pas tous revisites ici.
+    `"auto"` ne declenche l'arret anticipe QUE si `n_samples > 10000` ;
+    verifie directement sur un fold LOSO reel (`n_train=1280`) :
+    `do_early_stopping_` reste Faux, `n_iter_` va au bout des 300 avec
+    `l2_regularization=0.0` — aucune protection reelle sur des jeux de
+    cette taille, malgre le nom du parametre. `early_stopping=True`
+    l'impose explicitement (10 % du train interne, 10 iterations sans
+    progres, L2 non nulle) au lieu de compter sur un seuil qui ne mord
+    jamais ici."""
     if name == "lr":
         return Pipeline([
             ("scale", StandardScaler()),
@@ -215,10 +229,16 @@ def make_model(name, seed):
             n_jobs=-1, class_weight="balanced", random_state=seed,
         )
     if name == "gbt":
+        # `is True` strict : "auto" (le defaut) est truthy en Python et
+        # ne doit PAS declencher ces extras, seul l'opt-in explicite le
+        # doit.
+        extra = ({"validation_fraction": 0.1, "n_iter_no_change": 10,
+                 "l2_regularization": 1.0} if early_stopping is True else {})
         return HistGradientBoostingClassifier(
             max_iter=300, learning_rate=0.05,
             max_leaf_nodes=31, min_samples_leaf=20,
-            random_state=seed,
+            early_stopping=early_stopping,
+            random_state=seed, **extra,
         )
     raise ValueError(name)
 

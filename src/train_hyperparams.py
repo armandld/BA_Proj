@@ -1081,6 +1081,143 @@ def _run_classical_phase3(study_c2, seed=None):
 
 
 # ============================================================
+#  SELECTION PAR VALIDATION TENUE A L'ECART (refonte train/val, USER 26 aout)
+# ============================================================
+#
+# Les 3 phases ci-dessus choisissent TOUJOURS `best_params` par score EN
+# ECHANTILLON : la phase 3 evalue Optuna sur les 8 scenarios eux-memes, a
+# Re=800 et une seule graine physique implicite (`phys_seed=0` partout) —
+# rien n'est jamais tenu a l'ecart de la selection. Le deploiement final
+# peut donc surapprendre a CETTE configuration physique precise, le
+# risque qu'on nommerait sans hesiter pour un modele de machine learning
+# classique (c'est la question posee par D-198 : le plafond GBT en aval
+# souffre du meme genre de piege). `precompute_dns` accepte deja
+# `phys_seed`/`Re`/`Rm` par scenario (voir `Simulation/pre_compute_dns.py`)
+# — l'infrastructure existe, seuls les `SCENARIO_*` ci-dessus ne
+# variaient jamais ces trois cles.
+#
+# Cette section ajoute UNE selection finale, tenue a l'ecart des 3
+# phases : parmi les `HOLDOUT_TOP_K` meilleurs essais EN ECHANTILLON de
+# la phase 3, le gagnant est celui qui a la MEILLEURE perte sur un regime
+# physique JAMAIS vu par aucune phase — Re et graine differents, memes 8
+# scenarios. Cout : re-evaluer `HOLDOUT_TOP_K` jeux de parametres deja
+# tires (aucune nouvelle recherche Optuna), sur un jeu de traces DNS
+# precalcule UNE SEULE FOIS. De l'ordre d'une quinzaine d'essais
+# supplementaires, pas d'une nouvelle campagne.
+#
+# Portee assumee, pas un oubli : seule la selection FINALE (phase 3, les
+# deux bras) est protegee. Les cascades d'amorcage phase1->phase2 et
+# phase2->phase3 restent en-echantillon — etendre plus loin est possible
+# mais multiplie le cout de validation par le nombre de phases amorcees.
+
+HOLDOUT_RE = 1200
+HOLDOUT_PHYS_SEED = 1
+HOLDOUT_TOP_K = 15
+
+
+def _holdout_scenario_config(base_config):
+    """Variante d'un config `SCENARIO_*` a un regime jamais vu en
+    entrainement : meme scenario et memes reglages temporels, Re et
+    graine physique differents."""
+    cfg = dict(base_config)
+    cfg["Re"] = HOLDOUT_RE
+    cfg["Rm"] = HOLDOUT_RE
+    cfg["phys_seed"] = HOLDOUT_PHYS_SEED
+    return cfg
+
+
+def _top_completed_candidates(study, top_k):
+    """Les `top_k` essais complets les mieux classes EN ECHANTILLON, avec
+    leur jeu COMPLET d'hyperparametres — jamais `trial.params` seul, voir
+    `deployable_params` : il manquerait les parametres figes."""
+    completed = [t for t in study.trials
+                if t.state == optuna.trial.TrialState.COMPLETE
+                and t.value < float("inf")]
+    completed.sort(key=lambda t: t.value)
+    out = []
+    for t in completed[:top_k]:
+        resolved = t.user_attrs.get("hyperparams_resolved")
+        if resolved is None:
+            resolved = {**FIXED_PARAMS, **t.params}
+        out.append((t.number, float(t.value), dict(resolved)))
+    return out
+
+
+class _HoldoutTrial:
+    """`_run_one_scenario`/`_composite_loop` ecrivent sur `trial`
+    (`set_user_attr`, `report`, `should_prune`) : une evaluation de
+    validation n'appartient a aucune etude Optuna, donc cet objet jetable
+    absorbe les ecritures sans rien persister. `should_prune` renvoie
+    toujours faux — un candidat de validation doit etre note sur les 8
+    scenarios, jamais coupe en cours de route par le pruner median d'une
+    autre etude."""
+
+    def __init__(self, number):
+        self.number = number
+
+    def set_user_attr(self, *args, **kwargs):
+        pass
+
+    def report(self, *args, **kwargs):
+        pass
+
+    def should_prune(self):
+        return False
+
+
+def select_by_holdout_validation(study, scenario_list, top_k=HOLDOUT_TOP_K,
+                                 classical_only=False, label=""):
+    """Reclasse les `top_k` meilleurs essais EN ECHANTILLON de `study`
+    par leur perte sur un regime physique TENU A L'ECART des 3 phases
+    (Re et graine differents), et rend le gagnant.
+
+    Ne relance AUCUNE recherche Optuna : re-evalue des jeux de
+    parametres deja tires contre des donnees DNS neuves, precalculees
+    une seule fois pour tout le top_k.
+    """
+    candidates = _top_completed_candidates(study, top_k)
+    if not candidates:
+        return {"winner": None, "candidates": [],
+                "train_winner_differs": None}
+
+    holdout_scenarios = [(k, _holdout_scenario_config(cfg))
+                         for k, cfg in scenario_list]
+    dns_holdout = _precompute_dns_for(
+        holdout_scenarios, label=f"{label} validation tenue a l'ecart "
+                                 f"(Re={HOLDOUT_RE}, graine={HOLDOUT_PHYS_SEED})")
+
+    scored = []
+    for number, train_value, params in candidates:
+        val_loss = _composite_loop(
+            _HoldoutTrial(number), holdout_scenarios, dns_holdout, params,
+            LAMBDA_COST_SOFT, classical_only=classical_only)
+        scored.append({"trial": number, "train_value": train_value,
+                       "holdout_value": val_loss, "params": params})
+
+    scored.sort(key=lambda r: r["holdout_value"])
+    winner = scored[0]
+    train_winner_trial = candidates[0][0]
+    print(f"\n[{label}] selection par validation tenue a l'ecart "
+          f"(top {len(candidates)} essais reclasses) :")
+    print(f"  meilleur EN ECHANTILLON : essai #{train_winner_trial}")
+    print(f"  meilleur EN VALIDATION  : essai #{winner['trial']} "
+          f"(perte tenue a l'ecart {winner['holdout_value']:.6f})")
+    if winner["trial"] != train_winner_trial:
+        print("  -> DIFFERENT : le meilleur en echantillon n'est PAS le "
+              "meilleur en validation ; la selection a ecarte un "
+              "candidat en surapprentissage")
+    return {
+        "winner": winner,
+        "candidates": scored,
+        "train_winner_trial": train_winner_trial,
+        "train_winner_differs": winner["trial"] != train_winner_trial,
+        "holdout_re": HOLDOUT_RE,
+        "holdout_phys_seed": HOLDOUT_PHYS_SEED,
+        "top_k": top_k,
+    }
+
+
+# ============================================================
 #  SORTIE — un JSON qui suffit a redeployer
 # ============================================================
 
@@ -1196,11 +1333,18 @@ def save_phase_candidate(study, phase_key, scenario_list, target_trials,
 
 def _save_results(study_p1, study_p2, study_p3,
                   study_c1=None, study_c2=None, study_c3=None,
-                  filename="best_hyperparams.json"):
+                  filename="best_hyperparams.json",
+                  run_holdout_validation=True):
     """Ecrit le JSON final : parametres complets + provenance.
 
     Le fichier doit se suffire a lui-meme. Toute valeur qu'il ne porte pas
     sera comblee au deploiement par un repli que personne n'a choisi.
+
+    `run_holdout_validation=False` desactive la re-evaluation a Re/graine
+    tenus a l'ecart (voir `select_by_holdout_validation`) — reserve aux
+    tests et aux runs partiels qui n'ont pas de phase 3 complete ; le
+    deploiement final d'une vraie campagne doit toujours la laisser
+    active.
     """
     output_path = os.path.join(ensure_dirs(), filename)
     results = {
@@ -1227,12 +1371,30 @@ def _save_results(study_p1, study_p2, study_p3,
             "phase3": _phase_block(study_c3, SCENARIOS_ALL) if study_c3 else None,
         }
 
-    # Ce qu'on deploie : la phase 3, les deux bras.
-    results["deploy"] = {
-        "quantum": results["quantum"]["phase3"]["best_params"],
-        "classical": (results["classical"]["phase3"]["best_params"]
-                      if study_c3 is not None else None),
-    }
+    # Ce qu'on deploie : la phase 3 reclassee par validation tenue a
+    # l'ecart (Re/graine jamais vus en entrainement), pas le meilleur en
+    # echantillon brut — voir `select_by_holdout_validation` ci-dessus.
+    # `best_params` de la phase 3 reste ecrit tel quel plus haut, pour
+    # que le score en echantillon reste lisible a cote de celui qui a
+    # vraiment tranche le deploiement.
+    quantum_deploy = results["quantum"]["phase3"]["best_params"]
+    classical_deploy = (results["classical"]["phase3"]["best_params"]
+                        if study_c3 is not None else None)
+    if run_holdout_validation and results["quantum"]["phase3"]["best_params"] is not None:
+        holdout_q = select_by_holdout_validation(
+            study_p3, SCENARIOS_ALL, classical_only=False, label="quantique")
+        results["quantum"]["holdout_validation"] = holdout_q
+        if holdout_q["winner"] is not None:
+            quantum_deploy = holdout_q["winner"]["params"]
+    if (run_holdout_validation and study_c3 is not None
+            and results["classical"]["phase3"]["best_params"] is not None):
+        holdout_c = select_by_holdout_validation(
+            study_c3, SCENARIOS_ALL, classical_only=True, label="classique")
+        results["classical"]["holdout_validation"] = holdout_c
+        if holdout_c["winner"] is not None:
+            classical_deploy = holdout_c["winner"]["params"]
+
+    results["deploy"] = {"quantum": quantum_deploy, "classical": classical_deploy}
 
     _atomic_write_json(output_path, results)
     print(f"\nResultats finaux ecrits dans {output_path}")

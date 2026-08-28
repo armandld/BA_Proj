@@ -10009,3 +10009,76 @@ en bloc — mais **ce tableau-ci ne doit pas être cité comme la preuve**.
    au-delà de ce panel : c'est exactement le trou que la refonte
    train/val proposée par USER doit combler, des deux côtés de la
    comparaison (GBT et Hamiltonien).
+
+# Refonte train/val de la campagne (`select_by_holdout_validation`)
+
+**Demande USER, 26 août** : les 3 phases de `train_hyperparams.py`
+choisissent toujours `best_params` par score EN ÉCHANTILLON — aucun
+scénario, Re ou graine physique n'est jamais tenu à l'écart de la
+sélection, exactement le trou que D-198 vient de révéler côté GBT.
+« Il faut généraliser l'entraînement… faire des paramétrisations/graines
+physiques dans un set de validation, comme on entraîne un vrai réseau de
+neurones pour éviter le surapprentissage. »
+
+**Conception, et pourquoi cette portée-là.** Trois options pesées :
+1. Multi-Re/graines **tout au long** de l'entraînement (chaque essai
+   évalué sur plusieurs régimes) — rejeté : multiplie le coût par essai
+   par le nombre de régimes, sur une campagne déjà à ~2000 h CPU pour 3
+   phases à un seul régime.
+2. `VQA_N_TRAINING` monté à 3 pour sortir de la dégénérescence connue de
+   `dim=2` — rejeté séparément (voir plus haut) : D-53 montre déjà, à
+   cette taille certifiée, que QAOA n'atteint son optimum que sur
+   6–16 % des instantanés et que *plus* de budget d'optimiseur aggrave
+   l'écart — monter en dimension remplacerait un signal réel (178
+   valeurs distinctes mesurées) par du bruit d'optimiseur.
+3. **Une sélection finale tenue à l'écart** (retenue) : parmi les
+   `HOLDOUT_TOP_K=15` meilleurs essais EN ÉCHANTILLON de la phase 3, le
+   déployé est celui qui gagne sur un régime **jamais vu par aucune
+   phase** — `Re=1200` (au lieu de 800) et `phys_seed=1` (au lieu de 0,
+   implicite partout ailleurs). Coût : ~15 évaluations supplémentaires
+   sur des DNS précalculées une seule fois, de l'ordre de 15 essais sur
+   les 400+300 de la phase 3 — quelques % de plus, pas une nouvelle
+   campagne.
+
+**Implémentation** (`src/train_hyperparams.py`,
+`select_by_holdout_validation` + `_holdout_scenario_config` +
+`_top_completed_candidates`) : réutilise `_precompute_dns_for` et
+`_composite_loop` tels quels (aucune physique réimplémentée), lit
+`hyperparams_resolved` par essai (déjà écrit par les deux fonctions
+objectif, évite le piège documenté dans `deployable_params` — `trial.
+params` seul perd les paramètres figés). Câblée dans `_save_results` :
+`results["deploy"]` vient désormais du gagnant en validation, tandis que
+`results["quantum"]["phase3"]["best_params"]` — le score en échantillon
+— reste écrit intact à côté, jamais écrasé. `run_holdout_validation=False`
+la désactive pour les tests et les runs partiels.
+
+**Portée assumée** : seule la sélection FINALE (phase 3, les deux bras)
+est protégée ; les cascades d'amorçage phase1→phase2→phase3 restent en
+échantillon. Étendre plus loin est possible mais multiplie le coût de
+validation par le nombre de phases amorcées — pas fait ici sans mesure
+de ce que ça change réellement.
+
+**Vérifié** (`tests/pipeline/test_holdout_validation_selection.py`,
+5 tests) — `_composite_loop` remplacé par un espion contrôlé (teste la
+LOGIQUE de sélection, pas la physique, déjà couverte ailleurs) :
+1. cas séparant : essai A meilleur en échantillon, essai B meilleur en
+   validation → le gagnant rendu est **B**, pas A ;
+2. non-régression : si le meilleur en échantillon est aussi le meilleur
+   en validation, la sélection converge dessus sans tomber ailleurs par
+   accident ;
+3. `top_k` borne bien les candidats reconsidérés — un 4ᵉ essai hors
+   top_k, meilleur sur tous les critères, n'est pas repêché ;
+4. étude sans essai complet → résultat vide nommé, pas une exception ;
+5. `_holdout_scenario_config` ne touche que `Re`/`Rm`/`phys_seed`, rien
+   d'autre du scénario.
+
+```bash
+pytest tests/pipeline/test_holdout_validation_selection.py -v   # 5 passed
+```
+
+**Pas encore vérifié** : cette sélection n'a jamais tourné contre une
+VRAIE campagne (aucune n'a encore été relancée depuis D-22). Le premier
+`--phase all` réel dira si `train_winner_differs` vaut souvent vrai en
+pratique — c'est-à-dire si le surapprentissage qu'elle vise à empêcher
+est un risque réel sur ce périmètre, ou une précaution qui ne mord
+jamais.

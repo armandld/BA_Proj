@@ -167,12 +167,15 @@ def main():
         f1_cls = f1_score(Yva, (Sva > thr_star).astype(int),
                           zero_division=0)
 
-        # site GBT
-        r_site = fit_eval(make_model("gbt", args.seed),
+        # site GBT -- early_stopping=True explicite (D-198/D-199) : sur
+        # ces tailles de fold (n_train ~1000-1500), le defaut sklearn
+        # "auto" ne se declenche jamais (seuil 10000), donc le modele
+        # allait au bout de ses 300 iterations sans aucune penalite L2.
+        r_site = fit_eval(make_model("gbt", args.seed, early_stopping=True),
                           Xtr_site, Ytr, Xva_site, Yva)
 
-        # stencil GBT
-        r_sten = fit_eval(make_model("gbt", args.seed),
+        # stencil GBT, meme raison
+        r_sten = fit_eval(make_model("gbt", args.seed, early_stopping=True),
                           Xtr_sten, Ytr, Xva_sten, Yva)
 
         print(f"  {held:<18} {len(Yva):>7d} {f1_cls:>9.3f} "

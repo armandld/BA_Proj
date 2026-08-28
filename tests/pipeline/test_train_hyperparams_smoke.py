@@ -119,7 +119,11 @@ def test_a_full_phase_writes_a_database_and_a_deployable_json(
     assert TH.trials_done(study) == 3
     assert (tmp_path / "smoke_phase.log").exists()
 
-    path = TH._save_results(study, study, study, filename="deploy.json")
+    # D-199 : select_by_holdout_validation lit SCENARIOS_ALL (l'echelle de
+    # production), pas les scenarios minuscules de `tiny_campaign` -- sans
+    # ce drapeau ce banc ferait tourner `pipeline()` a l'echelle reelle.
+    path = TH._save_results(study, study, study, filename="deploy.json",
+                            run_holdout_validation=False)
     saved = json.load(open(path))
     deployed = saved["deploy"]["quantum"]
     assert set(deployed) == set(TH.SEARCH_SPACE) | set(TH.FIXED_PARAMS)
