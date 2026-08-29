@@ -123,10 +123,11 @@ def main():
     Xs, Ys, Ss, tags = gather_per_snapshot(
         args.scenario, args.re, args.N, args.dim, args.max_snaps)
     if not Xs:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        # Cette garde faisait auparavant `print(...); return` : code 0,
+        # aucun artefact ecrit, indiscernable d'une campagne reussie. Le
+        # detecteur AST qui traque ce motif ailleurs dans study/ ne
+        # reconnait que la forme `if not <accumulateur nomme>:` ; celle-ci
+        # lui echappait.
         raise RuntimeError(
             "balayage vide : aucune configuration (scenario, Re) n'a d'artefact "
             "d'entree pour les arguments donnes. Le script sortait ici avec le "
@@ -205,14 +206,15 @@ def main():
         # fuzz uses augmented model (trained with correct id); val rows get wrong id
         m_a = make_model("gbt", args.seed).fit(Xtr_a, Ytr)
         p_fuzz = m_a.predict_proba(Xv_fuzz)[:, 1]
-        # D-82 : le seuil etait choisi sur `(p_fuzz, Yv)` — les labels de
-        # VALIDATION — alors que les trois autres colonnes de cette meme
-        # table (classique, 9 features, 9+id) passent par `fit_eval`, donc
-        # par un seuil pris sur le train. La colonne « fuzz » etait la seule
-        # a beneficier de ses propres labels de test, et c'est precisement
-        # elle qui mesure la CHUTE quand l'identite de scenario est fausse :
-        # un F1 gonfle sous-estime la chute. `rid` est le meme modele
-        # (meme graine, memes donnees), son seuil vient de son train.
+        # Le seuil vient de `rid["thr"]`, pas d'un seuil choisi sur
+        # `(p_fuzz, Yv)` — les labels de VALIDATION. Les trois autres
+        # colonnes de cette meme table (classique, 9 features, 9+id)
+        # passent par `fit_eval`, donc par un seuil pris sur le train. Si
+        # la colonne « fuzz » beneficiait de ses propres labels de test,
+        # son F1 gonflerait alors qu'elle est precisement celle qui mesure
+        # la CHUTE quand l'identite de scenario est fausse. `rid` est le
+        # meme modele (meme graine, memes donnees), son seuil vient de son
+        # train.
         thr_fz = rid["thr"]
         f1_fz = f1_score(Yv, (p_fuzz > thr_fz).astype(int), zero_division=0)
         # l'ancien nombre, garde pour que le biais reste mesurable
@@ -269,7 +271,7 @@ def main():
         rs_class=f1_class_rs, rs_site9=r_b["f1"], rs_site9id=r_a["f1"],
         loso_held=np.array([r["held"] for r in rows]),
         loso_class=fcl, loso_site9=f9, loso_site9id=fid, loso_site9fuzz=ffz,
-        # D-82 : l'ancien nombre, seuil pris sur les labels de validation.
+        # l'ancien nombre, seuil pris sur les labels de validation.
         # Garde pour que le biais reste mesurable ; jamais compare aux
         # trois autres colonnes.
         loso_site9fuzz_thr_on_val=ffz_v,

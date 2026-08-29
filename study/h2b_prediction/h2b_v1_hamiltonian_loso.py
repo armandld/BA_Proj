@@ -103,7 +103,7 @@ def _block_avg(f, patch_size, dim):
 
 
 def _block_max(f, patch_size, dim):
-    """D-84 : la reduction que la colonne V2 emprunte, appliquee au score V1.
+    """La reduction que la colonne V2 emprunte, appliquee au score V1.
 
     `Sv2c` sort de `build_patch_hamiltonian`, qui fait `block_max` du score
     fin ; `Sv1c` faisait `block_avg` du sien. Les deux scores fins sortent
@@ -190,7 +190,7 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
         Y    : list of (n_cells,)     L2-hard label
         Sv2c : list of (n_cells,)     V2 classical multi-indicator
         Sv1c : list of (n_cells,)     V1 classical_score (4-indicator + Lohner)
-        Sv1cM: list of (n_cells,)     le meme, reduit par block_max (D-84)
+        Sv1cM: list of (n_cells,)     le meme, reduit par block_max
         Sv1f : list of (n_cells,)     V1 classical + psi (temporal)
     Kept as per-snapshot lists so phase 11E can bootstrap at the
     snapshot level (cells within a snapshot are spatially correlated).
@@ -220,7 +220,7 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
             s1c_full = v1_classical_score(vx, vy, Bx, By)
             s1c = _block_avg(s1c_full, ps, dim)
             Sv1c.append(s1c.ravel())
-            # D-84 : le meme score fin sous la reduction de la colonne V2
+            # le meme score fin sous la reduction de la colonne V2
             Sv1cM.append(_block_max(s1c_full, ps, dim).ravel())
 
             # V1 full input-side (classical + psi)
@@ -300,10 +300,11 @@ def main():
         if rows:
             by_sc[sc] = rows
     if len(by_sc) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        # Cette garde faisait auparavant `print(...); return` : code 0,
+        # aucun artefact ecrit, indiscernable d'une campagne reussie. Le
+        # detecteur AST qui traque ce motif ailleurs dans study/ ne
+        # reconnait que la forme `if not <accumulateur nomme>:` ; celle-ci
+        # lui echappait.
         raise RuntimeError(
             "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
             f"d'entree, {len(by_sc)} trouve(s) ({sorted(by_sc)}). Le script "
@@ -338,14 +339,14 @@ def main():
                 [x for s in by_sc if s != held for x in data[s][key]])
         Ytr    = cat("Y")
         Sv2c_tr = cat("Sv2c"); Sv1c_tr = cat("Sv1c"); Sv1f_tr = cat("Sv1f")
-        Sv1cM_tr = cat("Sv1cM")                      # D-84
+        Sv1cM_tr = cat("Sv1cM")
 
         # val pool stays per-snapshot for bootstrap
         Y_v    = data[held]["Y"]
         Sv2c_v = data[held]["Sv2c"]
         Sv1c_v = data[held]["Sv1c"]
         Sv1f_v = data[held]["Sv1f"]
-        Sv1cM_v = data[held]["Sv1cM"]                # D-84
+        Sv1cM_v = data[held]["Sv1cM"]
 
         # threshold-fit each score on TRAIN
         thr_v2c, _ = best_threshold_f1(Sv2c_tr, Ytr)
@@ -356,14 +357,14 @@ def main():
             Sv1f_tr, Ytr,
             grid=np.linspace(Sv1f_tr.min(), Sv1f_tr.max(), 201))
 
-        # D-84 : colonne de controle — le score V1, reduit comme celui de V2
+        # colonne de controle : le score V1, reduit comme celui de V2
         thr_v1cM, _ = best_threshold_f1(
             Sv1cM_tr, Ytr,
             grid=np.linspace(Sv1cM_tr.min(), Sv1cM_tr.max(), 201))
 
         # point-estimate F1 on the held-out scenario
         f1_v2c = snap_f1(Y_v, Sv2c_v, thr_v2c)
-        f1_v1cM = snap_f1(Y_v, Sv1cM_v, thr_v1cM)    # D-84
+        f1_v1cM = snap_f1(Y_v, Sv1cM_v, thr_v1cM)
         f1_v1c = snap_f1(Y_v, Sv1c_v, thr_v1c)
         f1_v1f = snap_f1(Y_v, Sv1f_v, thr_v1f)
         delta = f1_v1f - f1_v2c
@@ -375,7 +376,7 @@ def main():
         rows_out.append(dict(
             held=held, n_val_snaps=len(Y_v),
             f1_v2_class=f1_v2c, f1_v1_class=f1_v1c,
-            f1_v1_class_maxpool=f1_v1cM,             # D-84
+            f1_v1_class_maxpool=f1_v1cM,
             f1_v1_psi=f1_v1f, delta=delta,
             delta_ci=(d_lo, d_hi), p_v1psi_ge_v2c=p_H0,
             thr_v2c=thr_v2c, thr_v1c=thr_v1c, thr_v1f=thr_v1f,
@@ -407,7 +408,7 @@ def main():
         [r["f1_v1_psi"] - r["f1_v1_class"] for r in rows_out]))
     v1c_minus_v2c = float(np.mean(
         [r["f1_v1_class"] - r["f1_v2_class"] for r in rows_out]))
-    # D-84 : cette decomposition attribuait `V1_class - V2_class` a un effet
+    # Cette decomposition attribuait `V1_class - V2_class` a un effet
     # de PHYSIQUE (« Lohner + 4-indicator RMS »). Les deux colonnes sortent
     # de la MEME fonction, `AngleMapper.classical_score` : Sv2c est son score
     # fin reduit par block_max (via build_patch_hamiltonian), Sv1c le meme
@@ -436,7 +437,7 @@ def main():
         scenarios=np.array([r["held"] for r in rows_out]),
         f1_v2_class=np.array([r["f1_v2_class"] for r in rows_out]),
         f1_v1_class=np.array([r["f1_v1_class"] for r in rows_out]),
-        # D-84 : le meme score V1 sous la reduction de la colonne V2
+        # le meme score V1 sous la reduction de la colonne V2
         f1_v1_class_maxpool=np.array(
             [r["f1_v1_class_maxpool"] for r in rows_out]),
         f1_v1_psi  =np.array([r["f1_v1_psi"]   for r in rows_out]),

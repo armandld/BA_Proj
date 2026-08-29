@@ -175,10 +175,10 @@ def run_qke(Xtr, Ytr, Xva, Yva, d_q, reps_fm, seed):
 
     p_va = expit(svc.decision_function(K_va))
     p_tr = expit(svc.decision_function(K_tr))
-    # D-81 : le seuil se choisit sur le TRAIN, comme `fit_eval` le fait pour
-    # les bras classiques auxquels ce F1 est compare. Il etait choisi sur
-    # `(p_va, Yva)` — les labels de validation — ce qui donnait au bras
-    # quantique un avantage que son concurrent n'avait pas.
+    # Le seuil se choisit sur le TRAIN, comme `fit_eval` le fait pour
+    # les bras classiques auxquels ce F1 est compare. Un seuil choisi sur
+    # `(p_va, Yva)` — les labels de validation — donnerait au bras
+    # quantique un avantage que son concurrent n'a pas.
     grid = np.linspace(0.05, 0.95, 91)
     thr, _ = best_threshold_f1(p_tr, Ytr, grid=grid)
     f1 = float(f1_score(Yva, (p_va > thr).astype(int), zero_division=0))
@@ -239,11 +239,10 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if not configs:
-        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
+        # Ce garde imprimait « no input. » et rendait la main avec le
         # code 0, sans ecrire d'artefact — donc en laissant en place celui de
         # la campagne precedente. Une campagne qui n'avait rien mesure etait
-        # indiscernable d'une campagne reussie. Onze autres modules de
-        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        # indiscernable d'une campagne reussie.
         raise RuntimeError(
             "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
             "arguments donnes. Le script sortait ici avec le code 0 et sans "
@@ -378,7 +377,7 @@ def main():
         f1_lr_pca =results["class_lr_pca"]["f1"],
         f1_gbt_pca=results["class_gbt_pca"]["f1"],
     )
-    # D-81 : `f1_*_thr_on_val` est l'ancien nombre — seuil choisi sur les
+    # `f1_*_thr_on_val` est l'ancien nombre — seuil choisi sur les
     # labels de validation. Il est conserve pour que l'ecart reste
     # mesurable, jamais compare aux bras classiques.
     if "qke" in results:

@@ -54,14 +54,14 @@ from h2b_neighbour_cone_curve import blocked_split_indices
 
 BUDGETS = (0.10, 0.25, 0.50)
 
-# D-85 : critere d'acceptation de la tache 4 (protocole v3, section 8.3) —
+# Critere d'acceptation de la tache 4 (protocole v3, section 8.3) —
 # « les nombres du split aleatoire correspondent a la tache 0 ». Il etait
 # imprime en prose et jamais compare, donc il ne pouvait pas echouer ; le
 # test du fichier renvoyait sa verification a « l'execution sur les vraies
-# donnees », ou elle n'avait pas lieu. Meme forme que D-52.
+# donnees », ou elle n'avait pas lieu.
 #
 # Les deux references sont des nombres d'ARCHIVE d'avant l'audit (meme
-# provenance que celles de `aggregate_v3.py`, cf. D-49). Elles ne sont pas
+# provenance que celles de `aggregate_v3.py`). Elles ne sont pas
 # reajustees : un seuil perime se remesure, il ne se retouche pas.
 ACCEPTANCE_REFS = (
     ("B2 classical (block_max)", 0.475),
@@ -387,10 +387,11 @@ def main():
         print(f"  {rb['name']:<34} {rr['f1']:>8.3f} {rb['f1']:>8.3f} "
               f"{rr['f1'] - rb['f1']:>+8.3f}")
 
-    # D-85 : compare, au lieu d'imprimer. Mesure au moment de la correction
-    # (`--dim 4 --N 256 --seed 0`, Re=400, identique a --max-snaps 30 et 80,
-    # GBT deterministe) : B2 classique 0,472 contre 0,475 (ecart 0,003, dans
-    # la bande) ; B4 gbt-9(max) 0,908 contre 0,980 (ecart 0,072, HORS bande).
+    # Compare reellement les nombres du split aleatoire (au lieu de les
+    # imprimer sans verification). Mesure de reference (`--dim 4 --N 256
+    # --seed 0`, Re=400, identique a --max-snaps 30 et 80, GBT deterministe) :
+    # B2 classique 0,472 contre 0,475 (ecart 0,003, dans la bande) ; B4
+    # gbt-9(max) 0,908 contre 0,980 (ecart 0,072, HORS bande).
     print(f"\n  [ACCEPTANCE] tache 0, split aleatoire "
           f"(tolerance {TOL_ACCEPT:.3f})")
     acc_rows = check_acceptance({r["name"]: r["f1"] for r in rows_r})
@@ -428,7 +429,7 @@ def main():
         random_auc=pr["auc"], random_rho=pr["rho"],
         prevalence_blocked=prev_b, prevalence_random=prev_r,
         seed=args.seed,
-        # D-85 : le critere d'acceptation, ecrit plutot qu'imprime
+        # le critere d'acceptation, ecrit plutot qu'imprime
         acceptance_names=np.array([r[0] for r in acc_rows]),
         acceptance_ref=np.array([r[1] for r in acc_rows]),
         acceptance_measured=np.array([r[2] for r in acc_rows]),

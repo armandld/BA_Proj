@@ -135,7 +135,7 @@ def run_dim(dim, N, re_values, scenarios, physics_seeds, max_snaps, seed,
         pred_sten = (r_sten["p"] > r_sten["thr"]).astype(int)
 
         ci = delta_ci(Yva, pred_site, pred_sten, traj, B, seed)
-        # D-79 : `constant` decide qui VOTE, et la quantite votee est
+        # `constant` decide qui VOTE, et la quantite votee est
         # F1(sten) - F1(site). Le predicteur classique n'y entre pas : son
         # effondrement ne dit rien des deux modeles compares. Il etait
         # pourtant dans la meme liste, et ecartait des folds dont les deux
@@ -180,7 +180,7 @@ def verdict(rows):
     l'un des DEUX BRAS COMPARES (site, stencil) s'est effondre sur une
     constante ne votent pas — leur F1 ne mesure pas un modele.
 
-    D-79 : le predicteur classique etait compte dans cette regle alors qu'il
+    Le predicteur classique etait compte dans cette regle alors qu'il
     n'entre pas dans F1(sten) - F1(site). Un fold dont les deux modeles
     compares etaient sains pouvait donc etre ecarte parce qu'un TROISIEME
     predicteur, etranger a la comparaison, etait constant.

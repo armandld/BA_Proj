@@ -13,7 +13,7 @@ periodiques (decalages np.roll) :
   k=2 -> 225 features (carre de Moore 5x5)
   k=3 -> 441 features (carre de Moore 7x7)
 (comptes NOMINAUX : la boule de Chebyshev, sans egard a la periodicite de
-la grille. D-88 : sur une grille periodique de cote `dim`, deux decalages
+la grille. Sur une grille periodique de cote `dim`, deux decalages
 nominaux distincts peuvent s'enrouler sur le meme residu et produire deux
 colonnes identiques des que 2k+1 >= dim. A dim=4 c'est deja le cas a k=2 :
 le carre 5x5 couvre les 4 residus de chaque axe, donc la grille entiere ;
@@ -95,7 +95,7 @@ def khop_features(feats_2d, k):
 
 def khop_distinct_footprint(k, dim):
     """Nombre de decalages REELLEMENT distincts du voisinage k-hop sur une
-    grille periodique de cote `dim` (D-88).
+    grille periodique de cote `dim`.
 
     `khop_offsets(k)` enumere les decalages nominaux d'une boule de
     Chebyshev sans savoir que `khop_features` les applique par `np.roll`
@@ -105,7 +105,7 @@ def khop_distinct_footprint(k, dim):
     dans `khop_features`. `len(khop_offsets(k))` n'est alors plus le
     nombre de voisins reellement vus : c'est un compte de doublons.
 
-    Mesure a dim=4 (D-88, meme construction que `khop_offsets`/
+    Mesure a dim=4 (meme construction que `khop_offsets`/
     `khop_features` - pas de reimplementation parallele) : k=2 (largeur 5)
     couvre deja les 4 residus de chaque axe, donc les 16 cellules de la
     grille entiere -> k=3 (largeur 7) n'ajoute AUCUN residu de plus. Les
@@ -354,7 +354,7 @@ def main():
         cap_s = ("-" if k not in capped["blocked"]
                  else ("n/a" if cap is None else f"{cap:.3f}"))
         flag = "  [FLAG n_tr/F<20]" if ratios["blocked"][k] < 20 else ""
-        # D-88 : `nf` (nominal) surcompte des lors que 2k+1 >= dim -- deux
+        # `nf` (nominal) surcompte des lors que 2k+1 >= dim -- deux
         # decalages distincts s'enroulent sur le meme residu et rendent la
         # meme colonne. Ce drapeau dit quand k n'ajoute aucune information
         # de plus que k-1 sur CETTE grille : le "delta/hop" ne compare alors
@@ -416,7 +416,7 @@ def main():
     saturated_ks = [K_VALUES[i] for i in range(1, len(K_VALUES))
                     if footprints[i] == footprints[i - 1]]
     if saturated_ks:
-        # D-88 : mesure, dim=4, khop_distinct_footprint -- k=2 et k=3 rendent
+        # mesure, dim=4, khop_distinct_footprint -- k=2 et k=3 rendent
         # tous deux 16 residus distincts (144 colonnes) sur cette grille : k=3
         # n'est PAS un voisinage plus grand que k=2 ici, seulement plus de
         # colonnes dupliquees (441 nominales contre 144 reelles, meme compte
@@ -449,7 +449,7 @@ def main():
                                    in capped["loso"].items()}),
         f1_blocked_capped=json.dumps({str(k): v for k, v
                                       in capped["blocked"].items()}),
-        # D-88 : n_feats nominal (boule de Chebyshev) contre n_feats_distinct
+        # n_feats nominal (boule de Chebyshev) contre n_feats_distinct
         # (colonnes reellement distinctes sur cette grille periodique) --
         # les deux divergent des que 2k+1 >= dim, et l'ecart dit combien de
         # colonnes de la matrice d'entrainement sont des doublons exacts.
