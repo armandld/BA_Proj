@@ -67,17 +67,11 @@ def precompute_dns(phase_config):
     while t_current < T_MAX:
         dt = sim_dns.adapt_dt(cfl_target=0.4)
         dt = min(dt, T_MAX - t_current)
-        # Le clamp doit etre REECRIT dans le solveur. `adapt_dt` fixe
-        # `sim_dns.dt` et le rend ; le `min` ci-dessus ne creait qu'une
-        # variable locale, si bien que `step_full` integrait avec le dt NON
-        # borne pendant que `t_current` avancait du dt borne.
-        #
-        # Mesure sur orszag_tang N=32, T_MAX=0.05 : au dernier pas le
-        # solveur integrait 0.037997804 alors que la comptabilite avancait
-        # de 0.010730092. La trajectoire de REFERENCE finissait donc a
-        # t ~ 0.077 tandis que la trace annoncait 0.050 — et le pipeline,
-        # qui avance ses deux bras avec `dns_trace[step]['dt']`, les
-        # comparait a une reference prise 3.5 fois plus loin dans le temps.
+        # Le clamp doit etre REECRIT dans le solveur : `step_full` lit
+        # `sim_dns.dt`, pas la variable locale `dt`. Sans cette ligne, le
+        # solveur integrerait avec le dt NON borne pendant que `t_current`
+        # et la trace n'avancent que du dt borne, desynchronisant
+        # silencieusement la trajectoire integree de la trace enregistree.
         sim_dns.dt = dt
 
         # Capture Hot-Start state

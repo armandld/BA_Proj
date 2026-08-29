@@ -19,7 +19,7 @@ Couverture :
   T15c  synthese inter-folds (regles de decision pre-enregistrees)
   T17   fenetre d'incertitude (mecanisme de l'inertie ZZ)
   T18   contrefactuel fenetre neutralisee
-  T20   variance d'execution du bras Q-HAS (defaut D11)
+  T20   variance d'execution du bras Q-HAS
   T22   transfert vers conditions initiales inedites + plancher
 
 Les lignes de niveau 3 sont declarees MISSING tant que le fold n'a pas
@@ -140,9 +140,8 @@ def rows_t13(d, mapper, refs):
 def rows_t13_degeneracy(d, mapper, refs):
     """`n_optima` par ablation — la degenerescence de l'objectif.
 
-    Le chiffre « 64.8/256 » figurait dans le tableau des revendications
-    sans etre verifie par personne, et il etait attribue a T11 alors qu'il
-    vient de T13, sur le mappeur v1 seulement (le v2 rend 1.0).
+    Chiffre propre a T13 (mappeur v1 ; le v2 rend 1.0), a ne pas confondre
+    avec T11.
     """
     if d is None or "n_optima" not in d:
         return [make_row(f"t13/{mapper}", f"{n} n_optima", None, None)
@@ -156,22 +155,11 @@ def rows_t13_degeneracy(d, mapper, refs):
 def rows_t17_spearman(d):
     """La correlation rang C_edges / poids de fenetre, par scenario.
 
-    Publiee comme « -0.37 a -0.50 », un intervalle qui EXCLUDE `ot` sans le
-    dire (-0.01 la-bas). L'exclusion est defendable — la fenetre n'y laisse
-    aucune masse ZZ, donc il n'y a rien a correler — mais elle doit etre
-    ecrite, pas subie.
+    Le signe n'est pas uniforme : `ot` est quasi nul (la fenetre n'y laisse
+    aucune masse ZZ, donc rien a correler) et deux scenarios sur quatre
+    correlent POSITIVEMENT. La lecture « la fenetre eteint ZZ la ou C est
+    fort » ne generalise pas — a ecrire explicitement, pas a sous-entendre.
     """
-    # REMESURE (D-58). Les references precedentes -0.3725 / -0.0084 /
-    # -0.4595 / -0.5021 dataient d'AVANT `107c1cf` (D-9), qui a corrige la
-    # fenetre : elle etait mesuree sur `physical_score` alors que le chemin
-    # deploye l'applique a `classical_score`. Elles decrivaient donc le
-    # defaut, pas le resultat.
-    #
-    # Valeurs relues dans `results/t17_uncertainty_window.npz`
-    # (git_hash interne `50ca5a0`), qui porte deja la mesure corrigee.
-    # Le signe n'est plus uniforme : deux scenarios sur quatre correlent
-    # POSITIVEMENT. La lecture « la fenetre eteint ZZ la ou C est fort »
-    # ne tient plus, et c'est ce que dit la remesure.
     ref = {"init_kelvin_helmholtz": -0.3343, "init_orszag_tang": -0.2817,
            "init_mhd_rotor": 0.3057, "init_harris_tearing": 0.1400}
     if d is None or "spearman_c_w" not in d:
@@ -227,11 +215,9 @@ def rows_level3(results_dir, folds, prefix="t15_level3"):
         "kh": dict(qhas_phys=0.0070, classical_phys=0.0020,
                    qhas_patch=0.8376, matched_phys=0.0017,
                    matched_patch=0.7943, delta_matched=0.0053),
-        # `rotor` et `tearing` n'avaient AUCUNE reference : leurs lignes
-        # passaient donc quoi qu'il arrive. Elles sont figees ici. Le
-        # 1.1731 de `rotor` est la valeur du bras classique REGLE, qui a
-        # AVORTE (T19) : on l'epingle pour qu'elle ne bouge pas en silence,
-        # pas parce qu'elle serait un point de mesure.
+        # 1.1731 (rotor) est la valeur du bras classique REGLE, qui a AVORTE
+        # (T19) : figee ici comme garde-fou anti-regression, pas comme point
+        # de mesure valide.
         "rotor": dict(qhas_phys=0.1678, classical_phys=1.1731,
                       qhas_patch=0.3761, matched_phys=0.0536,
                       matched_patch=0.3562, delta_matched=0.1141),
@@ -281,17 +267,11 @@ def rows_t17(d):
     """Fenetre d'incertitude : fraction de masse ZZ conservee, au jeu de
     parametres REELLEMENT deploye. Les references sont celles publiees
     dans RESULTS.md."""
-    # Le jeu de parametres est NOMME dans chaque ligne : il existe deux
-    # sigma « entraines » distincts (0.023 en boucle ouverte, 0.1888 pour
-    # le fold Level-3) et les valeurs different de 20 ordres de grandeur.
-    # REMESURE (D-58). Les references precedentes — jusqu'a 3,855e-154 —
-    # decrivaient le defaut corrige par `107c1cf` (D-9) : la fenetre etait
-    # evaluee sur `physical_score` au lieu de `classical_score`. D'ou des
-    # valeurs « numeriquement mortes » sur 150 ordres de grandeur.
-    #
-    # Relues dans l'artefact commite (git_hash interne `50ca5a0`) : la
-    # fenetre conserve en realite 3 a 12 % de la masse ZZ en boucle
-    # ouverte, et 34 a 59 % au reglage Level-3. ZZ n'est PAS mort.
+    # Le jeu de parametres est NOMME dans chaque ligne : deux sigma
+    # « entraines » distincts (0.023 en boucle ouverte, 0.1888 pour le fold
+    # Level-3) donnent des masses ZZ qui different de ~20 ordres de
+    # grandeur. La masse ZZ n'est PAS nulle : 3-12 % en boucle ouverte,
+    # 34-59 % au reglage Level-3.
     ref = {
         "level3_trained": {"kelvin_helmholtz": 0.4357,
                            "harris_tearing": 0.3379,
@@ -457,17 +437,11 @@ def rows_t22(results_dir, folds):
 def rows_t23(results_dir, folds):
     """Recompute trajectory-level headline counts and confidence bounds.
 
-    D-158 : `fold_counts` leve `RuntimeError` (pas `None`) quand l'artefact
-    existe mais ne porte pas les donnees par-essai qu'exige le schema 2
-    (`budget_match`, graines) -- le cas des artefacts geles a l'ancien
-    schema. Cette fonction attendait deja `None` pour "rien a en tirer"
-    (branche `if r is None` juste apres) ; elle traite desormais les deux
-    de la meme facon, en ligne MISSING, plutot que de laisser l'exception
-    faire planter toute la table pour les ~176 autres nombres qui n'en
-    dependent pas. `fold_counts` elle-meme continue de lever pour son
-    usage direct (`closed_loop_headline_counts.py` en CLI) : c'est ce
-    site-ci, dont le contrat est "MISSING plutot que planter", qui doit
-    l'attraper.
+    `fold_counts` peut lever `RuntimeError` sur un artefact fige a l'ancien
+    schema (sans donnees par-essai) ; ce site l'attrape et rend MISSING
+    plutot que de faire planter toute la table pour les autres lignes.
+    L'appel CLI direct (`closed_loop_headline_counts.py`) continue de
+    laisser l'exception remonter.
     """
     from closed_loop_headline_counts import fold_counts, totals
     out, got = [], []
@@ -508,7 +482,7 @@ def rows_t23(results_dir, folds):
 
 
 def rows_t24(results_dir, folds):
-    """Le resultat sans fuite (D13 retire), recalcule depuis les artefacts.
+    """Le resultat sans fuite de donnees, recalcule depuis les artefacts.
 
     Ne pose de reference que pour les folds deja publies ; les autres
     apparaissent des qu'ils existent, sans figer un chiffre d'avance.
@@ -645,27 +619,20 @@ def rows_t15c(results_dir, folds):
 
     pri = primary_analysis(recs)
     sec = secondary_analysis(recs)
-    # Ces lignes n'avaient AUCUNE reference : elles passaient donc quoi
-    # qu'il arrive, y compris « 4/4 folds domines », qui est la forme sous
-    # laquelle la revendication E circule. Une ligne sans reference n'est
-    # pas un controle, c'est un affichage.
+    # Reference = nombre de folds demande : une ligne sans reference ne
+    # peut jamais echouer, ce n'est pas un controle. C'est sous cette forme
+    # (« 4/4 folds domines ») que circule la revendication E.
     out = [
         make_row("t15c", "folds completed", float(pri["n_folds"]),
                  float(len(folds)), tol=0.5),
         make_row("t15c", "budget-matched folds",
                  float(sec["n_folds"]), float(len(folds)), tol=0.5),
     ]
-    # D-196 (audit H1/H3/H4, 26 aout) : les trois lignes de VERDICT (pas de
-    # comptage de completude) restaient sans reference meme apres le fix
-    # ci-dessus -- un ecart precis : "folds completed"/"budget-matched
-    # folds" ont une cible connue (le nombre de folds demande), mais
-    # personne ne peut dire aujourd'hui ce que "folds where Q-HAS better"
-    # DOIT valoir a 8/8 folds. Leur donner une reference maintenant serait
-    # soit circulaire (= la valeur mesuree, un controle qui ne peut pas
-    # echouer), soit arbitraire. Tant que la campagne LOSO n'a pas fourni
-    # tous les folds, ces trois lignes sont MISSING -- pas un affichage OK
-    # sans reference, exactement le defaut que ce fichier corrige plus
-    # haut, applique a la moitie qui restait non corrigee.
+    # Les lignes de VERDICT (pas de comptage de completude) n'ont pas de
+    # cible connue avant la fin de la campagne LOSO : leur donner une
+    # reference maintenant serait circulaire (= la valeur mesuree) ou
+    # arbitraire. Elles restent MISSING tant que tous les folds ne sont pas
+    # la, plutot que d'afficher OK sans reference.
     complete = len(recs) == len(folds)
     if complete:
         out.append(make_row("t15c", "folds where Q-HAS better (combined)",

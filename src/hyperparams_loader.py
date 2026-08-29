@@ -165,11 +165,9 @@ def _load_new_format(data, method, scenario, combo, phase, lambda_cost, rank):
     default = data.get('default', {})
     entry = default.get(method)
     if entry is None:
-        # Ce bloc renvoyait AUTREFOIS les parametres de l'autre bras quand
-        # celui demande manquait. Demander 'quantum' et recevoir 'classical'
-        # sans le savoir rend la comparaison des deux bras vide de sens : les
-        # deux tourneraient avec le meme reglage, et rien ne le signalerait.
-        # On leve.
+        # Ne PAS renvoyer les parametres de l'autre bras si celui demande
+        # manque : demander 'quantum' et recevoir 'classical' sans le
+        # savoir viderait la comparaison des deux bras de son sens.
         available = sorted(k for k in default if isinstance(default[k], dict))
         raise KeyError(
             f"No default '{method}' params in the hyperparameter file. "

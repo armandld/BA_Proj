@@ -45,7 +45,7 @@ REGLE DE DECISION (pre-specifiee, avant execution) :
 # Le nom porte le mappeur des qu'il n'est pas le defaut v2 :
 # sans cela, relancer avec --mapper v1 ecraserait le resultat v2
 # et la comparaison entre mappeurs ne tiendrait pas dans les
-# artefacts (defaut D9, deja rencontre sur t13 et t19).
+# artefacts.
 Sortie : results/h0_optimiser_equivalence_N{N}_dim{D}.npz (+ hash git, args CLI)
 
 Usage :
@@ -302,17 +302,11 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     # information que son propre cout ignore. La mettre a zero isole ce que
     # psi apporte, sans toucher a theta ni a H.
     #
-    # D-122 — l'ablation n'a de sens que si psi est non nul, donc que sous
-    # with_psi. `prepare_qaoa_inputs` pose psi_h = psi_v = 0 EXACTEMENT quand
-    # with_psi est faux (mesure : max|psi| = 0 exact, contre 1,47 avec) : la
-    # boucle ci-dessous reecrit alors des zeros par des zeros, bit a bit. Le
-    # balayage sortait quand meme avec le code 0 et le suffixe _zeropsi au nom
-    # de son artefact, indiscernable d'une vraie ablation -- et un artefact
-    # publie porte ce nom (results/h0_optimiser_equivalence_N96_dim3_zeropsi_
-    # scalekopt.npz, cli_args zero_psi=true, PAS de with_psi). Mesure : ses 5
-    # solveurs deterministes sont bit a bit identiques a ceux de son jumeau
-    # _scalekopt (30/30 lignes, max|dE| = 0) ; seuls les 4 bras QAOA different,
-    # a la dispersion connue du bras. Un balayage vide doit crier.
+    # --zero-psi n'a d'effet que sous --with-psi : sinon psi vaut deja zero
+    # exactement, l'ablation reecrit des zeros par des zeros, et le balayage
+    # sortirait silencieusement avec le code 0 sous un nom d'artefact
+    # indiscernable d'une vraie ablation. D'ou le refus explicite ci-dessous
+    # plutot qu'un no-op silencieux.
     if zero_psi:
         if not with_psi:
             raise SystemExit(
@@ -418,12 +412,9 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
         if certified:
             r.update(decision_agreement(r["spins"], ex_spins, dim))
         else:
-            # Les MEMES cles que `decision_agreement`, sinon la boucle
-            # d'enregistrement leve un KeyError apres coup — c'est-a-dire
-            # apres des heures de calcul, au moment de consigner le premier
-            # instantane. La branche ecrivait `mask_match`, que personne ne
-            # lit, et omettait `n_diff_patch` : `--no-exact` ne pouvait donc
-            # jamais aller au bout.
+            # Memes cles que `decision_agreement`, sinon la boucle
+            # d'enregistrement leve un KeyError bien plus tard, loin de sa
+            # cause.
             r.update(dict(agree_spin=float("nan"),
                           exact_match=float("nan"),
                           n_diff_patch=float("nan")))
@@ -449,19 +440,12 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
 # ══════════════════════════════════════════════════════════════════════
 #  CRITERE D'ACCEPTATION — H0
 # ══════════════════════════════════════════════════════════════════════
-#
-# La regle de decision de H0 etait imprimee en prose et le script sortait 0
-# quoi qu'il mesure : il ne pouvait pas echouer. Elle est ici un critere.
-#
-# Reference (N=64 et N=256, dim=2, 8 qubits) : les huit solveurs —
-# exhaustif certifie, recuit simule, recuit a chaud, glouton, regle
-# classique seule, QAOA p=1, p=2, p=2 a 4096 tirs — atteignent l'optimum
-# certifie sur 100 % des instantanes et renvoient le MEME masque
-# (agree_spin = mask_match = 1.000, E_gap = 0).
-#
-# Ce que le critere protege : si un jour un solveur cesse d'atteindre
-# l'optimum, ou si deux solveurs divergent sur le masque, alors H0 n'est
-# plus refutee et la campagne doit s'arreter au lieu d'imprimer un tableau.
+# A la configuration de reference, les huit solveurs du panel atteignent
+# tous l'optimum certifie et renvoient le MEME masque (agree_spin =
+# mask_match = 1.000, E_gap = 0) : d'ou les seuils a 1.0. Le critere
+# protege : si un solveur cesse d'atteindre l'optimum, ou si deux solveurs
+# divergent sur le masque, H0 n'est plus refutee et la campagne doit
+# s'arreter au lieu d'imprimer un tableau.
 MIN_HIT = 1.0
 MIN_MASK_MATCH = 1.0
 
@@ -483,17 +467,16 @@ def is_certified(summary, solvers):
 
 def decision_rule_lines(summary, solvers):
     """Les lignes DECISION RULE, extraites pour etre testables sans rejouer
-    la campagne (meme decoupage que `interpretation_message` en D-46 et
-    `reading_message` en D-50). Textes du cas certifie inchanges."""
+    la campagne (meme decoupage que `interpretation_message` et
+    `reading_message` ailleurs dans le depot). Textes du cas certifie
+    inchanges."""
     certified = is_certified(summary, solvers)
     qaoa = [s for s in solvers if s.startswith("qaoa")]
     out = ["  DECISION RULE:"]
     if not certified:
-        # Avant : `hit >= 1.0` sur NaN valait False, donc cette ligne
-        # annoncait « none » — lisible comme « tous les solveurs ont echoue »
-        # alors qu'aucun optimum n'avait ete certifie ; et la ligne suivante
-        # affirmait « QAOA deviates from the certified optimum » en parlant
-        # d'un optimum qui n'existait pas.
+        # NaN sur `hit`/`match` compare silencieusement False : le message
+        # doit dire explicitement "NOT AVAILABLE", jamais laisser lire un
+        # optimum non atteint comme un echec de solveur.
         out.append("  * certified optimum: NOT AVAILABLE (exhaustive "
                    "enumeration skipped) -- hit_optimum / mask_match are "
                    "undefined, so neither can be read as a failure")
@@ -537,17 +520,11 @@ def check_expected_behaviour(summary, solvers, diag_flags):
     qaoa = [s for s in solvers if s.startswith("qaoa")]
     assert qaoa, "aucun bras QAOA dans le panel : H0 n'est pas testee"
 
-    # D-52 : sans optimum certifie, `hit` et `match` valent NaN pour tous les
-    # solveurs, et `nan < MIN_HIT` comme `nan < MIN_MASK_MATCH` valent False :
-    # `missed` et `diverging` restaient vides quoi qu'il arrive, et la ligne
-    # [ACCEPTANCE] annoncait « H0 refutee » sur une campagne ou RIEN n'avait
-    # ete certifie. Mesure (run reel, `--scenario orszag_tang --re 400 --N 64
-    # --dim 2 --n-snaps 1 --no-exact`, code de sortie 0) : les 8 solveurs a
-    # hit=nan / mask_match=nan, [ACCEPTANCE] « 7 optimiseurs atteignent
-    # l'optimum certifie » imprime — trois lignes sous une DECISION RULE qui
-    # disait l'inverse. Le critere ne pouvait pas echouer ; il ne pouvait pas
-    # non plus reussir, il ne mesurait rien. L'aide de `--no-exact` le dit
-    # deja : H0a est INDECIDABLE sans optimum certifie, pas refutee.
+    # NaN sur `hit`/`match` compare `<` silencieusement False : sans ce
+    # garde-fou, `missed`/`diverging` restent vides quoi qu'il arrive et la
+    # ligne [ACCEPTANCE] annoncerait H0 refutee sur une campagne ou RIEN n'a
+    # ete certifie. L'aide de `--no-exact` le dit deja : H0a est
+    # INDECIDABLE sans optimum certifie, pas refutee.
     if not is_certified(summary, solvers):
         print("\n  [INDECIDABLE] aucun optimum certifie sur cette campagne "
               "(hit_optimum / mask_match indefinis) : H0a ne peut y etre ni "
@@ -558,10 +535,9 @@ def check_expected_behaviour(summary, solvers, diag_flags):
         return
 
     # Les solveurs DETERMINISTES doivent atteindre l'optimum a chaque fois.
-    # Le recuit simule ne l'est pas (il n'est pas amorce), et son taux
-    # mesure varie d'une execution a l'autre : 1.000 dans la campagne
-    # publiee, 0.625 en rejouant la meme commande. On le rapporte au lieu
-    # de l'exiger, et on le dit.
+    # Le recuit simule ne l'est pas (il n'est pas amorce) et son taux peut
+    # varier fortement d'une execution a l'autre (1.000 a 0.625 observes) :
+    # on le rapporte au lieu de l'exiger.
     deterministic = [s for s in optimisers if not s.startswith("sa")]
     stochastic = [s for s in optimisers if s.startswith("sa")]
 

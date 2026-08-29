@@ -274,11 +274,9 @@ REQUIRED_SCENARIO_KEYS = (
 def create_argus(scenario_config):
     """Build the argus namespace for a given scenario config.
 
-    LEVE si une cle manque, `AdvAnomaliesEnable` comprise. Elle etait lue
-    avec `.get(..., False)` : Orszag-Tang, seul scenario a ne pas la
-    porter, tournait donc sans anomalies avancees — donc sans terme de
-    point X — sans que rien ne le signale. Un repli silencieux sur une
-    valeur valide est exactement ce qu'on ne veut pas ici.
+    LEVE si une cle manque, `AdvAnomaliesEnable` comprise : un repli
+    silencieux sur une valeur par defaut masquerait un scenario mal
+    configure (par ex. tournant sans terme de point X) sans rien signaler.
     """
     missing = [k for k in REQUIRED_SCENARIO_KEYS if k not in scenario_config]
     if missing:
@@ -556,16 +554,12 @@ def extract_top_params_from_rescore(phase_prefix, lambdas, top_k=2):
 #  L'espace de recherche, declare — pas devine en relisant la base
 # ══════════════════════════════════════════════════════════════════════
 #
-# Les bornes etaient ecrites en dur a l'interieur de l'objectif, sous la
-# forme `if "x" not in frozen: HyperParams["x"] = <constante>`, qui fait
-# passer une constante pour un parametre conditionnel. Quatre valeurs
-# etaient dans ce cas ; la campagne gelee croyait explorer neuf
-# parametres et en explorait cinq. C'est l'origine de D-22 : trois des
-# valeurs deployees n'ont jamais ete echantillonnees par personne.
-#
-# Ici les bornes sont des donnees. `search_space()` les rend lisibles
-# AVANT de louer des coeurs pour une semaine, et un test verifie que ce
-# qu'Optuna a reellement propose coincide avec cette declaration.
+# Les bornes sont des donnees, pas ecrites en dur dans l'objectif : une
+# constante conditionnelle glissee dans le code (`if "x" not in frozen:
+# ...`) se ferait passer pour un parametre explore sans l'etre vraiment.
+# `search_space()` rend ces bornes lisibles AVANT de louer des coeurs
+# pour une semaine, et un test verifie que ce qu'Optuna propose
+# reellement coincide avec cette declaration.
 
 #: Meilleur essai de l'etude classique gelee (#42, perte 0.2148).
 CLASSICAL_BEST_THRESHOLD = 0.14959824837662078
@@ -665,9 +659,8 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
 
     Une exception coute `DIVERGENCE_PENALTY` — penalite FINIE, pour
     qu'Optuna puisse continuer a modeliser l'espace au lieu de recevoir un
-    `inf` qui n'ordonne rien. La valeur est importee de `pipeline` plutot
-    que recopiee : elle y etait deja definie quatre fois, dont trois dans
-    des portees qui masquaient la premiere.
+    `inf` qui n'ordonne rien. Importee de `pipeline` plutot que recopiee,
+    pour garder une definition unique.
     """
     dns_trace, hot_start_state = dns_traces[scenario_key]
     DT = scenario_config["DT"]
@@ -711,8 +704,8 @@ def _run_one_scenario(trial, scenario_key, scenario_config, dns_traces,
         trial.set_user_attr(f"patch_{scenario_key}", float(result.get('patch_ratio', 0)))
         for field, err in result.get('field_errors', {}).items():
             trial.set_user_attr(f"error_{field}_{scenario_key}", float(err))
-        # D-22 / D-35 : d'ou vient sigma, essai par essai. Un artefact ne
-        # doit jamais laisser croire qu'une valeur vient de l'entrainement
+        # Provenance de sigma, essai par essai : un artefact ne doit
+        # jamais laisser croire qu'une valeur vient de l'entrainement
         # alors qu'elle vient d'un repli.
         if result.get('sigma_source') is not None:
             trial.set_user_attr(f"sigma_source_{scenario_key}",
@@ -768,12 +761,11 @@ def make_composite_objective(dns_traces, scenario_list,
     frozen_params : hyperparametres imposes par l'appelant, retires de
         l'espace de recherche.
     dns_traces_by_regime : dict (Re, graine) -> dns_traces (meme forme que
-        `dns_traces`, un jeu complet par point). Si fourni, DIVERSIFICATION
-        D'ENTRAINEMENT (USER, 26 aout) : chaque essai tire un regime
-        physique dans `training_regime_grid`, INDEPENDAMMENT du sampler
-        Optuna (`_training_regime_for_trial`), et s'entraine sur ce regime
-        plutot que sur `dns_traces` seul. Le regime tire est ecrit dans
-        `trial.user_attrs["training_regime"]`.
+        `dns_traces`, un jeu complet par point). Si fourni, chaque essai
+        tire un regime physique dans `training_regime_grid`,
+        independamment du sampler Optuna (`_training_regime_for_trial`),
+        et s'entraine sur ce regime plutot que sur `dns_traces` seul. Le
+        regime tire est ecrit dans `trial.user_attrs["training_regime"]`.
     training_regime_grid : damier a tirer si `dns_traces_by_regime` est
         fourni. None -> `TRAINING_REGIME_GRID`.
     """
@@ -955,41 +947,22 @@ def _precompute_dns_for(scenario_list, label="scenarios"):
 
 
 # ============================================================
-#  DIVERSIFICATION DE L'ENTRAINEMENT (USER, 26 aout)
+#  DIVERSIFICATION DE L'ENTRAINEMENT
 # ============================================================
 #
-# Les 3 phases entrainaient toutes a Re=Rm=800, graine physique 0
-# implicite : un seul regime physique, jamais varie d'un essai a
-# l'autre. `select_by_holdout_validation` (D-199) protege la SELECTION
-# finale avec un damier tenu a l'ecart (`HOLDOUT_GRID`), mais rien ne
-# diversifiait encore la boucle d'ENTRAINEMENT elle-meme — les
-# 600+600+400 essais Optuna. Demande USER, 26 aout, apres avoir vu le
-# damier de validation : « ok mais moi je veux quand meme une campagne
-# plus diversifiee. »
+# Chaque essai tire UN SEUL regime physique (Re, graine) dans
+# `TRAINING_REGIME_GRID`, via une fonction PURE de son numero d'essai
+# (`_training_regime_for_trial`) — jamais par le sampler TPE d'Optuna,
+# qui pourrait sinon apprendre a preferer les regimes faciles plutot que
+# des hyperparametres qui generalisent. Le cout par essai reste inchange
+# (toujours 6, 2 ou 8 scenarios simules) ; seul le precalcul DNS, fait
+# une fois par phase, est multiplie par la taille du damier.
 #
-# Option ecartee : evaluer CHAQUE essai sur TOUS les regimes d'un damier
-# (multiplie le cout par essai par la taille du damier, sur une campagne
-# deja de l'ordre de 2000 h CPU a un seul regime — c'est l'option
-# explicitement pesee et rejetee dans `RESULTS.md`, section
-# "Refonte train/val de la campagne", pour `select_by_holdout_validation`).
-#
-# Option retenue : chaque essai tire UN SEUL regime dans
-# `TRAINING_REGIME_GRID`, choisi par une fonction PURE de son numero
-# d'essai (`_training_regime_for_trial`) — jamais par le sampler TPE
-# d'Optuna. Cout par essai INCHANGE (toujours 6, 2 ou 8 scenarios
-# simules, jamais plus) ; seul le PRECALCUL DNS, fait une fois par phase
-# et non par essai, est multiplie par `len(TRAINING_REGIME_GRID)`. Sur
-# des centaines d'essais par phase, cette multiplication reste
-# negligeable face au cout de la recherche Optuna elle-meme.
-#
-# Effet de bord assume, pas cache : `run_phase` elague par
-# `MedianPruner`, qui compare la perte intermediaire des essais AU MEME
-# STEP. Deux essais sur des regimes differents ne sont plus strictement
-# comparables a mi-parcours — un essai sur un regime plus difficile peut
-# sembler pire qu'un bon reglage ne l'est vraiment. Accepte comme le cout
-# normal d'un entrainement diversifie (l'equivalent, pour ce depot, du
-# bruit qu'introduit un batch different a chaque epoque d'un reseau de
-# neurones) — pas mesure ici, a surveiller sur la vraie campagne.
+# Effet de bord assume : `run_phase` elague par `MedianPruner`, qui
+# compare la perte intermediaire des essais AU MEME STEP — deux essais
+# sur des regimes differents n'y sont plus strictement comparables a
+# mi-parcours. Accepte comme le bruit normal d'un entrainement
+# diversifie.
 
 #: Re=600/800/1000 (Re=800 deux fois, pour garder un pied dans le regime
 #: historique) x quatre graines physiques disjointes de celles du damier
@@ -1245,41 +1218,26 @@ def _run_classical_phase3(study_c2, seed=None):
 
 
 # ============================================================
-#  SELECTION PAR VALIDATION TENUE A L'ECART (refonte train/val, USER 26 aout)
+#  SELECTION PAR VALIDATION TENUE A L'ECART
 # ============================================================
 #
 # Les 3 phases ci-dessus choisissent TOUJOURS `best_params` par score EN
-# ECHANTILLON : la phase 3 evalue Optuna sur les 8 scenarios eux-memes, a
-# Re=800 et une seule graine physique implicite (`phys_seed=0` partout) —
-# rien n'est jamais tenu a l'ecart de la selection. Le deploiement final
-# peut donc surapprendre a CETTE configuration physique precise, le
-# risque qu'on nommerait sans hesiter pour un modele de machine learning
-# classique (c'est la question posee par D-198 : le plafond GBT en aval
-# souffre du meme genre de piege). `precompute_dns` accepte deja
-# `phys_seed`/`Re`/`Rm` par scenario (voir `Simulation/pre_compute_dns.py`)
-# — l'infrastructure existe, seuls les `SCENARIO_*` ci-dessus ne
-# variaient jamais ces trois cles.
+# ECHANTILLON (phase 3 : 8 scenarios, Re=800, graine physique implicite
+# `phys_seed=0` partout) — rien n'est jamais tenu a l'ecart de la
+# selection, donc le deploiement final peut surapprendre a cette
+# configuration physique precise.
 #
 # Cette section ajoute UNE selection finale, tenue a l'ecart des 3
 # phases : parmi les `HOLDOUT_TOP_K` meilleurs essais EN ECHANTILLON de
 # la phase 3, le gagnant est celui qui a la MEILLEURE perte MOYENNE sur
-# un DAMIER de regimes physiques jamais vus par aucune phase — plusieurs
-# Re et plusieurs graines, memes 8 scenarios. Cout : re-evaluer
-# `HOLDOUT_TOP_K` jeux de parametres deja tires (aucune nouvelle
-# recherche Optuna), sur des traces DNS precalculees UNE SEULE FOIS par
-# point du damier. De l'ordre de `HOLDOUT_TOP_K * len(HOLDOUT_GRID)`
-# essais equivalents, une fraction de la campagne (~600+600+400 essais
-# Optuna) — pas une nouvelle campagne.
-#
-# Mis a jour le 26 aout — un SEUL point tenu a l'ecart (Re=1200,
-# graine=1) restait lui-meme surapprenable : un candidat pouvait gagner
-# la validation en etant bon PRECISEMENT sur ce point, sans que rien ne
-# le distingue d'un candidat robuste sur l'ensemble du domaine. Demande
-# USER, 26 aout : « il faudrait que cette campagne ait plusieurs
-# parametrisations physiques et plusieurs graines ». `HOLDOUT_GRID`
-# remplace le point unique par un damier ; le classement se fait sur la
-# MOYENNE du damier (voir `select_by_holdout_validation`), le pire point
-# restant journalise a cote pour diagnostic.
+# un DAMIER de regimes physiques (`HOLDOUT_GRID`) jamais vus par aucune
+# phase — plusieurs Re et plusieurs graines, memes 8 scenarios. Classer
+# sur la MOYENNE du damier plutot que sur un point unique evite qu'un
+# candidat gagne en etant bon precisement sur un seul point tenu a
+# l'ecart, sans generaliser au reste du domaine (voir
+# `select_by_holdout_validation`). Cout : re-evaluer des jeux de
+# parametres deja tires (aucune nouvelle recherche Optuna), sur des
+# traces DNS precalculees UNE SEULE FOIS par point du damier.
 #
 # Portee assumee, pas un oubli : seule la selection FINALE (phase 3, les
 # deux bras) est protegee. Les cascades d'amorcage phase1->phase2 et
@@ -1287,11 +1245,10 @@ def _run_classical_phase3(study_c2, seed=None):
 # mais multiplie le cout de validation par le nombre de phases amorcees.
 
 #: Deux Re (sous et sur le point d'entrainement Re=Rm=800) x trois
-#: graines physiques : la demande USER porte sur les DEUX axes, pas un
-#: seul. Aucun point ne doit coincider avec le regime d'entrainement
-#: (Re=800, graine implicite 0), sinon ce n'est pas une validation tenue
-#: a l'ecart — verifie par
-#: `test_holdout_grid_varies_both_re_and_physical_seed`.
+#: graines physiques : varie les DEUX axes, pas un seul. Aucun point ne
+#: doit coincider avec le regime d'entrainement (Re=800, graine
+#: implicite 0), sinon ce n'est pas une validation tenue a l'ecart —
+#: verifie par `test_holdout_grid_varies_both_re_and_physical_seed`.
 HOLDOUT_GRID = (
     (400, 1), (400, 2), (400, 3),
     (1200, 1), (1200, 2), (1200, 3),
@@ -1437,12 +1394,9 @@ def select_by_holdout_validation(study, scenario_list, top_k=HOLDOUT_TOP_K,
 def deployable_params(study):
     """Le jeu COMPLET d'hyperparametres du meilleur essai.
 
-    `study.best_params` ne contient que ce qu'Optuna a echantillonne. Un
-    JSON construit a partir de lui perd les parametres fixes et se
-    retrouve complete au deploiement par des replis — c'est le mecanisme
-    exact de D-22 : `sigma` disparu, `gamma_hydro` / `gamma_mag` /
-    `kappa` presents dans le fichier deploye sans qu'aucune base ne les
-    ait jamais echantillonnes.
+    `study.best_params` ne contient que ce qu'Optuna a echantillonne : un
+    JSON construit a partir de lui seul perdrait les parametres fixes et
+    se retrouverait complete au deploiement par des replis silencieux.
 
     L'essai porte le dictionnaire resolu en attribut ; on le relit. S'il
     manque (essai d'une ancienne campagne), on le reconstruit et on le
@@ -1620,17 +1574,11 @@ def _save_results(study_p1, study_p2, study_p3,
 def _deploy(staged_path):
     """Copy a just-completed campaign result to where `study/` reads it.
 
-    D-22 : `_save_results` ecrit dans `CAMPAIGN_DIR`
-    (`results/hyperparams/reoptimisation/`), un registre permanent, jamais
-    ecrase. `hyperparams_loader.resolve_hyperparams_path()` lit un chemin
-    DIFFERENT (`results/hyperparams/best_hyperparams.json`) par defaut, et
-    rien ne copiait l'un vers l'autre avant cette fonction : une campagne
-    pouvait tourner jusqu'au bout et son resultat n'atteignait jamais
-    `pipeline.py`/`study/` sans qu'un humain se souvienne d'une etape
-    manuelle. Provenance de l'ancien fichier deploye desormais sans objet
-    (il va etre retrace ci-dessous) : ce n'est plus la question qui
-    compte, celle qui compte est que CE resultat-ci soit bien celui que
-    tout le reste consomme.
+    `_save_results` ecrit dans `CAMPAIGN_DIR`, un registre permanent
+    jamais ecrase ; `hyperparams_loader.resolve_hyperparams_path()` lit
+    un chemin DIFFERENT par defaut. Sans cette copie explicite, une
+    campagne pourrait tourner jusqu'au bout sans que son resultat
+    n'atteigne jamais `pipeline.py`/`study/`.
 
     Appelee uniquement depuis `main()`, apres un `--phase all` complet
     (les deux bras, les trois phases) : `staged_path` est donc toujours un

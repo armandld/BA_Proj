@@ -69,14 +69,8 @@ def legacy_forward_divergence(fx, fy):
 
 def curl_z(fx, fy, fixed_curl=True):
     """Rotationnel discret : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
-    historique si `fixed_curl=False` est demande explicitement.
-
-    (D-175 : ce docstring disait l'inverse — « forme historique par defaut,
-    forme 'ij' si demande » — alors que `fixed_curl=True` est deja le defaut
-    de la signature. Mesure sur un champ aleatoire 8x8 : `curl_z(fx, fy)`
-    sans 3e argument est identique bit-a-bit a `forward_curl_z`, ecart a
-    `legacy_forward_curl_z` de 1,1006. Comportement inchange, seul le texte
-    etait faux ; deja epingle par `tests/solver/test_analytic_fields.py`.)
+    historique si `fixed_curl=False` est demande explicitement. Verifie
+    par `tests/solver/test_analytic_fields.py`.
     """
     return (forward_curl_z(fx, fy) if fixed_curl
             else legacy_forward_curl_z(fx, fy))
@@ -85,8 +79,6 @@ def curl_z(fx, fy, fixed_curl=True):
 def divergence(fx, fy, fixed_curl=True):
     """Divergence discrete : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
     historique si `fixed_curl=False` est demande explicitement.
-
-    (D-175 : meme correction de docstring que `curl_z`, meme mesure.)
     """
     return (forward_divergence(fx, fy) if fixed_curl
             else legacy_forward_divergence(fx, fy))
@@ -102,8 +94,8 @@ def project_divergence_free_any(vx, vy):
     de la grille.
 
     Cette fonction deduit la taille du tableau. Elle est identique a la
-    methode pour un champ de taille N : meme traitement du mode de Nyquist
-    (D-7), meme garde sur la singularite k=0.
+    methode pour un champ de taille N : meme traitement du mode de
+    Nyquist, meme garde sur la singularite k=0.
 
     PRECONDITION : le champ doit etre PERIODIQUE. Sur un patch local avec
     halo, qui ne l'est pas, le resultat n'a pas de sens physique — la
@@ -118,7 +110,7 @@ def project_divergence_free_any(vx, vy):
     k = np.fft.fftfreq(n, d=1.0 / n)
     KX, KY = np.meshgrid(k, k, indexing='ij')
 
-    # D-7 : annuler la derivee au Nyquist, sans quoi la projection n'est ni
+    # Annuler la derivee au Nyquist, sans quoi la projection n'est ni
     # exacte ni idempotente sur un champ bruite.
     if n % 2 == 0:
         nyq = n // 2
@@ -235,20 +227,14 @@ class PeriodicGrid:
         KX, KY = np.meshgrid(kx, ky, indexing='ij')
 
         # ── Mode de Nyquist ──
-        # Pour un champ RÉEL de taille paire, le mode k = N/2 est ambigu :
-        # +N/2 et -N/2 y sont indiscernables, et son coefficient de Fourier
-        # est réel. Multiplier par i·k le rend imaginaire pur, et le
-        # `np.real(ifft2(...))` final le jette. La divergence portée par ce
-        # mode traversait donc la projection intacte.
-        #
-        # Mesuré sur un champ bruité (noisy_uniform) : le mode de Nyquist
-        # portait 6.5 % de l'énergie de divergence, et projeter trois fois
-        # de suite donnait 5.05 → 0.378 → 0.270 → 0.213 au lieu de zéro.
-        # La projection n'était donc ni exacte ni idempotente dès qu'un
-        # champ avait du contenu à l'échelle de la maille — bruit, mais
-        # aussi les tapers raides du rotor et de Lamb-Oseen.
-        #
-        # La convention standard est d'annuler la dérivée au Nyquist.
+        # Pour un champ RÉEL de taille paire, le mode k = N/2 est ambigu
+        # (+N/2 et -N/2 indiscernables) et son coefficient de Fourier est
+        # réel ; multiplier par i·k le rend imaginaire pur, que le
+        # `np.real(ifft2(...))` final jette. Sans l'annuler explicitement,
+        # la divergence portée par ce mode traverserait la projection
+        # intacte dès qu'un champ a du contenu à l'échelle de la maille —
+        # bruit, mais aussi les tapers raides du rotor et de Lamb-Oseen.
+        # Convention standard : annuler la dérivée au Nyquist.
         nyq = self.N // 2
         if self.N % 2 == 0:
             KX = KX.copy()
@@ -317,16 +303,11 @@ class PeriodicGrid:
         #   S_n = dvx/dx - dvy/dy   (normale)
         #   S_s = dvy/dx + dvx/dy   (cisaillement)
         #
-        # La version précédente retenait S_11² + S_22² + 2·S_12², soit
-        # (S_n² + S_s²)/2 pour un champ incompressible. Deux conséquences,
-        # toutes deux mesurées :
-        #   - la déformation pesait moitié moins que la rotation, si bien
-        #     qu'un cisaillement pur — exactement neutre au sens
-        #     d'Okubo-Weiss — sortait à Q = +0.25 et se lisait « dominé
-        #     par la rotation » ;
-        #   - S_11² + S_22² retient la partie ISOTROPE du tenseur, si bien
-        #     qu'une expansion pure, sans rotation ni déformation
-        #     déviatorique, sortait à Q = -1.
+        # Utiliser le tenseur complet (S_11² + S_22² + 2·S_12²) au lieu de
+        # ces deux composantes déviatoriques sous-pondère la déformation
+        # face à la rotation et laisse filtrer la partie ISOTROPE du
+        # tenseur : un cisaillement pur ou une expansion pure, pourtant
+        # neutres au sens d'Okubo-Weiss, ne sortiraient plus à Q≈0.
         #
         # Le préfacteur 0.5 est conservé : une rotation solide donne
         # toujours Q = 2, donc Q_CRIT = 2.0 garde sa calibration.

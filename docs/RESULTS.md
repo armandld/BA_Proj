@@ -17,89 +17,6 @@ n'est pas un résultat — il n'a pas sa place ici.
 
 ---
 
-## Reconstruction du 25 août
-
-Le commit `d3d7573` (« improvements and corrections of the tests, some
-corrections on the src code ») a remplacé ce fichier — alors **8 483
-lignes**, environ 190 corrections numérotées avec leur mesure avant/après
-et leur commande de vérification — par les 39 lignes ci-dessous (section
-« État au 25 août »), dans le même geste qui a vidé `DEFAUTS.md` et
-`COUVERTURE.md`, déjà reconstruits (voir leurs sections « Reconstruction »
-respectives). Restauré depuis `git show d047015:docs/RESULTS.md` — le
-dernier commit avant la suppression — **texte intégral, inchangé**, à
-partir de « Les 64 défauts corrigés » ci-dessous.
-
-**Pourquoi verbatim, et pas revérifié ligne à ligne comme `DEFAUTS.md`.**
-Les deux documents ne portent pas la même sorte d'affirmation.
-`DEFAUTS.md` dit « ceci bloque encore aujourd'hui » — une affirmation sur
-l'état **présent** du code, qui peut devenir fausse sans que le texte
-change, et qui a donc été revérifiée entrée par entrée contre le code réel
-de cette branche. `RESULTS.md` dit « ceci a été mesuré, à cette date, par
-cette commande » — un fait **historique**, qui ne se périme pas de la même
-façon : une correction déjà faite reste faite. Le risque propre à ce
-fichier n'est pas « le verdict a-t-il changé » mais « la commande de
-reproduction pointe-t-elle encore vers un fichier et des options réels » —
-exactement ce que `tests/study/test_repro_commands_point_to_real_files.py`
-vérifie mécaniquement, et que cette reconstruction fait tourner contre le
-texte restauré plutôt que de rejouer à la main environ 190 vérifications.
-
-**Ce qui a été vérifié, concrètement, avant de considérer la restauration
-close :**
-
-1. **Les commandes de reproduction.**
-   `pytest tests/study/test_repro_commands_point_to_real_files.py -q`
-   contre le texte restauré — résultat et corrections ci-dessous.
-2. **Ce que `COUVERTURE.md` avait déjà établi sur les 39 commits entre
-   `d047015` et `HEAD`** : protocole élargi à 8 scénarios × 5 graines
-   physiques, 5 fichiers ajoutés, 9 supprimés (dont
-   `study/pipeline/dns_extension.py`, dont ce fichier cite les mesures —
-   voir plus bas), `HamiltParams_v2.py` retravaillé. Rien de neuf à
-   revérifier ici : la même cartographie s'applique aux deux documents,
-   qui décrivent le même dépôt à la même date de coupure.
-3. **Les six entrées que `DEFAUTS.md` note comme « résolues entre-temps,
-   sans mesure écrite »** (D-41, D-48, D-135, D-141, D-143, D-186) : seule
-   **D-48** a une entrée dans ce fichier à `d047015` (« D-48 et les quatre
-   poches partielles de V1 ») — les cinq autres n'y étaient **déjà pas**
-   avant la suppression, donc leur absence n'est pas une perte de cette
-   reconstruction : leurs corrections sont postérieures à `d047015` et
-   n'ont jamais été écrites nulle part, comme `DEFAUTS.md` le documente
-   déjà.
-4. **D-53, D-188, D-190** — les trois résultats les plus consultés cette
-   semaine — sont bien présents avec leur mesure complète : D-53 à
-   « Relance `dim = 3` sur l'hamiltonien corrigé » et « Le défaut
-   principal n'est PAS l'optimiseur », D-190 à « Une normalisation dont
-   l'équilibre ne dépend plus de `dim` » (rétractation du 22 août
-   comprise), D-188 à « Vérité terrain dynamique ». C'est ce qui manquait
-   le plus concrètement tant que ce fichier restait supprimé : `CLAUDE.md`
-   cite D-53 directement, et jusqu'à cette restauration, sa mesure ne
-   vivait que dans l'historique Git.
-
-**Ce que cette reconstruction n'a PAS fait.** Les quelque 190 entrées ne
-sont pas repassées une à une contre le code actuel de la façon dont les 9
-entrées de `DEFAUTS.md` l'ont été — ce serait refaire l'audit, pas le
-restaurer, et ce n'est pas la nature de risque que ce fichier porte (voir
-ci-dessus). Seule la validité mécanique des commandes a été vérifiée.
-
-**Défaut mécanique trouvé au passage, non corrigé.** Le comptage des
-balises ``` du corps historique est **impair** dès `d047015` — vérifié en
-rejouant le même compteur sur `git show d047015:docs/RESULTS.md` seul, sans
-l'en-tête de cette reconstruction : la parité bascule dès le premier bloc
-mal fermé, aux alentours de « 15 tests, tous verts » (`## Vérification`,
-la mesure de la garde 4/5 de campagne), et reste basculée jusqu'à la fin du
-fichier — un rendu Markdown strict afficherait donc une partie de la fin du
-corps en bloc de code plutôt qu'en prose. **Antérieur à la suppression, pas
-introduit par elle ni par cette restauration** : cette reconstruction
-ajoute une paire équilibrée (le bloc `bash` de la section « État au
-25 août » ci-dessus) et ne déplace aucune balise du corps historique.
-Recompter les balises ne dit pas laquelle des ~600 lignes concernées manque
-ou est en trop sans relire cette portion — précisément le travail que le
-paragraphe ci-dessus explique ne pas avoir fait. Non inscrit dans
-`docs/DEFAUTS.md` : purement cosmétique (aucun nombre, aucune commande
-n'est affectée — les deux tests mécaniques ci-dessus portent sur le texte,
-pas le rendu), donc hors du périmètre « ça bloque » de ce document-là.
-
----
-
 ## État au 25 août
 
 Le chemin de campagne a été consolidé autour d'une machine multi-cœur
@@ -144,35 +61,15 @@ Les anciennes mesures restent accessibles dans l'historique Git et
 
 ---
 
-## Ce que le corps historique ci-dessous documente
-
-Tout ce qui suit, jusqu'à la fin du fichier, est le texte restauré tel
-qu'il existait à `d047015` — falsifications, corrections de `src/` et de
-`study/`, chacune avec sa mesure avant/après et sa commande de
-vérification. Organisé chronologiquement, pas par thème : une entrée
-récente peut corriger ou nuancer une entrée plus ancienne (c'est le cas de
-D-69, rétracté par une mesure postérieure ; de la plaquette, corrigée deux
-fois de suite, le 21 puis le 22 août ; et de D-53, mesuré une première
-fois puis relancé après correction de l'hamiltonien). Lire une entrée
-isolément, sans la suite du fichier, risque de citer un nombre déjà
-rétracté plus loin.
-
----
-
 ## Les 64 défauts corrigés
 
 *(61 lignes `D-N` distinctes dans les tables ci-dessous, plus 2 lignes non
 numérotées — 63 corrections en tout, avant l'ajout de D-89 et D-90
 ci-dessous ; ce sous-compte n'est pas revérifié ici, voir « Compte de tête
-inexact » plus bas — signalé une fois, non recorrigé à chaque ajout. Le
-titre annonçait **63** avant l'ajout de D-90 ; **62** avant l'ajout de
-D-89 ; **60** avant l'ajout de D-73 ; **59** avant l'ajout de D-72 ; **58** avant l'ajout de D-71 ; **56** avant l'ajout de D-68 et D-70 (D-69 était alors un rapport seul,
-dans `DEFAUTS.md` ; il entre ici depuis que sa table est refaite) ; **53** avant que la fusion de la base n'apporte
-D-10, D-66 et D-67 ; **41** pour 42 lignes numérotées avant l'ajout de D-52,
-D-54, D-55 et D-56. Le compte de tête est faux à chaque fusion — c'est
-exactement le défaut de registre que la section « Compte de tête inexact »
-plus bas rapporte déjà pour « Les 24 défauts corrigés ». Compté, pas estimé
-— la commande est
+inexact » plus bas. Le compte de tête du titre n'est pas recalculé à chaque
+ajout et peut donc être faux — c'est exactement le défaut de registre que
+la section « Compte de tête inexact » plus bas rapporte déjà pour « Les 24
+défauts corrigés ». Compté, pas estimé — la commande est
 `grep -o '^| D-[0-9]*' docs/RESULTS.md | sort -u -t- -k2 -n | wc -l`.)*
 
 Le matériau le plus solide du travail. Chacun est mesuré avant et après,
@@ -246,11 +143,10 @@ version. Les mesures détaillées sont plus bas, dans les entrées de campagne.
 | D-48 | `mode="hardware"` s'exécutait sur un **simulateur** sans le signaler | `Session(AerSimulator)` **acceptée** → **lève** à la construction | `pytest tests/pipeline/test_v1_partial_pockets.py -k mode` |
 
 *(La branche `vigil/…` de l'agent numérote en continu et va **au-delà de
-D-115**. Cette note disait « la numérotation reprend à D-48 » : c'était
-vrai à l'écriture et faux ensuite — D-68 et D-69 ont été attribués des
-deux côtés à des défauts différents, collision rattrapée en renumérotant
-les miens en **D-116 / D-117**. Avant d'attribuer un numéro, lire le
-maximum réel des **deux** branches :*
+D-115**. Avant d'attribuer un numéro, lire le maximum réel des **deux**
+branches — D-68 et D-69 ont déjà été attribués des deux côtés à des
+défauts différents, collision rattrapée en renumérotant les miens en
+**D-116 / D-117** :*
 
 ```bash
 git fetch origin 'refs/heads/vigil/*:refs/remotes/origin/vigil/*'
@@ -1179,20 +1075,22 @@ phase5 and therefore by T11/T13/T18; σ = **0.1888** is what Optuna found for
 the Level-3 fold `ot`, i.e. closed loop only. The deployed set is read from
 the module rather than hard-coded, so it cannot drift from what runs.
 
-> ## ⚠ RÉTRACTATION (D-58) — la lecture ci-dessous était fausse
+> ## ⚠ Portée du calcul — D-58 : la fenêtre gaussienne se mesure sur `classical_score`
 >
-> Le texte publié ici décrivait le **défaut** que `107c1cf` (D-9) a corrigé,
-> pas son résultat. La fenêtre gaussienne était évaluée sur
-> `physical_score` alors que le chemin déployé l'applique à
-> `classical_score` (`refinement.py:506,611`, `qaoa_inputs.py:161,233`).
-> D'où des masses « numériquement mortes » sur 150 ordres de grandeur.
+> La fenêtre gaussienne est évaluée sur `classical_score`, la grandeur que
+> le chemin déployé lui applique réellement (`refinement.py:506,611`,
+> `qaoa_inputs.py:161,233`) — pas sur `physical_score`, qui rend des masses
+> « numériquement mortes » sur 150 ordres de grandeur et ne correspond à
+> aucun chemin déployé (défaut corrigé par `107c1cf`, D-9).
 >
 > L'artefact `results/t17_uncertainty_window.npz` (`git_hash` interne
-> `50ca5a0`) porte la mesure corrigée depuis. Les constantes de référence
-> de `study/common/aggregate_master_table.py` ont été réancrées dessus :
-> le master table passe de **164 OK / 16 DIFF** à **176 OK / 4 DIFF**.
+> `50ca5a0`) porte cette mesure. Les constantes de référence de
+> `study/common/aggregate_master_table.py` sont ancrées dessus : le master
+> table compte **176 OK / 4 DIFF** (contre 164 OK / 16 DIFF sous
+> `physical_score`).
 >
-> Ce qui suit est la remesure. Les affirmations rétractées sont nommées.
+> Les trois affirmations ci-dessous, mesurées sous `physical_score`, sont
+> fausses et ne doivent plus être citées.
 
 **Paramètres déployés en boucle ouverte** (σ = 0,023, seuil = 0,1496) — la
 configuration derrière T11 / T13 / T18.
@@ -1827,22 +1725,16 @@ python study/closed_loop/closed_loop_headline_counts.py     # recomputes the tab
 > the 18**, more expensive on **16 of 18**, and strictly Pareto-dominated on
 > **16 of 18**. No run reverses the ordering on both coordinates at once.
 
-**Correction — this table previously read 19/20, 18/20, 17/20.** It was the
-only headline in the study composed by hand rather than computed, and it did
-not reproduce from the artifacts. Two errors, both of a kind already in the
-register:
-
-1. on `kh`, *less faithful* and *costlier* were **transposed** (4/5 and 5/5
-   instead of 5/5 and 4/5);
-2. on `rotor`, the **2 aborted draws were counted in the denominator**,
-   giving a total out of 20 when only 18 runs completed — the exact defect
-   ("an aggregation mixing aborted draws with valid ones") that had been
-   fixed in the code and reappeared in the prose.
-
-The corrected count is **stronger on fidelity** (unanimous, 18/18, where the
-old figure conceded one run) and **weaker on cost** (16/18). The direction of
-the conclusion is unchanged. T23 now computes it and `t16` checks it, so the
-number can no longer drift from its artifacts.
+This table was the only headline in the study composed by hand rather than
+computed, and previously read **19/20, 18/20, 17/20** — it did not reproduce
+from the artifacts, on `kh` from a transposition of *less faithful* and
+*costlier* (4/5 and 5/5 instead of 5/5 and 4/5), and on `rotor` from counting
+the 2 aborted draws in the denominator (an aggregation mixing aborted draws
+with valid ones, the same defect already fixed in code and reappearing here
+in the prose). The corrected count is **stronger on fidelity** (unanimous,
+18/18) and **weaker on cost** (16/18); the direction of the conclusion is
+unchanged. T23 now computes it and `t16` checks it, so the number can no
+longer drift from its artifacts.
 
 This is the form Claim E should take in the manuscript. It is weaker-sounding
 than "2.6–4.4× worse" and far harder to attack: it depends on no single draw,
@@ -2146,7 +2038,7 @@ everything), the lowest point already swept by t15b's bisections.
 | `rotor` | 0.03395 / 0.02874 | **1.58× / 0.98×** | 3.91× / 1.44× |
 | `ot` | 0.01111 / 0.00821 | **7.45× / 9.53×** | 11.04× / 14.28× |
 
-### Three corrections to what I first claimed from this table
+### Reading this table: three caveats
 
 **(1) The reference is not a lower bound.** `rotor`'s classical arm scores
 **0.98×** on the unseen condition — it *beats* near-full refinement. So
@@ -2202,19 +2094,17 @@ numbers must be read.
 draws span 0.054–0.219; 0.407 is high but not absurd. So an aborted run can
 land inside the plausible range.
 
-### This retracts my earlier bounding argument
+### Contamination cannot be bounded by inspection
 
-I had written, to bound the risk on the unguarded pass: *"a divergence lands
-300× out of family (the T22 case), while T20's spreads are 1.5–3.6× with no
-draw above phys = 1 — consistent with D11's CV, no divergence signature.
-Contamination unlikely but unproven."*
-
-That reasoning is **wrong**. Contamination need not leave a visible
-signature. `rotor`'s original five draws (max 0.2581) could perfectly well
-have contained aborted runs, and no inspection of the values would reveal
-it. The correct statement is not "unlikely but unproven" — it is
-**unknowable without the guard**, which is precisely why the guard had to be
-added and the pass repeated.
+Contamination need not leave a visible signature: `rotor`'s original five
+draws (max 0.2581) could perfectly well have contained aborted runs, and no
+inspection of the values would reveal it — draw 5 above (0.4069) is itself
+an aborted run that does not stand out. The out-of-family argument once used
+to bound this risk on the unguarded pass — a divergence lands 300× out of
+family in the T22 case, against 1.5–3.6× spreads here with no draw above
+phys = 1 — does not hold. The correct statement is not "unlikely but
+unproven" but **unknowable without the guard**, which is precisely why the
+guard had to be added and the pass repeated.
 
 ### A flaw in T20's own control
 
@@ -2727,12 +2617,9 @@ Trois lectures qui en découlent, toutes vérifiables dans la table maîtresse :
    couche quantique. Attribuer cette montée au quantique serait une erreur
    de lecture.
 
-**Correction d'une formulation antérieure de cette section.** J'avais écrit
-que la rupture d'inertie « ouvre un horizon » et était « plus intéressante à
-publier qu'un résultat négatif ». C'était prématuré : la frontière existe,
-mais de l'autre côté les couplages **nuisent**. Ce n'est pas un horizon,
-c'est la fermeture propre de la porte — avec, cette fois, la mesure qui
-répond à la question d'origine du projet.
+La rupture d'inertie n'ouvre pas d'horizon : la frontière existe, mais de
+l'autre côté les couplages **nuisent**. C'est la fermeture propre de la
+porte, avec la mesure qui répond à la question d'origine du projet.
 
 ### Le contrôle qui rend ce résultat lisible
 
@@ -3476,13 +3363,12 @@ publié n'est pas de la variance d'exécution.
 
 ## Ce qu'il faut en conclure
 
-⚠️ **Rétractation — « à dim=16 la correction dégrade » ne tient plus.**
-Cette section a longtemps conclu : *« corriger la convention d'axes
-n'améliore pas la tâche, et à dim=16 la dégrade avec un intervalle qui
-exclut zéro »*. La seconde moitié est retirée. Refaite à `95571d1`
-(D-69), la table ne porte **aucun** verdict tranché : l'IC95 du Spearman
-à dim=16 passe de [−0.1328, **−0.0146**] à [−0.1673, **+0.0343**]. Le
-nombre qui portait la phrase n'existe plus.
+⚠️ **À dim=16, la table refaite à `95571d1` (D-69) ne porte aucun verdict
+tranché.** L'IC95 du Spearman y vaut [−0.1673, **+0.0343**] et exclut donc
+zéro à peine — contre [−0.1328, **−0.0146**] dans la table publiée à
+`8ee5c8a`, qui excluait zéro et portait seule la lecture « à dim=16 la
+correction dégrade ». Cette lecture ne tient plus : le nombre qui la
+portait n'existe plus.
 
 **Ce qui reste vrai : corriger la convention d'axes n'améliore pas la
 tâche.** Les quatre Δ sont négatifs aux deux dimensions — direction
@@ -3503,18 +3389,16 @@ précisément la question qu'un référé posera — *« Q-HAS a-t-il échoué p
 que son entrée physique était cassée ? »* — et « on n'a pas réoptimisé »
 n'est pas une réponse.
 
-Trois lectures, révisées après avoir compté le coût réel :
+Trois lectures, chiffrées avec le coût réel :
 
-1. *Corriger et publier tel quel* — écarté, mais plus faiblement qu'écrit
-   ici d'abord (« la mesure dit que c'est pire ») : depuis D-69 la mesure
-   ne dit plus que c'est pire, elle dit qu'elle ne sait pas. Ce qui écarte
-   cette lecture est qu'aucune des quatre comparaisons ne montre de gain.
-2. *Documenter et ne rien réoptimiser* — recommandation initiale, fondée
-   sur « une semaine de calcul Optuna ». J'ai d'abord cru la réfuter avec
-   les ~47 h de **mur** mesurées dans les bases. C'était un mauvais cadrage :
-   les essais tournaient jusqu'à 9 de front, soit **224 h de CPU = 9.3 jours
-   mono-cœur**. L'annonce d'origine était juste en temps processeur, et
-   c'est le temps processeur qui gouverne le coût d'une relance.
+1. *Corriger et publier tel quel* — écarté : la mesure ne dit pas que
+   c'est pire, elle ne tranche pas, et aucune des quatre comparaisons ne
+   montre de gain.
+2. *Documenter et ne rien réoptimiser* — fondé sur l'estimation d'origine,
+   « une semaine de calcul Optuna », juste en **temps processeur** : les
+   essais tournaient jusqu'à 9 de front, donc les ~47 h de **mur** mesurées
+   dans les bases sous-comptent le coût réel, qui est le temps processeur
+   gouvernant une relance — **224 h de CPU = 9,3 jours mono-cœur**.
 3. *Réoptimisation ciblée* — retenu, mais chiffré honnêtement. Seuls
    `beta_curl`, `kappa` et `threshold_amr` touchent le canal du rotationnel.
    Un essai du bras quantique coûte **56 min de CPU** (médiane sur 178
@@ -3814,15 +3698,13 @@ historique bit à bit.
 ## D-12 — `PhysicalMapperV2` est aveugle à trois des quatre grandeurs
 ## que sa docstring nomme
 
-**Rectification de portée.** J'avais écrit « le mappeur déployé ». C'est
-faux : `src/pipeline.py` n'importe **jamais** `HamiltParams_v2`. La boucle
-fermée — celle qui produit les résultats de niveau 3 et la frontière de
-Pareto — instancie `PhysicalMapper` (v1) avec ses hyperparamètres entraînés
-(σ, β_curl, γ_hydro, γ_mag, κ, w_z_frac). Le v2 n'est utilisé que par les
-scripts de `study/`.
-
-Ce qui suit vaut donc pour les **analyses de `study/`**, pas pour la boucle
-déployée.
+**Portée : `study/`, pas la boucle déployée.** `src/pipeline.py` n'importe
+**jamais** `HamiltParams_v2`. La boucle fermée — celle qui produit les
+résultats de niveau 3 et la frontière de Pareto — instancie
+`PhysicalMapper` (v1) avec ses hyperparamètres entraînés (σ, β_curl,
+γ_hydro, γ_mag, κ, w_z_frac). Le v2 n'est utilisé que par les scripts de
+`study/`, et ce qui suit vaut donc pour les **analyses de `study/`**, pas
+pour la boucle déployée.
 
 `src/Simulation/HamiltParams_v2.py` — `PhysicalMapperV2`.
 
@@ -4230,18 +4112,15 @@ explicitement.
 axes numériques nus pour rester bit-à-bit identiques aux artefacts publiés,
 et figurent dans une liste d'exceptions explicitement documentée.
 
-## D-18 — rectification : la moitié `fluctuating_KE` était déjà connue
+## D-18 — la moitié `fluctuating_KE` de ce défaut relevait déjà de la déviation D2
 
-**Correction à la première rédaction de cette section.** J'avais présenté le
-défaut d'axe de `dns_validation.fluctuating_KE` comme une trouvaille de cet
-audit. C'est faux. Il était déjà connu, consigné comme **déviation D2**, et
-la décision prise alors était explicite — `dns_extension.py:85` : « phase 1b
-reste intouchée, réparation côté v3 par copie ». Un test de `tests/v3`
-épinglait même la contamination
-(`test_phase1b_observable_is_contaminated_by_base_flow`).
-
-Ma correction dans `dns_validation.py` a donc **rompu ce gel**, et c'est la
-grande suite qui l'a signalé en faisant échouer ce test. Le fichier a été
+Le défaut d'axe de `dns_validation.fluctuating_KE` était déjà connu,
+consigné comme **déviation D2**, avec une décision explicite —
+`dns_extension.py:85` : « phase 1b reste intouchée, réparation côté v3
+par copie ». Un test de `tests/v3` épingle la contamination
+(`test_phase1b_observable_is_contaminated_by_base_flow`). Cet audit
+l'avait d'abord recorrigé dans `dns_validation.py`, rompant ce gel ; la
+grande suite l'a signalé en faisant échouer ce test, et le fichier a été
 remis dans son état d'origine.
 
 ### Ce que l'audit apporte réellement
@@ -4568,15 +4447,13 @@ modification le jour où chaque valeur déployée sera traçable à un essai.
 
 ---
 
-# Correction d'une affirmation : le splitting de Strang ne s'applique pas ici
-
-J'ai écrit à plusieurs reprises, dans `docs/RESULTS.md` et dans le plan,
-qu'« un splitting de Strang rendrait l'ordre 2 ». **C'est faux, et la mesure
-le montre.**
+# Un splitting de Strang ne s'applique pas ici
 
 Un splitting symétrique suppose deux **flots** qu'on peut découper en
 demi-pas. La projection d'incompressibilité n'en est pas un : c'est un
-**projecteur idempotent**, et `P^(1/2)` n'a pas de sens.
+**projecteur idempotent**, et `P^(1/2)` n'a pas de sens — contrairement à
+ce que `docs/RESULTS.md` et le plan affirmaient à plusieurs reprises,
+qu'un splitting de Strang rendrait l'ordre 2.
 
 Mesuré, N=128, Orszag-Tang, grille fixe, quatre résolutions temporelles :
 
@@ -4587,8 +4464,8 @@ Mesuré, N=128, Orszag-Tang, grille fixe, quatre résolutions temporelles :
 
 **Identiques à la dernière décimale.** L'explication est immédiate : après le
 premier pas l'état est déjà dans le sous-espace à divergence nulle, donc la
-projection initiale est l'identité. Le « Strang » que j'avais écrit *est*
-le schéma de Lie.
+projection initiale est l'identité. Le schéma « Strang » décrit est en
+réalité le schéma de Lie.
 
 Le bon cadre est celui d'un système **différentiel-algébrique** : l'ordre
 chute parce que la contrainte est imposée *après* un pas RK4 non contraint.
@@ -6200,23 +6077,23 @@ porte `|B|` de `K_xpoint`, sa normalisation en dx⁴, et le seuil absolu en
 | point X magnétique | 5,092e−06 | 5,437e−01 |
 | uniforme (contrôle) | 0 | 0 |
 
-**Le rapport fluide / magnétique passe de 27 500 à 0,44** — soit un rapport magnétique/fluide de **2,29**. *(Les deux sens ont circulé dans mes messages ; c'est bien 0,501 pour le fluide et 1,148 pour le magnétique.)* Les deux canaux
+**Le rapport fluide / magnétique passe de 27 500 à 0,44** — soit un rapport magnétique/fluide de **2,29** (fluide : 0,501 ; magnétique : 1,148). Les deux canaux
 sont désormais du même ordre — la seule chose qu'on puisse exiger de deux
 instabilités de même nature.
 
 Sur `harris_tearing` à N=256 : `K_plaq` 2,43e−01 et `K_xpoint` 9,81e−01. Le
 canal point X domine encore, mais d'un facteur **4** au lieu de 370.
 
-## Une lecture que la correction invalide
+## La lecture « orthogonaux d'un facteur 19 000 » ne tient pas sur ce champ
 
-J'avais écrit que les deux canaux ZZZZ étaient orthogonaux « d'un facteur
-19 000 » sur le champ de point X. **C'était un artefact du canal magnétique
-écrasé.** Le champ d'essai `B = (sin(y−L/2), sin(x−L/2))` porte un point X
-**et** du courant — `Jz = cos(x−L/2) − cos(y−L/2)`, non nul. Le canal
-magnétique réparé, `K_plaquettes` y répond légitimement.
+Ce facteur, mesuré sur le champ de point X, était un artefact du canal
+magnétique écrasé : le champ d'essai `B = (sin(y−L/2), sin(x−L/2))` porte
+un point X **et** du courant — `Jz = cos(x−L/2) − cos(y−L/2)`, non nul —
+si bien que `K_plaquettes` y répond désormais légitimement une fois le
+canal magnétique réparé.
 
-L'orthogonalité se lit désormais sur le champ qui **sépare** vraiment : le
-réseau de vortex, qui n'a aucun nul magnétique, laisse `K_xpoint` à zéro.
+L'orthogonalité se lit sur le champ qui **sépare** vraiment : le réseau de
+vortex, qui n'a aucun nul magnétique, laisse `K_xpoint` à zéro.
 
 ## Conséquence sur le périmètre de réoptimisation
 
@@ -6489,17 +6366,16 @@ coefficient qui ne détecte pas ne se corrige pas par un réglage.
 
 **Verdict : les cinq passent.** Les coefficients font leur travail.
 
-## Deux références corrigées en montant ce contrôle
+## Deux précisions sur ces valeurs
 
-**Le rapport d'équilibre.** J'ai écrit « 0,44 » ; c'est le rapport
-**fluide/magnétique**. Le contrôle calcule magnétique/fluide, soit **2,29**.
-Même mesure — 0,501 pour le fluide, 1,148 pour le magnétique — libellé
-inversé d'un message à l'autre. Corrigé ici et dans l'entrée précédente.
+**Le rapport d'équilibre** ci-dessus est **magnétique/fluide** (2,29), pas
+fluide/magnétique (0,44) — même mesure (0,501 pour le fluide, 1,148 pour
+le magnétique), sens inverse.
 
-**La corrélation avec l'erreur réelle.** Elle vaut **0,798**, pas 0,897.
-Le 0,897 datait d'**avant** l'harmonisation des portes `g` : réveiller le
-canal magnétique a légèrement abaissé la corrélation de `K_plaquettes`
-seul. Remesuré, non ajusté — les deux valeurs sont consignées.
+**La corrélation avec l'erreur réelle vaut 0,798, pas 0,897.** Le 0,897
+datait d'avant l'harmonisation des portes `g` : réveiller le canal
+magnétique a légèrement abaissé la corrélation de `K_plaquettes` seul.
+Les deux valeurs sont consignées, sans être ajustées l'une vers l'autre.
 
 ---
 
@@ -6515,14 +6391,14 @@ campagne n'en porte donc aucun risque.
 | `..._dim3_hamiltonien_corrige` | **+0,870** | 0,0023 | l'optimum de H n'est pas la bonne décision |
 | `..._N256_dim2` | **−1,000** | 0,0000 | l'optimum de H est la bonne décision |
 
-## Deux corrections à ce que j'ai annoncé
+## Deux précisions sur ce critère
 
-**ρ vaut +0,870, pas +0,970.** Mon calcul manuel excluait `qaoa_shots_p3` ;
-le module prend les 9 solveurs. Le signe et la conclusion sont inchangés,
-la valeur non.
+**ρ vaut +0,870** (le calcul manuel qui donnait +0,970 excluait
+`qaoa_shots_p3` ; le module prend les 9 solveurs) — signe et conclusion
+inchangés, seule la valeur l'est.
 
-**Le signe s'inverse à `dim = 2`.** Je présentais « mieux résoudre H dégrade
-la décision » comme un fait général — il ne l'est pas.
+**Le signe s'inverse à `dim = 2`, donc « mieux résoudre H dégrade la
+décision » n'est pas un fait général.**
 
 Mais `dim = 2` est **dégénéré**, et c'est D-45/D-47 : `classical_init` y a un
 écart de **0,0000** à l'optimum, c'est-à-dire que la règle classique *est*
@@ -10062,23 +9938,33 @@ neurones pour éviter le surapprentissage. »
 
 **Conception, et pourquoi cette portée-là.** Trois options pesées :
 1. Multi-Re/graines **tout au long** de l'entraînement (chaque essai
-   évalué sur plusieurs régimes) — rejeté : multiplie le coût par essai
-   par le nombre de régimes, sur une campagne déjà à ~2000 h CPU pour 3
-   phases à un seul régime.
+   évalué sur plusieurs régimes) — rejeté ici : multiplie le coût par
+   essai par le nombre de régimes, sur une campagne déjà à ~2000 h CPU
+   pour 3 phases à un seul régime. Un second axe de diversification, de
+   conception différente (un seul régime tiré par essai, pas tous les
+   régimes du damier), existe séparément — voir « Diversification de
+   l'entraînement » ci-dessous.
 2. `VQA_N_TRAINING` monté à 3 pour sortir de la dégénérescence connue de
    `dim=2` — rejeté séparément (voir plus haut) : D-53 montre déjà, à
    cette taille certifiée, que QAOA n'atteint son optimum que sur
    6–16 % des instantanés et que *plus* de budget d'optimiseur aggrave
    l'écart — monter en dimension remplacerait un signal réel (178
    valeurs distinctes mesurées) par du bruit d'optimiseur.
-3. **Une sélection finale tenue à l'écart** (retenue) : parmi les
-   `HOLDOUT_TOP_K=15` meilleurs essais EN ÉCHANTILLON de la phase 3, le
-   déployé est celui qui gagne sur un régime **jamais vu par aucune
-   phase** — `Re=1200` (au lieu de 800) et `phys_seed=1` (au lieu de 0,
-   implicite partout ailleurs). Coût : ~15 évaluations supplémentaires
-   sur des DNS précalculées une seule fois, de l'ordre de 15 essais sur
-   les 400+300 de la phase 3 — quelques % de plus, pas une nouvelle
-   campagne.
+3. **Une sélection finale tenue à l'écart sur un damier physique**
+   (retenue) : parmi les `HOLDOUT_TOP_K=15` meilleurs essais EN
+   ÉCHANTILLON de la phase 3, le déployé est celui qui gagne, en
+   moyenne, sur `HOLDOUT_GRID` — six régimes **jamais vus par aucune
+   phase** : deux Re (400 et 1200, de part et d'autre du régime
+   d'entraînement Re=Rm=800) × trois graines physiques (1, 2, 3),
+   choisis pour faire varier les deux axes demandés, pas un seul
+   (vérifié par `test_holdout_grid_varies_both_re_and_physical_seed`,
+   qui interdit aussi qu'un point coïncide avec le régime
+   d'entraînement). Un damier plutôt qu'un point unique : un seul point
+   tenu à l'écart resterait lui-même surapprenable — un candidat
+   pourrait gagner la validation en étant simplement bon SUR CE POINT
+   PRÉCIS, sans rien qui le distingue d'un candidat robuste sur
+   l'ensemble du domaine physique, le même piège que la validation
+   existe pour éviter, déplacé d'un cran.
 
 **Implémentation** (`src/train_hyperparams.py`,
 `select_by_holdout_validation` + `_with_physical_regime` +
@@ -10090,7 +9976,11 @@ params` seul perd les paramètres figés). Câblée dans `_save_results` :
 `results["deploy"]` vient désormais du gagnant en validation, tandis que
 `results["quantum"]["phase3"]["best_params"]` — le score en échantillon
 — reste écrit intact à côté, jamais écrasé. `run_holdout_validation=False`
-la désactive pour les tests et les runs partiels.
+la désactive pour les tests et les runs partiels. Le classement des
+candidats se fait sur la perte MOYENNE du damier (`holdout_value`) ; le
+pire point de chaque candidat est journalisé à côté (`holdout_worst`,
+`holdout_per_point`) pour distinguer en aval un gagnant régulier d'un
+gagnant qui doit sa moyenne à un seul point favorable.
 
 **Portée assumée** : seule la sélection FINALE (phase 3, les deux bras)
 est protégée ; les cascades d'amorçage phase1→phase2→phase3 restent en
@@ -10098,8 +9988,14 @@ est protégée ; les cascades d'amorçage phase1→phase2→phase3 restent en
 validation par le nombre de phases amorcées — pas fait ici sans mesure
 de ce que ça change réellement.
 
+**Coût** : le damier multiplie par 6 le coût de la validation finale
+(precompute DNS et réévaluation des `HOLDOUT_TOP_K=15` candidats), pas
+celui des 3 phases elles-mêmes — de l'ordre de 15 × 6 = 90 essais
+équivalents, sur une campagne à ~600+600+400 essais Optuna : quelques %
+de plus, pas une nouvelle campagne.
+
 **Vérifié** (`tests/pipeline/test_holdout_validation_selection.py`,
-5 tests) — `_composite_loop` remplacé par un espion contrôlé (teste la
+7 tests) — `_composite_loop` remplacé par un espion contrôlé (teste la
 LOGIQUE de sélection, pas la physique, déjà couverte ailleurs) :
 1. cas séparant : essai A meilleur en échantillon, essai B meilleur en
    validation → le gagnant rendu est **B**, pas A ;
@@ -10110,67 +10006,7 @@ LOGIQUE de sélection, pas la physique, déjà couverte ailleurs) :
    top_k, meilleur sur tous les critères, n'est pas repêché ;
 4. étude sans essai complet → résultat vide nommé, pas une exception ;
 5. `_with_physical_regime` ne touche que `Re`/`Rm`/`phys_seed`, rien
-   d'autre du scénario.
-
-```bash
-pytest tests/pipeline/test_holdout_validation_selection.py -v   # 5 passed
-```
-
-**Pas encore vérifié** : cette sélection n'a jamais tourné contre une
-VRAIE campagne (aucune n'a encore été relancée depuis D-22). Le premier
-`--phase all` réel dira si `train_winner_differs` vaut souvent vrai en
-pratique — c'est-à-dire si le surapprentissage qu'elle vise à empêcher
-est un risque réel sur ce périmètre, ou une précaution qui ne mord
-jamais.
-
-**Mis à jour le 26 août — le point unique était lui-même surapprenable,
-`HOLDOUT_GRID` le remplace par un damier.** Suite directe de la demande
-USER ci-dessus : « il faudrait que cette campagne ait plusieurs
-paramétrisations physiques et plusieurs graines » n'était satisfaite
-qu'à moitié par un SEUL point tenu à l'écart (`Re=1200`, `phys_seed=1`)
-— un candidat pouvait gagner la validation en étant simplement bon SUR
-CE POINT PRÉCIS, sans que rien ne le distingue d'un candidat robuste sur
-l'ensemble du domaine physique. C'est le même piège que celui que la
-validation existe pour éviter, déplacé d'un cran.
-
-`HOLDOUT_GRID` remplace `HOLDOUT_RE`/`HOLDOUT_PHYS_SEED` par six points
-— deux Re (400 et 1200, de part et d'autre du régime d'entraînement
-Re=Rm=800) × trois graines physiques (1, 2, 3) — choisis pour faire
-varier les DEUX axes demandés, pas un seul (vérifié par
-`test_holdout_grid_varies_both_re_and_physical_seed`, qui interdit aussi
-qu'un point coïncide avec le régime d'entraînement). Le classement des
-candidats se fait désormais sur la perte MOYENNE du damier
-(`holdout_value`), et non plus sur un point unique ; le pire point de
-chaque candidat est journalisé à côté (`holdout_worst`,
-`holdout_per_point`) pour distinguer en aval un gagnant régulier d'un
-gagnant qui doit sa moyenne à un seul point favorable.
-
-**Coût** : le damier multiplie par 6 le coût de la validation finale
-(precompute DNS et réévaluation des `HOLDOUT_TOP_K=15` candidats), pas
-celui des 3 phases elles-mêmes — de l'ordre de 15 × 6 = 90 essais
-équivalents contre ~15 avant, sur une campagne à ~600+600+400 essais
-Optuna : quelques % de plus, toujours pas une nouvelle campagne.
-
-**Mis à jour le 26 août — l'option « diversité tout au long de
-l'entraînement » a été rouverte, sur demande USER explicite, et
-implémentée sous une forme différente de celle rejetée ci-dessus.**
-Cette section rejetait la diversification d'entraînement pour un coût
-précis : évaluer CHAQUE essai sur TOUS les régimes d'un damier multiplie
-le coût par essai par la taille du damier. USER, après avoir vu le
-damier de validation : « ok mais moi je veux quand même une campagne
-plus diversifiée. » Ce chiffre de coût n'était vrai que pour CETTE
-conception-là (multiplication par essai) — une seconde option, non pesée
-ici à l'époque, tire un SEUL régime par essai plutôt que tous : le coût
-par essai reste inchangé, seul le précalcul DNS (une fois par phase, pas
-par essai) grossit. Voir la section dédiée ci-dessous
-(« Diversification de l'entraînement »).
-
-**Vérifié** (`tests/pipeline/test_holdout_validation_selection.py`,
-7 tests désormais — les 5 ci-dessus, migrés vers la nouvelle signature
-`_with_physical_regime(base_config, re, phys_seed)`, renommée depuis
-`_holdout_scenario_config` — le nom ne devait plus dire seulement
-« holdout » une fois réutilisée par la diversification d'entraînement
-ci-dessous — plus deux nouveaux) :
+   d'autre du scénario ;
 6. le damier fait varier Re ET la graine physique, sans doublon ni point
    confondu avec le régime d'entraînement ;
 7. cas séparant dédié au damier : un candidat excellent sur un seul
@@ -10183,9 +10019,12 @@ ci-dessous — plus deux nouveaux) :
 pytest tests/pipeline/test_holdout_validation_selection.py -v   # 7 passed
 ```
 
-**Toujours pas vérifié en conditions réelles** : comme ci-dessus, cette
-sélection — damier compris — n'a encore tourné contre aucune vraie
-campagne.
+**Pas encore vérifié en conditions réelles** : cette sélection — damier
+compris — n'a jamais tourné contre une VRAIE campagne (aucune n'a encore
+été relancée depuis D-22). Le premier `--phase all` réel dira si
+`train_winner_differs` vaut souvent vrai en pratique — c'est-à-dire si le
+surapprentissage qu'elle vise à empêcher est un risque réel sur ce
+périmètre, ou une précaution qui ne mord jamais.
 
 # Diversification de l'entraînement (USER, 26 août, après le damier de validation)
 

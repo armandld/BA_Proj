@@ -12,10 +12,9 @@ inedite : le rapport phys Q/C se resserrait sur les quatre folds (ot
 reel, cela contredirait la lecture « l'apprentissage ne transfere pas ».
 
 POURQUOI ELLE N'ETAIT PAS TRANCHEE. Un tirage par condition, contre un
-coefficient de variation de 17 a 49 % mesure par T20 (defaut D11, chaine
-VQA sans germe). Les variations observees etaient du meme ordre que le
-bruit. De plus la comparaison utilisait le bras classique REGLE, a un autre
-budget (defaut D4).
+coefficient de variation de 17 a 49 % mesure par T20 (chaine VQA sans
+germe) : les variations observees etaient du meme ordre que le bruit. De
+plus la comparaison utilisait le bras classique REGLE, a un autre budget.
 
 CE QUE CETTE SYNTHESE FAIT. Avec N tirages par condition :
   - le ratio de degradation de Q-HAS devient une moyenne assortie d'un
@@ -77,13 +76,10 @@ def load(results_dir, fold, mode="unseen-ic"):
         return {"fold": fold, "underpowered": True, "partial": True,
                 "raw": d}
     if d.get("status") == "total_abort":
-        # D-90 : `h4_unseen_conditions.py:512` ecrit `total_abort_arms`
-        # (PLURIEL, une liste -- un fold peut voir les deux bras avorter).
-        # Ce fichier lisait `total_abort_arm` (singulier) : la cle
-        # n'existe jamais dans l'artefact, `.get()` rend systematiquement
-        # `None`, et le message affiche « the None arm aborted... » au
-        # lieu du nom reel -- un repli silencieux qui affiche une valeur
-        # plausible et fausse plutot que de lever.
+        # Cle PLURIELLE dans l'artefact (`total_abort_arms`, une liste : un
+        # fold peut voir les deux bras avorter). Une cle mal orthographiee
+        # ici ne leve pas -- `.get()` rend silencieusement None et affiche
+        # un nom d'arme plausible mais faux.
         return {"fold": fold, "underpowered": True, "total_abort": True,
                 "total_abort_arms": d.get("total_abort_arms", []), "raw": d}
     if d["arms"]["qhas"].get("n_runs", 1) < 2:
@@ -111,20 +107,14 @@ def analyse(rec):
     #     R(cond) = phys_qhas(cond) / phys_classical(cond)
     #     shift   = R_unseen / R_canonical
     #
-    # ATTENTION — je l'avais d'abord presente comme une mesure « non
-    # confondue », par opposition au rapport des degradations. C'EST FAUX :
-    #     R_uns/R_can = (qu/cu)/(qc/cc) = (qu/qc)/(cu/cc) = deg_q/deg_c
-    # les deux quantites sont ALGEBRIQUEMENT IDENTIQUES, d'ou le meme |z|.
-    # Ce n'est donc qu'une reformulation, pas un controle supplementaire.
+    # ALGEBRIQUEMENT IDENTIQUE a deg_q/deg_c (meme |z|) : ce n'est qu'une
+    # reformulation, pas un controle supplementaire.
     #
-    # Le confondant demeure et n'est PAS traite ici : si la condition
-    # inedite est plus facile et que les deux bras butent sur un plancher
-    # commun (discretisation, budget), ils convergent quelle que soit la
-    # qualite de leur regle de decision, et le rapport se resserre
-    # mecaniquement. Distinguer « plancher commun » de « meilleur
-    # transfert » demanderait de mesurer ce plancher — non fait.
-    # On rapporte donc le nombre, et le seul enonce qui n'en depende pas
-    # reste le comptage de dominance.
+    # Confondant NON traite : si la condition inedite est plus facile et
+    # que les deux bras butent sur un plancher commun (discretisation,
+    # budget), ils convergent quelle que soit la qualite de leur regle de
+    # decision, et le rapport se resserre mecaniquement. On rapporte donc
+    # le nombre ; seul le comptage de dominance n'en depend pas.
     r_can = qc / cc if cc else float("nan")
     r_uns = qu / cu if cu else float("nan")
     shift = r_uns / r_can if r_can else float("nan")

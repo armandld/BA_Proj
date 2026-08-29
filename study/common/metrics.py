@@ -108,14 +108,10 @@ def threshold_transfer_flag(gt, proba, threshold, auc_floor=0.70, tol=0.005):
     Les deux rendent la meme chose — une prediction constante et un F1 au
     plancher — et le protocole §1.3-B3 les traite deja de la meme facon :
     `degeneracy_flag` les exclut des decomptes. Mais ce ne sont pas le meme
-    fait, et les confondre a coute une lecture.
-
-    Cas mesure (pli `harris_tearing`, LOSO, dim=16) : les probabilites du
-    GBT y plafonnent a 0.124 tandis que le seuil ajuste sur les scenarios
-    d'entrainement vaut 0.400. Aucun positif n'est predit sur 20 480
-    cellules, donc F1 = 0.000 — alors que l'AUC vaut 0.908 et que le F1 a
-    budget appaire vaut 0.659. Le CLASSEMENT est bon ; c'est l'operateur de
-    decision qui ne traverse pas la frontiere de scenario.
+    fait : un seuil ajuste sur les scenarios d'entrainement peut ne predire
+    aucun positif sur un fold LOSO tout en gardant une AUC elevee — le
+    CLASSEMENT est bon, c'est l'operateur de decision qui ne traverse pas
+    la frontiere de scenario.
 
     Renvoie un dict :
       degenerate            la prediction est-elle constante ?

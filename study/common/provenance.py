@@ -1,18 +1,11 @@
 """Provenance d'une execution longue — le hash pris AU BON MOMENT.
 
-DEFAUT D15
-----------
-`git_commit_hash()` etait appele au moment de SAUVEGARDER l'artefact. Une
-execution d'une heure se retrouvait donc estampillee avec ce qui avait ete
-commite pendant qu'elle tournait — c'est-a-dire, potentiellement, avec du
-code qu'elle n'a jamais execute.
-
-Ce n'est pas theorique. Les artefacts T20 de `ot` et `kh` portent un hash
-POSTERIEUR au commit qui a introduit `always_matched=True` dans leur propre
-controle classique, alors qu'ils ont execute la version d'avant. Python
-charge le module a l'import : editer le fichier pendant l'execution ne
-change rien au code qui tourne, mais change le hash qui sera ecrit. Le
-tampon de provenance pointait activement a cote de la verite.
+Appeler `git_commit_hash()` au moment de SAUVEGARDER l'artefact capture ce
+qui a ete commite PENDANT l'execution, pas le code reellement charge au
+demarrage : Python charge le module a l'import, donc un commit tombe en
+cours de route change le hash ecrit sans changer le code qui tourne. Deja
+observe en pratique : des artefacts geles portaient un hash qui ne
+decrivait pas le code qu'ils avaient reellement execute.
 
 CLAUDE.md exige le hash du commit dans chaque sortie. Ce module rend cette
 exigence utile pour les taches longues :

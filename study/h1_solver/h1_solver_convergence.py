@@ -21,9 +21,8 @@ solveur V1 (`MHDSolver`, importe, jamais reimplemente).
     l'energie totale (decroissance attendue pour un systeme dissipatif non
     force), sa monotonie, et max|div B| / rms|B| via l'operateur FD4 du
     solveur — celui qui construit `rhs_B` et donc celui qui garantit la
-    contrainte depuis D-25 (voir `div_B_matched`, D-72). L'operateur
-    spectral de la phase 1b mesurerait l'ecart entre deux stencils, pas la
-    contrainte.
+    contrainte (voir `div_B_matched`). L'operateur spectral de la phase 1b
+    mesurerait l'ecart entre deux stencils, pas la contrainte.
 
 (C) HORS GRILLE D'ENTRAINEMENT. Les memes diagnostics sont evalues a des
     Re/Rm situes en dehors de {400, 800, 1200, 1600}.
@@ -57,32 +56,15 @@ FIELDS = ("vx", "vy", "Bx", "By")
 def div_B_matched(Bx, By, dx):
     """Divergence de B avec l'operateur qui la GARANTIT — pas un autre.
 
-    D-72. Ce diagnostic utilisait `dns_validation.div_B`, qui est SPECTRALE.
-    Sa docstring dit pourquoi c'etait juste quand elle a ete ecrite : « same
-    convention as the solver's FFT projection ». Ce n'est plus la convention
-    du solveur depuis D-25 : `MHDSolver.PROJECT_B = False`, B n'est plus
-    projete spectralement.
-
-    Ce que le solveur garantit aujourd'hui est une divergence nulle AUX
-    DIFFERENCES FINIES : l'induction est en forme rotationnelle
-    `rhs_B = (dEz/dy, -dEz/dx)`, dont la divergence FD4 vaut
-    `d2Ez/dxdy - d2Ez/dydx`, exactement nulle puisque les decalages de
-    `np.roll` commutent. B est solenoidal par construction, dans l'operateur
-    meme qui construit le second membre.
-
-    Mesurer ce champ au spectral ne mesure donc pas la contrainte : cela
-    mesure l'ecart entre les deux operateurs. Mesure sur la configuration
-    publiee de T14 (orszag_tang, grilles 32/64/128, t_end=0.5, Re=400 puis
-    200/3200), rejouee a HEAD :
-
-      max|div B|/rms|B|, spectral (avant)   3.9029e-02   -> ALL CHECKS False
-      max|div B|/rms|B|, FD4 assorti (apres) 2.0266e-14  -> ALL CHECKS True
-
-    contre un seuil d'acceptation de 1e-3, et une valeur publiee « entre
-    5.6e-15 et 8.0e-14 — machine precision ». Le faux signal croissait quand
-    la grille grossissait (N=128 2.3103e-04, N=64 4.5675e-03, N=32
-    3.9029e-02) : la validation passait ou echouait selon la RESOLUTION,
-    pour une contrainte respectee a 1e-14 partout.
+    N'utilise PAS `dns_validation.div_B` (spectral) : cet operateur ne
+    correspond plus a la convention du solveur, qui ne projette plus B
+    spectralement (`MHDSolver.PROJECT_B = False`). B est aujourd'hui
+    solenoidal par construction aux DIFFERENCES FINIES — `rhs_B` en forme
+    rotationnelle, de divergence FD4 exactement nulle car les decalages de
+    `np.roll` commutent. Mesurer au spectral compare deux operateurs, pas la
+    contrainte reelle, avec un faux signal qui grandit aux grilles
+    grossieres alors que la contrainte FD4 reste a machine precision
+    partout.
 
     Le stencil n'est pas reimplemente : `_fd_grad` est celui de V1, celui-la
     meme qui assemble `rhs_Bx`/`rhs_By` dans `_compute_rhs_fd`.

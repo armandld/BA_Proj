@@ -87,27 +87,13 @@ def _downsample_fields(fields, y_s, y_e, x_s, x_e, target_dim, pad=0):
     mean in each coarse cell — appropriate for velocity/magnetic fields.
 
     Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue du
-    patch, comme dans `RescaleArrays._maxabs_pool_2d`.
+    patch, comme dans `RescaleArrays._maxabs_pool_2d` : decouper puis jeter
+    le reste de la division ferait decrire aux deux chemins des REGIONS
+    DIFFERENTES du domaine (systematiquement les dernieres lignes et
+    colonnes — precisement le HALO qui porte l'information de voisinage).
 
-    La version precedente decoupait `patch[:out_dim*bh, :out_dim*bw]` et
-    jetait le reste de la division. Ce n'etait pas neutre : le score, lui,
-    est reduit par max-pooling qui couvre 100 % du patch. Les deux chemins
-    decrivaient donc des REGIONS DIFFERENTES du domaine, et la cellule (i,j)
-    du score ne designait plus la cellule (i,j) des champs.
-
-    La perte tombe systematiquement du meme cote — les dernieres lignes et
-    colonnes — donc c'est un biais et non du bruit. Et ces dernieres lignes
-    sont precisement le HALO droit et bas, l'information de voisinage que
-    l'etude cherche a evaluer.
-
-    Le patch vaut `extent + 2*pad` (get_periodic_patch ajoute le halo) et la
-    cible `dim + 2*pad` ; la division tombe rarement juste. Pour N=256 et la
-    taille deployee dim=2 : 100 % a la profondeur 0 (pad=0), puis 98.5 %,
-    97.0 % et 94.1 % aux profondeurs 1, 2 et 3. Pour dim=8 a la profondeur 2,
-    90.9 %.
-
-    Quand h % out_dim == 0, les bornes retombent sur les memes blocs qu'avant
-    et la sortie est bit-a-bit identique.
+    Quand h % out_dim == 0, les bornes retombent sur les memes blocs et la
+    sortie est bit-a-bit identique.
     """
     result = {}
     out_dim = target_dim + 2 * pad
@@ -179,18 +165,11 @@ def _prepare_vqa_input(
     dx_eff = patch_phys_size / target_dim
     # `target_dim`, PAS `target_dim + 2 * pad` : a depth > 0,
     # `_process_score` emprunte `_resize_padded_maxpool`, dont le contrat
-    # est « entree (N+2, M+2) -> sortie (t_dim+2, t_dim+2) ». Le halo est
-    # donc deja ajoute par la fonction. L'appelant l'ajoutait une SECONDE
-    # fois : pour un coeur 2x2 il demandait t_dim=4 et recevait (6, 6),
-    # la ou les champs rendaient (4, 4).
-    #
-    # `H_edges` (biais Z, bati sur le score) et `C_edges` / `K_plaquettes`
-    # (bati sur les champs) decrivaient alors des grilles DIFFERENTES.
-    # `create_bounded_hamiltonian(dim=2)` lisait le coin superieur gauche
-    # du (6, 6) : le biais Z d'un patch venait du quart haut-gauche de ce
-    # patch, plus un halo situe deux cellules trop loin. Mesure sur
-    # `orszag_tang` apres 40 pas : ecart jusqu'a 0.05814 sur des
-    # coefficients dont le plus grand vaut 0.14107, soit 41 %. Voir D-37.
+    # est « entree (N+2, M+2) -> sortie (t_dim+2, t_dim+2) » — le halo est
+    # deja ajoute par la fonction. L'ajouter une seconde fois ici
+    # desalignerait `H_edges` (biais Z, bati sur le score) de `C_edges` /
+    # `K_plaquettes` (batis sur les champs) : les deux decriraient des
+    # grilles DIFFERENTES, le biais Z d'un patch lu avec un halo decale.
     mini_score_for_hamilt = _process_score(local_score, depth == 0, target_dim)
     mini_hamilt_params = HamiltMapper.compute_coefficients(
         sim, mini_score_for_hamilt, mini_fields, threshold_amr,
@@ -340,11 +319,9 @@ def _run_level(
         boundary_flags = _boundary_activation(prob_map, target_dim)
 
         if verbose:
-            # Le seuil AFFICHE doit etre celui APPLIQUE. Cette ligne
-            # recalculait une rampe en profondeur qui n'est plus utilisee
-            # (voir `effective_threshold` plus bas, ou elle est commentee) :
-            # le journal annonçait donc un seuil, et le code en appliquait un
-            # autre. Toute lecture des decisions dans le journal etait fausse.
+            # Le seuil AFFICHE doit etre celui APPLIQUE (voir
+            # `effective_threshold` plus bas) : sinon le journal annonce un
+            # seuil different de celui que le code applique reellement.
             effective_thr = threshold_amr
             print(f"\n  ┌─ Depth {depth} | Patch {bounds} | eff_threshold={effective_thr:.3f}")
             print(f"  │  θ-only  (before QAOA): {np.array2string(prob_map_avant_qaoa, precision=3, suppress_small=True)}")
@@ -382,15 +359,12 @@ def _run_level(
                 # Sondage de bord : signal marginal ET anomalie qui touche
                 # le bord dans cette direction -> on descend quand meme.
                 #
-                # La decision est prise AVANT la ventilation, en un seul
-                # if/elif/else. Auparavant le sondage etait un bloc separe
-                # qui rajoutait le sous-patch dans `next_level` APRES que la
-                # branche `else` l'eut deja enregistre comme feuille : la
-                # meme region etait alors comptee comme feuille non raffinee
-                # ET redecoupee au niveau suivant. Les patchs se recouvraient
-                # donc, et toute metrique de budget ou de couverture lue sur
-                # la liste finale surcomptait — jusqu'a 25 % du domaine au
-                # seuil deploye 0.1496, davantage a seuil plus eleve.
+                # La decision DOIT rester un seul if/elif/else : un bloc de
+                # sondage separe qui rajoute le sous-patch dans `next_level`
+                # APRES qu'une branche `else` l'ait deja enregistre comme
+                # feuille ferait compter la meme region deux fois (feuille
+                # non raffinee ET redecoupee), et tout budget/couverture lu
+                # sur la liste finale surcompterait.
                 should_probe = (
                     local_prob < effective_threshold
                     and local_prob >= effective_threshold * 0.5

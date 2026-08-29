@@ -85,21 +85,14 @@ EXHAUSTIVE_MAX_Q = 22
 
 
 def proxy_validation_message(summary):
-    """D-57 : ce que vaut vraiment la validation du proxy, imprime.
+    """Imprime ce que vaut reellement la validation du proxy glouton.
 
-    L'en-tete de la tache annonce « warm-started greedy (validated at
-    dim=2) », et `greedy_agrees_with_exhaustive` etait bien calcule — puis
-    range dans le JSON sans jamais etre imprime ni controle. Or c'est ce
-    nombre, et lui seul, qui autorise a lire les dimensions ou l'exhaustif
-    est hors de portee.
-
-    Mesure (N=96 et N=256, 12 instantanes, 4 scenarios canoniques) :
-    `--mapper v1`, le defaut de la tache, rend **0,7500** a dim=2 ;
-    `--mapper v2` rend 1,0000. Le 0,75 figure deja dans
-    `results/t26_size_scan_N256_v1.json`.
-
-    Aucun seuil n'est invente ici : la fonction rapporte, et n'avertit que
-    sur `< 1`, la seule valeur que « valide » puisse vouloir dire.
+    `greedy_agrees_with_exhaustive` est le seul nombre qui autorise a lire
+    les dimensions ou l'exhaustif est hors de portee -- il doit donc etre
+    imprime et controle, pas seulement calcule. Sous `--mapper v1` (le
+    defaut), il vaut 0,7500 a dim=2 : le proxy n'est PAS parfaitement
+    valide par defaut, seul `--mapper v2` rend 1,0000. Le seuil d'alerte
+    est `< 1` : la seule valeur que "valide" puisse vouloir dire.
     """
     checked = [s for s in summary if s.get("greedy_agreement") is not None]
     unchecked = [s for s in summary if s.get("greedy_agreement") is None]
@@ -268,11 +261,8 @@ def main():
         f1 = lambda a: float(np.mean([r["f1"] for r in sub
                                       if r["ablation"] == a]))
         f1c = float(np.mean([r["f1_classical"] for r in sub]))
-        # D-57 : `agree` etait calcule, range dans le JSON, et jamais
-        # imprime ni controle — alors que c'est LUI qui autorise a lire les
-        # dimensions ou seul le glouton tourne. Mesure : a `--mapper v1`
-        # (le defaut) et dim=2, il vaut 0,7500, valeur deja presente dans
-        # `t26_size_scan_N256_v1.json` sans que rien ne la montre.
+        # `agree` (validation du proxy) doit apparaitre ici, pas seulement
+        # dans le JSON -- voir `proxy_validation_message`.
         print(f"  {dim:4d} {sub[0]['n_qubits']:7d} {g('Z_only'):11.4f} "
               f"{f1('full'):8.4f} {f1('Z_only'):10.4f} {f1c:11.4f} "
               f"{uni:8.2f} "
@@ -322,8 +312,7 @@ def main():
     out.update(provenance.finish(prov))
     out["wall_s"] = time.time() - t0
     # Le mode de controle DOIT porter un nom distinct : sans cela il
-    # ecrase le scan qu'il sert a valider, et le defaut D9 recommence dans
-    # la tache ecrite pour trancher la question centrale de l'etude.
+    # ecrase le scan qu'il sert a valider.
     ctrl = "_forcegreedy" if args.force_greedy else ""
     op = os.path.join(
         RESULTS_DIR,

@@ -188,23 +188,12 @@ class PhysicalMapper:
     def _effective_crit(self, signal, crit_absolu):
         """Seuil effectif : `min(absolu, percentile)`.
 
-        Le seuil de maille est ABSOLU : `RE_CRIT nu/(dx^2 v0)`. Il croit
-        donc en 1/dx^2, et il est le MEME pour tous les scenarios. Deux
-        consequences mesurees :
-
-          - il meurt au raffinement. Sur un champ physique fixe (rotation
-            solide), `K_plaquettes` passe de 1.00e+02 a N=32 a EXACTEMENT
-            0 a N=256, la resolution d'entrainement.
-
-          - il ne peut pas servir deux instabilites d'amplitudes
-            differentes. |omega| vaut au maximum 1.55e-02 sur
-            harris_tearing et 1.96e+01 sur mhd_rotor : trois ordres de
-            grandeur, pour un seuil unique de 13.04.
-
-        Or l'information EST la. Contraste max/mediane du signal brut a
-        N=256 : 1104 sur harris_tearing (sqrt(det)), 223 sur
-        island_coalescence, 752 sur mhd_rotor. Ce n'est pas la structure
-        qui manque, c'est le seuil absolu qui l'efface.
+        Le seuil de maille est ABSOLU (`RE_CRIT nu/(dx^2 v0)`), croit en
+        1/dx^2, et est le MEME pour tous les scenarios : a la resolution
+        d'entrainement il peut s'effacer completement (aucune cellule ne
+        le franchit) meme quand le signal brut porte une vraie structure,
+        et un seuil unique ne peut pas servir deux instabilites
+        d'amplitudes tres differentes.
 
         D'ou `min(absolu, percentile)` :
 
@@ -289,8 +278,8 @@ class PhysicalMapper:
 
     # ══════════════════════════════════════════════════════════════════
     #  Physical score — NOT wired to θ initialization in the deployed
-    #  pipeline. See the docstring below (D-176, RESULTS.md) before
-    #  reading this header as a claim about production behaviour.
+    #  pipeline. See the docstring below before reading this header as a
+    #  claim about production behaviour.
     # ══════════════════════════════════════════════════════════════════
 
     LOHNER_CRIT = 0.3   # Löhner > 0.3 → genuine discontinuity
@@ -300,19 +289,11 @@ class PhysicalMapper:
         Physics-grounded instability score — an alternative to
         `AngleMapper.classical_score`, exercised only by the test suite.
 
-        D-176 : cette docstring annoncait "replaces classical_score for
-        theta initialization" et se presentait comme le score DEPLOYE.
-        C'etait deja faux avant D-9 (qui a corrige le seul appelant errone,
-        `h3_uncertainty_window.py`, sans toucher a cette ligne) et c'est
-        toujours faux : AUCUN site de `src/` ni de `study/` n'appelle
-        `physical_score` (verifie par grep, 0 site hors sa propre
-        definition et ses tests). Le theta-init deploye vient partout de
-        `AngleMapper.classical_score` (`refinement.py`, `qaoa_inputs.py`).
-        `physical_score` n'est ni mort au sens du bytecode -- ~30 sites de
-        tests l'appellent directement, comme formule alternative a
-        comparer -- ni vivant au sens du pipeline : aucun artefact publie
-        n'en depend. Hors chemin critique, comportement inchange : une
-        ligne dans `RESULTS.md`, pas d'entree `DEFAUTS.md`.
+        N'est appelee nulle part dans `src/` ni `study/` : le theta-init
+        deploye vient partout de `AngleMapper.classical_score`
+        (`refinement.py`, `qaoa_inputs.py`). Utilisee uniquement par les
+        tests comme formule alternative a comparer — ne pas lire cette
+        fonction comme une description du comportement de production.
 
         Each indicator is normalized by its **physical critical value**
         (not by the domain maximum). This ensures:
@@ -558,21 +539,11 @@ class PhysicalMapper:
         # difference finie en unites de GRILLE. `Q_OW`, lui, vient de
         # `_compute_q_criterion(..., dx=dx)` et est en unites PHYSIQUES.
         #
-        # Les deux portes topologiques comparaient donc des grandeurs de
-        # deux systemes d'unites differents a des seuils de meme ordre
-        # nominal (Q_CRIT = 2.0, J_CRIT = 1.0). La porte magnetique etait
-        # plus dure a franchir d'un facteur exactement 1/dx -- 10.2 a
-        # N=64, 20.4 a N=128, 40.7 a N=256 : elle se degradait quand la
-        # grille se raffine.
-        #
-        # Mesure avant, nappe de courant a N=64 : mic_jz = 1.541e-01 et
-        # f_Rm_cell = 8.346 (les deux sains), mais g_mag = 0.000, d'ou
-        # mag_comp = 1.816e-05 contre fluid_comp = 5.009e-01 sur un
-        # reseau de vortex -- un facteur 27 500 entre deux instabilites de
-        # meme nature.
-        #
-        # `g_mag` recoit desormais un Jz PHYSIQUE, comme `g_rot` recoit un
-        # Q_OW physique. Voir RESULTS.md.
+        # Comparer les deux a des seuils nominalement du meme ordre
+        # (Q_CRIT = 2.0, J_CRIT = 1.0) rendrait la porte magnetique plus
+        # dure a franchir d'un facteur 1/dx — se degradant quand la grille
+        # se raffine. `g_mag` recoit donc un Jz PHYSIQUE, comme `g_rot`
+        # recoit un Q_OW physique.
         Jz_phys = Jz_curl / max(dx, 1e-10)
         g_mag = self._g_mag(Jz_phys, self.J_CRIT, self.kappa)
 
@@ -605,12 +576,11 @@ class PhysicalMapper:
         K_plaquettes = -1.0 * np.sqrt(fluid_comp**2 + mag_comp**2)
 
         # ── Etages observables ─────────────────────────────────────
-        # Le desequilibre entre canal fluide et canal magnetique ne peut
-        # pas etre diagnostique en RECALCULANT les etages a cote : trois
-        # fois de suite, une reproduction incomplete a fait accuser du code
-        # juste. On expose donc les composantes telles que la fonction les
-        # a calculees. `_stages` n'est lu que par les tests et les
-        # diagnostics ; aucun chemin de production ne le consulte.
+        # Exposees telles que la fonction les a calculees plutot que
+        # RECALCULEES a cote pour diagnostic : une reproduction incomplete
+        # accuserait a tort du code juste. `_stages` n'est lu que par les
+        # tests et les diagnostics ; aucun chemin de production ne le
+        # consulte.
         self._stages = {
             "g_rot": g_rot, "g_mag": g_mag,
             "f_Re_cell": f_Re_cell, "f_Rm_cell": f_Rm_cell,
@@ -627,10 +597,9 @@ class PhysicalMapper:
         # ZZ/ZZZZ. We scale it relative to a GLOBAL summary of the
         # multi-body coupling strength.
         #
-        # Using the global MAX caused a single outlier (e.g. C=-1193 at
-        # the Orszag-Tang current sheet) to over-inflate alpha for all
-        # cells. The MEDIAN of non-zero |C| and |K| values is robust to
-        # outliers while still reflecting the typical coupling scale.
+        # The global MAX lets a single outlier cell over-inflate alpha for
+        # every cell. The MEDIAN of non-zero |C| and |K| values is robust
+        # to outliers while still reflecting the typical coupling scale.
         # w_z_frac ∈ [0.05, 0.5], default 0.15.
         all_coeffs = np.concatenate([
             np.abs(C_horiz).ravel(),
@@ -673,22 +642,12 @@ class PhysicalMapper:
             # gradients de B. On emploie donc la normalisation et le seuil du
             # canal courant, deja definis plus haut (`jz_crit`).
             #
-            # L'ancienne forme comparait `sig / (B0/dx)^2` a
-            # `(RM_CRIT eta / (dx B0))^2`. `sig` est un gradient AU CARRE
-            # normalise par une seule puissance de dx^2, puis compare a un
-            # seuil lui-meme au carre : le rapport variait en **dx^4**. Le
-            # critere devenait donc moins susceptible de se declencher a
-            # mesure que la grille se raffine, a la puissance quatre.
-            #
-            # Mesure du rapport signal/seuil (il faut depasser 1 pour tirer) :
-            #
-            #                        N=64     N=128    N=256   loi
-            #   ancienne forme      0.171    0.0105   0.0007   dx^4
-            #   forme actuelle      0.414    0.1025   0.0256   dx^2
-            #   |Jz|, reference     5.137    1.349    0.341    dx^2
-            #
-            # La forme actuelle suit la meme loi que le canal courant, ce que
-            # la coherence dimensionnelle impose. Voir RESULTS.md.
+            # Comparer un signal AU CARRE normalise par une seule puissance
+            # de dx^2 a un seuil lui-meme au carre ferait varier le rapport
+            # en dx^4 : le critere deviendrait exponentiellement moins
+            # susceptible de se declencher a mesure que la grille se
+            # raffine. La forme actuelle suit la meme loi (dx^2) que le
+            # canal courant, ce que la coherence dimensionnelle impose.
             xpoint_grad = np.sqrt(xpoint_signal) / max(B0, 1e-10)
 
             # Meme critere relatif, mais sur la distribution DE CE CANAL :
@@ -702,23 +661,15 @@ class PhysicalMapper:
             )
 
             # PAS de `f_Rm_cell` ici : cette porte vaut
-            # `_f_gate(|B| dx / eta)` et un point X est PAR DEFINITION un
-            # zero de B. Elle annulait donc le coefficient exactement a
-            # l'endroit qu'il doit signaler, ne laissant que l'anneau
-            # autour. Mesure sur une nappe de 2 cellules a N=256 : seuil au
-            # point X = 0.5292, porte au point X = 0.0000 (sur les six
-            # epaisseurs testees), coefficient resultant 0.0000 contre
-            # 0.8537 sur l'anneau.
+            # `_f_gate(|B| dx / eta)`, et un point X est PAR DEFINITION un
+            # zero de B — elle annulerait le coefficient exactement la ou
+            # il doit signaler, ne laissant que l'anneau autour. Verifie
+            # par `tests/mapping/test_xpoint_at_training_resolution.py`.
             #
-            # Le commentaire d'origine annoncait deja « No separate g-gate
-            # needed (signal is intrinsically localized) » pendant que le
-            # code appliquait la porte : le commentaire et le code se
-            # contredisaient. Voir tests/mapping/test_xpoint_at_training_resolution.py
-            #
-            # ATTENTION — ce retrait ne suffit pas a faire tirer le terme sur
-            # des champs REELS : a N=256 le seuil lui-meme n'est pas atteint
-            # (signal/seuil = 7e-4 sur island_coalescence). La normalisation
-            # est le second verrou, et il reste ouvert. Voir RESULTS.md.
+            # ATTENTION — ce retrait ne suffit pas a faire tirer le terme
+            # sur des champs REELS : a N=256 le seuil lui-meme n'est pas
+            # atteint. La normalisation est le second verrou, et il reste
+            # ouvert. Voir RESULTS.md.
             #
             # Even-parity ZZZZ: output negative so cost_hamiltonian uses as-is
             K_xpoint = -1.0 * mic_xpoint

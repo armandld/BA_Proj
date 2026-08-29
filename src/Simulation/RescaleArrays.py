@@ -19,13 +19,10 @@ def _maxabs_pool_2d(arr, target_h, target_w):
     if bh < 1 or bw < 1:
         return zoom(arr, (target_h / h, target_w / w), order=1)
 
-    # Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue.
-    #
-    # La version precedente decoupait `arr[:target_h*bh, :target_w*bw]` :
-    # le reste de la division etait purement jete. Pour 10x10 -> 3x3, les
-    # lignes et colonnes 9 disparaissaient, soit 19 cellules sur 100, et un
-    # pic isole qui s'y trouvait s'evanouissait sans trace — exactement
-    # l'anomalie que ce pooling existe pour preserver.
+    # Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue :
+    # tronquer puis jeter le reste de la division ferait disparaitre les
+    # dernieres lignes/colonnes sans trace — exactement l'anomalie que ce
+    # pooling existe pour preserver.
     #
     # Quand h % target_h == 0 (le cas du chemin deploye, 256 vers 2/4/8),
     # les bornes retombent sur les memes blocs qu'avant : la sortie est
@@ -151,10 +148,9 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     un gros bloc doit survivre a la reduction ; c'est la raison d'etre de
     ces trois quantites.
 
-    Le flux passait auparavant par un lissage puis une interpolation
-    bilineaire, au motif qu'il serait un champ lisse. Il ne l'est pas :
-    Phi est bati sur des DIFFERENCES de champ et pique la ou le score
-    pique. Voir `_process_flux` pour la mesure.
+    Le flux n'est PAS un champ lisse — Phi est bati sur des DIFFERENCES de
+    champ et pique la ou le score pique — d'ou le max-abs pooling plutot
+    qu'un lissage puis interpolation bilineaire. Voir `_process_flux`.
 
     type_filter=True  (depth 0) : global periodic scan.
     type_filter=False (depth>0) : local sub-domain with halo.
@@ -170,26 +166,17 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
 
     # ── Flux dispatch (max-abs pool — anomaly preservation) ───────────
     #
-    # Le flux passait auparavant par un lissage 3x3 puis `zoom(order=1)`,
-    # justifie par « smooth physical fields ». Mais Phi n'est PAS un champ
-    # lisse : c'est un indicateur d'anomalie, construit sur des DIFFERENCES
-    # de champ, qui pique aux chocs et aux nappes de courant — exactement
-    # comme le score et les coefficients, que ce fichier max-poole deja.
-    #
-    # Un zoom bilineaire ECHANTILLONNE, il ne moyenne pas. Mesure : un pic
-    # isole place a 256 positions differentes dans un patch 128 -> 4 ne
-    # survivait qu'a UNE d'entre elles ; place au centre il rendait
-    # exactement 0.0000 la ou le max-pooling rend 1000 et la moyenne de
-    # bloc 0.98. Sur champs DNS reels, part du pic de Phi conservee :
-    # orszag_tang 38 %, mhd_rotor 70 %, kelvin_helmholtz et harris_tearing
-    # 100 %.
-    #
-    # Le lissage prealable aggravait le tout : il diluait le pic AVANT de
-    # l'echantillonner, alors que `_process_score` porte explicitement
-    # « No smoothing! » pour cette raison.
+    # Phi n'est PAS un champ lisse : c'est un indicateur d'anomalie,
+    # construit sur des DIFFERENCES de champ, qui pique aux chocs et aux
+    # nappes de courant — comme le score et les coefficients, que ce
+    # fichier max-poole deja. Un lissage puis zoom bilineaire les traiterait
+    # comme un champ lisse : le zoom ECHANTILLONNE (il ne moyenne pas), donc
+    # un pic isole ne survit qu'a une fraction des positions possibles dans
+    # le bloc, et un lissage prealable le dilue encore avant cet
+    # echantillonnage.
     #
     # Les trois chemins qui descendent vers le VQA — score, coefficients,
-    # flux — appliquent desormais la meme reduction.
+    # flux — appliquent donc la meme reduction (max-abs pooling).
     def _process_flux(arr, is_periodic_scan):
         if arr is None:
             return None
@@ -219,9 +206,9 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
         for key, value in hamilt_params.items():
             if key == 'E_max':
                 # E_max est un scalaire d'echelle, pas un champ : il ne doit
-                # PAS etre reduit. Le `if` suivant etait un `if` et non un
-                # `elif`, si bien qu'un E_max devenu tableau aurait ete
-                # silencieusement remplace par sa version poolee.
+                # PAS etre reduit. Le `elif` est necessaire — avec un `if`
+                # independant, un E_max devenu tableau se ferait remplacer
+                # en silence par sa version poolee.
                 mini_hamilt_params[key] = value
             elif isinstance(value, (tuple, list)):
                 mini_hamilt_params[key] = tuple(

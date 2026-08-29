@@ -109,15 +109,9 @@ class MHDSolver:
         # B = (B0 cos alpha(y), B_guide) — solénoïdal PAR CONSTRUCTION :
         # Bx ne dépend pas de x et By est constant, donc div B = 0 exactement.
         #
-        # La version précédente posait B = (B0 cos alpha, B0 sin alpha). Ce
-        # champ a div B = alpha'(y) cos(alpha) != 0 — mesuré 2.62 — et toute
-        # la composante By y était un pur gradient. `enforce_incompressibility`
-        # l'annulait donc intégralement : |By| tombait de 0.707 à 1.6e-6, et
-        # la direction du champ ne tournait plus du tout (amplitude d'angle
-        # 6.4e-7 au lieu de pi/2). Le scénario ne posait aucune torsion.
-        # (D-6 : même défaut, même correction, que `init_ghost_twisting`
-        # portait avant sa retraite — la même fonction guide/transverse
-        # ci-dessous répare les deux.)
+        # Poser B = (B0 cos alpha, B0 sin alpha) à la place n'est PAS à
+        # divergence nulle en 2-D : `enforce_incompressibility` y annulerait
+        # alors la torsion elle-même, silencieusement.
         #
         # En 2-D, un champ solénoïdal dont la direction tourne exige que la
         # composante parallèle à la variation reste constante : c'est ce que
@@ -148,12 +142,12 @@ class MHDSolver:
     def init_noisy_uniform(self, B0=1.0, noise_sigma=0.05, seed=42):
         X = self.grid.X
         rng = np.random.default_rng(seed)
-        # D-27 : bruit tiré d'une fonction de flux, donc solénoïdal par
-        # construction. La version précédente tirait Bx et By
-        # indépendamment : `enforce_incompressibility` n'en gardait que la
-        # moitié solénoïdale, et `noise_sigma` n'était pas la déviation
-        # obtenue. Ici on tire psi, on prend son rotationnel, puis on
-        # renormalise pour que l'écart-type demandé soit celui produit.
+        # Bruit tiré d'une fonction de flux, donc solénoïdal par
+        # construction : tirer Bx et By indépendamment ne serait
+        # solénoïdal qu'à moitié après projection, et `noise_sigma` ne
+        # serait plus l'écart-type réellement obtenu. On tire psi, on
+        # prend son rotationnel, puis on renormalise pour que l'écart-type
+        # demandé soit celui produit.
         psi = rng.standard_normal(X.shape)
         bx, by = self._curl_z_fd4(psi, self.dx)
         scale = noise_sigma / max(float(np.std(np.concatenate([bx.ravel(),
@@ -183,10 +177,10 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Perturbation magnétique pour déclencher la tearing mode.
-        # D-27 : posée par fonction de flux, donc à divergence nulle par
-        # construction. La version précédente ne posait que `dBy` ; la
-        # projection en retirait 72.5 %.
+        # Perturbation magnétique pour déclencher la tearing mode, posée
+        # par fonction de flux : à divergence nulle par construction. Ne
+        # poser que `dBy` seul se ferait en grande partie retirer par la
+        # projection.
         u1 = (Y - np.pi / 2) / shear_width
         u2 = (Y - 3 * np.pi / 2) / shear_width
         env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
@@ -269,14 +263,13 @@ class MHDSolver:
             - np.tanh((Y - (3 * np.pi / 2 + d)) / shear_width)
             - 2.0
         )
-        # Perturbation pour la tearing.
-        # D-27 : posée par fonction de flux. `_solenoidal_perturbation` pose
-        # `dBy ~ cos(kx)` ; ici la version historique était en `sin(kx)`, on
-        # décale donc la phase de -pi/(2k) pour retrouver le même profil.
+        # Perturbation pour la tearing, posée par fonction de flux (à
+        # divergence nulle par construction).
         g1 = np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
         g2 = np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
         env = g1 + g2
-        # profil historique en sin(kx) : psi = (amp/k) cos(kx) f(y)
+        # cos(kx) ici (plutôt que sin) donne le même profil physique,
+        # après décalage de phase.
         psi = (perturbation / k_mode) * np.cos(k_mode * X) * env
         dBx, dBy = self._curl_z_fd4(psi, self.dx)
         self.Bx = self.Bx + dBx
@@ -370,8 +363,8 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Stronger perturbation to drive island coalescence.
-        # D-27 : posée par fonction de flux (voir harris_tearing).
+        # Stronger perturbation to drive island coalescence, posée par
+        # fonction de flux (voir harris_tearing).
         u1 = (Y - np.pi / 2) / shear_width
         u2 = (Y - 3 * np.pi / 2) / shear_width
         env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
@@ -397,11 +390,9 @@ class MHDSolver:
         `div(rot psi) = d_x d_y psi - d_y d_x psi` : exactement nul, parce
         que les deux dérivées FD4 sont des combinaisons de `np.roll` et
         commutent. Dériver `psi` analytiquement ne donnerait la contrainte
-        qu'à la précision de discrétisation — mesuré 2.1e-05 au lieu de
-        1e-16 sur `harris_tearing`.
-
-        La leçon vaut au-delà d'ici : une contrainte discrète ne se satisfait
-        que dans l'opérateur qui la mesure.
+        qu'à la précision de discrétisation, pas exactement — une
+        contrainte discrète ne se satisfait que dans l'opérateur qui la
+        mesure.
         """
         g_x, g_y = MHDSolver._fd_grad(psi, dx)
         return g_y, -g_x
@@ -446,24 +437,12 @@ class MHDSolver:
         de `np.roll` commutent. B est donc solenoidal par construction, dans
         l'operateur meme qui construit le second membre.
 
-        La projection, elle, est SPECTRALE. Appliquee a un champ deja a
-        divergence FD nulle, elle ne le nettoie pas : elle y injecte le
-        desaccord entre les deux operateurs. Mesure sur Orszag-Tang N=64,
-        divergence FD4 du champ B :
-
-          second membre                        1.97e-14
-          etat, 50 pas SANS projection         1.00e-14
-          etat, 50 pas AVEC projection         4.63e-07
-
-          ordre en temps, T=0.05, 256 pas :
-            projection v et B    erreur 1.185e-05   div_FD B = 4.877e-06
-            projection de v seul erreur 1.185e-05   div_FD B = 2.818e-14
-
-        Huit ordres de grandeur sur la contrainte, pour une erreur identique
-        a la quatrieme decimale. La projection de B ne coutait rien en
-        precision et degradait la seule chose qu'elle etait censee garantir.
-
-        La vitesse, elle, en a besoin : `div_FD(rhs_v)` vaut 4.17 en relatif.
+        La projection, elle, est SPECTRALE : un operateur DIFFERENT de
+        celui qui a construit B. Appliquee a un champ deja a divergence FD
+        nulle, elle ne le nettoie pas — elle y injecte le desaccord entre
+        les deux operateurs, degradant la precision sans rien garantir de
+        plus. La vitesse, elle, en a reellement besoin : sa divergence FD
+        n'est PAS nulle analytiquement.
 
         `PROJECT_B = True` reproduit le chemin historique bit a bit.
         """
@@ -474,25 +453,13 @@ class MHDSolver:
     def is_diverged(self, max_value=1e8):
         """Check if any field has NaN, Inf, or has blown up beyond physical limits.
 
-        Le seuil valait 1e100, ce qui le rendait inerte : `float64` ne
-        deborde qu'au-dela de ~1e154, donc un champ a 1e50 — physiquement
-        mort, 1e49 fois l'echelle du probleme — passait sans un mot. Seuls
-        NaN et Inf etaient reellement attrapes, et ils n'arrivent qu'apres
-        que le run a cesse d'avoir un sens.
-
-        Mesure sur les quatre scenarios, 200 pas a CFL 0.4 :
-
-          orszag_tang       1.81      kelvin_helmholtz  1.50
-          mhd_rotor         3.85      harris_tearing    1.00
-
-        Pic a 3.85. Le seuil de 1e8 laisse donc une marge de 2.6e7 sur le
-        comportement observe — aucun transitoire legitime ne s'en approche —
-        tout en attrapant une divergence quatre-vingt-douze ordres de
-        grandeur plus tot qu'avant.
-
-        Une divergence MHD croit exponentiellement : elle traverse 1e8 en
-        route vers 1e100. Abreger plus tot ne perd donc aucun run viable, et
-        laisse le score partiel se calculer sur des champs moins corrompus.
+        Le seuil doit rester petit devant l'echelle de l'overflow `float64`
+        (~1e154) mais tres grand devant l'echelle physique legitime des
+        scenarios de ce depot (champs d'ordre 1-4) : un seuil demesurement
+        haut ne detecterait plus qu'un run deja depourvu de sens (NaN/Inf).
+        Une divergence MHD croit exponentiellement, donc couper tot ne
+        perd aucun run viable et laisse le score partiel se calculer sur
+        des champs moins corrompus.
 
         `max_value` reste un parametre : un appelant qui travaille a une
         autre echelle peut l'elargir explicitement.
@@ -590,25 +557,20 @@ class MHDSolver:
                 By + (dt / 2.0) * (k1[3] + k2[3]))
     
     #: Projeter le SECOND MEMBRE a chaque etage RK4 plutot que l'ETAT une
-    #: fois le pas fini. Voir `_rk4_step` pour la mesure d'ordre : 4.00 au
-    #: lieu de 1.22, a divergence egale.
+    #: fois le pas fini (voir `_rk4_step` pour le gain d'ordre).
     #:
     #: PAR DEFAUT False, malgre ce gain, parce que la correction n'est
     #: VALIDE QUE SUR `step_full`. `_rk4_step` a trois appelants :
     #:
-    #:   step_full       champ global periodique       -> projection valide
+    #:   step_full       champ global periodique        -> projection valide
     #:   step_layered/1  champ global sous-echantillonne -> periodique, mais
-    #:                   d'une autre TAILLE que self.grid : la projection
-    #:                   leve (operands could not be broadcast, (256,256)
-    #:                   contre (8,8))
-    #:   step_layered/2  patch LOCAL avec halo          -> pas periodique,
-    #:                   une projection spectrale periodique n'y est pas
-    #:                   definie
+    #:                   d'une autre TAILLE que self.grid : la projection leve
+    #:   step_layered/2  patch LOCAL avec halo           -> pas periodique,
+    #:                   une projection spectrale periodique n'y est pas definie
     #:
     #: Projeter les deux premiers et pas le troisieme romprait la garantie
-    #: « a max_depth, step_layered est identique a step_full ». Le choix
-    #: — projection par taille de grille, formulation a pression, ou autre —
-    #: est une decision de modelisation, pas une correction de defaut.
+    #: « a max_depth, step_layered est identique a step_full » : etendre ce
+    #: flag est une decision de modelisation, pas une correction de defaut.
     PROJECT_RHS = False
 
     def _projected_rhs(self, vx, vy, Bx, By, dx, nu, eta):
@@ -635,26 +597,15 @@ class MHDSolver:
     def _rk4_step(self, vx, vy, Bx, By, dx, dt, nu=None, eta=None):
         """Integration temporelle Runge-Kutta d'ordre 4 (RK4).
 
-        Ordre en temps mesure a grille FIXE (N=96, T=0.5, Orszag-Tang), en ne
-        raffinant que le pas de temps, chaque schema compare a sa propre
-        reference a 1024 pas :
+        Projeter l'ETAT apres un pas RK4 complet degrade l'ordre du schema
+        a 1 (splitting de Lie) ; projeter le SECOND MEMBRE a chaque etage
+        preserve l'ordre 4 de RK4 tout en controlant la divergence aussi
+        bien que la projection de l'etat. Ne pas projeter du tout garde
+        aussi l'ordre 4 mais laisse la divergence exploser.
 
-          schema                     32 pas      256 pas    ordre   max|div v|
-          projection de l'ETAT     1.098e-02   1.093e-03   1.0->1.2   5.04e-03
-          projection du SECOND M.  8.610e-08   2.093e-11   **4.00**   5.11e-03
-          aucune projection        1.908e-03   4.790e-07   3.95->4.01 5.89e+00
-
-        La projection du second membre rend les DEUX : l'ordre 4 du schema
-        (erreur 52 000 fois plus petite a 256 pas) et le controle de la
-        divergence au meme niveau que la projection de l'etat. Ne pas
-        projeter du tout donne bien l'ordre 4, mais laisse la divergence
-        exploser d'un facteur 1150.
-
-        A ne pas confondre avec un splitting de Strang, qui ne s'applique
-        pas ici : il suppose deux FLOTS decoupables en demi-pas, alors que la
-        projection est un projecteur idempotent. Verifie — `P.RK4.P` rend des
-        erreurs identiques a `P.RK4` a la derniere decimale, puisque l'etat
-        est deja dans le sous-espace au moment de la premiere projection.
+        A ne pas confondre avec un splitting de Strang : la projection est
+        un projecteur idempotent (P.P = P), pas un flot decoupable en
+        demi-pas.
         """
         _rhs = self._projected_rhs if self.PROJECT_RHS else self._compute_rhs_fd
 
@@ -729,17 +680,13 @@ class MHDSolver:
 
         1. ÉCHANTILLONNAGE AUX NŒUDS. `PeriodicGrid` pose ses points sur
            `linspace(0, L, N, endpoint=False)`, donc le point fin j tombe à
-           l'indice grossier j / factor. La version précédente visait
-           `(j + 0.5) / factor - 0.5`, convention centre-de-cellule, d'où un
-           décalage constant de -0.375 cellule grossière à factor = 4.
+           l'indice grossier j / factor — PAS la convention centre-de-cellule
+           `(j + 0.5) / factor - 0.5`.
 
         2. mode='grid-wrap'. Depuis scipy 1.6, `mode='wrap'` n'est PAS
            l'enroulement périodique : il traite le tableau comme si le
            premier et le dernier échantillon coïncidaient. C'est
            `'grid-wrap'` qui réalise la topologie torique.
-
-        Mesure sur sin(x)cos(y), 32 → 128 : l'erreur passe de 2.49e-1 à
-        7.74e-6, soit quatre ordres de grandeur.
         """
         if factor == 1: return field
         Nc = field.shape[0]

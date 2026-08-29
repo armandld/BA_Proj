@@ -202,20 +202,13 @@ def best_threshold_f1(scores, gt, grid=None):
 # -------------------------------------------------------------------
 
 def make_model(name, seed, early_stopping="auto"):
-    """`early_stopping` ne s'applique qu'a `"gbt"` (D-198/D-199, USER
-    26 aout : "il faut etre absolument surs qu'ils ne surapprennent
-    pas"). Par defaut `"auto"` — LITTERALEMENT le defaut sklearn
-    d'avant cette fonction, comportement bit-a-bit inchange pour les
-    appelants existants — ce module a 12 consommateurs de `make_model`,
-    dont les nombres publies de H2b ne sont pas tous revisites ici.
-    `"auto"` ne declenche l'arret anticipe QUE si `n_samples > 10000` ;
-    verifie directement sur un fold LOSO reel (`n_train=1280`) :
-    `do_early_stopping_` reste Faux, `n_iter_` va au bout des 300 avec
-    `l2_regularization=0.0` — aucune protection reelle sur des jeux de
-    cette taille, malgre le nom du parametre. `early_stopping=True`
-    l'impose explicitement (10 % du train interne, 10 iterations sans
-    progres, L2 non nulle) au lieu de compter sur un seuil qui ne mord
-    jamais ici."""
+    """`early_stopping` ne s'applique qu'a `"gbt"`. Par defaut `"auto"`
+    (le defaut sklearn, garde pour la compatibilite avec les nombres H2b
+    deja publies) : piege, `"auto"` ne declenche l'arret anticipe que si
+    `n_samples > 10000`, ce qui n'arrive jamais ici (ex. un fold LOSO reel
+    a n_train=1280) -- aucune protection reelle contre le surapprentissage
+    malgre le nom du parametre. `early_stopping=True` l'impose
+    explicitement (validation interne, arret sur plateau, L2 non nulle)."""
     if name == "lr":
         return Pipeline([
             ("scale", StandardScaler()),
@@ -297,11 +290,8 @@ def main():
             else:
                 print(f"  SKIP {sc} Re={re}: missing input")
     if not configs:
-        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
-        # la campagne precedente. Une campagne qui n'avait rien mesure etait
-        # indiscernable d'une campagne reussie. Onze autres modules de
-        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        # Rendre la main avec le code 0 et sans artefact laisserait celui
+        # de la campagne precedente passer pour un resultat frais.
         raise RuntimeError(
             "balayage vide : aucune configurations n'a d'artefact d'entree pour les "
             "arguments donnes. Le script sortait ici avec le code 0 et sans "

@@ -106,13 +106,11 @@ class AngleMapper:
         du decalage.
 
         fixed_flux=False conserve l'ordre historique, ecrit sous la convention
-        inverse (axis=1 lu comme x). Il place la composante transverse dans la
-        case de la normale : la diode de choc s'applique alors au cisaillement
-        — dont le signe ne porte aucune information de compression — et la
-        compression passe par `np.abs` dans la branche de cisaillement. Sur des
-        champs analytiques ce chemin rend un rapport compression/cisaillement
-        de 0.5 la ou la conception en demande 2.0, et rend la diode inerte
-        (compression et expansion donnent le meme flux).
+        inverse (axis=1 lu comme x) : il place la composante transverse dans
+        la case de la normale, donc la diode de choc s'applique au
+        cisaillement (dont le signe ne porte aucune information de
+        compression) plutot qu'a la compression reelle — la rendant inerte
+        (compression et expansion produisent alors le meme flux).
 
         Returns dict with:
             'phi_horizontal', 'phi_vertical'            — flux magnitudes

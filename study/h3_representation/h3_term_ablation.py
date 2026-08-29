@@ -169,20 +169,18 @@ def main():
                         uniform=bool(uni), n_optima=n_opt,
                         f1=f1_from_masks(mask, gt),
                         refined=float(np.mean(mask)),
-                        # D-54 : sans cette colonne, « changed = 0 » sur une
-                        # ablation qui n'a rien retire est indiscernable d'un
-                        # terme reellement inerte — les deux impriment 0,0000.
+                        # Distingue « rien retire » de « terme inerte » :
+                        # les deux donnent changed=0, seul removed_max les
+                        # separe.
                         removed_max=coefficients_removed(hp, hp_ab, args.dim),
                         dE=float(E - base_E)))
                 print(f"  {sc:<18} Re={re} snap={si:<3} "
                       f"base_uniform={base_uni}")
 
     if not rows:
-        # D-55 : le script imprimait « no input. » et sortait avec le code 0,
-        # sans ecrire d'artefact — donc en laissant en place celui d'une
-        # campagne precedente, indiscernable d'une campagne reussie. Meme
-        # defaut, meme formulation que la correction deja faite dans
-        # `h0_optimiser_equivalence.main`.
+        # Rendre la main avec le code 0 et sans artefact laisserait celui
+        # d'une campagne precedente passer pour un resultat frais (meme
+        # garde qu'ailleurs dans study/, ex. `h0_optimiser_equivalence.main`).
         raise RuntimeError(
             f"balayage vide : aucun des scenarios {args.scenario} n'a "
             f"d'artefacts d'entree a N={args.N} dim={args.dim} "
@@ -230,7 +228,7 @@ def main():
         n_optima=np.array([r["n_optima"] for r in rows]),
         f1=np.array([r["f1"] for r in rows]),
         refined=np.array([r["refined"] for r in rows]),
-        # D-54 : ce que `build_ising_terms` a reellement produit en moins.
+        # Ce que `build_ising_terms` a reellement produit en moins.
         removed_max=np.array([r["removed_max"] for r in rows]),
         dE=np.array([r["dE"] for r in rows]),
         seed=args.seed, git_hash=git_commit_hash(),
@@ -248,32 +246,24 @@ def main():
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  CONTROLE — D-54
+#  CONTROLE
 # ══════════════════════════════════════════════════════════════════════
+#  Le controle `full` compare `ground_state_mask` sur la MEME entree des
+#  deux cotes : il vaut 0 par construction et ne verifie que la
+#  reproductibilite de la chaine de mesure, pas les ablations elles-memes.
 #
-#  Le controle `full` compare `ground_state_mask(zero_hamiltonian_terms(hp,
-#  ()))` a `ground_state_mask(hp)` : la MEME fonction sur la MEME entree.
-#  Il vaut 0 par construction et ne peut echouer que sur un indeterminisme
-#  d'`exhaustive_ground_state`, qui n'en a pas.
-#
-#  Mesure : en sabotant `TERM_KEYS` pour que plus rien ne soit jamais mis a
-#  zero (orszag_tang Re=400 N=64 dim=2, 2 instantanes), le controle rend
-#  0,000000 des DEUX cotes, et `no_ZZ` / `no_ZZZZ` / `Z_only` rendent
-#  0,0000 des deux cotes — les trois lignes memes qui portent la lecture
-#  « causalement inertes ». Le controle ne les distingue pas.
-#
-#  Ce qui les distingue est `removed_max` : ce que `build_ising_terms`
-#  produit reellement en moins. Une ablation a `changed = 0` ET
-#  `removed_max = 0` n'a rien retire — c'est le cas de `K_xpoint` (D-51) —
-#  et ne dit rien de l'inertie du terme.
+#  Il ne peut PAS detecter une ablation qui n'a rien retire : "rien
+#  retire" et "terme causalement inerte" donnent tous deux changed=0.
+#  Verifier aussi `removed_max` (ce que `build_ising_terms` a reellement
+#  produit en moins) -- c'est le cas de `K_xpoint`.
 CONTROL_ABLATION = "full"
 
 
 def control_and_reading(rows):
     """Le bloc de conclusion, extrait pour etre testable sans rejouer le
-    balayage (meme decoupage que D-46 / D-50 / D-52). Leve si le controle
-    ne vaut pas exactement 0 : il etait jusqu'ici imprime avec la mention
-    « (must be 0.0) » et rien ne l'exigeait."""
+    balayage (meme decoupage que les autres fonctions `*_message`/`*_lines`
+    du depot). Leve si le controle ne vaut pas exactement 0, plutot que de
+    se contenter d'un libelle non verifie."""
     ctrl_rows = [r for r in rows if r["ablation"] == CONTROL_ABLATION]
     if not ctrl_rows:
         raise RuntimeError(

@@ -53,19 +53,15 @@ def normalise_per_scenario(X):
     """Centre-reduit chaque colonne de X avec la moyenne/ecart-type de X
     LUI-MEME (un scenario a la fois, avant tout pool entre scenarios).
 
-    D-198 : le score classique (feature 0) a une echelle absolue tres
-    differente d'un scenario a l'autre (moyenne classe positive 0,65 sur
-    mhd_rotor contre 0,38 sur orszag_tang) — un GBT qui apprend un seuil
-    sur l'echelle brute, poolee sur 3 scenarios d'entrainement, transfere
-    mal au 4e si son echelle differe. Normaliser par scenario, AVANT le
-    pool LOSO, place chaque scenario sur une echelle commune sans exiger
-    de connaitre le scenario tenu (chaque scenario se normalise avec ses
-    PROPRES statistiques, disponibles qu'il soit dans le pool
-    d'entrainement ou tenu a l'ecart — aucune fuite entre scenarios).
+    Le score classique (feature 0) a une echelle absolue tres differente
+    d'un scenario a l'autre : un seuil appris sur l'echelle poolee des
+    scenarios d'entrainement transfere mal a un scenario tenu dont
+    l'echelle differe. Normaliser par scenario AVANT le pool LOSO evite ca
+    sans fuite (chaque scenario utilise ses PROPRES statistiques, qu'il
+    soit dans le train ou tenu a l'ecart).
 
     Une colonne constante (ecart-type nul) reste seulement centree :
-    diviser par zero produirait des NaN sur une feature qui ne varie pas
-    dans ce scenario, pas une normalisation.
+    diviser par zero produirait des NaN, pas une normalisation.
     """
     mean = X.mean(axis=0)
     std = X.std(axis=0)
@@ -148,10 +144,10 @@ def main():
             by_scene[sc] = rows
 
     if len(by_scene) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        # Rendre la main avec le code 0 et sans artefact laisserait un
+        # balayage vide passer pour une campagne reussie. Le detecteur AST
+        # qui traque ce genre de garde ailleurs dans study/ ne reconnait
+        # pas toutes ses formes : ce site devait etre verifie a la main.
         raise RuntimeError(
             "balayage vide : le LOSO exige au moins 2 scenarios avec artefacts "
             f"d'entree, {len(by_scene)} trouve(s) ({sorted(by_scene)}). Le script "
@@ -198,10 +194,9 @@ def main():
         f1_cls = f1_score(Yva, (Sva > thr_star).astype(int),
                           zero_division=0)
 
-        # site GBT -- early_stopping=True explicite (D-198/D-199) : sur
-        # ces tailles de fold (n_train ~1000-1500), le defaut sklearn
-        # "auto" ne se declenche jamais (seuil 10000), donc le modele
-        # allait au bout de ses 300 iterations sans aucune penalite L2.
+        # early_stopping=True explicite : a ces tailles de fold (n_train
+        # ~1000-1500), le defaut sklearn "auto" ne se declenche jamais
+        # (seuil 10000) -- voir `make_model`.
         r_site = fit_eval(make_model("gbt", args.seed, early_stopping=True),
                           Xtr_site, Ytr, Xva_site, Yva)
 

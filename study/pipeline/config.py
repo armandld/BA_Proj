@@ -95,19 +95,11 @@ _REFERENCE_TRAINED = {
     "relative_percentile": 90.0,
 }
 
-# D-195 (audit H1/H3/H4, 26 aout) : ce module et `src/hyperparams_loader.py`
-# resolvaient deux chemins DIFFERENTS par defaut -- `pipeline.py` lisait deja
-# automatiquement `results/hyperparams/best_hyperparams.json`
-# (`resolve_hyperparams_path()`), mais CE module ne le faisait QUE si
-# `QHAS_HYPERPARAMS_PATH` etait explicitement exporte, sinon retombait
-# silencieusement sur `_REFERENCE_TRAINED` -- une campagne pouvait tourner et
-# se deployer (D-22) sans qu'aucun script de `study/h1_solver`/
-# `study/h3_representation` (mapper v1) n'en voie jamais le resultat. Ce
-# module suit maintenant EXACTEMENT la meme resolution que `pipeline.py` :
-# `QHAS_HYPERPARAMS_PATH` si fixe, sinon le chemin par defaut de
-# `hyperparams_loader`, silencieusement s'il existe. Garde-fou : un fichier
-# incomplet (il manque `sigma`/`relative_percentile` au fichier
-# actuellement deploye, cf. D-22 avant campagne) retombe sur
+# Suit EXACTEMENT la meme resolution que `pipeline.py` (meme chemin par
+# defaut via `resolve_hyperparams_path()`, meme fallback) : sinon une
+# campagne peut tourner et se deployer sans qu'aucun script de
+# `study/h1_solver`/`study/h3_representation` (mapper v1) n'en voie jamais
+# le resultat. Garde-fou : un fichier incomplet retombe sur
 # `_REFERENCE_TRAINED` EN ENTIER plutot que de melanger deux jeux de
 # parametres incompatibles -- avec un avertissement, pour que ce ne soit
 # jamais silencieux.
