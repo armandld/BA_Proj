@@ -5,50 +5,11 @@ résultats** : on dit ce qu'on a, et on renvoie.
 
 | fichier | contenu |
 |---|---|
-| **`PLAN_PREPRINT.md`** (ce fichier) | la structure |
-| `DEFAUTS.md` | les défauts, ce qui les a révélés, comment les retester |
+| **`PLAN_PREPRINT.md`** (ce fichier) | la structure, les verdicts, ce qui reste à faire |
+| `DEFAUTS.md` | uniquement ce qui bloque encore |
 | `RESULTS.md` | les résultats, comment ils ont été obtenus, comment les réobtenir |
-
----
-
-## Reconstruction du 26 août — pourquoi ce fichier a une nouvelle histoire
-
-Le commit `d3d7573` (« improvements and corrections of the tests, some
-corrections on the src code », 24 août) a remplacé ce fichier — alors
-**283 lignes, 9 sections + un appendice, la structure hypothèses/histoire/
-discussion ci-dessous** — par un squelette de plan de papier à 5 sections
-(Titre, Question, Méthodes, Validation du banc, Résultats, Discussion,
-Figures, Tableaux) sans hypothèses `H0`–`H5`, sans verdict, sans discussion :
-59 lignes neuves, 224 supprimées, dans le même geste qui a vidé
-`DEFAUTS.md`, `COUVERTURE.md`, `RESULTS.md`, `EVALUATION.md` et
-`CODE_REVIEW.md` sans rien archiver.
-
-**Ce fichier est la source mère** (`CLAUDE.md` : « objectif, hypothèses, ce
-qu'on peut prouver ou non ») — celui dont dépendent le titre, le §7 que
-`RESULTS.md` cite déjà verbatim (« l'argument de fermeture »), et la
-question que toute campagne future doit continuer à poser dans les mêmes
-termes. `DEFAUTS.md`, `COUVERTURE.md` et `RESULTS.md` ont été restaurés
-avec pleine rigueur le 25 août ; celui-ci et `EVALUATION.md` ne l'avaient
-pas encore été — l'écart a été signalé par USER, pas trouvé en interne.
-
-**Méthode de restauration**, identique à celle des trois premiers
-documents : le texte original (`git show d047015:docs/PLAN_PREPRINT.md`)
-est restauré section par section, puis chaque affirmation est revérifiée
-contre `RESULTS.md`/`DEFAUTS.md` **tels qu'ils sont aujourd'hui** — pas
-seulement contre leur état à `d047015`, qui datait déjà de 39 commits et
-d'une journée entière de corrections (25 août : D-39, D-50, D-98, D-100,
-D-158, D-191, D-187, D-195). Ce qui a bougé est marqué **« mis à jour le
-26 août »** ; ce qui n'a pas bougé est laissé tel quel, sans faux
-renouvellement de date.
-
-**Une chose que la restauration a trouvée et qu'il faut dire tout de
-suite** : le texte de `d047015` lui-même n'était pas parfaitement à jour
-avec `RESULTS.md` à cette même date — son §7 ne mentionnait pas D-58 (la
-rétractation « ZZ is numerically dead », déjà écrite dans `RESULTS.md` à
-`d047015`) ni la question rouverte de T13/T11b. Ce document a donc
-toujours eu tendance à prendre du retard sur `RESULTS.md` ; le corriger ici
-ne suffira pas à empêcher que ça se reproduise — seule la discipline de
-CLAUDE.md (« les tenir à jour fait partie de chaque tâche ») le peut.
+| `EVALUATION.md` | ce qui, dans `RESULTS.md`, est exploitable dans le manuscrit |
+| `COUVERTURE.md` | l'audit de couverture du code |
 
 ---
 
@@ -62,16 +23,9 @@ arbitrer le raffinement.
 
 Décider si un critère de raffinement fondé sur un Ising quantique résolu par
 QAOA local, avec un léger cône d'information sur les voisins, a une valeur
-au-delà de la baseline classique.
-
-L'attente qui motive cette famille d'approches : le quantique traite mieux
-les problèmes combinatoires — ici l'interaction entre voisins — donc ajouter
-cette information devrait rendre l'AMR plus performante, tout en restant
-calculable sur matériel quantique (ce travail n'utilise que des simulations).
-
-Si aucun avantage n'est trouvé, déterminer **ce qui échoue** : la sélection,
-la représentation, la forme du modèle, la spécification de la tâche, ou le
-fait même de faire du ML.
+au-delà de la baseline classique. Si aucun avantage n'est trouvé, déterminer
+**ce qui échoue** : la sélection, la représentation, la forme du modèle, la
+spécification de la tâche, ou le fait même de faire du ML.
 
 **Ce que ce n'est pas.** Ni à `dim = 2` (256 états) ni à `dim = 3`
 (262 144 états) l'espace n'est intraitable classiquement — les deux se
@@ -84,35 +38,16 @@ sur cette tâche précise ? C'est une question empirique légitime même
 quand le problème sous-jacent est classique — mais seulement celle-là.
 
 **Préalable.** Cette question ne peut être posée qu'à un modèle dont on sait
-qu'il calcule ce que sa documentation annonce. Établir cela a occupé une part
-substantielle du travail, n'était pas prévu, et constitue une contribution à
-part entière. → `DEFAUTS.md`
+qu'il calcule ce que sa documentation annonce. Le vérifier a occupé une part
+substantielle du travail et reste une contribution à part entière : plus de
+190 défauts de contrat ont été trouvés et fermés par un audit systématique
+(cinq questions, huit patrons de défaut — méthode ci-dessous, §6) plutôt que
+par une relecture ligne à ligne. → `DEFAUTS.md` pour ce qui reste ouvert,
+`RESULTS.md` pour ce qui est fermé.
 
-**Mis à jour le 26 août.** Ce préalable n'est toujours pas clos : il l'est
-moins qu'il ne le semblait à `d047015`. Le 25 août a rouvert et refermé six
-défauts de plus (D-39, D-50, D-98, D-100, D-158, D-191), en a laissé un
-nouveau ouvert (D-195). Sa moitié `test_hyperparameter_sweep` a depuis été
-expliquée et refermée le 26 août — une instance de plus de H0a, confirmée
-en montrant qu'un budget d'optimiseur 10× plus grand répare la sélection
-sans toucher au Hamiltonien ; sa moitié `test_noise_robustness` reste
-ouverte, deux causes plausibles éliminées par la mesure, une troisième
-posée et non vérifiée. Un défaut reste bloqué sur une décision humaine,
-pas sur du code — D-22, la campagne de réoptimisation
-elle-même. D-188 a été décidé et remesuré le 26 août plutôt que laissé
-en attente (§3, §4 ci-dessous). Un troisième, D-189, a été retiré une
-seconde fois le 26 août : la
-description restaurée depuis `d047015` décrivait un défaut que `d3d7573`
-avait déjà corrigé le 24, dans le même geste que la suppression des
-documents — erreur de vérification (le test qui l'entourait avait
-lui-même été réécrit pour vérifier le nouveau comportement, sa réussite
-ne distinguait donc plus « corrigé » de « pas encore corrigé »), pas une
-nouvelle correction de code. Le préalable est une contribution qui
-continue, pas un socle acquis une fois pour toutes.
+## 3. Hypothèses et verdicts
 
-## 3. Mise en place des hypothèses
-
-**H0 — l'échec vient de la sélection.** Qualité de l'optimisation
-variationnelle à profondeur p.
+**H0 — l'échec vient de la sélection.**
 - **H0a** — l'optimiseur atteint-il l'optimum de son propre hamiltonien ?
 - **H0b** — mieux l'atteindre améliore-t-il la tâche ?
 
@@ -123,27 +58,21 @@ variationnelle à profondeur p.
   baseline ?
 - **H2b** — le modèle est-il simplement trop restrictif ?
 
-**H3 — l'information des voisins.**
-- **H3a** — le cône apporte-t-il un gain en distribution ?
-- **H3b** — en apporte-t-il un sous transfert ?
+**H3 — l'information des voisins (les couplages ZZ/ZZZZ) aide-t-elle ?**
 
 **H4 — l'échec vient de ce qu'on fait du ML, quantique ou non.**
 
-**H5 — l'échec vient de la spécification de la tâche.** Objectif
-d'entraînement, label, score de référence.
+**H5 — l'échec vient de la spécification de la tâche.**
 
-**État courant, mis à jour le 26 août** (détail et mesures → §7 et
-`RESULTS.md`) :
-
-| hypothèse | verdict | qualificatif nécessaire |
+| hypothèse | verdict | portée |
 |---|---|---|
-| H0a | **NON** — 0,062–0,156 contre 1,000 exigé | à `dim = 3`, la seule taille certifiée non dégénérée (D-53) ; réfutation antérieure invalide, mesurée à `dim = 2` où le problème est dégénéré (D-45/D-47). Mesuré sur le mappeur **V2** (sans paramètre) ; sur **V1** (déployé, réglé par la campagne), à `dim = 3` : QAOA n'atteint l'optimum sur **aucun** des 12 instantanés testés (D-200, 26 août) — le défaut se confirme, plus net encore |
-| H0b | **NON** — ρ(E_gap, F1) = +0,870 : mieux résoudre H dégrade la décision | mesuré à `dim = 3`, 9 solveurs, sur V2 (D-53). **Étendu à V1 le 26 août (D-200)** : ρ = +0,891 (p=0,0013), même signe, même ampleur — mesuré aux hyperparamètres de référence, avant toute campagne. La pathologie n'est donc pas propre à V2 (hors de portée de l'entraînement) ; elle existe déjà sur le mappeur que la campagne va régler |
-| H1 | **PARTIEL** | les défauts numériques comptent, mais ne suffisent pas seuls à expliquer l'écart |
+| H0a | **NON** — QAOA atteint l'optimum sur 0,000–0,156 des instantanés, contre 1,000 exigé | à `dim = 3` (18 qubits), la seule taille certifiée non dégénérée, sur les deux mappeurs (V2 : D-53 ; V1, celui que la campagne règle : D-200, 0/12) |
+| H0b | **NON** — ρ(E_gap, F1) = +0,87 à +0,89 : mieux résoudre H **dégrade** la décision | même protocole, 9 solveurs, V2 et V1 (D-53, D-200) — mesuré aux hyperparamètres de référence, avant toute campagne |
+| H1 | **PARTIEL** | les défauts numériques comptent, ne suffisent pas seuls |
 | QH2a / H2b | **RÉFUTÉ** | modèle libre testé (`study/h2b_prediction/`), ne bat pas la baseline |
-| H3a / H3b | **À REPRENDRE** | D-58 a retiré l'explication causale des ablations nulles de T13 et de la stagnation de T11b (« ZZ is numerically dead » était faux) ; la courbe de cône elle-même (T1b, `dim = 8`/`16`) n'est pas retirée par cette rétractation mais reste bornée par un pli dégénéré non expliqué (`harris_tearing`) |
+| H3 | **NON** — les couplages ne détectent jamais mieux, et dégradent le F1 dès qu'ils cessent d'être inertes | balayage exhaustif/glouton `dim = 2` à `dim = 8` (T26) ; à `dim = 2` (8 qubits) l'optimum exact est le prédicteur constant, donc rien n'y peut jamais paraître causal — dès `dim = 3` (exhaustif) les couplages changent 6,9–15,3 % des décisions et le F1 baisse de 0,033 à 0,057 par rapport au biais Z seul |
 | H4 | **CONJECTURE** | pas d'expérience dédiée qui l'isole du reste |
-| H5 | **MIXTE, remesuré à `t_x`** | à l'horizon physique (D-188, 26 août) : `harris_tearing`/`kelvin_helmholtz` restent redondants (ρ≈1,0), `mhd_rotor`/`orszag_tang` divergent réellement à certains instantanés (ρ jusqu'à 0,66) — corriger l'horizon expose un signal sur la moitié des scénarios, pas sur tous |
+| H5 | **MIXTE** | à l'horizon physique `t_x` : `harris_tearing`/`kelvin_helmholtz` restent redondants avec le label statique (ρ ≈ 1,0), `mhd_rotor`/`orszag_tang` divergent réellement (ρ jusqu'à 0,66) — corriger l'horizon expose un signal sur la moitié du panel canonique, pas sur tout |
 
 ## 4. Comment V1 marche — et pourquoi ça, intuitivement
 
@@ -158,100 +87,59 @@ arêtes de la grille.
   magnétique) ;
 - la forme volontairement restreinte, et pourquoi elle l'est.
 
-Deux faits structurels à énoncer ici, parce qu'ils conditionnent la lecture
-de H0b et de H3 :
+Quatre faits structurels conditionnent la lecture de H0b et de H3 :
 
 - la couche de coût est **diagonale** — seul le mixeur déplace une
-  probabilité de mesure, et il est borné ;
+  probabilité de mesure (γ seul, β = 0 : déplacement 4,4e−16), et il est
+  borné à `β ≤ π/(4·reps) = 0,393 rad` ;
+- sur un balayage exhaustif de la grille admissible, le mixeur seul
+  déplace déjà une probabilité médiane de 0,254 ; l'hamiltonien en ajoute
+  0,236 — l'apport de la physique est réel mais partage le même canal
+  borné que le mixeur (`RESULTS.md`, « Ce que le circuit peut
+  déplacer ») ; ce témoin n'est pas encore intégré comme solveur du panel
+  H0b lui-même — l'intégrer demanderait de faire tourner QAOA sur un
+  hamiltonien de coût nul, ce que COBYLA ne peut pas optimiser (aucun
+  signal) et que le garde-fou `NullHamiltonianError` refuse à raison ; la
+  mesure par balayage direct reste la bonne méthode pour cette question ;
 - les portes `g_strain` et `g_rot` somment à **1 exactement** — ZZ et ZZZZ
-  partitionnent un unique scalaire, ils ne sont pas deux détecteurs
-  indépendants.
+  partitionnent un unique scalaire d'Okubo-Weiss, ils ne sont pas deux
+  détecteurs indépendants ;
+- aucun des deux couplages ne désigne un TYPE d'instabilité : la
+  plaquette vaut `(|ω| + |J|)/norme` (un vortex pur et une nappe de
+  courant pure y rendent la même valeur) et le couplage ZZ mélange saut
+  hydrodynamique et saut magnétique sous la même racine. Seul `K_xpoint`
+  est sélectif. C'est une propriété de la forme choisie, pas un défaut :
+  l'hamiltonien détecte « il se passe quelque chose » localement, pas
+  « quoi ».
 
-**À ajouter ici, mis à jour le 26 août — le témoin qui manque à H0b.**
-Mesuré depuis (`RESULTS.md`, « Ce que le circuit peut déplacer, et par quel
-canal ») : le mixeur seul, sans hamiltonien, déplace déjà une probabilité
-médiane de 0,254 sur les patches réels ; l'hamiltonien en ajoute 0,236, sur
-un canal borné à `β ≤ π/(4·reps) = 0,393 rad`. **Aucune campagne du dépôt
-n'utilise ce témoin** — voir Appendice A, item 4, toujours ouvert. Sans lui,
-« le QAOA déplace la décision » ne distingue pas l'apport de la physique de
-celui d'une simple rotation de mixeur.
+**Une leçon de mesure qui a sa place ici.** La plaquette combine `|ω|` et
+`|J|` ; sous un dénominateur commun mal choisi, le signal le plus faible
+des deux pouvait numériquement disparaître (rapport 179 sur
+`harris_tearing`, 84 sur `kelvin_helmholtz`, historique). Corrigé en
+adimensionnalisant les deux magnitudes séparément avant la somme, sans
+ajouter de porte. Elle illustre qu'un coefficient bien formé, borné et
+adimensionnel peut ne mesurer qu'une moitié de ce qu'il annonce — visible
+seulement sur des champs réels, jamais sur un cas synthétique.
 
-Un troisième, mesuré depuis, qui appartient à la même section : **aucun des
-deux couplages ne désigne un type d'instabilité.** La plaquette vaut
-`(|ω| + |J|)/norme` — un vortex pur et une nappe de courant pure y rendent la
-même valeur — et le couplage ZZ fait entrer un saut hydrodynamique et un saut
-magnétique dans la même racine. Seul `K_xpoint` est sélectif. C'est une
-propriété de la **forme choisie**, pas un défaut d'implémentation, et elle se
-dit dans cette section : l'hamiltonien détecte « il se passe quelque chose »
-localement, pas « quoi ».
-
-Et un fait qui appartient au manuscrit, pas seulement au journal de bord :
-sous la normalisation historique, **la moitié du terme ZZZZ était
-numériquement morte sur deux scénarios canoniques sur quatre**. La plaquette
-sommait `|ω|` et `|J|` sous un dénominateur commun, si bien que le signal le
-plus faible disparaissait en proportion de son amplitude — rapport 179 sur
-`harris_tearing`, 84 sur `kelvin_helmholtz`. Chaque scénario est dominé par un
-type de structure, et le dénominateur commun transformait ce fait physique en
-effacement de l'autre. Corrigé en rendant les deux magnitudes adimensionnelles
-séparément avant la somme, **sans ajouter de porte**.
-
-Ce fait a sa place dans la section : il montre qu'un coefficient peut être
-*bien formé, borné, adimensionnel* et pourtant ne mesurer qu'une moitié de ce
-qu'il annonce — et que seule une mesure sur les champs réels le révèle.
-
-**Ne pas confondre avec, mis à jour le 26 août.** Ce ZZZZ-là (le poids de
-plaquette, mapper v2, corrigé ci-dessus) est un défaut **distinct** de celui
-que D-58 retire plus loin (« ZZ is numerically dead », la fenêtre
-d'incertitude de la campagne confirmatoire, T17/T18). Les deux portent sur
-« un coefficient ZZ/ZZZZ semble mort » et se ressemblent assez pour être
-confondus dans une lecture rapide du manuscrit — ils ne le sont pas : l'un
-est un défaut de normalisation déjà corrigé, l'autre une lecture publiée puis
-rétractée. Le distinguer explicitement dans le texte du papier évite qu'un
-correctif applique à tort la leçon de l'un à l'autre.
-
-### La spécification de la tâche — H5, et ce qu'une vérité terrain dynamique en dit
+### La spécification de la tâche — H5
 
 Le label de la phase 2, `e_i`, est l'écart intra-patch à la moyenne : une
-mesure de non-lissité, instantanée et confinée au patch. Ce n'est pas ce que
-l'AMR cherche à contrôler, et l'AUC du score classique seul contre `e_i` —
-**1,000** (harris), **0,997** (KH), **0,948** (rotor), 0,592 (OT) — dit que
-sur trois scénarios sur quatre la tâche est quasi gratuite.
+mesure de non-lissité, instantanée et confinée au patch. L'AUC du score
+classique seul contre `e_i` — 1,000 (harris), 0,997 (KH), 0,948 (rotor),
+0,592 (OT) — dit que sur trois scénarios sur quatre la tâche est quasi
+gratuite.
 
-La vérité terrain **dynamique** `d_i` du protocole §1.2 existe désormais, et
-sa mesure appartient au manuscrit :
-
-- à l'horizon que le protocole impose (δt = 0,1), **ρ(d, e) ≥ 0,98 sur les
-  quatre scénarios** : le label dynamique est une renumérotation monotone du
-  statique, et le contrôle d'acceptation du protocole (« Spearman > 0 ») le
-  laisse passer ;
-- la raison est physique et se calcule : à cet horizon la perturbation
-  parcourt **0,11 à 0,25** d'une largeur de patch — il n'y a rien à propager ;
-- à δt = 2,0, un seul scénario décolle (`orszag_tang`, ρ = 0,596) — le seul
-  dont la perturbation **amplifie** (1,38×), et le seul où la tâche statique
-  n'était pas déjà résolue.
-
-Ce que la section doit dire, **avant révision** : à l'horizon imposé par le
-protocole, changer de label ne suffit pas à réparer la spécification de la
-tâche.
-
-**Mis à jour le 26 août — remesuré à l'horizon physique, décidé par
-USER.** `δt = 0,1` était le mauvais horizon pour poser cette question : à
-cette échelle, la perturbation ne parcourt que 0,11–0,25 d'une largeur de
-patch, il n'y a presque rien à propager. Régénéré aux 4 scénarios
-canoniques à `t_x = 2π/(dim·(v+b)_rms)` (le temps de traversée réel d'un
-patch, 4 à 9× `δt = 0,1`) : **le verdict est mixte, pas uniforme.**
-`harris_tearing` et `kelvin_helmholtz` restent redondants avec le label
-statique même à cet horizon (ρ ≈ 1,0 sur les 5 instantanés des deux) —
-pour eux, la phrase d'origine tient. `mhd_rotor` et `orszag_tang`
-divergent réellement à certains instantanés (ρ jusqu'à 0,66 pour
-Orszag-Tang, 0,82 pour le rotor, au premier instantané) — pour ces
-deux-là, l'horizon corrigé expose un signal que `δt = 0,1` masquait
-entièrement. La phrase à écrire dans le manuscrit n'est donc plus « ça ne
-répare rien » mais : **corriger l'horizon est nécessaire et expose un
-vrai signal sur la moitié du panel canonique — pas plus.** Toute tâche
-future consommant `d_i` (tâche 7 du protocole) doit fixer son horizon sur
-`t_x`, sans présumer que le label devient informatif partout. Détail
-complet, table par scénario : `docs/RESULTS.md`.
+La vérité terrain dynamique `d_i` (protocole §1.2), mesurée à son horizon
+physique `t_x = 2π/(dim·(v+b)_rms)` (le temps de traversée réel d'un
+patch, 4 à 9× l'horizon `δt = 0,1` du protocole) plutôt qu'à `δt = 0,1`
+(où la perturbation ne parcourt que 0,11–0,25 d'une largeur de patch, et
+`ρ(d,e) ≥ 0,98` uniformément — rien à distinguer) : `harris_tearing` et
+`kelvin_helmholtz` restent redondants avec le label statique même à `t_x`
+(ρ ≈ 1,0) ; `mhd_rotor` et `orszag_tang` divergent réellement à certains
+instantanés (ρ jusqu'à 0,66 pour Orszag-Tang, 0,82 pour le rotor, au
+premier instantané). **Corriger l'horizon est nécessaire et expose un
+vrai signal sur la moitié du panel canonique — pas sur tout.** Toute
+tâche future consommant `d_i` doit fixer son horizon sur `t_x`.
 
 ## 5. Comment le GBT fonctionne, à partir de quoi *(court)*
 
@@ -278,166 +166,121 @@ rôle de témoin qu'il joue vis-à-vis de V1.
 
 ## 7. Discussion — affirmation, réfutation, ce qui reste ouvert
 
-Verdict par hypothèse, avec sa portée. Certaines restent ouvertes ; on le
-dit.
+**H0b ferme l'approche plus directement que H3.** Le pari de départ est que
+le quantique optimise mieux le combinatoire ; H0b montre que mieux optimiser
+n'améliore pas la tâche. C'est la valeur de l'optimisation qui est
+attaquée — précisément ce qu'on paierait en qubits.
 
-Ce qui doit être mis en avant : **H0b ferme l'approche plus directement que
-H3**. Le pari de départ est que le quantique optimise mieux le combinatoire ;
-H0b montre que mieux optimiser n'améliore pas la tâche. C'est la valeur de
-l'optimisation qui est attaquée — précisément ce qu'on paierait en qubits.
+**En une phrase, pour un lecteur qui n'a pas suivi le détail** : le pari
+de départ était qu'un optimiseur quantique piloterait mieux la décision
+de raffinement qu'une règle classique bon marché ; il est réfuté à deux
+niveaux indépendants, mesurés séparément plutôt que supposés l'un de
+l'autre — QAOA n'atteint quasiment jamais l'optimum de son propre
+hamiltonien (H0a), et même quand un AUTRE solveur atteint cet optimum
+exact, la décision qui en résulte est **pire** que celle d'une règle
+classique simple (H0b). Réparer l'optimiseur ne changerait donc rien : le
+problème n'est pas seulement que le quantique calcule mal, c'est que ce
+qu'il calculerait s'il calculait bien n'est pas ce qu'on veut. Mesuré sur
+les deux mappeurs (V2 : D-53 ; V1, celui que la campagne règle réellement :
+D-200, ρ = +0,891, p = 0,0013, quasi identique) — la pathologie n'est pas
+un artefact du mappeur sans paramètre, elle existe déjà au point de départ
+de la campagne. Une limite demeure : un seul point du domaine de recherche
+à 9 dimensions a été mesuré pour V1, pas un balayage — ça ne garantit pas
+qu'aucun réglage ne fait basculer ρ au négatif, mais ça retire l'hypothèse
+qu'un réglage quelconque suffirait par défaut.
 
-**Mis à jour le 26 août — cet argument est désormais mesuré, pas seulement
-anticipé.** Ce paragraphe, écrit à `d047015`, formulait un pari sur ce que la
-discussion devrait dire. `D-53` (`RESULTS.md`) l'a depuis mesuré à la seule
-taille certifiée non dégénérée (`dim = 3`, 18 qubits, l'optimum y est
-énuméré exactement) :
-
-| | question | verdict |
-|---|---|---|
-| **H0a** | l'optimiseur atteint-il l'optimum de son propre hamiltonien ? | **NON** — 0,062–0,156 contre 1,000 exigé (la règle classique dont il part atteint déjà 0,500) |
-| **H0b** | mieux l'atteindre améliorerait-il la tâche ? | **NON** — ρ(E_gap, F1) = +0,870 sur 9 solveurs : mieux résoudre H **dégrade** la décision AMR |
-
-**En une phrase, pour un lecteur qui n'a pas suivi l'historique des
-correctifs** : le pari de départ était qu'un optimiseur quantique
-piloterait mieux la décision de raffinement qu'une règle classique bon
-marché ; il est réfuté à deux niveaux indépendants, mesurés séparément
-plutôt que supposés l'un de l'autre — QAOA n'atteint quasiment jamais
-l'optimum de son propre hamiltonien (H0a), et même quand un AUTRE solveur
-atteint cet optimum exact, la décision qui en résulte est **pire** que
-celle d'une règle classique simple (H0b). Réparer l'optimiseur ne
-changerait donc rien : le problème n'est pas seulement que le quantique
-calcule mal, c'est que ce qu'il calculerait s'il calculait bien n'est pas
-ce qu'on veut.
-
-**Ajouté le 26 août (D-200) — cette mesure portait sur V2, pas sur le
-mappeur que la campagne règle.** Les trois artefacts `dim = 3` de D-53
-utilisent le mappeur **V2**, sans paramètre (poids figés) — hors de
-portée de `train_hyperparams.py`. Rejoué dans les mêmes conditions sur
-**V1** (le mappeur réellement déployé et réglé par la campagne), aux
-hyperparamètres de référence : ρ(E_gap, F1) = **+0,891** (p=0,0013),
-quasi identique. Le solveur qui atteint exactement le fondamental a le F1
-le plus bas (0,437) ; QAOA, qui ne l'atteint jamais sur les 12 instantanés
-testés (0/12, pire que sur V2 à cette même taille), a le F1 le plus haut
-(0,519). **La pathologie n'est donc pas un artefact de V2** : elle existe
-déjà sur V1, au point de départ même de la campagne
-(`PHASE1_SEED_GRID`). Un seul point du domaine de recherche à 9
-dimensions a été mesuré — ça ne prouve pas qu'aucun réglage ne fait
-basculer ρ au négatif, mais ça retire l'hypothèse qu'un réglage
-quelconque suffirait par défaut.
-
-**Ce que ceci corrige par rapport au texte publié avant D-53** :
-`CLAUDE.md` portait « H0 → RÉFUTÉ » sans qualificatif, et un test T11
-concluait que l'optimisation quantique n'était la source d'aucun gain — les
-deux mesurés **entièrement à `dim = 2`**, où l'état fondamental exact est le
-prédicteur constant « tout raffiner » sur 40 instantanés sur 40 (D-45/D-47) :
-tous les solveurs atteignent l'optimum parce qu'il n'y a rien à départager.
+**Ce que ceci corrige par rapport à une lecture antérieure du dépôt** :
+une version antérieure concluait « H0 → RÉFUTÉ » sans qualificatif, mesurée
+entièrement à `dim = 2`, où l'état fondamental exact est le prédicteur
+constant « tout raffiner » sur 40 instantanés sur 40 (D-45/D-47) : tous
+les solveurs atteignent l'optimum parce qu'il n'y a rien à départager.
 Réfuter H0 là-dessus, c'était la réfuter sur un problème vide. La lecture
 juste sépare H0a de H0b et les mesure là où le problème est certifié non
-dégénéré : **l'optimiseur échoue vraiment, et le réparer ne servirait à
-rien.**
+dégénéré : l'optimiseur échoue vraiment, et le réparer ne servirait à
+rien.
 
-Sur H3, l'énoncé **doit être réécrit** : la courbe de cône a maintenant deux
-artefacts (`dim = 8` et `dim = 16`, → `RESULTS.md`) et ils vont **contre** la
-formulation ci-dessous.
+**H3 — les couplages n'aident jamais, et nuisent dès qu'ils comptent.**
+La courbe de cône (T1b, `dim = 8`/`16`) montre que l'information des
+voisins n'est pas plate en distribution : écarts par saut +0,123 / −0,076 /
++0,100 à `dim = 16`, contre un seuil de retrait pré-enregistré de 0,01 ;
+hors le pli dégénéré `harris_tearing` (0,000 à tous les k, cause non
+expliquée), le cône dépasse même le classique à `dim = 16`. Mais la
+question qui compte pour le manuscrit n'est pas « le cône bouge-t-il la
+décision » — c'est « la bouge-t-il en mieux » : T26 (balayage
+exhaustif/glouton `dim = 2` à `dim = 8`, étendu à `dim = 3` exhaustif)
+répond non. À `dim = 2`, ablater les couplages ZZ/ZZZZ change exactement
+0 décision — pas parce que le formalisme Ising serait intrinsèquement
+inerte, mais parce que `dim = 2` est la taille où l'optimum exact est
+uniforme quel que soit le hamiltonien (D-45/D-47) : rien ne peut jamais
+s'y montrer causal. Dès `dim = 3` (exhaustif, non dégénéré), retirer les
+couplages change 6,9 % à 15,3 % des décisions selon le mappeur — et le F1
+du hamiltonien complet est alors **inférieur** à celui du biais Z seul
+(0,405 contre 0,451). Le motif se confirme et s'aggrave à `dim = 4` (32
+qubits, glouton contrôlé contre l'exhaustif) et `dim = 8` (128 qubits) :
+`F1(biais Z seul) = F1(règle classique)` exactement, et ajouter les
+couplages retire 0,033 à 0,057 de F1. **Le meilleur cas de cette famille
+de mappings Ising est d'égaler la règle de seuil qu'elle est censée
+remplacer ; son pire cas est de faire moins bien.** Cela répond aussi,
+au passage, à T13/T11b (leurs lectures `dim = 2` d'origine s'appuyaient
+sur une explication depuis retirée — une fenêtre d'incertitude supposée
+annihiler le couplage ZZ, qui en fait n'en annihile jamais plus de 96,7 %
+et souvent beaucoup moins) : la bonne explication de leurs résultats nuls
+était la dégénérescence de `dim = 2`, pas un défaut d'implémentation.
 
-- Le cône **n'est pas plat** : écarts par saut +0,123 / −0,076 / +0,100 à
-  `dim = 16`, contre un seuil de retrait pré-enregistré de 0,01.
-- Hors pli dégénéré, à la seule taille où les quatre k sont des voisinages,
-  un saut fait passer de 0,429 à 0,593 et le cône **dépasse** le classique.
-- Le gain **croît** de `dim = 8` à `dim = 16` — la clause « décroît quand on
-  affine » est contredite par les deux seuls points mesurés.
+**Conséquence de structure : la fermeture ne repose pas sur H3, mais sur H0b
+ET H3 séparément, et ils s'accordent.** H0b montre que même un optimiseur
+parfait donnerait une mauvaise décision ; H3 montre que la représentation
+elle-même (les couplages) n'apporte rien de bon dès qu'elle cesse d'être
+inerte. Les deux angles — optimisation et représentation — ferment
+indépendamment, pour la même conclusion.
 
-Ce qui borne cette lecture : `harris_tearing` rend 0,000 à tous les k, et la
-conclusion change de signe selon qu'on compte ce pli ou non. Rien n'est
-tranché tant qu'il n'est pas expliqué.
-
-**Mis à jour le 26 août — cette lecture tient toujours, mais elle est
-maintenant elle-même bornée par un défaut différent.** `RESULTS.md`
-confirme les nombres ci-dessus tels quels (rejoués, `git ef5f0a4`) : la
-courbe de cône n'est **pas** retirée par ce qui suit. Mais `D-58`, déjà
-présent dans `RESULTS.md` à `d047015` sans que ce paragraphe en tienne
-compte, a depuis rétracté une affirmation voisine et plus lourde :
-*« the deployed pipeline discards ~99 % of [ZZ] before the QAOA ever sees
-it, which is a sufficient explanation for T13's null ablations and for
-T11b's near-zero variational progress »* était **faux** — la fenêtre
-conserve en fait 3,3 %–12,1 % de la masse ZZ en boucle ouverte et
-33,8 %–59,4 % au réglage Level-3 ; aucune classe n'est numériquement morte.
-**L'explication causale des ablations nulles de T13 et de la stagnation de
-T11b tombe avec la rétractation : ces deux résultats restent à expliquer.**
-Ce n'est pas la courbe de cône (T1b) qui est en cause — c'est un pan
-différent de H3 (T13, T11b) qui se rouvre sans explication de repli.
-
-**Conséquence de structure** : la fermeture ne peut pas reposer sur H3. Elle
-repose sur **H0b**, qui n'en dépend pas. L'ancienne formulation, conservée
-ici pour mémoire et à ne plus citer telle quelle :
-
-> Le gain apporté par l'information des voisins est réel mais petit, il
-> décroît quand on affine la grille, et il ne justifie pas le coût d'un
-> dispositif quantique.
-
-Les limites qui bornent ces conclusions — un seul solveur, quatre scénarios,
-8 qubits en déploiement, baseline partagée par les deux bras, non-déterminisme
-du bras QAOA, chute d'ordre du solveur commune aux deux bras — sont énoncées
-ici, chiffrées dans `RESULTS.md`.
-
-**Mis à jour le 26 août.** Le protocole s'est élargi depuis (`COUVERTURE.md`) :
-8 scénarios canoniques et 5 graines physiques, contre les 4 scénarios et la
-graine implicite que cette liste de limites décrivait encore. « Un seul
-solveur, quatre scénarios » est donc devenu **plus étroit que le protocole
-actuel** sans être faux pour ce qui a été mesuré jusqu'ici — aucune campagne
-confirmatoire n'a encore tourné sur les 8 scénarios (bloquée par D-22).
-« Non-déterminisme du bras QAOA » doit aussi se relire à la lumière de D-191
-(25 août) : la graine QAOA était par défaut fixée à `0` avant ce correctif,
-ce qui masquait la dispersion réelle sur plusieurs tests et scripts hors du
-protocole confirmatoire — corrigé, mais aucune mesure de dispersion publiée
-avant le 25 août ne doit être citée sans vérifier de quel côté du correctif
-elle a été produite.
+**Limites qui bornent ces conclusions.** Un seul solveur classique de
+référence, protocole à 8 scénarios canoniques et 5 graines physiques (le
+protocole confirmatoire lui-même n'a pas encore tourné à cette échelle —
+`DEFAUTS.md`, D-22), non-déterminisme du bras QAOA (dispersion par appel
+1,79e−1 à 3,61e−1 — les conclusions de CLASSEMENT tiennent, celles qui
+reposeraient sur une valeur précise ne tiennent pas), chute d'ordre du
+solveur commune aux deux bras. Chiffrées dans `RESULTS.md`.
 
 ## 8. Conclusion
-
-*Rédigé le 26 août — cette section était un placeholder vide depuis la
-restauration ; en l'état, le résumé le plus lisible du dossier se
-trouvait enterré en §7. Ce qui suit ne dit rien de neuf par rapport à
-§3/§7 — ça les résume pour un lecteur qui n'a lu que ce paragraphe.*
 
 **Ce que ce travail teste, en une phrase.** Pas un avantage quantique au
 sens de la complexité (§2) : un solveur NISQ (QAOA), utilisé comme règle
 de décision de raffinement de maillage, fait-il mieux qu'une heuristique
 classique bon marché sur cette tâche précise ?
 
-**Verdict, à deux niveaux mesurés indépendamment** (§7, H0a/H0b,
-D-53/D-200, seule taille certifiée non dégénérée : `dim = 3`,
-18 qubits) :
+**Verdict, à trois niveaux mesurés indépendamment** (§7, seule taille
+certifiée non dégénérée pour H0 : `dim = 3`, 18 qubits ; H3 confirmé de
+`dim = 2` à `dim = 8`) :
 - QAOA n'atteint quasiment jamais l'optimum de son propre hamiltonien
-  (0,062–0,156 des instantanés contre 1,000 exigé) ;
+  (0 à 15,6 % des instantanés contre 1,000 exigé, selon le mappeur) ;
 - même quand un AUTRE solveur atteint cet optimum exactement, la
   décision de raffinement qui en résulte est **pire** qu'une règle
-  classique simple (ρ(E_gap, F1) = +0,87 à +0,89 selon le mappeur testé,
-  sur 9 solveurs).
+  classique simple (ρ(E_gap, F1) = +0,87 à +0,89, sur 9 solveurs) ;
+- même en ignorant la question de l'optimiseur, les couplages
+  ZZ/ZZZZ — l'information de voisinage qui motivait tout le projet — ne
+  détectent jamais mieux que le biais Z seul, et dégradent le F1 de
+  0,03 à 0,06 dès qu'ils cessent d'être numériquement inertes.
 
-Le second point ferme la porte que le premier laissait ouverte : réparer
-l'optimiseur ne sauverait pas l'approche, puisque ce qu'il calculerait
-s'il calculait parfaitement n'est déjà pas ce qu'on veut. Ce n'est donc
-pas (seulement) un problème d'ingénierie du solveur — c'est la forme du
-hamiltonien elle-même qui encode une mauvaise décision.
+Les trois pointent dans la même direction par des chemins indépendants :
+réparer l'optimiseur ne sauverait pas l'approche (H0b), et améliorer la
+représentation en exploitant mieux les couplages ne le ferait pas non
+plus (H3) — ce que le hamiltonien encode au-delà du score classique
+n'est pas ce qu'on veut, que ce soit atteint parfaitement ou non.
 
 **Ce qui reste ouvert, sans rouvrir ce verdict.** H1 (les défauts
-numériques suffisent-ils seuls à expliquer l'échec ?) est partiel ; H3
-(l'information des voisins) est à reprendre depuis D-58, sa lecture
-publiée ayant perdu son explication causale ; H4 (transfert à des
-conditions inédites) reste une conjecture. Ces trois portent sur des
-questions différentes de celle que H0b tranche — les laisser ouvertes ne
-rouvre pas H0b.
+numériques suffisent-ils seuls à expliquer l'échec ?) est partiel ; H4
+(transfert à des conditions inédites) reste une conjecture, faute
+d'expérience dédiée. Ni l'un ni l'autre ne porte sur la question que H0b
+et H3 tranchent.
 
 **Ce qui manque avant de publier ce verdict tel quel.** Les nombres
 ci-dessus viennent des hyperparamètres de RÉFÉRENCE, pas d'une campagne
 d'entraînement qui a réellement tourné (`DEFAUTS.md`, D-22). D-200 montre
 que ce point de départ est déjà dans la zone que H0b qualifie de
-pathologique — mais un seul point du domaine de recherche à 9 dimensions
-a été mesuré, pas un balayage. Le verdict ne dépend pas de la campagne
-(H0b porte sur la forme du hamiltonien, pas sur son réglage) ; ce qui
-manque, c'est de le redire avec les nombres d'une vraie campagne plutôt
-qu'avec ceux du point de départ → Appendice A.
+pathologique, et H3 ne dépend d'aucun hyperparamètre entraîné — mais le
+verdict gagnerait à être redit avec les nombres d'une vraie campagne.
+C'est la seule étape qui reste : voir Appendice A.
 
 ## 9. Bibliographie
 
@@ -447,163 +290,75 @@ qu'avec ceux du point de départ → Appendice A.
 
 *Transitoire, disparaîtra du manuscrit.*
 
-Les campagnes n'ont pas été relancées depuis les corrections. Ordre contraint,
-chaque étape conditionnant la suivante :
+**Il ne reste qu'une chose à faire : lancer la campagne.** Tout le reste
+qui la précédait dans l'ordre contraint est réglé :
 
-1. **Réoptimisation.** Les hyperparamètres déployés ne correspondent à aucune
-   base du dépôt, et trois d'entre eux n'ont jamais été échantillonnés →
-   `DEFAUTS.md`, D-22.
-2. **Relance des campagnes** sur le code corrigé.
-3. **Republication ou justification** des 16 lignes de la table maître qui ne
-   se recalculent plus.
-4. **Ajout du témoin « mixeur seul »** aux campagnes H0b — sans lui, l'apport
-   de l'hamiltonien n'est pas séparable d'une rotation de mixeur.
-
-**Mis à jour le 26 août — l'ordre contraint tient toujours, item par
-item :**
-
-1. **D-22 : toujours bloquant, mécanisme en place, campagne non lancée.**
-   Re-vérifié le 25 août : `w_z_frac` reste borné à `[0.1, 1000.0]` (log)
-   dans `train_hyperparams.py --print-space`, la borne haute que D-22
-   signalait n'est toujours pas tranchée. Le JSON déployé
-   (`best_hyperparams.json`) ne correspond toujours à **aucune** ligne des
-   CSV Optuna du dépôt (perte 0,3213 dans la base contre 0,2215 annoncée).
-   Ce qui a changé : `_save_results` écrit désormais le jeu complet de
-   paramètres, le hash du commit et `sys.argv` — le mécanisme de provenance
-   existe — mais il ne s'applique qu'à une campagne qui n'a pas encore
-   tourné. Item 1 reste ouvert.
-2. **Non lancé.** Attend l'item 1.
-3. **Le compte a bougé plusieurs fois et doit être remesuré avant citation,
-   pas recopié d'ici.** « 16 lignes en écart » date de `d047015`. Mesuré
-   depuis, à des moments différents et sur des périmètres différents (le
-   protocole s'est élargi à 8 scénarios entre-temps) :
-   `study/common/aggregate_master_table.py` a rendu tour à tour
-   **180 lignes, 176 OK / 4 DIFF / 0 MISSING** (après la clôture de D-58,
-   périmètre à 4 scénarios — ce compte revient identique des dizaines de
-   fois dans `RESULTS.md`, c'est le plus stable des trois),
-   puis **268 lignes, 142 OK / 6 DIFF / 120 MISSING** (25 août, après la correction de
-   D-158, `--allow-missing`, périmètre élargi à 8 scénarios — les MISSING
-   sont les scénarios de la campagne confirmatoire qui n'a pas encore
-   tourné, pas une régression),
-   puis **268 lignes, 139 OK / 6 DIFF / 123 MISSING** (26 août, D-196 — le
-   pin `KNOWN_DIFF` du test était resté à 4 alors que la table en portait
-   déjà 6 ; correction de `rows_t15c` : 3 lignes `t15c` sans référence
-   non-circulaire passent de OK à MISSING, DIFF inchangé, aucune
-   régression). **Aucun de ces quatre nombres n'est le bon à citer dans un
-   manuscrit** : chacun est vrai pour son jour et son périmètre, aucun
-   n'est stable. La commande qui les produit doit être rejouée au moment
-   de rédiger, pas avant.
+1. **Réoptimisation — prête, jamais lancée.** `train_hyperparams.py
+   --phase all` règle 8 hyperparamètres (`beta`, `w_z_frac`, `sigma`,
+   `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`) sur
+   8 scénarios canoniques. La sélection finale de la phase 3 est
+   protégée par un damier de validation tenu à l'écart (`HOLDOUT_GRID`,
+   6 régimes physiques jamais vus en entraînement, classement par perte
+   MOYENNE du damier) ; l'entraînement lui-même tire un régime physique
+   différent par essai (`TRAINING_REGIME_GRID`, 4 régimes, coût par
+   essai inchangé — seul le précalcul DNS grossit) ; les deux damiers
+   sont disjoints par construction. `_save_results`/`_deploy` écrivent
+   un JSON traçable (jeu complet de paramètres, hash de commit,
+   `sys.argv`) et le copient automatiquement où `pipeline.py`/`study/`
+   le lisent. Rien ne manque au mécanisme ; seule la campagne — plusieurs
+   jours de calcul — n'a pas tourné (`DEFAUTS.md`, D-22).
    ```bash
-   python study/common/aggregate_master_table.py --allow-missing
+   python src/train_hyperparams.py --print-space   # verifie l'espace, ne calcule rien
+   python src/train_hyperparams.py --phase all --seed <graine>
    ```
-4. **Toujours pas ajouté.** Confirmé le 26 août : `RESULTS.md` (« Ce que le
-   circuit peut déplacer, et par quel canal ») mesure et motive ce témoin en
-   détail — mixeur seul 0,254 de médiane, mixeur+H 0,490 — mais conclut
-   lui-même : « Aucune campagne du dépôt n'utilise ce témoin. » Item 4 reste
-   ouvert, à la fois dans l'appendice et dans `RESULTS.md`.
+2. **Relance des campagnes** — attend l'item 1, aucun autre obstacle.
+3. **Table maître — à jour.** `study/common/aggregate_master_table.py
+   --allow-missing` rend aujourd'hui **268 lignes, 139 OK / 6 DIFF /
+   123 MISSING** ; les MISSING sont les lignes de la campagne
+   confirmatoire qui n'a pas encore tourné (item 2), pas une régression.
+   Ce compte doit être recalculé au moment de rédiger, pas recopié
+   d'ici — il bougera dès que la campagne aura tourné.
+4. **Témoin « mixeur seul » — mesuré, non intégrable au panel H0b sans
+   travail supplémentaire.** Mesuré par balayage exhaustif de (β, γ)
+   (`RESULTS.md`, « Ce que le circuit peut déplacer » — médiane 0,254,
+   contre 0,490 avec l'hamiltonien). L'intégrer comme solveur du panel
+   `h0_optimiser_equivalence.py` demanderait de faire tourner QAOA sur
+   un hamiltonien de coût nul : COBYLA n'a alors aucun signal à
+   optimiser, et `NullHamiltonianError` (`src/VQA/cost_hamiltonian.py`)
+   refuse à raison de construire un tel circuit. La mesure par balayage
+   direct reste la bonne méthode pour cette question précise ; en faire
+   un solveur comparable aux autres (même E_gap, même F1) demande un
+   mécanisme différent, pas encore conçu.
+5. **H4/D-197 — la campagne LOSO du niveau 3 n'a que 4 des 8 folds.**
+   Complément distinct de la campagne d'hyperparamètres, structurellement
+   séparé (`closed_loop_campaign.py` ne lit jamais
+   `best_hyperparams.json`). Compléter les 4 folds manquants
+   (`vortex`, `coalescence`, `double_tearing`, `magnetic_twist`) demande
+   ~170 essais Optuna chacun — un ordre de grandeur d'heures par fold, du
+   même ordre que la campagne d'hyperparamètres. À lancer avec elle sur
+   la même machine, pas un correctif de code.
 
-**Mis à jour le 26 août (D-199/D-200) — l'item 2 gagne une précision,
-l'item 1 n'en perd aucune.** `select_by_holdout_validation` (D-199,
-`train_hyperparams.py`) existe désormais : la phase 3 choisit son
-candidat déployé par performance sur un point tenu à l'écart (Re=1200,
-graine physique 1) parmi les meilleurs essais en échantillon, plutôt que
-par le seul score d'entraînement — un garde-fou contre le surapprentissage
-au régime d'entraînement unique, mais construit sur UN SEUL point tenu à
-l'écart (Re=1200, graine=1) : lui-même surapprenable, un candidat pouvant
-gagner en étant simplement bon SUR CE POINT PRÉCIS.
+**Ce qui reste un résultat négatif non résolu, documenté honnêtement
+plutôt que forcé.** D-198 : le plafond GBT sous LOSO (H2b) souffre d'un
+signe de corrélation qui s'inverse d'un scénario à l'autre. La
+régularisation (`early_stopping=True`) est corrigée mais n'est qu'une
+cause mineure. La piste la plus directe — normaliser chaque scénario par
+ses propres statistiques avant le pool LOSO — a été essayée et
+**aggrave** le plafond moyen (0,278 → 0,165) : elle répare le pire fold
+mais en casse d'autres, preuve que l'échelle absolue du score classique
+porte elle-même du signal réel selon le scénario. Les deux autres pistes
+(modèle non-monotone, calibration du seuil de label) restent non
+essayées. Sans conséquence sur le verdict H2b (qui ne repose pas sur
+cette seule comparaison), mais non résolu.
 
-**Résolu depuis, dans la même journée.** `HOLDOUT_GRID` (`train_hyperparams.py`)
-remplace ce point unique par un damier de six régimes — deux Re (400 et
-1200, de part et d'autre du régime d'entraînement Re=Rm=800) × trois
-graines physiques (1, 2, 3), les deux axes que demandait le message USER
-cité plus haut. Le classement des candidats se fait désormais sur la
-perte MOYENNE du damier, pas sur un point unique ; le pire point de
-chaque candidat est journalisé à côté pour distinguer un gagnant régulier
-d'un gagnant chanceux sur un seul point. Coût multiplié par 6 sur la
-SEULE validation finale (~90 essais équivalents contre ~15), pas sur les
-3 phases. Testé (`tests/pipeline/test_holdout_validation_selection.py`,
-7 tests) → `RESULTS.md`.
-
-**Ce que ceci ne faisait toujours pas — corrigé depuis, dans la même
-journée, sur demande USER explicite.** Les 8 scénarios canoniques
-s'entraînaient tous à Re=Rm=800, graine physique 0 implicite : la
-diversité restait dans la sélection finale, jamais dans la boucle
-d'entraînement (les 600+600+400 essais Optuna). Cette portée n'était pas
-un oubli : la diversification d'entraînement avait déjà été pesée et
-écartée en construisant `select_by_holdout_validation`, pour un coût
-précis — évaluer CHAQUE essai sur TOUS les régimes d'un damier multiplie
-le coût par essai par le nombre de régimes, sur une campagne déjà de
-l'ordre de 2000 h CPU à un seul régime. USER, après avoir vu le damier de
-validation : « ok mais moi je veux quand même une campagne plus
-diversifiée. »
-
-Ce chiffre de coût n'était vrai que pour une conception précise
-(multiplier chaque essai) — `TRAINING_REGIME_GRID` en implémente une
-autre, jamais pesée jusque-là : chaque essai tire un SEUL régime
-(`_training_regime_for_trial`, fonction pure du numéro d'essai,
-indépendante du sampler TPE), pas tous. Le coût par essai reste
-inchangé ; seul le précalcul DNS — une fois par phase, pas par essai —
-grossit du facteur `len(TRAINING_REGIME_GRID)` (4 points : Re∈{600,800,
-1000}, graines∈{0,10,20,30} — Re=800 conservé comme point d'ancrage
-historique). Ce damier d'entraînement et celui de validation
-(`HOLDOUT_GRID`) ne partagent JAMAIS un point (`test_training_and_
-holdout_grids_never_share_a_point`) : Re plus resserré autour de 800 et
-graines disjointes (0/10/20/30 contre 1/2/3) — l'entraînement voit un
-voisinage local, la validation teste une généralisation plus lointaine.
-
-Câblé dans les 6 fonctions de phase et dans `main()`, le même damier DNS
-partagé entre bras quantique et classique (l'invariant `CLAUDE.md` :
-« les bras comparés partagent DNS »), et entré dans le hash de contrat de
-campagne (`objective._qhas_contract`) pour qu'une reprise sous un damier
-différent échoue plutôt que de mélanger deux définitions de
-l'entraînement. Défaut trouvé en câblant ceci, corrigé dans le même
-geste : `prepare_phase1` (`--prepare-only`) ouvrait un contrat SANS
-damier tandis que `_run_phase1` en ouvre désormais un AVEC — une reprise
-aurait échoué au premier essai réel (`campaign contract mismatch`) ;
-`prepare_phase1` construit maintenant son contrat de vérification avec la
-même forme de damier. Testé (`tests/pipeline/test_training_regime_
-diversification.py`, 15 tests, dont un qui aurait attrapé ce défaut
-précis) → `RESULTS.md`. **Jamais vérifié contre une vraie campagne** —
-en particulier l'effet du `MedianPruner` sous régimes mélangés d'un essai
-à l'autre, assumé mais non mesuré.
-
-D-200 mesure, au point de départ de la campagne (hyperparamètres de
-référence — la campagne n'a pas encore tourné), sous le protocole D-53
-(4 scénarios canoniques, Re=400 — pas encore le Re=800 ni les 8 scénarios
-de la campagne elle-même), avec `--mapper v1` (le mappeur que la campagne
-règle réellement ; D-53 n'avait mesuré que V2) : même pathologie H0a/H0b
-qu'à D-53 — ρ(E_gap, F1) = +0,891 (p=0,0013), QAOA n'atteint jamais
-l'optimum certifié (0/12). Ça ne bloque pas la relance — la campagne
-optimise directement la qualité de la décision AMR, pas le taux de succès
-sur l'optimum du hamiltonien — mais ça documente que le point de départ
-est déjà dans la zone que H0b décrit comme pathologique, et qu'aucune
-garantie a priori n'existe que l'espace de recherche à 9 dimensions en
-sorte. `rho_gap_f1.py` appliqué après coup à un échantillon des meilleurs
-essais de la phase 3 (proposé, pas fait — voir `RESULTS.md`, D-200)
-donnerait une première réponse, à coût mesuré (~12 min par point testé).
-
-**Une conclusion est désormais invalidée, pas seulement en attente.** À toute
-profondeur de raffinement supérieure à la première, le biais Z de
-l'hamiltonien et ses couplages décrivaient deux grilles différentes : le biais
-d'un patch venait du quart haut-gauche de ce patch (D-37, écart 41 % du plus
-grand coefficient, présent depuis le premier commit). À `max_depth = 4`,
-réglage de toutes les campagnes, trois niveaux sur quatre passaient par là.
-
-Le bras classique n'est pas touché — il ne construit aucun hamiltonien. La
-comparaison des deux bras était donc biaisée dans un sens connu.
-
-**Mis à jour le 26 août — D-37 est corrigé, la portée de « invalidé »
-change de forme sans disparaître.** `RESULTS.md` (« D-37 — le biais Z et les
-couplages décrivaient deux grilles différentes ») documente la correction :
-une ligne, `_process_score(local_score, depth == 0, target_dim)`, le halo
-n'est plus ajouté deux fois ; `H_edges` passe de (6,6) à (4,4) à `depth > 0`,
-et le pipeline s'exécute désormais à `max_depth = 2` là où il levait une
-`ValueError` avant. **Tout nombre Q-HAS mesuré avant cette correction, à une
-profondeur > 1, reste invalidé — mais rien mesuré après ne l'est plus pour
-cette raison.** Distinguer les deux dans le manuscrit demande de savoir de
-quel côté du commit `git log -S "target_dim + 2 * pad" -- src/Simulation/refinement.py`
-chaque artefact cité a été produit — non fait ici, à faire avant de citer un
-nombre Q-HAS à profondeur > 1.
-
-Le reste est **en attente de confirmation** sur le code corrigé, ce qui n'est
-pas la même chose qu'invalidé → `EVALUATION.md`.
+**Une conclusion reste bornée par une correction déjà faite, à vérifier
+avant de citer un vieux nombre.** Avant la correction de `_process_score`
+(`refinement.py`), le biais Z de l'hamiltonien et ses couplages
+décrivaient deux grilles différentes à toute profondeur de raffinement
+> 0 (le biais d'un patch venait du quart haut-gauche de ce patch, écart
+41 % du plus grand coefficient) ; à `max_depth = 4`, réglage de toutes
+les campagnes historiques, trois niveaux sur quatre passaient par là.
+Corrigé (une ligne, `H_edges` passe de (6,6) à (4,4) à `depth > 0`) :
+tout nombre Q-HAS produit APRÈS ce commit, à profondeur > 1, n'est plus
+concerné. Un artefact cité à cette profondeur doit d'abord être situé par
+rapport à `git log -S "target_dim + 2 * pad" -- src/Simulation/refinement.py`.

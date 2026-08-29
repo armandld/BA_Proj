@@ -4340,7 +4340,7 @@ prise sur parole.
 
 | vérification | résultat |
 |---|---|
-| H1/H3 lisent-elles la campagne déployée, ou une constante figée ? | **non, corrigé** — `config.py` ne suivait `hyperparams_loader` que si `QHAS_HYPERPARAMS_PATH` était exporté à la main → D-195 |
+| H1/H3 lisent-elles la campagne déployée, ou une constante figée ? | **non, corrigé** (commit `708f8fc`) — `config.py` ne suivait `hyperparams_loader` que si `QHAS_HYPERPARAMS_PATH` était exporté à la main |
 | `h3_window_counterfactual.py` (tâche 18) tourne-t-il vraiment ? | **non, plantait à chaque appel** (`AttributeError`), aucun test ne l'exerçait → corrigé |
 | H4 lit-elle `best_hyperparams.json` ? | non, à bon droit — LOSO structurellement séparé. Mais ses artefacts réels : **4 des 8 folds**, à l'échelle fumée → D-197, pas corrigé (campagne à part) |
 | la table maîtresse elle-même, recroisée contre son propre pin | **`KNOWN_DIFF` périmé depuis D-58** (17 août) : 4 pointé, 6 réel depuis la fermeture de D-158 (25 août) — personne n'avait recroisé → D-196 |

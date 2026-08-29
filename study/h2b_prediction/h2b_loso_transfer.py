@@ -49,6 +49,30 @@ from h2b_ceiling_random_split import (
 )
 
 
+def normalise_per_scenario(X):
+    """Centre-reduit chaque colonne de X avec la moyenne/ecart-type de X
+    LUI-MEME (un scenario a la fois, avant tout pool entre scenarios).
+
+    D-198 : le score classique (feature 0) a une echelle absolue tres
+    differente d'un scenario a l'autre (moyenne classe positive 0,65 sur
+    mhd_rotor contre 0,38 sur orszag_tang) — un GBT qui apprend un seuil
+    sur l'echelle brute, poolee sur 3 scenarios d'entrainement, transfere
+    mal au 4e si son echelle differe. Normaliser par scenario, AVANT le
+    pool LOSO, place chaque scenario sur une echelle commune sans exiger
+    de connaitre le scenario tenu (chaque scenario se normalise avec ses
+    PROPRES statistiques, disponibles qu'il soit dans le pool
+    d'entrainement ou tenu a l'ecart — aucune fuite entre scenarios).
+
+    Une colonne constante (ecart-type nul) reste seulement centree :
+    diviser par zero produirait des NaN sur une feature qui ne varie pas
+    dans ce scenario, pas une normalisation.
+    """
+    mean = X.mean(axis=0)
+    std = X.std(axis=0)
+    std_safe = np.where(std > 1e-12, std, 1.0)
+    return (X - mean) / std_safe
+
+
 def _gather_scenario(dns_paths_for_scen, dim, max_snaps):
     """Return (X_site, X_sten, Y, S) stacked for one scenario."""
     X_site, X_sten, Y, S = [], [], [], []
@@ -97,6 +121,10 @@ def main():
     p.add_argument("--N", type=int, default=DNS_N)
     p.add_argument("--max-snaps", type=int, default=30)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--normalize-per-scenario", action="store_true",
+                   help="D-198 : centre-reduit chaque scenario avant le "
+                        "pool LOSO (voir normalise_per_scenario). Off par "
+                        "defaut : bit-a-bit identique aux runs publies.")
     args = p.parse_args()
 
     print("=" * 88)
@@ -135,6 +163,9 @@ def main():
     data = {}
     for sc, rows in by_scene.items():
         Xs, Xn, Y, S = _gather_scenario(rows, args.dim, args.max_snaps)
+        if args.normalize_per_scenario:
+            Xs = normalise_per_scenario(Xs)
+            Xn = normalise_per_scenario(Xn)
         data[sc] = dict(X_site=Xs, X_sten=Xn, Y=Y, S=S)
         print(f"    {sc:<18} cells={len(Y):>6}  pos_rate={Y.mean():.3f}")
     print(f"  done in {time.time() - t0:.1f}s\n")
@@ -230,8 +261,10 @@ def main():
               f"==> neighbourhood couplings help for transfer.")
 
     # ---- save ----
-    out = os.path.join(RESULTS_DIR,
-                       f"upper_bound_loso_N{args.N}_dim{args.dim}{args.label_suffix}.npz")
+    norm_suffix = "_normpersc" if args.normalize_per_scenario else ""
+    out = os.path.join(
+        RESULTS_DIR,
+        f"upper_bound_loso_N{args.N}_dim{args.dim}{args.label_suffix}{norm_suffix}.npz")
     np.savez_compressed(
         out,
         held=np.array([r["held"] for r in rows]),

@@ -2671,12 +2671,25 @@ faiblesse centrale de l'étude.
 |---|---|---|---|---|---|---|
 | 2 | 8 | exhaustive | 0.0000 | 0.0000 | 0.0000 | **1.00** |
 | 2 | 8 | glouton *(contrôle)* | 0.0000 | 0.0000 | 0.0000 | 1.00 |
+| 3 | 18 | **exhaustive** | **0.0694** | **0.1528** | **0.1528** | 0.50 |
 | 4 | 32 | glouton | 0.0000 | **0.0312** | **0.0312** | 0.75 |
 | 8 | 128 | glouton | **0.0469** | **0.0690** | **0.0794** | **0.17** |
 
-> **L'inertie casse avec la taille.** À 32 et 128 qubits, ablater les
-> couplages change des décisions. Et l'uniformité de l'état fondamental
-> s'effondre en parallèle : 1.00 → 0.75 → 0.17.
+> **L'inertie casse avec la taille — confirmé par énumération exhaustive,
+> pas seulement par le proxy glouton.** `dim = 3` (18 qubits) était la
+> case manquante que ce document signalait comme « encore
+> exhaustivement vérifiable » : elle est maintenant remplie, avec les
+> mêmes traces DNS que D-53 (`N = 96`, divisible par 3). Ablater les
+> couplages y change déjà 6,9 % à 15,3 % des décisions — plus que le
+> proxy glouton n'en trouvait à `dim = 4`, et sans dépendre de la
+> fidélité du glouton, seule question encore ouverte à `dim ≥ 4`.
+
+```bash
+python study/h3_representation/h3_term_ablation.py \
+    --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang \
+    --re 400 --N 96 --dim 3 --n-snaps 2 --mapper v1
+pytest tests/study/test_t13_dim3_couplings_not_inert.py -v   # 7 passed, couvre aussi --mapper v2
+```
 
 Les deux phénomènes vont ensemble et forment un mécanisme cohérent : tant
 que l'optimum est un masque constant, aucun couplage ne peut le déplacer ;
@@ -2693,6 +2706,7 @@ durs à grossir. Elle se mesure contre la vérité terrain
 | dim | qubits | F1 hamiltonien complet | F1 Z seul | F1 règle classique | **gain des couplages** |
 |---|---|---|---|---|---|
 | 2 | 8 | 0.3333 | 0.3333 | **0.3889** | **+0.0000** |
+| 3 | 18 | 0.4050 | 0.4510 | *(4 scénarios, pas de règle classique comparable ici)* | **−0.0460** |
 | 4 | 32 | 0.5199 | 0.5524 | 0.5524 | **−0.0325** |
 | 8 | 128 | 0.5916 | 0.6481 | 0.6481 | **−0.0565** |
 
@@ -2757,11 +2771,30 @@ montant en taille. Les couplages deviennent actifs mais nuisibles, sur toute
 la plage testée (8 → 128 qubits). Le meilleur cas de cette famille de
 mappings est d'égaler la règle de seuil qu'elle est censée remplacer.
 
-**Ce qui reste ouvert :** la localisation exacte de la transition (entre 8
-et 32 qubits ; dim = 3, 18 qubits, serait encore exhaustivement vérifiable
-mais demande un DNS à `N` divisible par 3), et surtout **une autre
-construction de couplages** — le diagnostic F1 ci-dessus est le test que
-toute nouvelle proposition devrait passer avant d'être revendiquée.
+**Ce qui reste ouvert :** surtout **une autre construction de couplages**
+— le diagnostic F1 ci-dessus est le test que toute nouvelle proposition
+devrait passer avant d'être revendiquée.
+
+**Ce que ceci répond, aussi, pour T13 et T11b (D-58).** T13 et T11b ont
+toujours été mesurés à `dim = 2`, la même taille dégénérée — leur lecture
+d'origine (« couplages inertes », « progression variationnelle quasi
+nulle ») s'expliquait, jusqu'à D-58, par une fenêtre d'incertitude
+supposée annihiler le couplage ZZ. D-58 a retiré cette explication (la
+fenêtre était mesurée sur la mauvaise variable ; corrigée, elle laisse
+33,8 % à 59,4 % de la masse ZZ intacte, pas près de zéro). La bonne
+explication est celle-ci : à `dim = 2`, l'optimum exact est uniforme quel
+que soit le Hamiltonien (ci-dessus), donc rien ne peut jamais s'y montrer
+causal — ni les couplages (T13), ni la direction vers laquelle un
+optimiseur pourrait progresser (T11b). Ce n'est pas une propriété du
+formalisme Ising, c'est une propriété de la taille `dim = 2`, qui cesse
+dès `dim = 3`. La progression variationnelle de T11b elle-même n'a pas
+été rejouée séparément à `dim = 3` : H0a (D-53, D-200) mesure directement
+la même question à cette taille, avec plus de rigueur (7 tests
+verrouillés, plusieurs profondeurs de circuit, plusieurs scénarios) —
+QAOA atteint son propre optimum sur 0 à 15,6 % des instantanés selon le
+mappeur, et un budget d'optimiseur plus grand aggrave l'écart plutôt que
+de le réduire. La quasi-absence de progression de T11b à `dim = 2` en est
+un cas particulier, pas un phénomène distinct.
 
 ---
 
@@ -9643,13 +9676,11 @@ fichier n'a pas été rejoué (coût).
 
 ---
 
-# D-195 — une moitié expliquée et confirmée, l'autre bornée mais pas close
+# D-195 — les deux symptômes expliqués, tous deux des instances de H0a
 
-**Ce que USER a demandé le 26 août** : investiguer la cause et régler le
-problème. Les deux symptômes n'ont **pas** la même cause : l'un est
-expliqué et confirmé empiriquement, l'autre a deux hypothèses éliminées
-mais pas de troisième confirmée — écrit tel quel, pas présenté comme clos
-en bloc.
+Les deux symptômes n'ont **pas** la même cause locale, mais la même cause
+de fond : l'optimiseur variationnel n'atteint pas l'optimum de son propre
+hamiltonien (H0a), sous deux formes différentes selon la configuration.
 
 ## `test_hyperparameter_sweep` (MHD Rotor) — expliqué et confirmé
 
@@ -9722,12 +9753,11 @@ for K_opt in (80, 800):
 "
 ```
 
-## `test_noise_robustness` (Orszag-Tang, sans bruit) — deux hypothèses éliminées, pas de troisième confirmée
+## `test_noise_robustness` (Orszag-Tang, sans bruit) — les trois causes tranchées
 
-Le second symptôme — QAOA égale exactement le classique
-(`frac_qa=frac_cl=0,3189`) sur Orszag-Tang sans bruit — **n'a pas la même
-explication**, vérifié en éliminant les deux candidats les plus probables
-avant d'en chercher un troisième :
+QAOA égale exactement le classique (`frac_qa=frac_cl=0,3189`) sur
+Orszag-Tang sans bruit. Trois causes candidates, toutes tranchées par la
+mesure :
 
 1. **Budget d'optimiseur insuffisant : éliminé.** `K_opt=80` contre
    `K_opt=800`, même configuration : `captured` reste **exactement**
@@ -9742,27 +9772,37 @@ avant d'en chercher un troisième :
    la fenêtre `exp(-((score-seuil)/σ)²)` vaut **0,68 à 0,93** sur 6 des 9
    cellules — pas near-zero. Le couplage n'est pas noyé ici comme il
    l'était dans le cas que D-58 mesurait.
+3. **L'optimum exact coïnciderait avec la décision classique : réfuté par
+   énumération exhaustive**, pas seulement rendu plausible.
+   `h3_noise_robustness_exact_check.py` reconstruit exactement le
+   hamiltonien de ce test (même mapper, même `get_adaptive_flux`, même
+   trajectoire DNS — `classical_captured_fraction` reproduit `0,3189` au
+   dix-millième près, la preuve que la reconstruction est fidèle) et
+   calcule son état fondamental exact par énumération (18 qubits, mêmes
+   fonctions que T13/D-53) : **il est uniforme — 0 cellule raffinée sur
+   9, 4-fois dégénéré** — alors que la décision classique en sélectionne
+   2. Un optimum uniforme ne peut par construction coïncider avec une
+   sélection non triviale : il n'y a pas de décision informative du côté
+   de l'optimum exact avec laquelle QAOA pourrait coïncider.
 
-**Ce qui reste, non vérifié** : le motif observé (le score QAOA continu
-suit presque cellule à cellule le score classique, écarts de 0,01 à
-0,05) est cohérent avec une lecture où l'optimum du hamiltonien, pour
-CETTE configuration précise, coïncide réellement avec la décision
-classique — parce que l'encodage de départ (`mini_score`, dérivé du score
-classique) est déjà proche de cet optimum, pas parce que le couplage est
-inactif ou l'optimiseur bloqué. C'est une hypothèse plausible, cohérente
-avec les deux éliminations ci-dessus, **mais non confirmée** : la
-trancher demanderait une énumération exhaustive du hamiltonien de cette
-configuration précise (méthode de D-53), pas encore faite ici — budget de
-calcul non dépensé sur cette question précise.
+**Ce qui explique réellement l'observation.** QAOA « égale le classique »
+parce qu'il reste proche de son encodage initial — le mécanisme déjà
+établi par T11b et par H0a (D-53/D-200) : à profondeur/budget limités, la
+sortie de QAOA est une faible perturbation de `θ = 2·arcsin(√score)`,
+pas une exploration réelle du hamiltonien. Ici l'optimum réel est
+dégénéré et sans contenu décisionnel ; QAOA n'a donc ni l'occasion ni la
+raison de s'en écarter, et son résultat continu ressemble au score
+classique parce que c'est de là qu'il part. Une instance de plus de H0a,
+pas un phénomène distinct.
 
-## Conséquence pour `docs/DEFAUTS.md`
+```bash
+python study/h3_representation/h3_noise_robustness_exact_check.py
+pytest tests/study/test_h3_noise_robustness_exact_check.py -v   # 4 passed
+```
 
-D-195 se referme pour sa moitié `test_hyperparameter_sweep`
-(expliquée, confirmée, rattachée à H0a — pas un défaut à part).
-`test_noise_robustness` reste ouvert, mais sous une forme plus précise
-qu'avant : deux causes plausibles éliminées par la mesure, une troisième
-posée et non vérifiée — pas « cause non élucidée » au sens où rien
-n'aurait été tenté.
+**Conséquence pour `docs/DEFAUTS.md`** : D-195 est refermé en entier —
+les deux symptômes (`test_hyperparameter_sweep`, `test_noise_robustness`)
+sont désormais tous deux rattachés à H0a, avec leur propre mesure.
 
 # D-196 — le pin `KNOWN_DIFF` de la table maîtresse était resté à 4 alors que la table en portait déjà 6
 
