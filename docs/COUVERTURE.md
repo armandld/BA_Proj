@@ -16,205 +16,56 @@ modèle mental du code, donc son erreur. Un module à 95 % peut être un piège 
 un module à 60 % peut être sain.
 
 **3 102 tests** (3 091 hors `slow`), 170 fichiers de tests. Commandes dans
-`tests/README.md`. *(Remesuré le 25 août — voir la reconstruction
-ci-dessous ; le chiffre « 1 971 tests, 77 fichiers » de la version
-précédente datait du 13 août et n'avait jamais été remis à jour depuis,
-malgré la règle énoncée en bas de ce document.)*
+`tests/README.md`.
 
 ---
 
-## Reconstruction et mise à jour du 25 août
+## Couverture globale de `src/` et portée du protocole
 
-Le commit `d3d7573` (« improvements and corrections of the tests, some
-corrections on the src code ») a remplacé ce fichier — alors **4 117
-lignes, 67 sections**, une couverture nominative de chaque fichier de
-`src/`, `study/`, `figures/` et `scripts/` — par trois paragraphes
-génériques, dans le même geste qui a supprimé `DEFAUTS.md` et `RESULTS.md`
-sans rien archiver (voir `DEFAUTS.md`, section « Reconstruction du
-25 août »). **Contrairement à `DEFAUTS.md`, ce document n'est pas un
-journal de défauts filtrable en « résolu / non résolu » : c'est l'index qui
-répond, en un coup d'œil, à « tout le code est-il lu et testé, et qu'est-ce
-qui ne l'est pas encore ». Il est donc restauré ici en entier**, texte
-original inclus ci-dessous à partir de la section 1, puis mis à jour contre
-le code réellement présent sur cette branche aujourd'hui — pas seulement
-recopié depuis `git show d047015:docs/COUVERTURE.md`.
+Le protocole actuel définit **8 scénarios** (`orszag_tang`,
+`harris_tearing`, `kelvin_helmholtz`, `mhd_rotor`, `lamb_oseen`,
+`island_coalescence`, `double_tearing`, `magnetic_twist`) et **5 graines
+physiques** (`PHYSICS_SEEDS = [0, 1, 2, 3, 4]`) — voir `PLAN_PREPRINT.md`
+et `protocol_v3_evaluation.md`. Les sections datées ci-dessous (13 au
+22 août) mesurent sous 4 scénarios canoniques et une seule graine : elles
+restent correctes pour ce qu'elles ont mesuré, mais leurs tables « axes
+empruntés » ne couvrent pas le périmètre à 8 scénarios × 5 graines —
+rejouer ces tables sous le périmètre étendu n'a pas été fait.
 
-**Ce qui a changé entre `d047015` (dernier commit avant la suppression) et
-aujourd'hui** — 39 commits, 153 fichiers sous `src/`, `study/`, `figures/`,
-`scripts/`, `tests/` :
+`scripts/agent-github-action.py` (72 lignes, pont GitHub Actions) porte
+**0 test** — le seul lanceur du dépôt sans aucune référence dans `tests/`.
 
-**Le protocole s'est élargi, et c'est documenté ailleurs.** `config.py`
-définit maintenant **8 scénarios** (`orszag_tang`, `harris_tearing`,
-`kelvin_helmholtz`, `mhd_rotor`, `lamb_oseen`, `island_coalescence`,
-`double_tearing`, `magnetic_twist`, contre les 4 « canoniques » que tout ce
-document ci-dessous cite) et **5 graines physiques** (`PHYSICS_SEEDS = [0,
-1, 2, 3, 4]`, contre une seule graine implicite). Ce n'est pas une dérive
-silencieuse : l'extension figure dans `PLAN_PREPRINT.md` et
-`protocol_v3_evaluation.md`. Mais elle rend **le périmètre de tout « axes
-empruntés » écrit avant le 22 août plus étroit que le protocole actuel** —
-chaque section ci-dessous reste correcte pour ce qu'elle a mesuré, elle ne
-couvre plus la totalité de ce qui existe aujourd'hui. Rejouer les tables
-« axes empruntés » sous 8 scénarios × 5 graines n'a pas été fait ici : ce
-serait refaire l'audit, pas le restaurer.
+**Couverture totale de `src/` : 68 %** (4 354 instructions, 1 393 jamais
+exécutées) :
 
-**C'est cette extension qui explique la plupart des fichiers déplacés :**
-
-| | quoi |
+| module | couverture |
 |---|---|
-| **ajoutés, jamais mentionnés dans ce document** | `scripts/agent-github-action.py` (72 lignes, pont GitHub Actions, **0 test** — le seul des cinq sans aucune référence dans `tests/`), `scripts/run_confirmatory_campaign.sh`, `scripts/run_dns_campaign.sh`, `scripts/run_rented_campaign.sh` (référencés par `tests/pipeline/test_campagne_noms_et_fantomes.py`, `tests/lint/test_mise_en_place_campagne.py`, `tests/study/test_repro_commands_point_to_real_files.py` — existence et options vérifiées, pas audités fonction par fonction), `study/pipeline/data_catalog.py` (83 lignes — résout le panel DNS 8 scénarios × 5 graines et **lève** sur tout artefact manquant plutôt que de continuer sur un sous-ensemble silencieux ; testé par `tests/study/test_t8_dns_extension.py`, pas encore lu en entier au sens de ce document) |
-| **supprimés, tous dans le même commit `d3d7573`** | `study/pipeline/dns_extension.py` (§ « lu en entier RIEN trouvé » plus haut, et consommé par D-73/T14 ci-dessous), `study/h2b_prediction/h2b_dynamic_ground_truth.py`, `study/h2b_prediction/h2b_loso_bootstrap.py` (309 lignes, **lu en entier et croisé le 15 août**, § `study/h2b_prediction/`, passe du 15 août — pas un fichier mort), `scripts/inventaire_campagne.py`, `scripts/nettoyer_essais_fantomes.py`, `scripts/run_leak_free_campaign.sh`, `scripts/run_study_v2_phases.sh`, `scripts/run_study_v2b.sh`, `scripts/soumettre_campagne.sh` |
+| `cost_hamiltonian`, `init_qbits_state`, `mapping`, `call_vqa_shell`, `PhysToAngle`, `utils` | **100 %** |
+| `Simulation/solver.py` | **99 %** |
+| `HamiltParams.py`, `pre_compute_dns.py`, `VQA/runtime.py` | **98 %** |
+| `RescaleArrays.py` | **97 %** |
+| `VQA/optimize.py`, `VQA/postprocess.py` | **95 %** |
+| `HamiltParams_v2.py` | **94 %** |
+| `train_hyperparams.py` | **92 %** |
+| `Simulation/grid.py` | **90 %** |
+| `Simulation/refinement.py` | **82 %** |
+| `hyperparams_loader.py`, `VQA/execute.py` | **68 %** |
+| `pipeline.py` | **65 %** |
+| `visual.py` | **54 %** |
+| `analyze_hyperparams.py` | **29 %** |
+| `recompute_lambda_scores.py` | **28 %** |
+| `compare_rotor_budget.py` | **22 %** |
+| `help_visual.py` | **7 %** |
+| `import_Neon_data_to_local.py` | **supprimé du dépôt** — §1a ter ci-dessous décrit le fichier tel qu'il était avant sa suppression |
 
-Vérifié pour les neuf supprimés : **aucune référence vivante** ne subsiste
-dans le dépôt (import, appel, invocation de lanceur) — seuls des
-commentaires et docstrings historiques les citent encore, ce qui ne casse
-rien. `dns_extension.py` en particulier : son rôle (perturbation de champ,
-validations KH/OT, catalogue de trajectoires) est repris par
-`dns_sweep.py` + `dns_validation.py` + le nouveau `data_catalog.py` —
-`tests/study/test_t8_dns_extension.py` (le nom du fichier de test n'a pas
-suivi le déplacement) importe maintenant les trois. Mais comme pour le
-contenu de `DEFAUTS.md`/`COUVERTURE.md`/`RESULTS.md`, **rien n'écrit noir
-sur blanc, quelque part dans le dépôt, que ces neuf suppressions sont ce
-remplacement plutôt qu'une perte** — c'est une lecture du code qui
-l'établit ici, pas une mesure avant/après consignée au moment du commit.
-Les deux fichiers `h2b_prediction` n'ont pas de successeur aussi net :
-`h2b_loso_bootstrap.py` en particulier était un module audité, pas du code
-mort, et sa disparition n'est expliquée nulle part.
+Trois défauts que des sections datées de ce document présentent comme
+ouverts sont **résolus** :
 
-**Un cas plus ancien de la même famille, mais correctement tracé sur le
-moment : `src/import_Neon_data_to_local.py`** (§ 1a ter ci-dessous, D-64 et
-D-65 — suppression silencieuse d'étude Optuna, identifiant Neon complet
-publié). Le fichier a disparu le **15 août** (`fdc7b03`, 77 lignes), soit
-**avant** `d047015` — donc pendant la période que ce document couvre déjà,
-sans que la section qui le décrit (datée du 13 août) n'ait été mise à jour
-en conséquence. `tests/pipeline/test_import_never_destroys_destination.py`
-documente la raison — « décision de USER, `docs/RESULTS.md` §
-"Architecture Neon supprimée" » — mais cette section de `RESULTS.md` n'est
-plus lisible aujourd'hui : `RESULTS.md` porte la même suppression du
-24 août que `DEFAUTS.md`/`COUVERTURE.md`, et n'a pas encore été restauré.
-D-64 et D-65 n'apparaissent plus dans `DEFAUTS.md` (cohérent avec
-« résolu »), mais comme les six entrées listées ci-dessus, sans mesure
-avant/après retrouvable.
-
-**`src/Simulation/HamiltParams_v2.py`** a été retravaillé en profondeur
-après `d047015` (146 insertions, 263 suppressions sur ce seul fichier) —
-mais revérifié, pas juste recopié : `norm="max"` reste le défaut, et la
-formule reste la somme des deux grandeurs adimensionnelles sous
-dénominateur commun que D-189/D-190 (dernière section de ce document,
-« Passe du 22 août ») ont établie. Les quatre fichiers de test que cette
-même section cite existent toujours :
-`tests/mapping/test_plaquette_signal_negligeable.py`,
-`tests/mapping/test_selectivite_des_coefficients.py`,
-`tests/pipeline/test_intermediate_score_time_alignment.py`,
-`tests/study/test_preflight_pertinence_separates.py`.
-
-**Trois entrées que ce document cite comme ouvertes sont résolues
-depuis**, sans que la correction soit datée ou mesurée ailleurs — vérifié
-contre `docs/DEFAUTS.md` (reconstruit le 25 août, `08e90c4`), pas contre le
-texte ci-dessous qui n'est pas réécrit :
-
-| section de ce document | citait | aujourd'hui |
+| section | défaut | résolution |
 |---|---|---|
-| § `preflight_coefficients.py` (D-141) | « rapport seul, décision requise » — la baseline classique franchit le seuil de pertinence mieux que `K_plaquettes` | **résolu** — `relevance_is_sufficient` exige maintenant `rho_best − rho_classical > margin`, l'option 2 que cette même section proposait |
-| § « Le score intermédiaire d'Optuna » (D-143) | `dns_trace[step − 1]` lu un pas trop tôt sur le chemin d'élagage | **résolu** — les deux sites lisent désormais `dns_trace[step]` |
-| § « Passe du 21 août (suite) », dernière ligne (D-186) | l'optimum du balayage `c_bias` tombait au bord de la grille, non rejoué | **résolu avec soin** — grille portée à `[0,1 ; 1e5]`, `require_interior_optima` distingue un bord non résolu (refuse l'artefact) d'un plateau biais-seul authentique. Remesuré le 25 août : F1 sature à 0,7405, sous la baseline (0,830) |
-
-Les tests de déviation que D-141 et D-143 décrivent (« ils rougissent le
-jour où le défaut est tranché ») ont donc dû rougir au moment de ces
-corrections — vérifié que la suite est verte aujourd'hui, ce qui veut dire
-qu'ils ont été mis à jour avec la correction, pas simplement supprimés ;
-le détail vit dans `DEFAUTS.md`, pas ici.
-
-**Couverture de ligne — remesurée le 25 août**, selon la commande que ce
-document prescrit lui-même (§ « Tenir ce document à jour »), même
-périmètre que la mesure du 13 août (`--source=src`, suites QAOA comprises,
-seul `slow` exclu) : **1h15** (4542 s), contre les « 36 min » de la mesure
-précédente — attendu, la suite est passée de 1971 à 3102 tests sur le même
-intervalle de commits.
-
-**Total sur tout `src/` : 68 %** (4354 instructions, 1393 jamais
-exécutées), contre 56 % le 13 août. Périmètre identique des deux côtés :
-c'est un vrai gain, pas un artefact de mesure.
-
-| module | 13 août | 25 août | écart |
-|---|---|---|---|
-| `cost_hamiltonian`, `init_qbits_state`, `mapping`, `call_vqa_shell`, `PhysToAngle`, `utils` | 100 % | **100 %** | — |
-| `HamiltParams_v2.py` | 100 % | **94 %** | retravaillé en profondeur (voir ci-dessus) ; 9 instructions non exécutées, pas mesurées en détail ici |
-| `Simulation/solver.py` | 99 % | **99 %** | — |
-| `HamiltParams.py` | 99 % | **98 %** | — |
-| `pre_compute_dns.py` | 98 % | **98 %** | — |
-| `VQA/runtime.py` | 98 % | **98 %** | — |
-| `RescaleArrays.py` | 97 % | **97 %** | — |
-| `VQA/optimize.py` | 88 % | **95 %** | + |
-| `VQA/postprocess.py` | 95 % | **95 %** | — |
-| `train_hyperparams.py` | 90 % | **92 %** | + |
-| `Simulation/grid.py` | 90 % | **90 %** | — |
-| `Simulation/refinement.py` | 82 % | **82 %** | — |
-| `hyperparams_loader.py` | 55 % | **68 %** | + |
-| `VQA/execute.py` | 64 % | **68 %** | + |
-| `pipeline.py` | 52 % | **65 %** | + — le corps de `main()`/sa CLI reste hors du chemin déployé, comme noté le 13 août |
-| `visual.py` | 12 % | **54 %** | + |
-| `analyze_hyperparams.py` | 0 % | **29 %** | + — D-49/D-50/D-60 à D-65 l'ont fait sortir de « jamais audité », voir §1a |
-| `recompute_lambda_scores.py` | 0 % | **28 %** | + — D-49/D-61/D-62, voir §1a bis |
-| `compare_rotor_budget.py` | *(non tabulé le 13 août)* | **22 %** | audité en entier depuis (§ ci-dessous), 202 instructions non exécutées — c'est le tracé et le script complet, jamais rejoués en test |
-| `help_visual.py` | 7 % | **7 %** | — |
-| `import_Neon_data_to_local.py` | 0 % | **supprimé** | voir la note ci-dessus |
-
-Les cinq fichiers que le 13 août listait comme « jamais audités » ne le
-sont plus au sens de la couverture : les quatre restants (`analyze_hyperparams.py`,
-`recompute_lambda_scores.py`, `compare_rotor_budget.py`, `help_visual.py`)
-portent tous des tests maintenant, même partiels. `help_visual.py` seul n'a
-pas bougé — cohérent avec §1a quater, qui documente déjà que 239 de ses
-327 lignes sont mortes par construction (aucun appelant).
-
-**La suite n'est pas verte, et ce n'est pas nouveau.** La mesure du 25 août
-donne **20 failed, 3000 passed, 69 skipped, 2 xfailed**. Un seul de ces
-échecs vient de cette reconstruction — `test_live_documentation_has_no_
-removed_versioned_study_path[COUVERTURE.md]`, parce que le texte original
-restauré ci-dessous citait littéralement l'ancien chemin versionné de T14
-(§ D-71) en expliquant qu'il n'existe plus ; reformulé sans changer le
-sens, pour ne pas affaiblir un garde qui fait exactement son travail.
-**Les 19 autres sont préexistants sur cette branche**, confirmé en
-comparant à une exécution complète capturée avant les deux commits de
-cette reconstruction — diff exact, aucun de plus, aucun de moins :
-
-```
-tests/lint/test_scripts_point_somewhere.py::test_chaque_chemin_dun_lanceur_existe[run_study_v3.sh]
-tests/mapping/test_signal_contribution.py::test_C_ZZ
-tests/pipeline/test_relative_percentile_is_trainable.py::test_le_bloc_mort_existe_encore
-tests/pipeline/test_relative_percentile_is_trainable.py::test_le_bloc_mort_ne_compte_pas
-tests/quantum/test_optimiser_axis.py::test_the_gap_between_the_two_optimisers_is_smaller_than_the_qaoa_spread
-tests/quantum/test_qaoa_arm_is_sampled.py::test_study_result_names_and_payload_separate_quantum_seeds
-tests/quantum/test_qaoa_noise_and_early.py::test_noise_robustness
-tests/quantum/test_qaoa_physics_decision.py::TestFullPipelineVortex::test_the_vortex_contrast_is_not_reproducible_enough_to_conclude
-tests/quantum/test_qaoa_scaling_and_hparams.py::test_hyperparameter_sweep
-tests/solver/test_solver_convergence.py::test_the_corrected_path_is_the_default_and_the_reason_is_written
-tests/solver/test_solver_convergence.py::test_the_correction_is_off_by_default_and_the_reason_is_written
-tests/solver/test_solver_guards_and_objective.py::test_the_pipeline_warns_when_sigma_has_to_be_defaulted
-tests/study/test_h0_certified_dim3_contradicts_criterion.py::test_la_decision_de_ne_pas_corriger_D53_reste_ecrite
-tests/study/test_h0_panel_guards.py::test_four_parallel_runs_would_not_collide
-tests/study/test_t17_uncertainty_window.py::test_deployed_params_are_read_from_the_pipeline_not_hardcoded
-tests/test_launcher_paths_resolve.py::test_each_exemption_still_names_a_real_dead_path
-tests/test_launcher_paths_resolve.py::test_the_sweep_is_not_empty
-tests/test_launcher_paths_resolve.py::test_the_sweep_still_sees_every_invocation_it_saw_before
-tests/test_suite_integrity.py::test_aucun_test_n_est_incapable_d_echouer
-```
-
-Aucun n'est mentionné comme ouvert dans `DEFAUTS.md` reconstruit — donc soit
-un défaut de plus à y ajouter après diagnostic, soit un artefact
-d'environnement (dépendance, graine, ressource absente) à distinguer d'un
-vrai défaut avant de conclure. Ni l'un ni l'autre n'est fait ici : cette
-reconstruction s'arrête à la mesure, pas au diagnostic — c'est le prochain
-travail, pas celui de ce document.
-
-**Ce que cette reconstruction n'a PAS fait, écrit pour ne pas être supposé
-fait.** Le texte original ci-dessous, à partir de la section 1, **n'est
-pas réécrit** — c'est un journal chronologique de passes datées (13 au
-22 août), et chaque entrée reste correcte à la date où elle a été écrite.
-Les 67 sections n'ont pas été rejouées une à une contre le protocole à 8
-scénarios ; seuls les écarts structurels (fichiers apparus/disparus,
-verdicts changés ailleurs) sont listés ci-dessus. Une passe future qui
-voudrait revérifier une section précise doit encore le faire — cette
-reconstruction ne s'y substitue pas.
+| `preflight_coefficients.py` (D-141) | la baseline classique franchissait le seuil de pertinence mieux que `K_plaquettes` | `relevance_is_sufficient` exige `rho_best − rho_classical > margin` |
+| « Le score intermédiaire d'Optuna » (D-143) | `dns_trace[step − 1]` lu un pas trop tôt sur le chemin d'élagage | les deux sites lisent `dns_trace[step]` |
+| « Passe du 21 août (suite) » (D-186) | l'optimum du balayage `c_bias` tombait au bord de la grille, non rejoué | grille portée à `[0,1 ; 1e5]`, `require_interior_optima` distingue un bord non résolu (refuse l'artefact) d'un plateau biais-seul authentique ; F1 sature à 0,7405, sous la baseline (0,830) |
 
 ---
 ## 1. Ce qui n'est pas couvert — la liste qui dit quoi faire
@@ -568,42 +419,31 @@ seront que si un appelant apparaît.
 
 ## `src/compare_rotor_budget.py` — lu en entier, tourne depuis D-10, un défaut trouvé (D-91, depuis clos)
 
-Note obsolète (deux fois) : le `TypeError` décrit ci-dessous a été corrigé
-le 13 août 2026 (`403240b`, D-10/D-66/D-67) — **avant** que cette note ne
-soit écrite, mais sans qu'elle soit mise à jour. Le script tourne, produit
-son `.npz`, et est désormais lu en entier, fonction par fonction (question
-2 de `VIGIL.md` posée sur `compute_block_errors` : que promet-elle ?).
-
-**Mise à jour (Vigil, 19 août) : D-91 a depuis été corrigé et est sorti de
-`DEFAUTS.md`.** Le titre de cette section et le paragraphe suivant le
-disaient encore « ouvert » ; ce n'est plus le cas — `RESULTS.md` porte la
-mesure avant/après (normalisation par bloc → normalisation globale par
-champ, le bruit de fond ne domine plus la structure d'un facteur 1,0e+07).
-Le paragraphe ci-dessous est laissé tel quel comme trace de ce qui a été
-trouvé ; seul son statut change.
+Le script tourne, produit son `.npz`, et a été lu en entier, fonction par
+fonction (question 2 de `VIGIL.md` posée sur `compute_block_errors` : que
+promet-elle ?).
 
 **D-91** (`DEFAUTS.md` → `RESULTS.md`, **clos**) : `compute_block_errors` divisait par
 `ref = sqrt(mean(dns_block**2)) + 1e-10`, plancher côté dénominateur
 seul — deux blocs au même écart absolu reçoivent un score qui dépend de
 l'amplitude du signal, pas de l'écart. Sur le rotor MHD réel, la sélection
-« ground truth » qui en sort exclut le bloc central (celui qui porte la
-vraie structure), au profit de coins de fond quasi vide. C'est la cause de
-l'anomalie déjà notée dans `RESULTS.md` (D-10 : sélection ground truth
-0,3079, à peine mieux que l'absence d'AMR à 0,3074, contre 0,0208 pour
-classique/Q-HAS). **Depuis corrigé** (normalisation globale par champ au
-lieu de par bloc) et remesuré — voir `RESULTS.md`, D-91 : les deux nombres
-publiés cités ici sont ceux d'AVANT la correction, gardés pour la trace de
-ce qui a été trouvé, pas les valeurs courantes.
+« ground truth » qui en sortait excluait le bloc central (celui qui porte
+la vraie structure), au profit de coins de fond quasi vide — la cause de
+l'anomalie notée dans `RESULTS.md` (D-10 : sélection ground truth 0,3079,
+à peine mieux que l'absence d'AMR à 0,3074, contre 0,0208 pour
+classique/Q-HAS ; ces trois valeurs sont celles d'AVANT la correction,
+gardées comme trace du défaut, pas les valeurs courantes). Corrigé
+(normalisation globale par champ au lieu de par bloc) et remesuré —
+valeurs courantes dans `RESULTS.md`, D-91.
 
 Sain par ailleurs : `select_top_k` (testé, `argsort` décroissant correct),
 `build_patches_from_selection` (même convention `bi,bj` que les trois
 fonctions de score), `classical_block_scores`/`qhas_block_scores` (le
-mapper reçoit désormais les hyperparamètres réellement déployés, D-10),
+mapper reçoit les hyperparamètres réellement déployés, D-10),
 `compute_solution_error` (nulle sur un champ identique, croissante avec
-l'écart, testé). Historique désormais dans le fichier lui-même : même
-réparé, il comparerait un bras Q-HAS aux hyperparamètres écrits en dur
-avant D-10 — ce n'est plus le cas, `qhas_block_scores` appelle
-`load_hyperparams()`.
+l'écart, testé). `qhas_block_scores` appelle `load_hyperparams()`, donc le
+bras Q-HAS compare aux hyperparamètres réellement déployés, pas à des
+valeurs écrites en dur.
 
 **Axes empruntés** : bras qhas/classique/ground-truth tous exercés, bord
 périodique uniquement, `state_vector` uniquement (le seul backend rejoué
@@ -1072,16 +912,13 @@ l'artefact mais aucune ligne du master table ne la cite.
 
 ### `aggregate_master_table.py` — lu en entier
 
-Dernier fichier non relu de `study/common/` ; exécuté à chaque passe
-(`180 / 164 / 16 / 0`) mais jamais relu fonction par fonction avant cette
-passe.
-
-**Mis à jour le 26 août (D-196, audit H1/H3/H4).** Le `180 / 164 / 16 / 0`
-ci-dessus est le décompte à la fermeture de D-58 (17 août) sur une table
-de 180 lignes ; la table a grandi depuis (`t15c`, `t26` notamment) et
-personne n'avait recroisé le compteur `KNOWN_DIFF` du test contre l'état
-réel de la table. Décompte courant, recoupé contre l'artefact et
-reproductible aujourd'hui : **268 lignes, 139 OK / 6 DIFF / 123 MISSING**
+Dernier fichier non relu de `study/common/`, maintenant relu fonction par
+fonction. **D-196** (audit H1/H3/H4) : le compteur `KNOWN_DIFF` du test
+reflétait le décompte à la fermeture de D-58 (17 août, `180 / 164 / 16 /
+0` sur une table de 180 lignes) et n'avait jamais été recroisé contre
+l'état réel de la table depuis qu'elle a grandi (`t15c`, `t26`
+notamment). Décompte courant, recoupé contre l'artefact et
+reproductible : **268 lignes, 139 OK / 6 DIFF / 123 MISSING**
 (`python study/common/aggregate_master_table.py --allow-missing`) — les
 MISSING sont attendus tant que la campagne confirmatoire à 8 scénarios
 (dont la boucle fermée niveau 3, D-197) n'a pas tourné au complet, pas
@@ -4239,13 +4076,13 @@ Elle compte maintenant les fichiers réellement écrits par deux appels.
   vérifiée.
 - **Aucun consommateur ne lit encore `d_errors`.** Le label existe, aucune
   tâche du protocole ne le consomme : brancher les tâches 7 et suivantes
-  dessus reste à faire. **Mis à jour le 26 août (D-188)** : l'horizon
-  `t_x` qui manquait ici a été fixé et mesuré — régénéré aux 4 scénarios
-  canoniques, verdict mixte (`ρ(d,e)` reste redondant sur harris_tearing/
-  kelvin_helmholtz, expose un vrai signal sur mhd_rotor/orszag_tang à
-  certains instantanés). Toute tâche future consommant `d_i` doit fixer
-  son horizon sur `t_x`, pas sur `δt=0,1` — voir `docs/DEFAUTS.md`
-  (D-188) et `docs/RESULTS.md` pour la mesure complète.
+  dessus reste à faire. L'horizon est `t_x` (D-188), régénéré aux
+  4 scénarios canoniques : verdict mixte — `ρ(d,e)` reste redondant sur
+  harris_tearing/kelvin_helmholtz, expose un vrai signal sur
+  mhd_rotor/orszag_tang à certains instantanés. Toute tâche future
+  consommant `d_i` doit fixer son horizon sur `t_x`, pas sur `δt=0,1` —
+  voir `docs/DEFAUTS.md` (D-188) et `docs/RESULTS.md` pour la mesure
+  complète.
 - **Le choix « le patch grossi est remplacé par sa moyenne »** reproduit la
   définition de la phase 2, donc les deux labels sont comparables. Un vrai
   AMR ferait une restriction/prolongation d'ordre supérieur : l'écart entre
@@ -4306,27 +4143,15 @@ table historique de l'entrée supersédée le garde, annoté.
 
 ### Nouveau fichier de garde
 
-`tests/mapping/test_plaquette_signal_negligeable.py` (5 tests, dont 2 `slow`)
-épingle la marche de D-189 dans les deux modes, balaye les 480 instantanés du
-corpus, vérifie que les pics nuls sont **exactement** nuls, et teste son
-propre plancher de balayage sur un répertoire vide.
-
-**Mis à jour le 26 août — cette description est celle du 22 août, plus
-vraie depuis `d3d7573` (24 août).** Le mécanisme d'origine (`_adim`
-compare le pic d'un signal à `self.EPS=1e-10`, garde de division par zéro
-faisant aussi office de seuil physique — la « marche » ci-dessus) et le
-fichier de test qui l'épinglait (5 tests, dont 2 `slow` balayant les 480
-instantanés) ont tous deux été **réécrits dans le même commit qui a vidé
-ce document** : `_adim(signal, noise_floor)` lit désormais un seuil
-calculé par champ (`_difference_roundoff_floor`/
-`_determinant_roundoff_floor`, échelle réelle des champs d'entrée et
-précision flottante du dtype), pas `EPS`. Le fichier de test compte
-maintenant **10 tests, aucun `slow`** — round-off près d'un grand offset
-supprimé, petite structure réellement résolue gardant son poids plein,
-seuil du signal X-point, `norm="legacy"` gardant son ancien garde gelé.
-Ni la « marche à `EPS` » ni le balayage DNS `-m slow` de cette section ne
-décrivent le code actuel. Détail complet, mesure avant/après :
-`docs/RESULTS.md`, « D-189 — déjà corrigé le 24 août ».
+`tests/mapping/test_plaquette_signal_negligeable.py` (10 tests, aucun
+`slow`) épingle `_adim(signal, noise_floor)` : le seuil est calculé par
+champ (`_difference_roundoff_floor`/`_determinant_roundoff_floor`,
+échelle réelle des champs d'entrée et précision flottante du dtype)
+plutôt que fixé à `EPS`, ce qui couvre la marche de D-189 (ci-dessus) —
+round-off près d'un grand offset supprimé, petite structure réellement
+résolue gardant son poids plein, seuil du signal X-point, `norm="legacy"`
+gardant son ancien garde gelé. Détail complet, mesure avant/après :
+`docs/RESULTS.md`, D-189.
 
 ---
 
