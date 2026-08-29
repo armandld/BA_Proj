@@ -69,29 +69,25 @@ FLOOR_THRESHOLD = 0.05
 def floor_ratios(t22_arms, floor_can, floor_uns):
     """Ecart au plancher par bras, sans supposer que t22 a complete.
 
-    D-89 : `h4_unseen_conditions.py` documente et gere explicitement le cas
-    ou un bras avorte sur la TOTALITE d'une condition -- c'est "un resultat,
-    pas une panne", et son dict d'artefact ne porte alors AUCUNE sous-cle
+    Un bras qui avorte sur la TOTALITE d'une condition est "un resultat,
+    pas une panne" (voir `h4_unseen_conditions.py` et son propre bloc
+    `dead = [...]`) : son dict d'artefact ne porte alors AUCUNE sous-cle
     `"canonical"`/`"unseen"` (seulement les `*_runs` bruts et
-    `degradation_ratio = NaN`, `status = "total_abort"`). Avant cette
-    correction, cette fonction etait en ligne dans `main()` et lisait
-    `t22_arms[arm]["canonical"]["phys_score"]` sans jamais verifier -- sur un
-    total_abort elle levait `KeyError: 'canonical'`, sans artefact ecrit --
-    exactement le motif que `h4_unseen_conditions.py` prend soin d'eviter
-    pour lui-meme (voir son propre bloc `dead = [...]`). Extraite pour etre
-    testable sans rejouer les 4h de DNS d'un fold.
+    `degradation_ratio = NaN`, `status = "total_abort"`). Lire
+    `t22_arms[arm]["canonical"]["phys_score"]` sans verifier leve donc
+    `KeyError` sur un total_abort, sans artefact ecrit. Extraite de
+    `main()` pour etre testable sans rejouer les 4h de DNS d'un fold.
 
-    Teste la PRESENCE de `"canonical"`/`"unseen"`, pas le champ `"status"` :
-    les 4 artefacts `t22_unseen_unseen-ic_*.json` deja publies dans
-    `results/` datent d'avant que `status` existe dans le schema (mesure
-    directe : aucune des deux cles `status` n'y figure, ni au niveau racine
-    ni au niveau d'un bras) et portent pourtant `"canonical"`/`"unseen"`
-    valides sur les deux bras des quatre folds -- un test sur `status`
-    aurait classe ces quatre artefacts REELS comme `total_abort` et rendu
-    NaN a la place des 8 ratios deja publies dans
-    `results/t22d_unseen_floor_*.json`. Verifie en rejouant les 4 artefacts
-    contre `results/t22d_unseen_floor_*.json` deja committes : identiques au
-    bit pres.
+    Teste la PRESENCE de `"canonical"`/`"unseen"`, pas le champ
+    `"status"` : les 4 artefacts `t22_unseen_unseen-ic_*.json` deja
+    publies dans `results/` datent d'avant que `status` existe dans le
+    schema (aucune des deux cles `status` n'y figure, ni a la racine ni
+    par bras) et portent pourtant des `"canonical"`/`"unseen"` valides
+    sur les deux bras des quatre folds. Tester `status` classerait ces
+    quatre artefacts REELS comme `total_abort` et rendrait NaN a la place
+    des 8 ratios deja publies dans `results/t22d_unseen_floor_*.json`.
+    Verifie en rejouant les 4 artefacts contre ces fichiers deja
+    committes : identiques au bit pres.
     """
     out = {}
     dead = []
@@ -188,7 +184,7 @@ def main():
 
     print("\n  " + "-" * 74)
     if dead:
-        # D-89 : un bras total_abort n'a pas de ratio -- meme regle que
+        # Un bras total_abort n'a pas de ratio -- meme regle que
         # `h4_unseen_conditions.py` applique deja a lui-meme (son propre
         # bloc `dead = [...]`) : le constat s'ecrit, on ne le fait pas
         # passer pour un ratio mesure.

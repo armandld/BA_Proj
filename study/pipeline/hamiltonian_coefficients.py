@@ -156,18 +156,14 @@ def find_optimal_threshold(energy_values, is_hard):
     flat_e = energy_values.flatten()
     flat_h = is_hard.flatten()
 
-    # D-43 : sur une entree constante, les 100 percentiles valent tous la
-    # meme chose, et `flat_e >= thr` predit alors TOUS les patchs durs. Le
-    # F1 rendu etait celui du classifieur tout-positif, 2p/(p+1) : mesure
-    # 0.400 sur harris_tearing (prevalence 0.250) et 0.376 sur
-    # kelvin_helmholtz (0.231) a partir des artefacts reels
-    # coefficients_*_Re400_N256_dim4.npz, ou l'energie v1 est
-    # identiquement nulle (D-40/D-41). A cote du 0.519 authentique
-    # d'orszag_tang, 0.400 se lit comme un signal reel un peu plus faible.
-    # `labels_global_threshold.py` nomme deja 0.400 comme la signature du
-    # classifieur constant tout-positif ; le sibling de cette fonction
-    # dans pipeline_verification.py rend 0.000 et signale la degenerescence
-    # sur exactement les memes donnees.
+    # Sur une entree constante, les 100 percentiles valent tous la meme
+    # chose, et `flat_e >= thr` predit alors TOUS les patchs durs : le F1
+    # rendu est celui du classifieur tout-positif, 2p/(p+1) -- ex. 0.400
+    # sur harris_tearing (prevalence 0.250), facile a lire a tort comme un
+    # signal reel juste plus faible que le 0.519 authentique d'orszag_tang.
+    # `labels_global_threshold.py` nomme deja 0.400 comme la signature de
+    # ce classifieur degenere. Le sibling de cette fonction dans
+    # pipeline_verification.py rend 0.000 (pas NaN) sur les memes donnees.
     if np.ptp(flat_e) < 1e-12:
         nan_sweep = np.full(100, np.nan)
         return np.nan, np.nan, nan_sweep, nan_sweep.copy()
@@ -291,8 +287,8 @@ def analyze_one(dns_path, patches_path, n_patches,
         frac_C_active = np.mean(all_C.flatten() > 1e-10)
         frac_K_active = np.mean(all_K.flatten() > 1e-10)
 
-        # D-43 : une energie constante ne classe rien ; le dire au lieu de
-        # laisser un NaN passer pour un accident de calcul.
+        # Une energie constante ne classe rien ; le dire explicitement
+        # plutot que de laisser un NaN passer pour un accident de calcul.
         degenerate_E = bool(np.ptp(all_E) < 1e-12)
 
         label = "v2" if use_v2 else f"sigma={sigma:.3f}"
@@ -354,10 +350,10 @@ def threshold_stability_report(all_results):
                 if sigma not in results:
                     continue
                 r = results[sigma]
-                # D-43 : une ligne degeneree affichait thr=0.0000 / F1=0.400
-                # identiques a tous les Re, ce qui se lisait comme un seuil
-                # PARFAITEMENT STABLE — la conclusion meme que cette table
-                # existe pour produire.
+                # Une ligne degeneree affiche thr=0.0000 / F1=0.400
+                # identiques a tous les Re, ce qui se lit comme un seuil
+                # PARFAITEMENT STABLE -- exactement la conclusion que cette
+                # table existe pour tester.
                 flag = "  <- DEGENERATE (E constant)" if r.get("degenerate_E") else ""
                 print(f"  {re:>6}  {sigma:>6.3f}  {r['best_thr_e']:>8.4f}  "
                       f"{r['best_f1_e']:>6.3f}  "
@@ -421,12 +417,10 @@ def main():
             print()
 
     if not all_results:
-        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 3. Mesure :
-        # `--scenario no_such_scenario --N 64` sortait avec le code 0 apres
-        # avoir imprime « Phase 3 complete. », sans ecrire d'artefact — donc
-        # en laissant en place ceux de la campagne precedente. Le rapport de
-        # stabilite etait deja garde par `if all_results:`, mais rien ne
-        # criait quand la condition etait fausse.
+        # Same failure mode as elsewhere in study/ (D-55/D-56/D-75): an
+        # empty sweep used to exit 0 after printing "Phase 3 complete.",
+        # without writing an artifact, leaving the previous campaign's
+        # files in place and indistinguishable from a fresh success.
         raise RuntimeError(
             "balayage vide : aucun couple (scenario, Re) n'a d'artefact "
             "d'entree pour les arguments donnes. Le script sortait ici avec "

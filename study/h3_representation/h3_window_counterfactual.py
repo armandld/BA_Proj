@@ -79,11 +79,11 @@ def prepare_both_arms(vx, vy, Bx, By, N, dim, re):
     restaure inconditionnellement.
 
     La substitution porte sur `config.TRAINED_SIGMA`, pas sur
-    `qaoa_inputs.TRAINED_SIGMA` : depuis que `qaoa_inputs.py` importe la
-    fonction groupee `trained_mapper_params()` au lieu des constantes
-    `TRAINED_*` individuelles (refactor du 24 aout, D-195), celle-ci resout
-    `TRAINED_SIGMA` par portee lexicale dans le namespace de `config`, ou
-    elle est definie -- `qaoa_inputs` ne porte plus cet attribut du tout.
+    `qaoa_inputs.TRAINED_SIGMA` : `qaoa_inputs.py` importe la fonction
+    groupee `trained_mapper_params()` au lieu des constantes `TRAINED_*`
+    individuelles, donc `TRAINED_SIGMA` resout par portee lexicale dans
+    le namespace de `config`, ou elle est definie -- `qaoa_inputs` ne
+    porte plus cet attribut du tout.
     """
     import config
     import qaoa_inputs as p5

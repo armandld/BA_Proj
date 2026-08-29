@@ -167,10 +167,10 @@ def main():
                           f"{row['total_gates']:>7}")
 
     if not rows:
-        # D-148 : meme famille que D-55/D-56/D-75, sur la phase 8. Mesure :
-        # `--scenario no_such_scenario --N 64` imprimait l'EN-TETE de la
-        # table, aucune ligne, puis « Phase 8 complete. » et sortait avec le
-        # code 0 sans ecrire de CSV. Une table vide se lit comme un resultat.
+        # Same failure mode as elsewhere in study/ (D-55/D-56/D-75): an
+        # empty sweep used to print the table header with zero rows, then
+        # "Phase 8 complete." and exit 0 without writing a CSV -- an
+        # empty table reads as a result.
         raise RuntimeError(
             "balayage vide : aucune ligne de rapport de profondeur produite "
             "pour les arguments donnes. Le script sortait ici avec le code 0 "

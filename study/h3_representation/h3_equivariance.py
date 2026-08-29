@@ -297,11 +297,10 @@ def main():
                 print(f"  {sc:<18} Re={re} snap={si} done")
 
     if not rows:
-        # D-56 : ce garde imprimait « no input. » et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui de
-        # la campagne precedente. Une campagne qui n'avait rien mesure etait
-        # indiscernable d'une campagne reussie. Onze autres modules de
-        # `study/` levaient deja ici ; ceux-ci ne le faisaient pas.
+        # Same failure mode as elsewhere in study/ (D-56): silently
+        # exiting 0 without writing an artifact would leave the previous
+        # campaign's file in place, indistinguishable from a fresh,
+        # successful run.
         raise RuntimeError(
             "balayage vide : aucune orbites d'equivariance n'a d'artefact d'entree pour les "
             "arguments donnes. Le script sortait ici avec le code 0 et sans "

@@ -186,13 +186,14 @@ def checkpoint_is_reusable(prev, args):
     incomparables dans une seule moyenne publiee — la forme exacte de defaut
     que ce module traque. On refuse plutot que de deviner.
 
-    D-123 — cette decision etait en ligne dans `main()`, et son seul garde
-    etait `test_resume_reuses_only_matching_configurations`, qui cherchait
-    les quatre chaines dans le TEXTE du fichier. Mesure : remplacer un seul
-    `and` par un `or` casse la decision (`fold` et `mode` egaux suffisent
-    alors a accepter un point ecrit sous un autre `--repeats`) en laissant
-    les quatre chaines en place — `pytest tests/study/test_t24_leak_free.py`
-    rendait **26 passed**. Extraite ici pour qu'un test puisse l'appeler.
+    Extraite pour etre testable directement : le seul garde textuel,
+    `test_resume_reuses_only_matching_configurations`, cherche quatre
+    chaines dans le TEXTE du fichier plutot que le comportement --
+    remplacer un seul `and` par un `or` casse la decision (`fold` et
+    `mode` egaux suffiraient alors a accepter un point ecrit sous un
+    autre `--repeats`) sans faire bouger aucune des quatre chaines, et
+    `pytest tests/study/test_t24_leak_free.py` rendrait toujours **26
+    passed**.
     """
     cli = prev.get("cli_args", {}) or {}
     return (prev.get("fold") == args.fold
@@ -204,12 +205,13 @@ def checkpoint_is_reusable(prev, args):
 def apply_leak_free_threshold(hp_q, rec):
     """Remplace le seuil QAOA fuyant par celui du bras classique du fold.
 
-    Extrait de `main()` par D-134 pour etre mesurable sans rejouer les
-    heures de DNS d'un fold : les quatre chaines que
-    `test_no_leak_mode_is_gone_and_leak_free_is_wired` cherchait dans ce
-    fichier restaient toutes presentes quand on reecrivait le seuil sur
-    `LEAKED_THRESHOLD` une ligne plus bas — 35 tests verts sous un artefact
-    nomme `leak-free`. Le corps est INCHANGE, seul son emplacement bouge.
+    Extrait de `main()` pour etre mesurable sans rejouer les heures de
+    DNS d'un fold : le garde textuel est fragile -- les quatre chaines
+    que `test_no_leak_mode_is_gone_and_leak_free_is_wired` cherchait dans
+    ce fichier restaient toutes presentes meme en reecrivant le seuil sur
+    `LEAKED_THRESHOLD` une ligne plus bas, donnant 35 tests verts sous un
+    artefact nomme `leak-free` malgre la fuite. Le corps est INCHANGE,
+    seul son emplacement bouge.
 
     D13 : le seuil QAOA par defaut (0.1496) a ete ajuste sur les QUATRE
     classes, classe tenue comprise. Celui du bras classique de ce fold vient

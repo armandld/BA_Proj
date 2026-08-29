@@ -13,11 +13,10 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     # 1. Calcul du Courant Jz pour l'esthétique "Fluide" (Curl of B)
     # Jz = dBy/dx - dBx/dy
     #
-    # D-68 : le commentaire disait ici « axis=1 est d/dx (colonnes), axis=0
-    # est d/dy (lignes) ». C'est la convention indexing='xy', qui n'est PAS
-    # celle du depot. `grid.py` fait foi : AXIS_X = 0, AXIS_Y = 1, et
-    # `MHDSolver.get_fluxes` forme bien Jz = dBy/dX - dBx/dY avec axis=0
-    # pour X. Le tableau Jz est donc indexe [X, Y].
+    # Convention du depot (`grid.py` fait foi : AXIS_X = 0, AXIS_Y = 1) :
+    # `MHDSolver.get_fluxes` forme Jz = dBy/dX - dBx/dY avec axis=0 pour X,
+    # donc le tableau Jz est indexe [X, Y] — a ne pas confondre avec la
+    # convention indexing='xy' (axis=1 = d/dx).
     _, _, _, _, Jz = sim.get_fluxes().values()
 
     # Création de la figure
@@ -33,18 +32,12 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     max_val_vy = np.max(np.abs(vy))
     max_val = max(max_val_Jz, max_val_Bx, max_val_By, max_val_vx, max_val_vy)
     """
-    # D-68, resolution : on TRANSPOSE pour mettre X en horizontal.
-    #
-    # `imshow` place l'axe 0 du tableau en vertical. `Jz` etant indexe
-    # [X, Y], l'image non transposee portait Y en horizontal — l'inverse
-    # des deux AUTRES traceurs du depot (`plot_recursive_state` ligne ~171
-    # trace `state['Jz'].T`, `help_visual.plot_field` trace `grid.X.T` et
-    # etiquette « X » en horizontal). Cette fonction etait la seule des
-    # trois a lire dans l'autre sens.
-    #
-    # L'objection « cela change la geometrie de PNG deja publies » ne tient
-    # plus : toutes les figures sont regenerees apres la campagne, donc la
-    # coherence est gratuite maintenant et couteuse plus tard.
+    # On TRANSPOSE pour mettre X en horizontal : `imshow` place l'axe 0 du
+    # tableau en vertical, et `Jz` est indexe [X, Y] (voir plus haut) — sans
+    # transposition, Y se retrouverait en horizontal, a l'inverse des deux
+    # autres traceurs du depot (`plot_recursive_state` trace
+    # `state['Jz'].T`, `help_visual.plot_field` trace `grid.X.T` et
+    # etiquette « X » en horizontal).
     im = ax.imshow(Jz.T, origin='lower', cmap='RdBu', interpolation='nearest')
 
     # Barre de couleur
@@ -57,11 +50,8 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     
     for p in active_patches_sorted:
         # Récupération des coord (Format Dictionnaire)
-        # Noms honnetes : `bounds` porte (i_start, i_end, j_start, j_end),
-        # i indexant l'axe 0 (= X selon grid.py) et j l'axe 1 (= Y). Les
-        # anciens noms `ys/ye` pour i et `xs/xe` pour j disaient l'inverse
-        # de ce qu'ils contenaient — c'est cette inversion de vocabulaire
-        # qui a rendu D-68 invisible pendant tout le projet.
+        # `bounds` porte (i_start, i_end, j_start, j_end), i indexant
+        # l'axe 0 (= X selon grid.py) et j l'axe 1 (= Y).
         if 'bounds' in p:
             i_start, i_end, j_start, j_end = p['bounds']
             depth = p.get('depth', 0)
@@ -99,12 +89,9 @@ def plot_amr_state(sim, active_patches, t_val, target_dim, verbose = False, save
     # Titres et Labels
     total_patches = len(active_patches)
     ax.set_title(f"VQA-Driven AMR Simulation\nTime: {t_val:.3f} | Active Zones: {total_patches}")
-    # D-68 clos. L'image est transposee (voir `imshow` plus haut), donc ces
-    # deux etiquettes disent maintenant la verite ET s'accordent avec les
-    # deux autres traceurs du depot. Mesure : une structure placee en
-    # X=10, Y=40 au sens de grid.py se lisait « X=40, Y=10 » avant, et se
-    # lit « X=10, Y=40 » apres. Epingle par
-    # `tests/pipeline/test_amr_figure_axes.py`.
+    # L'image est transposee (voir `imshow` plus haut), donc ces deux
+    # etiquettes s'accordent avec grid.py et avec les deux autres traceurs
+    # du depot. Epingle par `tests/pipeline/test_amr_figure_axes.py`.
     ax.set_xlabel("Grid X")
     ax.set_ylabel("Grid Y")
     

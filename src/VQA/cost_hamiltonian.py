@@ -108,20 +108,14 @@ def create_bounded_hamiltonian(
     # c'est un lien H. Le <Z> qui remplace un qubit manquant doit venir du
     # theta de CE lien : theta_v_full pour un lien V, theta_h_full pour un
     # lien H (init_qbits_state place theta_h sur les qubits idx_H et theta_v
-    # sur les qubits idx_V).
+    # sur les qubits idx_V) — lire l'autre tableau echangerait les deux
+    # familles, changerait le signe du terme et peut l'annuler entierement.
     #
-    # Le code lisait ici z_halo_right_raw (issu de theta_h_full) pour le
-    # membre Droite, qui est un lien V, et z_halo_bottom_raw (issu de
-    # theta_v_full) pour le membre Bas, qui est un lien H : les deux familles
-    # etaient echangees. Les POSITIONS etaient bonnes, seul le tableau lu
-    # etait le mauvais -- defaut present depuis le premier commit (cf93ba3).
-    #
-    # Mesure (D-113, docs/RESULTS.md) : en deploiement theta_h et theta_v
-    # sont le MEME tableau (`refinement._prepare_vqa_input` passe `mini_score`
-    # deux fois, `PhysToAngle.map_to_angles` le documente), donc l'echange
-    # etait sans effet : 36 configurations aleatoires, operateur identique
-    # bit a bit avant/apres. Sur theta_h != theta_v il change le signe du
-    # terme (k = -0.5 rendu +0.5) et peut l'annuler entierement.
+    # En deploiement theta_h et theta_v sont le MEME tableau
+    # (`refinement._prepare_vqa_input` passe `mini_score` deux fois,
+    # `PhysToAngle.map_to_angles` le documente) : un tel echange resterait
+    # donc invisible sur les donnees deployees, et n'apparaitrait que si
+    # theta_h et theta_v venaient a diverger.
     z_plaq_right_raw  = get_expected_Z(theta_v_full[1:-1, -1])
     z_plaq_bottom_raw = get_expected_Z(theta_h_full[-1, 1:-1])
 
@@ -311,25 +305,23 @@ def create_period_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
     Construit l'Hamiltonien MHD sur une grille torique (Périodique).
     Utilise SparsePauliOp pour la performance et corrige la topologie des plaquettes/vertex.
 
-    D-59 — CORRIGÉ. À dim = 2 l'anneau périodique dégénère : le lien ZZ
-    (i,0)->(i,1) et (i,1)->(i,0 mod 2) relient la MÊME paire de qubits, et
-    les deux itérations ajoutaient chacune une entrée au lieu d'être
-    fusionnées. Les coefficients étant symétriques par construction
-    (`C_edges[0][i,0] == C_edges[0][i,1]` au bit près), le couplage shear
-    était appliqué DEUX FOIS : poids effectif ×2. `K_plaquettes` n'a pas ce
-    défaut — les 4 quadruplets à dim = 2 sont distincts deux à deux.
+    À dim = 2 l'anneau périodique dégénère : le lien ZZ (i,0)->(i,1) et
+    (i,1)->(i,0 mod 2) relient la MÊME paire de qubits. Sans déduplication,
+    les deux itérations ajoutent chacune une entrée au lieu d'être
+    fusionnées, et le couplage shear est appliqué DEUX FOIS (poids effectif
+    ×2). `K_plaquettes` n'a pas ce problème : les 4 quadruplets à dim = 2
+    sont distincts deux à deux.
 
-    Les liens sont désormais dédupliqués par paire de qubits. À dim ≥ 3
-    aucune paire ne se répète, donc l'opérateur est INCHANGÉ bit à bit ; la
-    correction ne mord qu'à dim = 2.
+    Les liens sont dédupliqués par paire de qubits. À dim ≥ 3 aucune paire
+    ne se répète, donc l'opérateur est INCHANGÉ bit à bit ; la
+    déduplication ne mord qu'à dim = 2.
 
-    Corrigé AVANT la campagne et non après, alors que l'impact mesuré est
-    nul aujourd'hui (0 décision changée sur 12) : c'est le biais Z qui
-    domine de 2 à 6,6× (D-47) et masque le doublement. La réoptimisation
-    rééquilibre précisément ces poids — si `w_z_frac` se resserre ou `σ`
-    s'élargit, le ZZ redevient actif et le facteur 2 devient réel, à
-    dim = 2 qui est la seule taille de toutes les campagnes publiées.
-    Corriger après coup obligerait à tout rejouer.
+    dim = 2 est la seule taille de toutes les campagnes publiées, et le
+    biais Z y domine largement le couplage ZZ aujourd'hui — ce qui masque
+    le doublement sans l'annuler. Si la réoptimisation resserre `w_z_frac`
+    ou élargit `σ`, le ZZ redevient actif et le facteur ×2 devient réel :
+    la déduplication doit donc rester en place même si son impact mesuré
+    est nul pour l'instant.
     """
     sparse_list = []
     
@@ -341,8 +333,8 @@ def create_period_hamiltonian(hamilt_params, dim) -> SparsePauliOp:
     def idx_H(y, x): return (y % dim) * dim + (x % dim)
     def idx_V(y, x): return offset_v + (y % dim) * dim + (x % dim)
 
-    # D-59 : paires de qubits ZZ deja emises. La deduplication porte sur la
-    # PAIRE NON ORDONNEE — c'est elle qui identifie le lien physique.
+    # Paires de qubits ZZ deja emises. La deduplication porte sur la PAIRE
+    # NON ORDONNEE — c'est elle qui identifie le lien physique.
     _liens_zz_emis = set()
 
     def _lien_zz_neuf(a, b):

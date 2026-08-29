@@ -65,7 +65,7 @@ def fluctuating_KE(vx, vy):
 def fluctuating_mean_sq_current(Bx, By, dx=1.0):
     """Mean squared current after removing the homogeneous-x background.
 
-    D-39. `mean_sq_current` moyenne `Jz**2` sur TOUT le domaine, y compris
+    `mean_sq_current` moyenne `Jz**2` sur TOUT le domaine, y compris
     le courant d'equilibre de la nappe -- uniforme le long de x pour les
     trois scenarios `TEARING_LIKE` (profil en `tanh(y)`, voir
     `Simulation.solver.MHDSolver.init_harris_tearing` et les deux
@@ -161,14 +161,13 @@ def check_ot(result):
 
 
 def check_tearing(result):
-    """D-39 — CORRIGE, deux corrections composees.
+    """Deux corrections a la facon dont la reconnexion est validee ici.
 
     (1) Lit `J2_fluct` (`fluctuating_mean_sq_current`), pas `J2` : le
     courant d'equilibre de la nappe, uniforme en x et quasi constant dans
     le temps, dominait la moyenne pleine grille et noyait le signal de
-    reconnexion (mesure a la decouverte : ok=False sur 6/6 artefacts DNS
-    harris_tearing malgre un vrai signal fluctuant, amplification 8x a
-    17x, recupere par un test exploratoire mais pas branche ici).
+    reconnexion (mesure : ok=False sur 6/6 artefacts DNS harris_tearing
+    malgre un vrai signal fluctuant, amplification 8x a 17x).
 
     (2) `interior` (le pic doit avoir un point apres lui dans la fenetre)
     n'est satisfaite par AUCUNE des 6 trajectoires mesurees : le pic

@@ -59,17 +59,13 @@ def analyze(scenario, Re, dim, N, use_v2=True, sigma=TRAINED_SIGMA):
     # coefficients were computed only on every k-th snapshot; figure out
     # which snapshots are there by reading the C array shape
     #
-    # D-180 : la branche v1 prenait `for k in coefs.files: if
-    # k.endswith("_E"): break` — la PREMIERE cle du .npz, pas un sigma
-    # choisi. La phase 3 en ecrit SIX (0,023 a 0,300, `sigma_values`) dans
-    # le meme artefact, et le verdict F1 flippe entre eux a echantillon
-    # apparie : PASS a 0,023 et 0,050, WARN a 0,100/0,200/0,300, TIE a
-    # 0,150. Les nombres publies (D-40, D-77 : 0,874 / 0,729 / 0,654 /
-    # PASS) sont ceux de 0,023 = TRAINED_SIGMA, atteint parce que
-    # `sigma_values` est ecrit dans cet ordre — reordonner cette liste de
-    # balayage aurait change le verdict sans qu'aucun mot de la sortie ne
-    # bouge. La cle est desormais construite, et son absence LEVE : un
-    # repli silencieux sur le premier venu est indiscernable d'un choix.
+    # The key must be built explicitly, never taken as "the first _E key
+    # found": phase 3 writes SIX sigma values into the same artifact, and
+    # the F1 verdict differs across them (PASS at 0.023/0.050, WARN at
+    # 0.100/0.200/0.300, TIE at 0.150). A silent fallback to whichever
+    # key happens to be written first would let the write order of
+    # `sigma_values` decide the published verdict instead of an explicit
+    # sigma choice, so a missing key raises rather than falling back.
     E_key = "s0.000_E" if use_v2 else f"s{sigma:.3f}_E"
     if E_key not in coefs.files:
         available = sorted(k[:-2] for k in coefs.files if k.endswith("_E"))
@@ -139,12 +135,12 @@ def analyze(scenario, Re, dim, N, use_v2=True, sigma=TRAINED_SIGMA):
     overlap_E = len(set(topK_E) & set(topK_hard))
     recall_E = overlap_E / max(n_hard, 1)
 
-    # D-40: a constant E (no patch ever crosses the v1 Hamiltonian's
-    # critical thresholds) makes every ranking metric tied at its
-    # chance value (AUC=0.5, F1=0.0) -- indistinguishable at a glance
-    # from a genuine "no discrimination" result, but it means no signal
-    # was computed at all. Flag it so it isn't averaged in as if it
-    # were a real chance-level measurement.
+    # A constant E (no patch ever crosses the v1 Hamiltonian's critical
+    # thresholds) makes every ranking metric tied at its chance value
+    # (AUC=0.5, F1=0.0) -- indistinguishable at a glance from a genuine
+    # "no discrimination" result, but it means no signal was computed at
+    # all. Flag it so it isn't averaged in as if it were a real
+    # chance-level measurement.
     degenerate_E = bool(np.ptp(E_flat) < 1e-12)
 
     result = {
@@ -179,7 +175,7 @@ def split_degenerate(rows):
     """
     Separate rows whose Hamiltonian energy never crossed a critical
     threshold (E constant, AUC/F1 tied at their chance value by
-    construction -- see D-40) from rows with a genuine ranking.
+    construction) from rows with a genuine ranking.
 
     Returns (clean_rows, degenerate_rows).
     """
@@ -239,10 +235,9 @@ def main():
                       f"{r.get('recall_c_topK', np.nan):>13.3f}{flag}")
 
     if not rows:
-        # D-56 : ce garde imprimait un message et rendait la main avec le
-        # code 0, sans ecrire d'artefact — donc en laissant en place celui
-        # de la campagne precedente. Une campagne qui n'avait rien mesure
-        # etait indiscernable d'une campagne reussie.
+        # Raise rather than print-and-return: silently exiting 0 here
+        # without writing an artifact would leave the previous campaign's
+        # file in place, indistinguishable from a fresh, successful run.
         raise RuntimeError(
             "balayage vide : aucun fichier de coefficients trouve, lancer "
             "la phase 3 d'abord. Le script sortait ici avec le code 0 et "
@@ -253,10 +248,10 @@ def main():
     print("  INTERPRETATION")
     print("=" * 78)
 
-    # D-40: rows where the Hamiltonian energy never crossed the v1
-    # critical thresholds are tied at AUC=0.5/F1=0.0 by construction --
-    # not a measurement of chance-level discrimination. Averaging them
-    # in silently changes the PASS/FAIL verdict below. Report them
+    # Rows where the Hamiltonian energy never crossed the v1 critical
+    # thresholds are tied at AUC=0.5/F1=0.0 by construction -- not a
+    # measurement of chance-level discrimination. Averaging them in
+    # silently changes the PASS/FAIL verdict below, so report them
     # separately instead of dropping them without a trace.
     clean_rows, degenerate_rows = split_degenerate(rows)
     if degenerate_rows:
@@ -265,10 +260,9 @@ def main():
               f"the Hamiltonian-energy averages below -- E was constant\n"
               f"        (no coefficient ever crossed a critical threshold): {names}")
     if not clean_rows:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        # Same failure mode as the `not rows` guard above (silent success
+        # on an empty result): raise instead of print-and-return, so an
+        # all-degenerate sweep cannot masquerade as a completed campaign.
         raise RuntimeError(
             f"balayage vide : les {len(rows)} ligne(s) sont toutes degenerees "
             "(E constant, aucun coefficient n'a franchi de seuil critique — voir "
@@ -289,7 +283,9 @@ def main():
     mean_f1_c = np.nanmean(f1_c)
     mean_recall_c = np.nanmean(recall_c)
 
-    # D-180 : le sigma accompagne le nombre partout ou le nombre parait.
+    # sigma must tag every printed number: the F1 verdict is
+    # sigma-dependent (see E_key above), so a bare number would be
+    # ambiguous.
     tag = "" if use_v2 else f" [sigma={args.sigma:.3f}]"
     print(f"\n  Hamiltonian energy{tag}:  AUC = {mean_auc_E:.3f}  "
           f"F1 = {mean_f1_E:.3f}  Recall@K = {mean_recall_E:.3f}")

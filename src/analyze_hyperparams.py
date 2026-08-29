@@ -136,26 +136,15 @@ SCENARIO_COLORS = {
 def _detect_scenario_keys(completed):
     """Rend les cles de scenario REELLEMENT presentes dans `user_attrs`.
 
-    Auparavant, trouver UNE cle faisait rendre toute sa famille — les sept
-    non-`_predict`, ou les sept `_predict` — sans verifier qu'elles
-    existent. La docstring annoncait « which scenario keys are present » ;
-    la fonction rendait des cles absentes.
+    Verifie chaque cle individuellement plutot que de rendre toute sa
+    famille (les sept `_predict`, ou les sept non-`_predict`) des qu'une
+    seule y est vue : une etude ne couvre pas toujours les sept scenarios
+    d'une famille, et un appelant qui ferait confiance a la liste
+    obtiendrait un `KeyError`, ou pire une moyenne polluee de `NaN` sur des
+    cles inventees.
 
-    Mesure sur les deux bases gelees, qui portent quatre scenarios
-    (`kh`, `tearing`, `ot`, `rotor`) : la fonction en annoncait **sept**,
-    inventant `vortex`, `coalescence` et `gt` — trois scenarios qu'aucune
-    campagne n'a jamais executes.
-
-    Aucun nombre faux n'en sortait : les quatre appelants filtrent tous par
-    `if f"loss_{k}" in attrs`, et le resume imprime bien quatre lignes. Le
-    piege etait **arme, non declenche** — le premier appelant qui ferait
-    confiance a la liste obtiendrait un `KeyError`, ou pire une moyenne sur
-    sept termes dont trois `NaN`.
-
-    La correction ne change donc aucune sortie : verifie par empreinte
-    SHA-256 du resume complet, identique avant et apres sur les deux bases.
-    C'est le comportement qu'a deja la copie de `recompute_lambda_scores`,
-    dont cette fonction avait diverge.
+    Le comportement doit rester identique a la copie dans
+    `recompute_lambda_scores._detect_scenario_keys`.
     """
     trouvees = set()
     for t in completed[:10]:
@@ -184,12 +173,12 @@ def _find_available_keys(completed, candidates, prefix=""):
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
     """Binned median trend line.
 
-    D-60/D-61 : la derniere classe est FERMEE. Les bornes viennent de
-    `linspace(x.min(), x.max())`, donc le dernier bord EST `x.max()` : avec
+    La derniere classe est FERMEE : les bornes viennent de
+    `linspace(x.min(), x.max())`, donc le dernier bord EST `x.max()`. Avec
     un `<` strict, l'essai qui porte la plus grande valeur du parametre
-    n'entrait dans aucune classe. La tendance omettait silencieusement le
-    point extreme — celui qui decide justement du sens de la pente au bord
-    du domaine echantillonne.
+    n'entrerait dans aucune classe — la tendance omettrait silencieusement
+    le point extreme, celui qui decide justement du sens de la pente au
+    bord du domaine echantillonne.
     """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
@@ -611,7 +600,7 @@ def plot_field_correlation_heatmap(completed, param_names, output_dir):
 #: échantillonné. `train_hyperparams.make_classical_composite_objective`
 #: appelle `trial.suggest_float("threshold_amr", ...)` ; `"threshold"` tout
 #: court n'apparaît dans aucune base du dépôt ni dans aucune ligne de
-#: `src/` — c'est le nom que cette fonction exigeait, d'où D-60.
+#: `src/`, mais reste le nom qu'une fonction en aval exigeait.
 THRESHOLD_PARAM_NAMES = ("threshold_amr", "threshold")
 
 
@@ -680,9 +669,9 @@ def plot_threshold_operating_curve(completed, output_dir):
     completed = [t for t in completed if name in t.params]
     phys, patch, source = _decomposed_series(completed)
     if phys is None:
-        # D-60 : un balayage vide doit crier. Sans ce message, une étude
-        # dont le seuil EST le paramètre optimisé rendait une analyse sans
-        # sa figure de décision, indiscernable d'une analyse complète.
+        # Un balayage vide doit crier : sans ce message, une étude dont le
+        # seuil EST le paramètre optimisé rendait une analyse sans sa
+        # figure de décision, indiscernable d'une analyse complète.
         print("[FIGURE] courbe de seuil indisponible : ni "
               "(phys_score, patch_ratio) ni (phys_<scenario>, "
               "patch_<scenario>) dans les user_attrs", file=sys.stderr)
@@ -982,21 +971,11 @@ def main():
     if args.show:
         matplotlib.use("TkAgg")
 
-    # D-50 : le `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
-    # code 1.
-    #
-    # Avant, deux gestionnaires enveloppaient tout le corps de `main` --
-    # chargement, resume, et les treize fonctions de trace :
-    #
-    #   except KeyError    -> « Skipping X: Study does not exist on Neon yet »
-    #   except Exception   -> « Error loading study: ... » puis `return`
-    #
-    # Mesure sur une base locale inexistante : le message accusait **Neon**,
-    # une base distante qui n'intervient pas, et le script rendait **0**.
-    # Pire, un `KeyError` leve par n'importe laquelle des treize figures --
-    # une cle d'attribut absente, un scenario manquant -- etait annonce
-    # comme une etude introuvable. Le diagnostic imprime designait la
-    # mauvaise cause dans les deux branches.
+    # Ce `try` ne couvre que le CHARGEMENT de l'étude ; l'échec sort en
+    # code 1. Une exception levée par l'une des treize fonctions de trace
+    # plus bas (clé d'attribut absente, scénario manquant) ne doit pas
+    # être confondue avec une étude introuvable — élargir ce bloc
+    # masquerait sa vraie cause derrière un message de chargement.
     storage_path = args.journal_path or args.db_path
     try:
         loader = load_journal if args.journal_path else load_study
@@ -1037,11 +1016,12 @@ def main():
         print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
         print("       Sections 1–3 are available from existing trials.")
 
-    # D-60 : hors de la garde `has_decomposed_data`. Celle-ci teste
-    # `phys_score`, que seul l'objectif mono-scénario de `pipeline.py`
-    # écrit — donc la courbe de seuil ne pouvait pas sortir sur une étude
-    # composite, y compris l'étude classique dont le seuil EST le seul
-    # paramètre optimisé. La fonction porte ses propres gardes.
+    # Volontairement hors de la garde `has_decomposed_data` : celle-ci ne
+    # teste que `phys_score`, que seul l'objectif mono-scénario de
+    # `pipeline.py` écrit. La garder empêcherait la courbe de seuil de
+    # sortir sur toute étude composite, y compris l'étude classique dont
+    # le seuil EST le seul paramètre optimisé — la fonction porte ses
+    # propres gardes.
     plot_threshold_operating_curve(completed, args.output_dir)
 
     # Section 5: Per-scenario analysis (Phase 2 composite)

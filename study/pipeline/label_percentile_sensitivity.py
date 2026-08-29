@@ -181,10 +181,9 @@ def main():
             if os.path.exists(dp) and os.path.exists(pp):
                 configs.append((sc, re, dp, pp))
     if len(configs) < 2:
-        # D-75 : cette garde faisait `print(...); return` — code 0, aucun
-        # artefact ecrit, donc indiscernable d'une campagne reussie (meme
-        # famille que D-56 et D-74). Le detecteur AST de D-56 ne voyait que
-        # la forme `if not <accumulateur nomme>:` ; celle-ci lui echappait.
+        # Same failure mode as elsewhere in study/ (D-56/D-74/D-75): a
+        # too-small sweep used to exit 0 without writing an artifact,
+        # indistinguishable from a completed campaign.
         raise RuntimeError(
             "balayage vide : la sensibilite au percentile exige au moins 2 "
             f"configurations avec artefacts d'entree, {len(configs)} trouvee(s). "
