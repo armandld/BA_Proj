@@ -52,35 +52,24 @@ from hyperparams_loader import load_hyperparams
 def compute_block_errors(dns_fluxes, coarse_fluxes, N, n_blocks):
     """Erreur L2 par bloc entre DNS et solution grossiere.
 
-    D-91 — CORRIGE. La normalisation etait LOCALE :
-    `ref = sqrt(mean(dns_block**2)) + 1e-10`, c'est-a-dire l'amplitude du
-    signal DNS *dans ce bloc-la*. Seul le denominateur portait un plancher.
-    Consequence : deux blocs partageant le MEME ecart absolu recevaient des
-    scores dans un rapport egal a l'inverse de leurs amplitudes — le bruit
-    de fond battait la vraie structure.
-
-    Mesure du mecanisme (champ d'essai qui separe, ecart absolu identique
-    au bit pres sur les deux blocs) :
-
-        bloc de bruit    (DNS ~ 1e-6) -> erreur ~ 1e+0
-        bloc de structure (DNS = 10.0) -> erreur ~ 1e-7
-
-    Sur le rotor MHD reel, la selection dite « ground truth » ne contenait
-    donc PAS le bloc central, celui qui porte la structure : elle rendait
-    une erreur L2 globale de 0,3079, a peine mieux que l'absence d'AMR
-    (0,3074), quand la selection classique/QAOA rendait 0,0208.
+    La normalisation est GLOBALE (chaque champ divise par sa RMS sur tout
+    le domaine), PAS locale au bloc. Avec une normalisation locale, deux
+    blocs partageant le MEME ecart absolu recoivent des scores dans un
+    rapport egal a l'inverse de leurs amplitudes propres : un bloc de bruit
+    quasi nul (DNS ~ 1e-6) ecraserait alors un bloc de vraie structure
+    (DNS ~ 10) d'un facteur ~1e7, le bruit de fond battant la structure
+    reelle. Sur le rotor MHD, cela faisait manquer le bloc central — celui
+    qui porte la structure — a la selection « ground truth », qui devenait
+    alors a peine meilleure que l'absence d'AMR.
 
     Ce que promet cette fonction — « quels blocs ont VRAIMENT besoin d'etre
     raffines » — se lit contre la quantite que la campagne minimise :
     l'erreur L2 **globale**. Le bloc qui merite le raffinement est celui qui
     CONTRIBUE le plus a cette erreur globale, pas celui dont l'erreur
-    relative a son propre contenu est la plus grande.
-
-    La normalisation est donc GLOBALE : chaque champ est divise par sa RMS
-    sur tout le domaine. Cela garde la comparabilite entre champs
-    d'amplitudes differentes (vx et Jz ne vivent pas a la meme echelle) —
-    la seule raison d'etre d'une normalisation ici — sans donner de prime a
-    un bloc vide.
+    relative a son propre contenu est la plus grande — d'ou la
+    normalisation globale : elle garde la comparabilite entre champs
+    d'amplitudes differentes (vx et Jz ne vivent pas a la meme echelle)
+    sans donner de prime a un bloc vide.
 
     Rend un tableau (n_blocks, n_blocks).
     """
@@ -146,18 +135,13 @@ def qhas_block_scores(sim, n_blocks, argus, Phi_prev=None):
     nu = sim.grid.L / argus.Re
     eta_mhd = sim.grid.L / argus.Rm
 
-    # D-10 : `PhysicalMapper(..., beta=0.5, ...)` levait `TypeError`.
-    # `beta` a quitte le constructeur du mapper pour devenir un argument de
-    # `run_adaptive_vqa` ; ce script n'en a jamais eu besoin ici, il passe
-    # deja son propre beta a `map_to_angles` plus bas. Le script mourait a
-    # l'etape 4 sur 5 et n'a donc JAMAIS produit son .npz.
-    #
-    # Les trois constantes 0.5 / 0.5 / 5.0 sont remplacees par les
-    # hyperparametres REELLEMENT deployes : une demonstration d'avantage
-    # quantique sur des parametres que personne n'utilise ne demontre rien
-    # sur le critere de ce depot. Les quatre cles que la signature actuelle
-    # attend (sigma, beta_curl, beta_xpoint, w_z_frac) etaient absentes de
-    # l'appel, donc silencieusement remplacees par les defauts du mapper.
+    # Les hyperparametres viennent de `load_hyperparams()` (ceux
+    # REELLEMENT deployes), pas de constantes choisies a la main : une
+    # demonstration d'avantage quantique sur des parametres que personne
+    # n'utilise ne demontre rien sur le critere de ce depot. `beta` n'en
+    # fait pas partie : il a quitte le constructeur du mapper pour devenir
+    # un argument de `run_adaptive_vqa` ; ce script passe deja son propre
+    # beta a `map_to_angles` plus bas.
     hp = load_hyperparams()
     HamiltMapper = PhysicalMapper(
         cs=argus.c_s, nu=nu, eta_mhd=eta_mhd,

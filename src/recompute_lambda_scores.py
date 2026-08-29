@@ -312,11 +312,11 @@ def _pareto_front(points):
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
     """Médiane par classe. Copie de celle d'`analyze_hyperparams`.
 
-    D-61, second site : la dernière classe est FERMEE. Le dernier bord vaut
-    `x.max()`, donc un `<` strict excluait de toute classe l'essai portant
-    la plus grande valeur du paramètre. Les deux copies doivent rendre la
-    même chose — `tests/pipeline/test_trend_last_bin_closed.py` le vérifie
-    en les comparant sur la même entrée.
+    La dernière classe est FERMEE : le dernier bord vaut `x.max()`, donc un
+    `<` strict excluait de toute classe l'essai portant la plus grande
+    valeur du paramètre. Les deux copies doivent rendre la même chose —
+    `tests/pipeline/test_trend_last_bin_closed.py` le vérifie en les
+    comparant sur la même entrée.
     """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
@@ -399,13 +399,12 @@ def plot_pareto_with_isocost(completed, lambda_cost, output_dir):
 
     ax.set_xlabel("Patch Ratio (computational cost)", fontsize=12)
     ax.set_ylabel("Physics Score (L2 error)", fontsize=12)
-    # D-62 : la fenêtre était codée en dur à (-0,05 ; 0,40). Sur l'étude
-    # classique, 9 essais sur 125 et **3 des 46 points du front de Pareto**
-    # tombaient hors cadre : la figure montrait un front qui s'arrête sans
-    # rien dire de ce qui continue. On garde la fenêtre quand tout y entre
-    # — la figure de l'étude quantique est inchangée, 0/178 hors cadre — et
-    # on l'élargit aux données sinon. Aucun seuil inventé : les bornes
-    # viennent des points tracés.
+    # Fenêtre dynamique plutôt que fixe à (-0,05 ; 0,40) : une fenêtre figée
+    # peut couper hors cadre une partie du front de Pareto — silencieusement,
+    # la figure montre alors un front qui s'arrête sans rien dire de ce qui
+    # continue. On garde (-0,05 ; 0,40) comme bornes par défaut quand tout y
+    # entre, et on élargit aux données sinon. Aucun seuil inventé : les
+    # bornes viennent des points tracés.
     ax.set_ylim(min(-0.05, float(phys.min()) - 0.05),
                 max(0.4, float(phys.max()) * 1.05))
     ax.set_title(f"Pareto Front with Iso-Score Lines (lambda={lambda_cost:.4f})", fontsize=14)
@@ -694,21 +693,11 @@ def main():
     if args.lambda_cost is None and args.lambda_sweep is None:
         parser.error("Provide either --lambda-cost or --lambda-sweep (or both)")
 
-    # D-49 : `try` ne couvre plus que le CHARGEMENT, et l'echec sort en
-    # code 1.
-    #
-    # Avant, un unique `except Exception` enveloppait tout le corps de
-    # `main` -- chargement, rescore, ecriture CSV, chaque figure, le
-    # balayage -- imprimait « Erreur lors du chargement : ... » et laissait
-    # la fonction rendre la main. Deux consequences mesurees :
-    #
-    #   base inexistante        -> « Erreur lors du chargement »,  code 0
-    #   repertoire non ecrivable-> « Erreur lors du chargement »,  code 0
-    #                              alors que l'etude etait chargee (125
-    #                              essais annonces juste avant)
-    #
-    # Un script de campagne qui teste `$?` voyait donc un succes, et le
-    # message accusait le chargement pour une panne survenue bien apres.
+    # Ce `try` ne couvre que le CHARGEMENT de l'étude ; l'échec sort en
+    # code 1. Une exception levée plus loin — rescore, écriture CSV, une
+    # figure, le balayage — ne doit pas être confondue avec un chargement
+    # manqué : un script de campagne qui teste `$?` doit voir un code non
+    # nul et un message qui accuse la bonne étape.
     try:
         study, completed = load_completed_trials(args.db_path, args.study_name)
     except Exception as e:

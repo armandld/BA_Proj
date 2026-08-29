@@ -44,11 +44,11 @@ class VQARuntime:
         self.shots = shots
         self.opt_level = opt_level
         if seed is None:
-            # D-191 : aucune graine demandee -> le bras QAOA doit rester
-            # stochastique (protocole confirmatoire mis a part, qui passe
+            # Aucune graine demandee -> le bras QAOA doit rester
+            # stochastique par defaut (le protocole confirmatoire passe
             # toujours --qaoa-seed explicitement). Un `seed=0` par defaut
-            # rendait tout appelant deterministe sans le demander ; ici on
-            # tire une graine reelle, une fois, a la construction du
+            # rendrait tout appelant deterministe sans le demander ; on
+            # tire donc une graine reelle, une fois, a la construction du
             # runtime — les appels qui reutilisent CE runtime (une seule
             # execution de `pipeline()`) restent coherents entre eux,
             # tandis que deux executions independantes en tirent deux.
@@ -74,22 +74,18 @@ class VQARuntime:
     def _validate_mode(self):
         """Refuse un mode que le depot ne sait pas honorer.
 
-        `mode` etait STOCKE et lu NULLE PART : `_init_backend` ne
+        `mode` est STOCKE mais lu NULLE PART ailleurs : `_init_backend` ne
         dispatche que sur `backend_name`, et rend le meme `AerSimulator`
         pour `mode='simulator'` et pour `mode='hardware'`. Aucun chemin de
         ce depot ne resout un backend IBM reel.
 
-        Le mode materiel ne levait donc pas : `execute` ouvrait
-        `Session(backend=AerSimulator)` — que qiskit-ibm-runtime ACCEPTE —
-        puis y construisait un estimateur avec decouplage dynamique et
-        twirling. Un run demande en `hardware` s'executait sur un
-        simulateur, avec des options qui n'y veulent rien dire, et rendait
-        des nombres parfaitement plausibles sans jamais le signaler.
-
-        Mesure : `VQARuntime(backend_name=b, mode='hardware')._backend`
-        rend `AerSimulator` pour state_vector / matrix_product_state / aer
-        et `FakeFez` pour estimator — identique a `mode='simulator'` dans
-        les quatre cas. Voir D-48.
+        Sans cette garde, un mode `hardware` ne leverait pas : `execute`
+        ouvrirait `Session(backend=AerSimulator)` — que qiskit-ibm-runtime
+        ACCEPTE — puis y construirait un estimateur avec decouplage
+        dynamique et twirling, des options qui n'y veulent rien dire sur un
+        simulateur. Un run demande en `hardware` s'executerait donc sur un
+        simulateur et rendrait des nombres parfaitement plausibles sans
+        jamais le signaler.
         """
         if self.mode not in self.SUPPORTED_MODES:
             raise ValueError(

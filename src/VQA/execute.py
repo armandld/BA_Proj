@@ -31,16 +31,16 @@ def execute(qc, cost_hamiltonian, mode, backend_name, shots, reps, K_opt,
             f"Unsupported backend: {backend_name!r}. Expected one of "
             f"{SUPPORTED_BACKENDS}.")
 
-    # D-191 : `seed=None` ne veut pas dire "0" -- il veut dire "aucune
-    # graine demandee". Avec un runtime, on herite silencieusement de la
-    # graine QU'IL a deja resolue (fixe si on lui en a donne une, tiree
-    # une fois s'il n'en avait pas) : c'est lui, pas cet appel, qui
-    # possede l'etat partage entre les appels QAOA d'une meme execution.
-    # Sans runtime -- le chemin des appels directs, y compris les tests
-    # qui mesurent la dispersion propre du bras QAOA -- une graine neuve
-    # est tiree a CHAQUE appel, pour que la dispersion reste mesurable.
-    # Un `seed` explicite reste verifie contre celle du runtime : c'est
-    # la seule incoherence que cette fonction ne peut pas trancher seule.
+    # `seed=None` ne veut pas dire "0" -- il veut dire "aucune graine
+    # demandee". Avec un runtime, on herite silencieusement de la graine
+    # QU'IL a deja resolue (fixe si on lui en a donne une, tiree une fois
+    # s'il n'en avait pas) : c'est lui, pas cet appel, qui possede l'etat
+    # partage entre les appels QAOA d'une meme execution. Sans runtime --
+    # le chemin des appels directs, y compris les tests qui mesurent la
+    # dispersion propre du bras QAOA -- une graine neuve est tiree a
+    # CHAQUE appel, pour que la dispersion reste mesurable. Un `seed`
+    # explicite reste verifie contre celle du runtime : c'est la seule
+    # incoherence que cette fonction ne peut pas trancher seule.
     if vqa_runtime is not None:
         if seed is not None:
             seed = _validated_seed(seed)
