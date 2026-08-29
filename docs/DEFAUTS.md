@@ -27,6 +27,18 @@ essai inchangé). Rien ne manque au code.
 `sigma`, `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`.
 `threshold_amr` reste gelé au meilleur essai classique.
 
+**Vérification minimale (`CLAUDE.md`) passée sur `c52c1de`** : `pytest
+-m "not slow"` (3108 passed, 2 échecs connus — voir ci-dessous),
+`pytest -m slow` (10 passed, 1 skipped), `scripts/repetition_campagne.sh`
+(journal concurrent, budget global, reprise — vert), `study/common/
+preflight_coefficients.py` (5 contrôles physiques, « campagne
+possible »). Les 2 échecs restants, `test_hyperparameter_sweep` et
+`test_noise_robustness`, sont rouges par construction depuis D-195 : ils
+épinglent des valeurs (`min(rho)=-0,467` ; écart nul sur Orszag-Tang)
+qui SONT la preuve de H0a, pas une régression — confirmé en rejouant les
+deux tests, identiques à la décimale, sur le commit d'avant cette passe
+de synthèse de commentaires. Aucune autre ligne rouge à ce jour.
+
 ```bash
 python src/train_hyperparams.py --print-space   # verifie l'espace, ne calcule rien
 python src/train_hyperparams.py --phase all --seed <graine>   # la campagne elle-meme
