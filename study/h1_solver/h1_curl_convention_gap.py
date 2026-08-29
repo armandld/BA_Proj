@@ -145,10 +145,10 @@ def _hard_patches(vx, vy, Bx, By, N, dim, quantile):
     instantane : ce script compare deux variantes SUR LE MEME label, donc le
     choix du seuil n'entre pas dans l'ecart mesure.
 
-    D-70 : la version precedente calculait l'ecart-type intra-patch de la
-    NORME du champ (sqrt(vx^2+vy^2+Bx^2+By^2)) — une formule differente de
-    celle que la docstring annoncait, qui s'accorde avec `patch_l2_errors`
-    sur un champ lisse mais diverge totalement des qu'un champ oscille a
+    L'ancienne formule calculait l'ecart-type intra-patch de la NORME du
+    champ (sqrt(vx^2+vy^2+Bx^2+By^2)) — differente de celle que la
+    docstring annoncait, et qui s'accorde avec `patch_l2_errors` sur un
+    champ lisse mais diverge totalement des qu'un champ oscille a
     magnitude constante (ecart-type nul, alors que l'information est
     perdue par le grossissement en bloc : erreur de reconstruction maximale).
     Mesure sur un patch en damier +1/-1 (magnitude constante, information

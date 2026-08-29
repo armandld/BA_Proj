@@ -141,12 +141,11 @@ READING_THRESHOLD = 0.1
 def reading_message(slope):
     """La phrase de conclusion de T11b, extraite pour etre testable.
 
-    D-50 — CORRIGE (decision USER, 25 aout : option 2 des trois listees
-    dans docs/DEFAUTS.md). Le verdict lisait `prog_all`, la moyenne d'UN
-    tirage QAOA par instantane : trois executions de la commande publiee
-    (`--N 256 --dim 2 --n-snaps 2`, reps 1-4) rendaient 0.1034 / 0.0850 /
-    0.0859 contre le seuil de 0.1 — une execution sur trois imprimait la
-    conclusion inverse.
+    Le verdict lisait `prog_all`, la moyenne d'UN tirage QAOA par
+    instantane : trois executions de la commande publiee (`--N 256 --dim
+    2 --n-snaps 2`, reps 1-4) rendaient 0.1034 / 0.0850 / 0.0859 contre
+    le seuil de 0.1 — une execution sur trois imprimait la conclusion
+    inverse.
 
     Il lit desormais `slope` (`slope_paired` dans l'artefact) : la pente
     APPARIEE progress(reps=max) - progress(reps=min), sur les memes
