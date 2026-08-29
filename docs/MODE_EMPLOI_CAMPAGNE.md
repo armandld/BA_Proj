@@ -17,6 +17,16 @@ python3 -m venv .venv
 La campagne refuse un arbre Git modifié. Le commit doit donc contenir exactement
 le code qui sera exécuté.
 
+`pytest tests -q -m "not slow"` reste rouge sur exactement deux tests connus,
+sans lien avec le commit lancé : `test_qaoa_scaling_and_hparams.py::
+test_hyperparameter_sweep` et `test_qaoa_noise_and_early.py::
+test_noise_robustness`. Les deux pin des valeurs mesurées (`min(rho) =
+-0,467` ; écart nul sur Orszag-Tang) qui SONT la manifestation de H0a
+(`docs/PLAN_PREPRINT.md` — QAOA reste une faible perturbation de son
+encodage initial à profondeur/budget limités) plutôt qu'une régression à
+corriger ; voir `docs/RESULTS.md`, section D-195. Toute AUTRE ligne rouge
+est un vrai signal, à traiter avant de lancer.
+
 ## Répétition rapide
 
 Avant de louer la machine :

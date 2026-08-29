@@ -440,8 +440,15 @@ class MHDSolver:
         La projection, elle, est SPECTRALE : un operateur DIFFERENT de
         celui qui a construit B. Appliquee a un champ deja a divergence FD
         nulle, elle ne le nettoie pas — elle y injecte le desaccord entre
-        les deux operateurs, degradant la precision sans rien garantir de
-        plus. La vitesse, elle, en a reellement besoin : sa divergence FD
+        les deux operateurs. Mesure sur Orszag-Tang N=64 : 50 pas SANS
+        projeter B laissent sa divergence FD a 1.00e-14 (bruit) ; 50 pas
+        EN la projetant la fait monter a 4.63e-07, huit ordres de
+        grandeur perdus. Sur un run complet (T=0.05, 256 pas), l'erreur
+        en temps est IDENTIQUE que B soit projete ou non (1.185e-05) —
+        projeter B ne gagne donc rien, et laisse sa divergence FD a
+        4.877e-06 contre 2.818e-14 sans.
+
+        La vitesse, elle, en a reellement besoin : sa divergence FD
         n'est PAS nulle analytiquement.
 
         `PROJECT_B = True` reproduit le chemin historique bit a bit.
