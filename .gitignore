@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 .venv_vigil/
 env/
+.python-version
 
 # Etat de reprise des campagnes : transitoire, pas un resultat.
 # Le .npz final est le livrable ; ces fichiers ne servent qu a
