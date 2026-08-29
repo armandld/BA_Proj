@@ -73,6 +73,16 @@ Si aucun avantage n'est trouvé, déterminer **ce qui échoue** : la sélection,
 la représentation, la forme du modèle, la spécification de la tâche, ou le
 fait même de faire du ML.
 
+**Ce que ce n'est pas.** Ni à `dim = 2` (256 états) ni à `dim = 3`
+(262 144 états) l'espace n'est intraitable classiquement — les deux se
+diagonalisent exactement en quelques secondes sur une machine classique.
+Ce travail ne teste donc aucun avantage quantique au sens de la
+complexité, et ne prétend jamais le contraire. La question testée est
+plus étroite : un solveur NISQ (QAOA, peu de répétitions), utilisé comme
+règle de décision, fait-il mieux qu'une heuristique classique bon marché
+sur cette tâche précise ? C'est une question empirique légitime même
+quand le problème sous-jacent est classique — mais seulement celle-là.
+
 **Préalable.** Cette question ne peut être posée qu'à un modèle dont on sait
 qu'il calcule ce que sa documentation annonce. Établir cela a occupé une part
 substantielle du travail, n'était pas prévu, et constitue une contribution à
@@ -385,8 +395,49 @@ elle a été produite.
 
 ## 8. Conclusion
 
-Ce que le travail tranche, ce qu'il laisse ouvert, et les questions qu'il
-formule pour la suite.
+*Rédigé le 26 août — cette section était un placeholder vide depuis la
+restauration ; en l'état, le résumé le plus lisible du dossier se
+trouvait enterré en §7. Ce qui suit ne dit rien de neuf par rapport à
+§3/§7 — ça les résume pour un lecteur qui n'a lu que ce paragraphe.*
+
+**Ce que ce travail teste, en une phrase.** Pas un avantage quantique au
+sens de la complexité (§2) : un solveur NISQ (QAOA), utilisé comme règle
+de décision de raffinement de maillage, fait-il mieux qu'une heuristique
+classique bon marché sur cette tâche précise ?
+
+**Verdict, à deux niveaux mesurés indépendamment** (§7, H0a/H0b,
+D-53/D-200, seule taille certifiée non dégénérée : `dim = 3`,
+18 qubits) :
+- QAOA n'atteint quasiment jamais l'optimum de son propre hamiltonien
+  (0,062–0,156 des instantanés contre 1,000 exigé) ;
+- même quand un AUTRE solveur atteint cet optimum exactement, la
+  décision de raffinement qui en résulte est **pire** qu'une règle
+  classique simple (ρ(E_gap, F1) = +0,87 à +0,89 selon le mappeur testé,
+  sur 9 solveurs).
+
+Le second point ferme la porte que le premier laissait ouverte : réparer
+l'optimiseur ne sauverait pas l'approche, puisque ce qu'il calculerait
+s'il calculait parfaitement n'est déjà pas ce qu'on veut. Ce n'est donc
+pas (seulement) un problème d'ingénierie du solveur — c'est la forme du
+hamiltonien elle-même qui encode une mauvaise décision.
+
+**Ce qui reste ouvert, sans rouvrir ce verdict.** H1 (les défauts
+numériques suffisent-ils seuls à expliquer l'échec ?) est partiel ; H3
+(l'information des voisins) est à reprendre depuis D-58, sa lecture
+publiée ayant perdu son explication causale ; H4 (transfert à des
+conditions inédites) reste une conjecture. Ces trois portent sur des
+questions différentes de celle que H0b tranche — les laisser ouvertes ne
+rouvre pas H0b.
+
+**Ce qui manque avant de publier ce verdict tel quel.** Les nombres
+ci-dessus viennent des hyperparamètres de RÉFÉRENCE, pas d'une campagne
+d'entraînement qui a réellement tourné (`DEFAUTS.md`, D-22). D-200 montre
+que ce point de départ est déjà dans la zone que H0b qualifie de
+pathologique — mais un seul point du domaine de recherche à 9 dimensions
+a été mesuré, pas un balayage. Le verdict ne dépend pas de la campagne
+(H0b porte sur la forme du hamiltonien, pas sur son réglage) ; ce qui
+manque, c'est de le redire avec les nombres d'une vraie campagne plutôt
+qu'avec ceux du point de départ → Appendice A.
 
 ## 9. Bibliographie
 
@@ -457,14 +508,64 @@ l'item 1 n'en perd aucune.** `select_by_holdout_validation` (D-199,
 candidat déployé par performance sur un point tenu à l'écart (Re=1200,
 graine physique 1) parmi les meilleurs essais en échantillon, plutôt que
 par le seul score d'entraînement — un garde-fou contre le surapprentissage
-au régime d'entraînement unique. **Ce n'est pas ce que demande l'item 2
-avant relance.** Les 8 scénarios canoniques s'entraînent tous à
-Re=Rm=800, graine physique 0 implicite : un point de validation ne
-remplace pas une diversité de RÉGIMES D'ENTRAÎNEMENT. Demande USER,
-26 août : « il faudrait que cette campagne ait plusieurs paramétrisations
-physiques et plusieurs graines ». Avant relance, l'item 2 doit donc
-inclure une grille Re/graine physique dans la boucle d'entraînement
-elle-même, pas seulement dans le contrôle a posteriori. Non commencé.
+au régime d'entraînement unique, mais construit sur UN SEUL point tenu à
+l'écart (Re=1200, graine=1) : lui-même surapprenable, un candidat pouvant
+gagner en étant simplement bon SUR CE POINT PRÉCIS.
+
+**Résolu depuis, dans la même journée.** `HOLDOUT_GRID` (`train_hyperparams.py`)
+remplace ce point unique par un damier de six régimes — deux Re (400 et
+1200, de part et d'autre du régime d'entraînement Re=Rm=800) × trois
+graines physiques (1, 2, 3), les deux axes que demandait le message USER
+cité plus haut. Le classement des candidats se fait désormais sur la
+perte MOYENNE du damier, pas sur un point unique ; le pire point de
+chaque candidat est journalisé à côté pour distinguer un gagnant régulier
+d'un gagnant chanceux sur un seul point. Coût multiplié par 6 sur la
+SEULE validation finale (~90 essais équivalents contre ~15), pas sur les
+3 phases. Testé (`tests/pipeline/test_holdout_validation_selection.py`,
+7 tests) → `RESULTS.md`.
+
+**Ce que ceci ne faisait toujours pas — corrigé depuis, dans la même
+journée, sur demande USER explicite.** Les 8 scénarios canoniques
+s'entraînaient tous à Re=Rm=800, graine physique 0 implicite : la
+diversité restait dans la sélection finale, jamais dans la boucle
+d'entraînement (les 600+600+400 essais Optuna). Cette portée n'était pas
+un oubli : la diversification d'entraînement avait déjà été pesée et
+écartée en construisant `select_by_holdout_validation`, pour un coût
+précis — évaluer CHAQUE essai sur TOUS les régimes d'un damier multiplie
+le coût par essai par le nombre de régimes, sur une campagne déjà de
+l'ordre de 2000 h CPU à un seul régime. USER, après avoir vu le damier de
+validation : « ok mais moi je veux quand même une campagne plus
+diversifiée. »
+
+Ce chiffre de coût n'était vrai que pour une conception précise
+(multiplier chaque essai) — `TRAINING_REGIME_GRID` en implémente une
+autre, jamais pesée jusque-là : chaque essai tire un SEUL régime
+(`_training_regime_for_trial`, fonction pure du numéro d'essai,
+indépendante du sampler TPE), pas tous. Le coût par essai reste
+inchangé ; seul le précalcul DNS — une fois par phase, pas par essai —
+grossit du facteur `len(TRAINING_REGIME_GRID)` (4 points : Re∈{600,800,
+1000}, graines∈{0,10,20,30} — Re=800 conservé comme point d'ancrage
+historique). Ce damier d'entraînement et celui de validation
+(`HOLDOUT_GRID`) ne partagent JAMAIS un point (`test_training_and_
+holdout_grids_never_share_a_point`) : Re plus resserré autour de 800 et
+graines disjointes (0/10/20/30 contre 1/2/3) — l'entraînement voit un
+voisinage local, la validation teste une généralisation plus lointaine.
+
+Câblé dans les 6 fonctions de phase et dans `main()`, le même damier DNS
+partagé entre bras quantique et classique (l'invariant `CLAUDE.md` :
+« les bras comparés partagent DNS »), et entré dans le hash de contrat de
+campagne (`objective._qhas_contract`) pour qu'une reprise sous un damier
+différent échoue plutôt que de mélanger deux définitions de
+l'entraînement. Défaut trouvé en câblant ceci, corrigé dans le même
+geste : `prepare_phase1` (`--prepare-only`) ouvrait un contrat SANS
+damier tandis que `_run_phase1` en ouvre désormais un AVEC — une reprise
+aurait échoué au premier essai réel (`campaign contract mismatch`) ;
+`prepare_phase1` construit maintenant son contrat de vérification avec la
+même forme de damier. Testé (`tests/pipeline/test_training_regime_
+diversification.py`, 15 tests, dont un qui aurait attrapé ce défaut
+précis) → `RESULTS.md`. **Jamais vérifié contre une vraie campagne** —
+en particulier l'effet du `MedianPruner` sous régimes mélangés d'un essai
+à l'autre, assumé mais non mesuré.
 
 D-200 mesure, au point de départ de la campagne (hyperparamètres de
 référence — la campagne n'a pas encore tourné), sous le protocole D-53

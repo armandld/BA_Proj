@@ -767,8 +767,7 @@ def cheap_phases(monkeypatch, tmp_path):
                   "holdout_value": value, "params": params}
         return {"winner": winner, "candidates": [winner],
                 "train_winner_trial": number, "train_winner_differs": False,
-                "holdout_re": TH.HOLDOUT_RE,
-                "holdout_phys_seed": TH.HOLDOUT_PHYS_SEED, "top_k": top_k}
+                "holdout_grid": list(TH.HOLDOUT_GRID), "top_k": top_k}
 
     monkeypatch.setattr(TH, "_precompute_dns_for", fake_dns)
     monkeypatch.setattr(TH, "run_phase", fake_run_phase)

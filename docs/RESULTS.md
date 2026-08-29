@@ -10041,7 +10041,7 @@ neurones pour éviter le surapprentissage. »
    campagne.
 
 **Implémentation** (`src/train_hyperparams.py`,
-`select_by_holdout_validation` + `_holdout_scenario_config` +
+`select_by_holdout_validation` + `_with_physical_regime` +
 `_top_completed_candidates`) : réutilise `_precompute_dns_for` et
 `_composite_loop` tels quels (aucune physique réimplémentée), lit
 `hyperparams_resolved` par essai (déjà écrit par les deux fonctions
@@ -10069,7 +10069,7 @@ LOGIQUE de sélection, pas la physique, déjà couverte ailleurs) :
 3. `top_k` borne bien les candidats reconsidérés — un 4ᵉ essai hors
    top_k, meilleur sur tous les critères, n'est pas repêché ;
 4. étude sans essai complet → résultat vide nommé, pas une exception ;
-5. `_holdout_scenario_config` ne touche que `Re`/`Rm`/`phys_seed`, rien
+5. `_with_physical_regime` ne touche que `Re`/`Rm`/`phys_seed`, rien
    d'autre du scénario.
 
 ```bash
@@ -10082,6 +10082,168 @@ VRAIE campagne (aucune n'a encore été relancée depuis D-22). Le premier
 pratique — c'est-à-dire si le surapprentissage qu'elle vise à empêcher
 est un risque réel sur ce périmètre, ou une précaution qui ne mord
 jamais.
+
+**Mis à jour le 26 août — le point unique était lui-même surapprenable,
+`HOLDOUT_GRID` le remplace par un damier.** Suite directe de la demande
+USER ci-dessus : « il faudrait que cette campagne ait plusieurs
+paramétrisations physiques et plusieurs graines » n'était satisfaite
+qu'à moitié par un SEUL point tenu à l'écart (`Re=1200`, `phys_seed=1`)
+— un candidat pouvait gagner la validation en étant simplement bon SUR
+CE POINT PRÉCIS, sans que rien ne le distingue d'un candidat robuste sur
+l'ensemble du domaine physique. C'est le même piège que celui que la
+validation existe pour éviter, déplacé d'un cran.
+
+`HOLDOUT_GRID` remplace `HOLDOUT_RE`/`HOLDOUT_PHYS_SEED` par six points
+— deux Re (400 et 1200, de part et d'autre du régime d'entraînement
+Re=Rm=800) × trois graines physiques (1, 2, 3) — choisis pour faire
+varier les DEUX axes demandés, pas un seul (vérifié par
+`test_holdout_grid_varies_both_re_and_physical_seed`, qui interdit aussi
+qu'un point coïncide avec le régime d'entraînement). Le classement des
+candidats se fait désormais sur la perte MOYENNE du damier
+(`holdout_value`), et non plus sur un point unique ; le pire point de
+chaque candidat est journalisé à côté (`holdout_worst`,
+`holdout_per_point`) pour distinguer en aval un gagnant régulier d'un
+gagnant qui doit sa moyenne à un seul point favorable.
+
+**Coût** : le damier multiplie par 6 le coût de la validation finale
+(precompute DNS et réévaluation des `HOLDOUT_TOP_K=15` candidats), pas
+celui des 3 phases elles-mêmes — de l'ordre de 15 × 6 = 90 essais
+équivalents contre ~15 avant, sur une campagne à ~600+600+400 essais
+Optuna : quelques % de plus, toujours pas une nouvelle campagne.
+
+**Mis à jour le 26 août — l'option « diversité tout au long de
+l'entraînement » a été rouverte, sur demande USER explicite, et
+implémentée sous une forme différente de celle rejetée ci-dessus.**
+Cette section rejetait la diversification d'entraînement pour un coût
+précis : évaluer CHAQUE essai sur TOUS les régimes d'un damier multiplie
+le coût par essai par la taille du damier. USER, après avoir vu le
+damier de validation : « ok mais moi je veux quand même une campagne
+plus diversifiée. » Ce chiffre de coût n'était vrai que pour CETTE
+conception-là (multiplication par essai) — une seconde option, non pesée
+ici à l'époque, tire un SEUL régime par essai plutôt que tous : le coût
+par essai reste inchangé, seul le précalcul DNS (une fois par phase, pas
+par essai) grossit. Voir la section dédiée ci-dessous
+(« Diversification de l'entraînement »).
+
+**Vérifié** (`tests/pipeline/test_holdout_validation_selection.py`,
+7 tests désormais — les 5 ci-dessus, migrés vers la nouvelle signature
+`_with_physical_regime(base_config, re, phys_seed)`, renommée depuis
+`_holdout_scenario_config` — le nom ne devait plus dire seulement
+« holdout » une fois réutilisée par la diversification d'entraînement
+ci-dessous — plus deux nouveaux) :
+6. le damier fait varier Re ET la graine physique, sans doublon ni point
+   confondu avec le régime d'entraînement ;
+7. cas séparant dédié au damier : un candidat excellent sur un seul
+   point (perte quasi nulle) et médiocre sur les cinq autres (0,9) perd
+   contre un candidat régulier partout (0,3) — si le premier l'emportait,
+   le classement ne résumerait pas vraiment le damier, seulement son
+   point le plus favorable.
+
+```bash
+pytest tests/pipeline/test_holdout_validation_selection.py -v   # 7 passed
+```
+
+**Toujours pas vérifié en conditions réelles** : comme ci-dessus, cette
+sélection — damier compris — n'a encore tourné contre aucune vraie
+campagne.
+
+# Diversification de l'entraînement (USER, 26 août, après le damier de validation)
+
+**Demande USER** : « ok mais moi je veux quand même une campagne plus
+diversifiée. » — après avoir vu que `select_by_holdout_validation`
+protégeait la sélection finale mais laissait les 600+600+400 essais
+Optuna des 3 phases s'entraîner tous à Re=Rm=800, graine physique 0
+implicite.
+
+**Ce que la section précédente avait rejeté, et ce qu'elle n'avait pas
+pesé.** Rejeté : évaluer chaque essai sur tous les régimes d'un damier
+(coût par essai × taille du damier). Jamais posé : tirer un SEUL régime
+par essai, choisi indépendamment du sampler TPE d'Optuna. Cette seconde
+option laisse le coût par essai INCHANGÉ (toujours 6, 2 ou 8 scénarios
+simulés, jamais plus) ; seul le précalcul DNS — fait une fois par phase,
+pas par essai — grossit, du facteur `len(TRAINING_REGIME_GRID)`. C'est
+elle qui est implémentée ici.
+
+**Implémentation** (`src/train_hyperparams.py`) :
+- `TRAINING_REGIME_GRID` : quatre points — `(800, 0)` (le régime
+  historique, conservé comme point d'ancrage), `(600, 10)`, `(1000, 20)`,
+  `(800, 30)` — Re variant sur un intervalle plus étroit que
+  `HOLDOUT_GRID` (600–1000 contre 400/1200) et graines physiques
+  disjointes de celles du damier de validation (10/20/30 contre 1/2/3) :
+  l'entraînement voit un voisinage local, la validation teste une
+  généralisation plus lointaine — deux rôles différents, jamais le même
+  point (`test_training_and_holdout_grids_never_share_a_point`), sinon
+  la validation tenue à l'écart jugerait un régime déjà appris.
+- `_training_regime_for_trial(trial_number, grid)` : `grid[Random(trial_number)
+  .randrange(len(grid))]` — fonction PURE du numéro d'essai, jamais du
+  sampler TPE (sinon Optuna pourrait apprendre à préférer les régimes les
+  plus faciles plutôt que les hyperparamètres qui généralisent),
+  reproductible entre reprises (le numéro d'essai est stable, le journal
+  Optuna le persiste).
+- `_precompute_dns_by_regime` : réutilise `_precompute_dns_for` et
+  `_with_physical_regime` tels quels, un point du damier à la fois —
+  aucune physique réimplémentée.
+- `make_composite_objective`/`make_classical_composite_objective` :
+  nouveaux paramètres optionnels `dns_traces_by_regime`/
+  `training_regime_grid`, `None` par défaut → comportement EXACTEMENT
+  inchangé (`test_objective_without_a_regime_grid_never_tags_the_trial`).
+  Fournis, chaque essai tire son régime, l'écrit dans
+  `trial.user_attrs["training_regime"]`, et route vers `_composite_loop`
+  les scénarios et traces DNS de CE régime. Câblé dans les 6 fonctions de
+  phase (`_run_phase1…3`, `_run_classical_phase1…3`) et dans `main()` —
+  le même `dns_traces_by_regime` de la phase 1 est partagé entre bras
+  quantique et classique, comme l'était déjà `dns` avant (`CLAUDE.md` :
+  « les bras comparés partagent DNS »).
+- `training_regime_grid` entre dans `objective._qhas_contract`, donc dans
+  le hash de contrat de campagne (`_campaign_contract`) : changer le
+  damier au milieu d'une campagne fait échouer la reprise
+  (`campaign contract mismatch`), plutôt que de mélanger en silence deux
+  définitions de l'entraînement — exactement ce que ce mécanisme existe
+  pour empêcher (`CLAUDE.md` : « un artefact ancien n'est jamais repris
+  sous un contrat différent »).
+
+**Défaut trouvé en câblant ceci, corrigé dans le même geste** :
+`prepare_phase1` (`--prepare-only`) construisait son objectif de
+vérification de contrat SANS damier, tandis que `_run_phase1`
+(`--phase 1`/`--phase all`) en construit désormais un AVEC — deux
+contrats différents pour la MÊME étude Optuna. Une campagne préparée par
+`--prepare-only` puis lancée par `--phase 1` aurait donc levé
+`campaign contract mismatch` au tout premier essai réel. Corrigé :
+`prepare_phase1` construit maintenant un objectif de test avec la même
+forme de damier (valeurs de traces factices — seule la FORME du contrat
+compte, `_open_phase_study` n'exécute jamais l'objectif qu'il hashe).
+
+**Effet de bord assumé, pas caché** : `run_phase` élague par
+`MedianPruner`, qui compare la perte intermédiaire des essais au même
+`step`. Deux essais sur des régimes différents ne sont plus strictement
+comparables à mi-parcours. Accepté comme le coût normal d'un
+entraînement diversifié — non mesuré ici, à surveiller sur la vraie
+campagne.
+
+**Vérifié** (`tests/pipeline/test_training_regime_diversification.py`,
+15 tests, nouveau fichier) : déterminisme et variabilité réelle du
+tirage ; le damier d'entraînement ne recoupe jamais celui de validation
+et varie sur les deux axes (Re, graine) ; le chemin SANS damier est
+bit-pour-bit inchangé (espion sur `_composite_loop`) ; le chemin AVEC
+damier route le bon régime vers `_composite_loop` pour chaque essai,
+côtés quantique ET classique ; `_assert_regime_traces_wellformed` refuse
+un damier incomplet AVANT le premier essai plutôt qu'au milieu ;
+`_precompute_dns_by_regime` appelle `_precompute_dns_for` exactement une
+fois par point, jamais plus ; le contrat de `prepare_phase1` correspond
+bit-pour-bit à celui d'une vraie phase 1 diversifiée (le test qui aurait
+attrapé le défaut ci-dessus).
+
+```bash
+pytest tests/pipeline/test_training_regime_diversification.py -v   # 15 passed
+pytest tests/pipeline/test_holdout_validation_selection.py -v      # 7 passed
+pytest tests/pipeline -q -m "not slow"                             # non-régression
+```
+
+**Pas encore vérifié** : comme la sélection par validation tenue à
+l'écart (D-199) et son damier, cette diversification n'a jamais tourné
+contre une VRAIE campagne — aucune n'a encore été relancée depuis D-22.
+Le comportement du `MedianPruner` sous régimes mélangés, en particulier,
+ne peut être jugé que sur une exécution réelle.
 
 # D-200 — D-53 (H0b) étendu à V1, le mappeur réellement entraîné : même pathologie
 

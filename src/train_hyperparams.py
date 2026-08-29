@@ -17,6 +17,7 @@ import os
 import json
 import csv
 import hashlib
+import random
 import subprocess
 import sys
 import itertools
@@ -409,11 +410,24 @@ def fail_interrupted_trials(study):
 
 
 def prepare_phase1(target_trials):
-    """Create/validate phase 1, recover interruptions, and queue its seed."""
+    """Create/validate phase 1, recover interruptions, and queue its seed.
+
+    Le contrat de campagne (`_qhas_contract`) doit avoir EXACTEMENT la
+    meme forme que celui que `_run_phase1` ouvrira ensuite pour de vrai —
+    `training_regime_grid` compris — sinon `--prepare-only` ecrirait un
+    hash que la vraie execution ne pourrait plus retrouver
+    (`_open_phase_study` leverait `campaign contract mismatch` au premier
+    essai reel). Les valeurs des traces n'ont pas besoin d'etre reelles
+    ici : seule la FORME du contrat compte, jamais executee par
+    `_open_phase_study`.
+    """
     config = dict(PHASES["phase1_composite"])
     config["n_trials"] = int(target_trials)
     placeholders = {key: (None, None) for key, _ in SCENARIOS_ISOLATED}
-    objective = make_composite_objective(placeholders, SCENARIOS_ISOLATED)
+    placeholders_by_regime = {point: dict(placeholders)
+                              for point in TRAINING_REGIME_GRID}
+    objective = make_composite_objective(
+        None, SCENARIOS_ISOLATED, dns_traces_by_regime=placeholders_by_regime)
     study, _ = _open_phase_study(
         "phase1_composite", config, objective, seed=0)
     recovered = fail_interrupted_trials(study)
@@ -731,7 +745,9 @@ def _composite_loop(trial, scenario_list, dns_traces, hyperparams,
 def make_composite_objective(dns_traces, scenario_list,
                              frozen_params=None,
                              lambda_cost=LAMBDA_COST_SOFT,
-                             tune_threshold=False):
+                             tune_threshold=False,
+                             dns_traces_by_regime=None,
+                             training_regime_grid=None):
     """
     Composite loss across a set of scenarios (QAOA method).
 
@@ -743,14 +759,30 @@ def make_composite_objective(dns_traces, scenario_list,
 
     Parameters
     ----------
-    dns_traces : dict scenario_key -> (dns_trace, hot_start_state).
+    dns_traces : dict scenario_key -> (dns_trace, hot_start_state). Utilise
+        tel quel si `dns_traces_by_regime` est None ; peut alors etre None
+        (seul le controle de doublons de `_assert_scenarios_wellformed`
+        s'applique encore).
     scenario_list : liste de (key, config) — quels scenarios composent la
         perte. L'ORDRE compte : il definit les steps de l'elagage.
     frozen_params : hyperparametres imposes par l'appelant, retires de
         l'espace de recherche.
+    dns_traces_by_regime : dict (Re, graine) -> dns_traces (meme forme que
+        `dns_traces`, un jeu complet par point). Si fourni, DIVERSIFICATION
+        D'ENTRAINEMENT (USER, 26 aout) : chaque essai tire un regime
+        physique dans `training_regime_grid`, INDEPENDAMMENT du sampler
+        Optuna (`_training_regime_for_trial`), et s'entraine sur ce regime
+        plutot que sur `dns_traces` seul. Le regime tire est ecrit dans
+        `trial.user_attrs["training_regime"]`.
+    training_regime_grid : damier a tirer si `dns_traces_by_regime` est
+        fourni. None -> `TRAINING_REGIME_GRID`.
     """
     frozen = frozen_params or {}
+    grid = training_regime_grid if training_regime_grid is not None \
+        else TRAINING_REGIME_GRID
     _assert_scenarios_wellformed(scenario_list, dns_traces)
+    if dns_traces_by_regime is not None:
+        _assert_regime_traces_wellformed(scenario_list, dns_traces_by_regime, grid)
 
     def objective(trial):
         hyperparams = suggest_hyperparams(
@@ -759,6 +791,14 @@ def make_composite_objective(dns_traces, scenario_list,
         # trace qui permette de redeployer un essai sans le reconstruire
         # a la main. `trial.params` ne porte que l'echantillonne.
         trial.set_user_attr("hyperparams_resolved", hyperparams)
+        if dns_traces_by_regime is not None:
+            re, phys_seed = _training_regime_for_trial(trial.number, grid)
+            trial.set_user_attr("training_regime", f"Re={re}_seed={phys_seed}")
+            regime_scenarios = [(k, _with_physical_regime(cfg, re, phys_seed))
+                                for k, cfg in scenario_list]
+            return _composite_loop(trial, regime_scenarios,
+                                   dns_traces_by_regime[(re, phys_seed)],
+                                   hyperparams, lambda_cost)
         return _composite_loop(trial, scenario_list, dns_traces, hyperparams,
                                lambda_cost)
 
@@ -777,6 +817,8 @@ def make_composite_objective(dns_traces, scenario_list,
         "fixed_params": ({k: v for k, v in FIXED_PARAMS.items()
                           if not (tune_threshold and k == "threshold_amr")}),
         "tune_threshold": bool(tune_threshold),
+        "training_regime_grid": ([list(point) for point in grid]
+                                 if dns_traces_by_regime is not None else None),
     }
     if tune_threshold:
         lo, hi = CLASSICAL_THRESHOLD_RANGE
@@ -791,26 +833,45 @@ def make_composite_objective(dns_traces, scenario_list,
 # ============================================================
 
 def make_classical_composite_objective(dns_traces, scenario_list,
-                                       lambda_cost=LAMBDA_COST_SOFT):
+                                       lambda_cost=LAMBDA_COST_SOFT,
+                                       dns_traces_by_regime=None,
+                                       training_regime_grid=None):
     """
     Composite loss across scenarios for the CLASSICAL AMR method.
 
     N'entraine que `threshold_amr` (1 parametre) : pas de circuit, donc
     ~100x plus rapide par essai. C'est le bras de comparaison — meme
     perte, memes scenarios, meme agregation que le bras QAOA, seul le
-    critere de raffinement change.
+    critere de raffinement change. `dns_traces_by_regime`/
+    `training_regime_grid` : meme diversification d'entrainement que
+    `make_composite_objective` (le bras classique doit tirer les MEMES
+    regimes, pour que la comparaison reste equitable — voir
+    `_training_regime_for_trial`, fonction du seul numero d'essai).
 
     Parameters
     ----------
-    dns_traces : dict scenario_key -> (dns_trace, hot_start_state).
+    dns_traces : dict scenario_key -> (dns_trace, hot_start_state). Peut
+        etre None si `dns_traces_by_regime` est fourni.
     scenario_list : liste de (key, config), meme contrat que ci-dessus.
     """
+    grid = training_regime_grid if training_regime_grid is not None \
+        else TRAINING_REGIME_GRID
     _assert_scenarios_wellformed(scenario_list, dns_traces)
+    if dns_traces_by_regime is not None:
+        _assert_regime_traces_wellformed(scenario_list, dns_traces_by_regime, grid)
 
     def objective(trial):
         lo, hi = CLASSICAL_THRESHOLD_RANGE
         hyperparams = {"threshold_amr": trial.suggest_float("threshold_amr", lo, hi)}
         trial.set_user_attr("hyperparams_resolved", hyperparams)
+        if dns_traces_by_regime is not None:
+            re, phys_seed = _training_regime_for_trial(trial.number, grid)
+            trial.set_user_attr("training_regime", f"Re={re}_seed={phys_seed}")
+            regime_scenarios = [(k, _with_physical_regime(cfg, re, phys_seed))
+                                for k, cfg in scenario_list]
+            return _composite_loop(trial, regime_scenarios,
+                                   dns_traces_by_regime[(re, phys_seed)],
+                                   hyperparams, lambda_cost, classical_only=True)
         return _composite_loop(trial, scenario_list, dns_traces, hyperparams,
                                lambda_cost, classical_only=True)
 
@@ -822,6 +883,8 @@ def make_classical_composite_objective(dns_traces, scenario_list,
             for key, config in scenario_list
         ],
         "threshold_range": list(CLASSICAL_THRESHOLD_RANGE),
+        "training_regime_grid": ([list(point) for point in grid]
+                                 if dns_traces_by_regime is not None else None),
     }
     return objective
 
@@ -891,6 +954,100 @@ def _precompute_dns_for(scenario_list, label="scenarios"):
     return dns_traces
 
 
+# ============================================================
+#  DIVERSIFICATION DE L'ENTRAINEMENT (USER, 26 aout)
+# ============================================================
+#
+# Les 3 phases entrainaient toutes a Re=Rm=800, graine physique 0
+# implicite : un seul regime physique, jamais varie d'un essai a
+# l'autre. `select_by_holdout_validation` (D-199) protege la SELECTION
+# finale avec un damier tenu a l'ecart (`HOLDOUT_GRID`), mais rien ne
+# diversifiait encore la boucle d'ENTRAINEMENT elle-meme — les
+# 600+600+400 essais Optuna. Demande USER, 26 aout, apres avoir vu le
+# damier de validation : « ok mais moi je veux quand meme une campagne
+# plus diversifiee. »
+#
+# Option ecartee : evaluer CHAQUE essai sur TOUS les regimes d'un damier
+# (multiplie le cout par essai par la taille du damier, sur une campagne
+# deja de l'ordre de 2000 h CPU a un seul regime — c'est l'option
+# explicitement pesee et rejetee dans `RESULTS.md`, section
+# "Refonte train/val de la campagne", pour `select_by_holdout_validation`).
+#
+# Option retenue : chaque essai tire UN SEUL regime dans
+# `TRAINING_REGIME_GRID`, choisi par une fonction PURE de son numero
+# d'essai (`_training_regime_for_trial`) — jamais par le sampler TPE
+# d'Optuna. Cout par essai INCHANGE (toujours 6, 2 ou 8 scenarios
+# simules, jamais plus) ; seul le PRECALCUL DNS, fait une fois par phase
+# et non par essai, est multiplie par `len(TRAINING_REGIME_GRID)`. Sur
+# des centaines d'essais par phase, cette multiplication reste
+# negligeable face au cout de la recherche Optuna elle-meme.
+#
+# Effet de bord assume, pas cache : `run_phase` elague par
+# `MedianPruner`, qui compare la perte intermediaire des essais AU MEME
+# STEP. Deux essais sur des regimes differents ne sont plus strictement
+# comparables a mi-parcours — un essai sur un regime plus difficile peut
+# sembler pire qu'un bon reglage ne l'est vraiment. Accepte comme le cout
+# normal d'un entrainement diversifie (l'equivalent, pour ce depot, du
+# bruit qu'introduit un batch different a chaque epoque d'un reseau de
+# neurones) — pas mesure ici, a surveiller sur la vraie campagne.
+
+#: Re=600/800/1000 (Re=800 deux fois, pour garder un pied dans le regime
+#: historique) x quatre graines physiques disjointes de celles du damier
+#: de validation (`HOLDOUT_GRID` : graines 1/2/3) — verifie par
+#: `test_training_and_holdout_grids_never_share_a_point`. Une COINCIDENCE
+#: entre les deux damiers rendrait la validation tenue a l'ecart
+#: circulaire : elle jugerait un regime que l'entrainement a deja vu.
+TRAINING_REGIME_GRID = (
+    (800, 0),
+    (600, 10),
+    (1000, 20),
+    (800, 30),
+)
+
+
+def _training_regime_for_trial(trial_number, grid=TRAINING_REGIME_GRID):
+    """Le regime physique (Re, graine) d'un essai : fonction PURE de son
+    numero, reproductible entre reprises d'une meme etude Optuna (le
+    numero d'essai est stable, le journal Optuna le persiste). Jamais
+    tire par le sampler TPE : s'il voyait ce choix, il pourrait apprendre
+    a preferer les regimes les plus faciles plutot que les
+    hyperparametres qui generalisent — l'inverse de ce qu'on veut."""
+    return grid[random.Random(trial_number).randrange(len(grid))]
+
+
+def _assert_regime_traces_wellformed(scenario_list, dns_traces_by_regime, grid):
+    """Chaque point du damier d'entrainement doit porter une trace pour
+    CHAQUE scenario. Verifie a la CONSTRUCTION de l'objectif, pas
+    decouvert au milieu d'un essai qui tire ce point-la — potentiellement
+    des heures apres le debut de la campagne."""
+    keys = {k for k, _ in scenario_list}
+    for point in grid:
+        if point not in dns_traces_by_regime:
+            raise KeyError(
+                f"regime {point} absent de dns_traces_by_regime "
+                f"(damier {grid})")
+        missing = keys - set(dns_traces_by_regime[point])
+        if missing:
+            raise KeyError(
+                f"regime {point} : traces DNS manquantes pour {sorted(missing)}")
+
+
+def _precompute_dns_by_regime(scenario_list, grid=TRAINING_REGIME_GRID,
+                              label="scenarios"):
+    """Precalcule les traces DNS de `scenario_list` a CHAQUE point de
+    `grid`. Reutilise `_precompute_dns_for` (donc `precompute_dns`) tel
+    quel, un point a la fois — aucune physique reimplementee, et les
+    tests qui simulent deja `_precompute_dns_for` couvrent ce chemin
+    sans modification."""
+    return {
+        (re, phys_seed): _precompute_dns_for(
+            [(k, _with_physical_regime(cfg, re, phys_seed))
+             for k, cfg in scenario_list],
+            label=f"{label} (regime Re={re}, graine={phys_seed})")
+        for re, phys_seed in grid
+    }
+
+
 def _report_best(study, phase_label, scenario_list):
     """Meilleur essai et sous-pertes. Ne LEVE pas si rien n'a abouti."""
     completed = [t for t in study.trials
@@ -941,7 +1098,7 @@ def phase1_seeds():
             for values in itertools.product(*(PHASE1_SEED_GRID[n] for n in names))]
 
 
-def _run_phase1(dns_traces, seed=None, n_trials=None):
+def _run_phase1(dns_traces, seed=None, n_trials=None, dns_traces_by_regime=None):
     """Phase 1 : perte composite sur les 6 scenarios isoles.
 
     Le nombre de parametres n'est pas ecrit ici : il vaut
@@ -956,7 +1113,8 @@ def _run_phase1(dns_traces, seed=None, n_trials=None):
     print(f"  Scenarios: {', '.join(k for k, _ in SCENARIOS_ISOLATED)}")
     print("=" * 60)
 
-    objective = make_composite_objective(dns_traces, SCENARIOS_ISOLATED)
+    objective = make_composite_objective(
+        dns_traces, SCENARIOS_ISOLATED, dns_traces_by_regime=dns_traces_by_regime)
     phase_config = dict(PHASES["phase1_composite"])
     if n_trials is not None:
         phase_config["n_trials"] = n_trials
@@ -996,10 +1154,12 @@ def _run_phase2(study_p1, seed=None):
     print(f"  Training: {', '.join(search_space())}")
     print("=" * 60)
 
-    dns_traces_complex = _precompute_dns_for(SCENARIOS_COMPLEX, label="OT + Rotor")
+    dns_traces_by_regime = _precompute_dns_by_regime(SCENARIOS_COMPLEX,
+                                                     label="OT + Rotor")
     seed_params = _seeds_for("q_has_v2_phase1", study_p1, 20, "PHASE 2")
 
-    objective = make_composite_objective(dns_traces_complex, SCENARIOS_COMPLEX)
+    objective = make_composite_objective(
+        None, SCENARIOS_COMPLEX, dns_traces_by_regime=dns_traces_by_regime)
     study = run_phase("phase2_complex", PHASES["phase2_complex"],
                       objective, seed_params=seed_params, seed=seed)
     _report_best(study, "Phase 2", SCENARIOS_COMPLEX)
@@ -1013,10 +1173,12 @@ def _run_phase3(study_p2, seed=None):
     print(f"  Scenarios: {', '.join(k for k, _ in SCENARIOS_ALL)}")
     print("=" * 60)
 
-    dns_traces_all = _precompute_dns_for(SCENARIOS_ALL, label="8 scenarios")
+    dns_traces_by_regime = _precompute_dns_by_regime(SCENARIOS_ALL,
+                                                     label="8 scenarios")
     seed_params = _seeds_for("q_has_v2_phase2", study_p2, 15, "PHASE 3")
 
-    objective = make_composite_objective(dns_traces_all, SCENARIOS_ALL)
+    objective = make_composite_objective(
+        None, SCENARIOS_ALL, dns_traces_by_regime=dns_traces_by_regime)
     study = run_phase("phase3_validation", PHASES["phase3_validation"],
                       objective, seed_params=seed_params, seed=seed)
     _report_best(study, "Phase 3", SCENARIOS_ALL)
@@ -1028,13 +1190,14 @@ def _classical_grid_seeds(n=20):
     return [{"threshold_amr": t} for t in np.linspace(lo, hi, n).tolist()]
 
 
-def _run_classical_phase1(dns_traces, seed=None):
+def _run_classical_phase1(dns_traces, seed=None, dns_traces_by_regime=None):
     """Classique 1 : `threshold_amr` sur les 6 scenarios isoles."""
     print("\n" + "=" * 60)
     print("CLASSICAL PHASE 1 (*): threshold_amr, 6 scenarios isoles")
     print("=" * 60)
 
-    objective = make_classical_composite_objective(dns_traces, SCENARIOS_ISOLATED)
+    objective = make_classical_composite_objective(
+        dns_traces, SCENARIOS_ISOLATED, dns_traces_by_regime=dns_traces_by_regime)
     study = run_phase("classical_phase1", PHASES["classical_phase1"],
                       objective, seed_params=_classical_grid_seeds(20), seed=seed)
     _report_best(study, "Classical Phase 1", SCENARIOS_ISOLATED)
@@ -1047,14 +1210,14 @@ def _run_classical_phase2(study_c1, seed=None):
     print("CLASSICAL PHASE 2 (**): threshold_amr, OT + rotor")
     print("=" * 60)
 
-    dns_traces_complex = _precompute_dns_for(SCENARIOS_COMPLEX,
-                                             label="OT + Rotor (classique)")
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        SCENARIOS_COMPLEX, label="OT + Rotor (classique)")
     seeds = _seeds_for("classical_v2_phase1", study_c1, 15, "CLASSICAL PHASE 2")
     if not seeds:
         seeds = _classical_grid_seeds(15)
 
-    objective = make_classical_composite_objective(dns_traces_complex,
-                                                   SCENARIOS_COMPLEX)
+    objective = make_classical_composite_objective(
+        None, SCENARIOS_COMPLEX, dns_traces_by_regime=dns_traces_by_regime)
     study = run_phase("classical_phase2", PHASES["classical_phase2"],
                       objective, seed_params=seeds, seed=seed)
     _report_best(study, "Classical Phase 2", SCENARIOS_COMPLEX)
@@ -1067,13 +1230,14 @@ def _run_classical_phase3(study_c2, seed=None):
     print("CLASSICAL PHASE 3 (***): threshold_amr, 8 scenarios")
     print("=" * 60)
 
-    dns_traces_all = _precompute_dns_for(SCENARIOS_ALL,
-                                         label="8 scenarios (classique)")
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        SCENARIOS_ALL, label="8 scenarios (classique)")
     seeds = _seeds_for("classical_v2_phase2", study_c2, 15, "CLASSICAL PHASE 3")
     if not seeds:
         seeds = _classical_grid_seeds(15)
 
-    objective = make_classical_composite_objective(dns_traces_all, SCENARIOS_ALL)
+    objective = make_classical_composite_objective(
+        None, SCENARIOS_ALL, dns_traces_by_regime=dns_traces_by_regime)
     study = run_phase("classical_phase3", PHASES["classical_phase3"],
                       objective, seed_params=seeds, seed=seed)
     _report_best(study, "Classical Phase 3", SCENARIOS_ALL)
@@ -1098,31 +1262,54 @@ def _run_classical_phase3(study_c2, seed=None):
 #
 # Cette section ajoute UNE selection finale, tenue a l'ecart des 3
 # phases : parmi les `HOLDOUT_TOP_K` meilleurs essais EN ECHANTILLON de
-# la phase 3, le gagnant est celui qui a la MEILLEURE perte sur un regime
-# physique JAMAIS vu par aucune phase — Re et graine differents, memes 8
-# scenarios. Cout : re-evaluer `HOLDOUT_TOP_K` jeux de parametres deja
-# tires (aucune nouvelle recherche Optuna), sur un jeu de traces DNS
-# precalcule UNE SEULE FOIS. De l'ordre d'une quinzaine d'essais
-# supplementaires, pas d'une nouvelle campagne.
+# la phase 3, le gagnant est celui qui a la MEILLEURE perte MOYENNE sur
+# un DAMIER de regimes physiques jamais vus par aucune phase — plusieurs
+# Re et plusieurs graines, memes 8 scenarios. Cout : re-evaluer
+# `HOLDOUT_TOP_K` jeux de parametres deja tires (aucune nouvelle
+# recherche Optuna), sur des traces DNS precalculees UNE SEULE FOIS par
+# point du damier. De l'ordre de `HOLDOUT_TOP_K * len(HOLDOUT_GRID)`
+# essais equivalents, une fraction de la campagne (~600+600+400 essais
+# Optuna) — pas une nouvelle campagne.
+#
+# Mis a jour le 26 aout — un SEUL point tenu a l'ecart (Re=1200,
+# graine=1) restait lui-meme surapprenable : un candidat pouvait gagner
+# la validation en etant bon PRECISEMENT sur ce point, sans que rien ne
+# le distingue d'un candidat robuste sur l'ensemble du domaine. Demande
+# USER, 26 aout : « il faudrait que cette campagne ait plusieurs
+# parametrisations physiques et plusieurs graines ». `HOLDOUT_GRID`
+# remplace le point unique par un damier ; le classement se fait sur la
+# MOYENNE du damier (voir `select_by_holdout_validation`), le pire point
+# restant journalise a cote pour diagnostic.
 #
 # Portee assumee, pas un oubli : seule la selection FINALE (phase 3, les
 # deux bras) est protegee. Les cascades d'amorcage phase1->phase2 et
 # phase2->phase3 restent en-echantillon — etendre plus loin est possible
 # mais multiplie le cout de validation par le nombre de phases amorcees.
 
-HOLDOUT_RE = 1200
-HOLDOUT_PHYS_SEED = 1
+#: Deux Re (sous et sur le point d'entrainement Re=Rm=800) x trois
+#: graines physiques : la demande USER porte sur les DEUX axes, pas un
+#: seul. Aucun point ne doit coincider avec le regime d'entrainement
+#: (Re=800, graine implicite 0), sinon ce n'est pas une validation tenue
+#: a l'ecart — verifie par
+#: `test_holdout_grid_varies_both_re_and_physical_seed`.
+HOLDOUT_GRID = (
+    (400, 1), (400, 2), (400, 3),
+    (1200, 1), (1200, 2), (1200, 3),
+)
 HOLDOUT_TOP_K = 15
 
 
-def _holdout_scenario_config(base_config):
-    """Variante d'un config `SCENARIO_*` a un regime jamais vu en
-    entrainement : meme scenario et memes reglages temporels, Re et
-    graine physique differents."""
+def _with_physical_regime(base_config, re, phys_seed):
+    """Variante d'un config `SCENARIO_*` a un point d'un damier physique
+    (entrainement ou validation) : meme scenario et memes reglages
+    temporels, Re et graine physique remplaces par le point donne.
+    Partagee par `select_by_holdout_validation` (damier tenu a l'ecart)
+    et par la diversification d'entrainement (`TRAINING_REGIME_GRID`) —
+    le nom ne doit plus dire seulement « holdout »."""
     cfg = dict(base_config)
-    cfg["Re"] = HOLDOUT_RE
-    cfg["Rm"] = HOLDOUT_RE
-    cfg["phys_seed"] = HOLDOUT_PHYS_SEED
+    cfg["Re"] = re
+    cfg["Rm"] = re
+    cfg["phys_seed"] = phys_seed
     return cfg
 
 
@@ -1166,42 +1353,69 @@ class _HoldoutTrial:
 
 
 def select_by_holdout_validation(study, scenario_list, top_k=HOLDOUT_TOP_K,
-                                 classical_only=False, label=""):
+                                 classical_only=False, label="",
+                                 holdout_grid=HOLDOUT_GRID):
     """Reclasse les `top_k` meilleurs essais EN ECHANTILLON de `study`
-    par leur perte sur un regime physique TENU A L'ECART des 3 phases
-    (Re et graine differents), et rend le gagnant.
+    par leur perte MOYENNE sur un DAMIER de regimes physiques TENUS A
+    L'ECART des 3 phases (plusieurs Re, plusieurs graines), et rend le
+    gagnant.
+
+    Un candidat qui brille sur un seul point du damier mais s'effondre
+    sur les autres ne doit pas gagner : c'est le meme surapprentissage
+    que celui que le damier existe pour detecter, deplace d'un cran.
+    Classer par MOYENNE plutot que par un point unique le rend visible
+    (voir `test_the_winner_generalises_across_the_whole_grid_not_one_lucky_point`).
+    Le pire point de chaque candidat est aussi journalise
+    (`holdout_worst`), pour distinguer en aval un gagnant regulier d'un
+    gagnant qui doit sa moyenne a un point tres favorable.
 
     Ne relance AUCUNE recherche Optuna : re-evalue des jeux de
     parametres deja tires contre des donnees DNS neuves, precalculees
-    une seule fois pour tout le top_k.
+    une seule fois par point du damier pour tout le top_k.
     """
     candidates = _top_completed_candidates(study, top_k)
     if not candidates:
         return {"winner": None, "candidates": [],
                 "train_winner_differs": None}
 
-    holdout_scenarios = [(k, _holdout_scenario_config(cfg))
-                         for k, cfg in scenario_list]
-    dns_holdout = _precompute_dns_for(
-        holdout_scenarios, label=f"{label} validation tenue a l'ecart "
-                                 f"(Re={HOLDOUT_RE}, graine={HOLDOUT_PHYS_SEED})")
+    holdout_scenarios_by_point = {}
+    dns_by_point = {}
+    for re, phys_seed in holdout_grid:
+        holdout_scenarios = [(k, _with_physical_regime(cfg, re, phys_seed))
+                             for k, cfg in scenario_list]
+        holdout_scenarios_by_point[(re, phys_seed)] = holdout_scenarios
+        dns_by_point[(re, phys_seed)] = _precompute_dns_for(
+            holdout_scenarios,
+            label=f"{label} validation tenue a l'ecart (Re={re}, graine={phys_seed})")
 
     scored = []
     for number, train_value, params in candidates:
-        val_loss = _composite_loop(
-            _HoldoutTrial(number), holdout_scenarios, dns_holdout, params,
-            LAMBDA_COST_SOFT, classical_only=classical_only)
-        scored.append({"trial": number, "train_value": train_value,
-                       "holdout_value": val_loss, "params": params})
+        per_point = {}
+        for point in holdout_grid:
+            per_point[point] = _composite_loop(
+                _HoldoutTrial(number), holdout_scenarios_by_point[point],
+                dns_by_point[point], params, LAMBDA_COST_SOFT,
+                classical_only=classical_only)
+        losses = list(per_point.values())
+        scored.append({
+            "trial": number, "train_value": train_value,
+            "holdout_value": float(np.mean(losses)),
+            "holdout_worst": float(np.max(losses)),
+            "holdout_per_point": {f"Re={re}_seed={s}": v
+                                  for (re, s), v in per_point.items()},
+            "params": params,
+        })
 
     scored.sort(key=lambda r: r["holdout_value"])
     winner = scored[0]
     train_winner_trial = candidates[0][0]
     print(f"\n[{label}] selection par validation tenue a l'ecart "
-          f"(top {len(candidates)} essais reclasses) :")
+          f"(top {len(candidates)} essais reclasses sur "
+          f"{len(holdout_grid)} points) :")
     print(f"  meilleur EN ECHANTILLON : essai #{train_winner_trial}")
     print(f"  meilleur EN VALIDATION  : essai #{winner['trial']} "
-          f"(perte tenue a l'ecart {winner['holdout_value']:.6f})")
+          f"(perte moyenne tenue a l'ecart {winner['holdout_value']:.6f}, "
+          f"pire point {winner['holdout_worst']:.6f})")
     if winner["trial"] != train_winner_trial:
         print("  -> DIFFERENT : le meilleur en echantillon n'est PAS le "
               "meilleur en validation ; la selection a ecarte un "
@@ -1211,8 +1425,7 @@ def select_by_holdout_validation(study, scenario_list, top_k=HOLDOUT_TOP_K,
         "candidates": scored,
         "train_winner_trial": train_winner_trial,
         "train_winner_differs": winner["trial"] != train_winner_trial,
-        "holdout_re": HOLDOUT_RE,
-        "holdout_phys_seed": HOLDOUT_PHYS_SEED,
+        "holdout_grid": list(holdout_grid),
         "top_k": top_k,
     }
 
@@ -1527,8 +1740,9 @@ def main(argv=None):
         target = (args.n_trials if args.n_trials is not None
                   else PHASES["phase1_composite"]["n_trials"])
         study = _run_phase1(
-            _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles"),
-            args.seed, n_trials=target)
+            None, args.seed, n_trials=target,
+            dns_traces_by_regime=_precompute_dns_by_regime(
+                SCENARIOS_ISOLATED, label="6 isoles"))
         result_path = (args.result_path or
                        os.path.join(ensure_dirs(), "candidate_phase1.json"))
         save_phase_candidate(study, "phase1_composite", SCENARIOS_ISOLATED,
@@ -1541,8 +1755,10 @@ def main(argv=None):
         _run_phase3(_load_study("phase2_complex"), args.seed)
 
     elif args.phase == "classical_1":
-        _run_classical_phase1(_precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles"),
-                              args.seed)
+        _run_classical_phase1(
+            None, args.seed,
+            dns_traces_by_regime=_precompute_dns_by_regime(
+                SCENARIOS_ISOLATED, label="6 isoles"))
 
     elif args.phase == "classical_2":
         _run_classical_phase2(_load_study("classical_phase1"), args.seed)
@@ -1551,17 +1767,24 @@ def main(argv=None):
         _run_classical_phase3(_load_study("classical_phase2"), args.seed)
 
     elif args.phase == "classical":
-        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles")
-        c1 = _run_classical_phase1(dns, args.seed)
+        dns_by_regime = _precompute_dns_by_regime(SCENARIOS_ISOLATED,
+                                                   label="6 isoles")
+        c1 = _run_classical_phase1(None, args.seed,
+                                   dns_traces_by_regime=dns_by_regime)
         c2 = _run_classical_phase2(c1, args.seed)
         _run_classical_phase3(c2, args.seed)
 
     else:  # "all"
-        dns = _precompute_dns_for(SCENARIOS_ISOLATED, "6 isoles")
-        p1 = _run_phase1(dns, args.seed)
+        # Meme damier (`dns_by_regime`, DIVERSIFICATION DE L'ENTRAINEMENT
+        # ci-dessus) partage entre les deux bras, comme l'etait deja `dns`
+        # avant : seule la regle de decision doit differer (`CLAUDE.md`).
+        dns_by_regime = _precompute_dns_by_regime(SCENARIOS_ISOLATED,
+                                                   label="6 isoles")
+        p1 = _run_phase1(None, args.seed, dns_traces_by_regime=dns_by_regime)
         p2 = _run_phase2(p1, args.seed)
         p3 = _run_phase3(p2, args.seed)
-        c1 = _run_classical_phase1(dns, args.seed)
+        c1 = _run_classical_phase1(None, args.seed,
+                                   dns_traces_by_regime=dns_by_regime)
         c2 = _run_classical_phase2(c1, args.seed)
         c3 = _run_classical_phase3(c2, args.seed)
         staged_path = _save_results(p1, p2, p3, c1, c2, c3)
