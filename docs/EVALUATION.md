@@ -67,6 +67,26 @@ Verrouillé par `pytest tests/study/test_h0_certified_dim3_contradicts_criterion
 et sa variante `--scale-kopt`. C'est le résultat le plus fort du dépôt : il
 n'était écrit dans aucun document vivant avant le 25 août (D-193).
 
+**Ajouté le 26 août (D-200) — vérifié aussi sur le mappeur que la
+campagne règle réellement.** Les trois artefacts ci-dessus portent tous
+`mapper="v2"` : le mappeur **sans paramètre** (poids figés, hors de
+portée de `train_hyperparams.py`), jamais celui que la campagne optimise
+(V1). Rejoué avec `--mapper v1`, hyperparamètres de référence (le point
+de départ de la campagne, qui n'a pas encore tourné), sous le protocole
+D-53 (4 scénarios canoniques, Re=400) : même pathologie, plus nette —
+QAOA n'atteint l'optimum sur **aucun** des 12 instantanés (0/12, contre
+6,2–15,6 % pour V2), ρ(E_gap, F1) = **+0,891** (p=0,0013). La pathologie
+n'est donc pas un artefact du mappeur figé V2 : elle existe déjà au point
+de départ du mappeur que la campagne va régler. Reproductible depuis
+`results/h0_optimiser_equivalence_N96_dim3_harris_tearing-kelvin_helmholtz-mhd_rotor-orszag_tang_v1.npz`
+par le même script d'analyse (`rho_gap_f1.py`) → `RESULTS.md`, D-200 —
+**pas encore verrouillé par un test dédié**, contrairement à D-53 dont le
+test `test_h0_certified_dim3_contradicts_criterion.py` ne couvre que les
+artefacts `mapper="v2"`. Une limite demeure, non résolue : un seul point
+du domaine de recherche à 9 dimensions a été mesuré, pas un balayage —
+rien ne garantit ni n'exclut a priori que la campagne puisse s'en
+éloigner.
+
 **Les défauts corrigés, chacun mesuré avant/après.** C'est le matériau le
 plus solide du travail. Chaque mesure est déterministe, refaite par une
 commande, et verrouillée par un test qui échoue sur l'ancienne version.
@@ -215,9 +235,11 @@ lignes » date de `d047015`. Repris identique des dizaines de fois dans
 `RESULTS.md` après la clôture de D-58 : **180 lignes, 176 OK / 4 DIFF /
 0 MISSING** (périmètre à 4 scénarios). Le 25 août, après la correction de
 D-158 et sur le périmètre élargi à 8 scénarios : **268 lignes, 142 OK /
-6 DIFF / 120 MISSING** (`--allow-missing`). N'utiliser aucun de ces trois
-comptes sans le recalculer d'abord — chacun décrit un jour et un périmètre
-différents.
+6 DIFF / 120 MISSING** (`--allow-missing`). Le 26 août, D-196 (le pin
+`KNOWN_DIFF` du test était resté à 4 alors que la table en portait déjà
+6) : **268 lignes, 139 OK / 6 DIFF / 123 MISSING**. N'utiliser aucun de
+ces quatre comptes sans le recalculer d'abord — chacun décrit un jour et
+un périmètre différents.
 
 **Ce qui bloque leur confirmation** : la réoptimisation, elle-même bloquée
 par une décision → `DEFAUTS.md`, D-22.

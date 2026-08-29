@@ -127,8 +127,8 @@ d'entraînement, label, score de référence.
 
 | hypothèse | verdict | qualificatif nécessaire |
 |---|---|---|
-| H0a | **NON** — 0,062–0,156 contre 1,000 exigé | à `dim = 3`, la seule taille certifiée non dégénérée (D-53) ; réfutation antérieure invalide, mesurée à `dim = 2` où le problème est dégénéré (D-45/D-47) |
-| H0b | **NON** — ρ(E_gap, F1) = +0,870 : mieux résoudre H dégrade la décision | mesuré à `dim = 3`, 9 solveurs (D-53) |
+| H0a | **NON** — 0,062–0,156 contre 1,000 exigé | à `dim = 3`, la seule taille certifiée non dégénérée (D-53) ; réfutation antérieure invalide, mesurée à `dim = 2` où le problème est dégénéré (D-45/D-47). Mesuré sur le mappeur **V2** (sans paramètre) ; sur **V1** (déployé, réglé par la campagne), à `dim = 3` : QAOA n'atteint l'optimum sur **aucun** des 12 instantanés testés (D-200, 26 août) — le défaut se confirme, plus net encore |
+| H0b | **NON** — ρ(E_gap, F1) = +0,870 : mieux résoudre H dégrade la décision | mesuré à `dim = 3`, 9 solveurs, sur V2 (D-53). **Étendu à V1 le 26 août (D-200)** : ρ = +0,891 (p=0,0013), même signe, même ampleur — mesuré aux hyperparamètres de référence, avant toute campagne. La pathologie n'est donc pas propre à V2 (hors de portée de l'entraînement) ; elle existe déjà sur le mappeur que la campagne va régler |
 | H1 | **PARTIEL** | les défauts numériques comptent, mais ne suffisent pas seuls à expliquer l'écart |
 | QH2a / H2b | **RÉFUTÉ** | modèle libre testé (`study/h2b_prediction/`), ne bat pas la baseline |
 | H3a / H3b | **À REPRENDRE** | D-58 a retiré l'explication causale des ablations nulles de T13 et de la stagnation de T11b (« ZZ is numerically dead » était faux) ; la courbe de cône elle-même (T1b, `dim = 8`/`16`) n'est pas retirée par cette rétractation mais reste bornée par un pli dégénéré non expliqué (`harris_tearing`) |
@@ -287,6 +287,34 @@ taille certifiée non dégénérée (`dim = 3`, 18 qubits, l'optimum y est
 | **H0a** | l'optimiseur atteint-il l'optimum de son propre hamiltonien ? | **NON** — 0,062–0,156 contre 1,000 exigé (la règle classique dont il part atteint déjà 0,500) |
 | **H0b** | mieux l'atteindre améliorerait-il la tâche ? | **NON** — ρ(E_gap, F1) = +0,870 sur 9 solveurs : mieux résoudre H **dégrade** la décision AMR |
 
+**En une phrase, pour un lecteur qui n'a pas suivi l'historique des
+correctifs** : le pari de départ était qu'un optimiseur quantique
+piloterait mieux la décision de raffinement qu'une règle classique bon
+marché ; il est réfuté à deux niveaux indépendants, mesurés séparément
+plutôt que supposés l'un de l'autre — QAOA n'atteint quasiment jamais
+l'optimum de son propre hamiltonien (H0a), et même quand un AUTRE solveur
+atteint cet optimum exact, la décision qui en résulte est **pire** que
+celle d'une règle classique simple (H0b). Réparer l'optimiseur ne
+changerait donc rien : le problème n'est pas seulement que le quantique
+calcule mal, c'est que ce qu'il calculerait s'il calculait bien n'est pas
+ce qu'on veut.
+
+**Ajouté le 26 août (D-200) — cette mesure portait sur V2, pas sur le
+mappeur que la campagne règle.** Les trois artefacts `dim = 3` de D-53
+utilisent le mappeur **V2**, sans paramètre (poids figés) — hors de
+portée de `train_hyperparams.py`. Rejoué dans les mêmes conditions sur
+**V1** (le mappeur réellement déployé et réglé par la campagne), aux
+hyperparamètres de référence : ρ(E_gap, F1) = **+0,891** (p=0,0013),
+quasi identique. Le solveur qui atteint exactement le fondamental a le F1
+le plus bas (0,437) ; QAOA, qui ne l'atteint jamais sur les 12 instantanés
+testés (0/12, pire que sur V2 à cette même taille), a le F1 le plus haut
+(0,519). **La pathologie n'est donc pas un artefact de V2** : elle existe
+déjà sur V1, au point de départ même de la campagne
+(`PHASE1_SEED_GRID`). Un seul point du domaine de recherche à 9
+dimensions a été mesuré — ça ne prouve pas qu'aucun réglage ne fait
+basculer ρ au négatif, mais ça retire l'hypothèse qu'un réglage
+quelconque suffirait par défaut.
+
 **Ce que ceci corrige par rapport au texte publié avant D-53** :
 `CLAUDE.md` portait « H0 → RÉFUTÉ » sans qualificatif, et un test T11
 concluait que l'optimisation quantique n'était la source d'aucun gain — les
@@ -405,10 +433,15 @@ item :**
    puis **268 lignes, 142 OK / 6 DIFF / 120 MISSING** (25 août, après la correction de
    D-158, `--allow-missing`, périmètre élargi à 8 scénarios — les MISSING
    sont les scénarios de la campagne confirmatoire qui n'a pas encore
-   tourné, pas une régression). **Aucun de ces trois nombres n'est le bon
-   à citer dans un manuscrit** : chacun est vrai pour son jour et son
-   périmètre, aucun n'est stable. La commande qui les produit doit être
-   rejouée au moment de rédiger, pas avant.
+   tourné, pas une régression),
+   puis **268 lignes, 139 OK / 6 DIFF / 123 MISSING** (26 août, D-196 — le
+   pin `KNOWN_DIFF` du test était resté à 4 alors que la table en portait
+   déjà 6 ; correction de `rows_t15c` : 3 lignes `t15c` sans référence
+   non-circulaire passent de OK à MISSING, DIFF inchangé, aucune
+   régression). **Aucun de ces quatre nombres n'est le bon à citer dans un
+   manuscrit** : chacun est vrai pour son jour et son périmètre, aucun
+   n'est stable. La commande qui les produit doit être rejouée au moment
+   de rédiger, pas avant.
    ```bash
    python study/common/aggregate_master_table.py --allow-missing
    ```
@@ -417,6 +450,36 @@ item :**
    détail — mixeur seul 0,254 de médiane, mixeur+H 0,490 — mais conclut
    lui-même : « Aucune campagne du dépôt n'utilise ce témoin. » Item 4 reste
    ouvert, à la fois dans l'appendice et dans `RESULTS.md`.
+
+**Mis à jour le 26 août (D-199/D-200) — l'item 2 gagne une précision,
+l'item 1 n'en perd aucune.** `select_by_holdout_validation` (D-199,
+`train_hyperparams.py`) existe désormais : la phase 3 choisit son
+candidat déployé par performance sur un point tenu à l'écart (Re=1200,
+graine physique 1) parmi les meilleurs essais en échantillon, plutôt que
+par le seul score d'entraînement — un garde-fou contre le surapprentissage
+au régime d'entraînement unique. **Ce n'est pas ce que demande l'item 2
+avant relance.** Les 8 scénarios canoniques s'entraînent tous à
+Re=Rm=800, graine physique 0 implicite : un point de validation ne
+remplace pas une diversité de RÉGIMES D'ENTRAÎNEMENT. Demande USER,
+26 août : « il faudrait que cette campagne ait plusieurs paramétrisations
+physiques et plusieurs graines ». Avant relance, l'item 2 doit donc
+inclure une grille Re/graine physique dans la boucle d'entraînement
+elle-même, pas seulement dans le contrôle a posteriori. Non commencé.
+
+D-200 mesure, au point de départ de la campagne (hyperparamètres de
+référence — la campagne n'a pas encore tourné), sous le protocole D-53
+(4 scénarios canoniques, Re=400 — pas encore le Re=800 ni les 8 scénarios
+de la campagne elle-même), avec `--mapper v1` (le mappeur que la campagne
+règle réellement ; D-53 n'avait mesuré que V2) : même pathologie H0a/H0b
+qu'à D-53 — ρ(E_gap, F1) = +0,891 (p=0,0013), QAOA n'atteint jamais
+l'optimum certifié (0/12). Ça ne bloque pas la relance — la campagne
+optimise directement la qualité de la décision AMR, pas le taux de succès
+sur l'optimum du hamiltonien — mais ça documente que le point de départ
+est déjà dans la zone que H0b décrit comme pathologique, et qu'aucune
+garantie a priori n'existe que l'espace de recherche à 9 dimensions en
+sorte. `rho_gap_f1.py` appliqué après coup à un échantillon des meilleurs
+essais de la phase 3 (proposé, pas fait — voir `RESULTS.md`, D-200)
+donnerait une première réponse, à coût mesuré (~12 min par point testé).
 
 **Une conclusion est désormais invalidée, pas seulement en attente.** À toute
 profondeur de raffinement supérieure à la première, le biais Z de
