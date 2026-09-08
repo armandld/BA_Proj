@@ -78,34 +78,62 @@ def _random_streamfunction(rng, X, Y, L, n_structures, amplitude_range, radius_r
     return psi
 
 
-def generate_toy_snapshot(N, seed, n_structures_range=(2, 6),
-                          velocity_amplitude_range=(0.3, 1.5),
-                          field_amplitude_range=(0.3, 1.5),
-                          radius_range=None, background_noise=0.02,
+def _rescale_to_target_rms(fx, fy, target_rms):
+    """Ramene (fx, fy) a une intensite typique fixe, sans toucher au motif
+    spatial. Necessaire : le rotationnel d'une bosse de rayon r amplifie en
+    1/r, donc amplitude et rayon tires independamment produisent une
+    intensite globale imprevisible -- une premiere version atteignait
+    |v| ~ 12 pour une echelle de reference ~ 1 (v0=B0=1.0 ailleurs dans le
+    depot), ce qui saturait le score classique partout et rendait
+    l'optimum du hamiltonien degenere (toujours "tout raffiner", verifie
+    sur 20 tirages independants). Sans cette normalisation le nombre et le
+    rayon des structures deviendraient des parametres d'echelle plutot que
+    de forme."""
+    rms = np.sqrt(np.mean(fx ** 2 + fy ** 2))
+    if rms < 1e-12:
+        return fx, fy
+    scale = target_rms / rms
+    return fx * scale, fy * scale
+
+
+def generate_toy_snapshot(N, seed, n_structures_range=(1, 3),
+                          radius_range=None, target_velocity_rms=0.5,
+                          target_field_rms=0.5, background_noise=0.02,
                           length_L=2 * np.pi):
     """Un instantane statique : vx, vy, Bx, By, chacun (N, N).
 
-    Nombre, type, position, echelle et amplitude des structures sont tires
-    de `seed` -- meme seed, memes champs ; seed different, instance
-    differente. `radius_range` par defaut : d'un huitieme a un tiers du
-    domaine, assez grand pour survivre a la coarsification que
-    `hard_patch_labels.py` applique pour mesurer la verite terrain.
+    Nombre, type, position et echelle des structures sont tires de `seed`
+    -- meme seed, memes champs ; seed different, instance differente.
+    L'intensite globale est fixee separement (`target_velocity_rms`,
+    `target_field_rms`) : voir `_rescale_to_target_rms`.
+
+    `radius_range` par defaut : nettement plus petit qu'un patch typique
+    (`longueur_domaine / n_patches`), pour que la plupart des patches
+    restent calmes et que seuls quelques-uns portent une structure --
+    c'est ce contraste, pas la busyness uniforme, qui rend la decision de
+    raffinement non triviale.
     """
     if radius_range is None:
-        radius_range = (length_L / 8.0, length_L / 3.0)
+        radius_range = (length_L / 24.0, length_L / 10.0)
     rng = np.random.default_rng(seed)
     grid = PeriodicGrid(N, length_L=length_L)
     n_v = int(rng.integers(*n_structures_range))
     n_b = int(rng.integers(*n_structures_range))
 
     psi_v = _random_streamfunction(rng, grid.X, grid.Y, length_L, n_v,
-                                    velocity_amplitude_range, radius_range)
+                                    (0.5, 1.0), radius_range)
     psi_b = _random_streamfunction(rng, grid.X, grid.Y, length_L, n_b,
-                                    field_amplitude_range, radius_range)
+                                    (0.5, 1.0), radius_range)
     if background_noise:
+        # Bruit ajoute a la fonction de flux, PAS aux champs : le
+        # rotationnel d'un bruit reste a divergence nulle, l'ajouter apres
+        # coup ne le serait pas (verifie par
+        # test_velocity_and_field_are_solenoidal_by_construction).
         psi_v = psi_v + background_noise * rng.standard_normal(grid.X.shape)
         psi_b = psi_b + background_noise * rng.standard_normal(grid.X.shape)
 
     vx, vy = MHDSolver._curl_z_fd4(psi_v, grid.dx)
     Bx, By = MHDSolver._curl_z_fd4(psi_b, grid.dx)
+    vx, vy = _rescale_to_target_rms(vx, vy, target_velocity_rms)
+    Bx, By = _rescale_to_target_rms(Bx, By, target_field_rms)
     return vx, vy, Bx, By
