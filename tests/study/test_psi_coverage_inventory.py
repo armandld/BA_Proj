@@ -41,12 +41,24 @@ _STUDY = os.path.join(_REPO_ROOT, "study")
 
 #  Scripts appelant prepare_qaoa_inputs SANS rebrancher psi, a ce jour.
 #  Retirer une entree quand le cablage est fait — le test le verifiera.
+#
+#  `h3_toy_model_check.py` est different des six autres : ce ne sont pas
+#  des scripts sur trajectoire reelle qui attendent encore leur cablage
+#  psi, mais un generateur EXPLICITEMENT statique (une seule paire de
+#  fonctions de flux, pas d'evolution temporelle -- decision prise pour
+#  eviter d'entrainer sur les 8 scenarios reels tout en restant simple,
+#  voir `study/common/toy_model.py`). Il n'y a pas d'instantane precedent
+#  a passer : psi=0 est le cas d'usage exact de ce generateur, pas une
+#  dette a rembourser. Compte quand meme ici, cote "absent", parce que
+#  c'est ce que ce fichier verifie -- l'etat REEL du cablage, pas
+#  pourquoi il est dans cet etat.
 PSI_STILL_ZERO = {
     "h0_qaoa_displacement.py",
     "h1_curl_convention_gap.py",
     "h3_equivariance.py",
     "h3_size_scan.py",
     "h3_term_ablation.py",
+    "h3_toy_model_check.py",
     "h3_window_counterfactual.py",
 }
 
@@ -202,8 +214,15 @@ def test_the_unwired_scripts_really_run_with_psi_zero():
 
 
 def test_the_debt_is_not_silently_growing():
-    """Un garde-fou grossier sur la taille de la dette."""
-    assert len(PSI_STILL_ZERO) <= 6, (
+    """Un garde-fou grossier sur la taille de la dette.
+
+    Plancher a 7, pas 6 : `h3_toy_model_check.py` a fait passer le compte
+    de 6 a 7, mais ce n'est pas de la dette qui s'accumule -- c'est un
+    generateur statique par conception (voir le commentaire sur
+    `PSI_STILL_ZERO` ci-dessus), qui ne rejoindra jamais PSI_WIRED. Si ce
+    compte depasse 7, c'est un VRAI script sur trajectoire qui attend son
+    cablage, a verifier."""
+    assert len(PSI_STILL_ZERO) <= 7, (
         f"{len(PSI_STILL_ZERO)} scripts tournent encore sans psi ; la dette "
         "augmente au lieu de diminuer")
     assert PSI_WIRED, "aucun script ne rebranche psi : le cablage a disparu"

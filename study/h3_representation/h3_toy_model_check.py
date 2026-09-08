@@ -154,7 +154,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--n-seeds", type=int, default=20)
     p.add_argument("--N", type=int, default=48)
-    p.add_argument("--n-patches", type=int, default=3)
+    p.add_argument("--dim", dest="n_patches", type=int, default=3,
+                   help="patches par cote (nom `--dim` : convention "
+                        "partagee avec le reste de study/h2b_prediction)")
     p.add_argument("--re", type=float, default=800.0)
     p.add_argument("--k-opt", type=int, default=40)
     p.add_argument("--shots", type=int, default=2048)
