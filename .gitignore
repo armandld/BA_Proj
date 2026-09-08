@@ -35,6 +35,10 @@ data/
 # conteneur.
 results/hyperparams/reoptimisation/
 results/hyperparams/reoptimisation_launch.log
+
+# Meme raison, pour le pilote (echelle reduite) de l'entrainement jouet :
+# base Optuna de travail, pas un resultat.
+results/hyperparams/toy_pilot/
 /results/campaigns/
 .coverage
 
