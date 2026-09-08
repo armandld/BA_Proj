@@ -80,15 +80,14 @@ def _random_streamfunction(rng, X, Y, L, n_structures, amplitude_range, radius_r
 
 def _rescale_to_target_rms(fx, fy, target_rms):
     """Ramene (fx, fy) a une intensite typique fixe, sans toucher au motif
-    spatial. Necessaire : le rotationnel d'une bosse de rayon r amplifie en
-    1/r, donc amplitude et rayon tires independamment produisent une
-    intensite globale imprevisible -- une premiere version atteignait
-    |v| ~ 12 pour une echelle de reference ~ 1 (v0=B0=1.0 ailleurs dans le
-    depot), ce qui saturait le score classique partout et rendait
-    l'optimum du hamiltonien degenere (toujours "tout raffiner", verifie
-    sur 20 tirages independants). Sans cette normalisation le nombre et le
-    rayon des structures deviendraient des parametres d'echelle plutot que
-    de forme."""
+    spatial. Le rotationnel d'une bosse de rayon r amplifie en 1/r, donc
+    amplitude et rayon tires independamment produisent une intensite
+    globale imprevisible (v0=B0=1.0 est l'echelle de reference ailleurs
+    dans le depot) -- sans cette normalisation le nombre et le rayon des
+    structures deviendraient des parametres d'echelle plutot que de
+    forme. Ne suffit PAS a elle seule a eviter un optimum degenere : voir
+    le commentaire sur `background_noise` ci-dessous, la vraie cause
+    trouvee par verification a 20 graines independantes."""
     rms = np.sqrt(np.mean(fx ** 2 + fy ** 2))
     if rms < 1e-12:
         return fx, fy
@@ -98,7 +97,7 @@ def _rescale_to_target_rms(fx, fy, target_rms):
 
 def generate_toy_snapshot(N, seed, n_structures_range=(1, 3),
                           radius_range=None, target_velocity_rms=0.5,
-                          target_field_rms=0.5, background_noise=0.02,
+                          target_field_rms=0.5, background_noise=0.0,
                           length_L=2 * np.pi):
     """Un instantane statique : vx, vy, Bx, By, chacun (N, N).
 
@@ -112,6 +111,17 @@ def generate_toy_snapshot(N, seed, n_structures_range=(1, 3),
     restent calmes et que seuls quelques-uns portent une structure --
     c'est ce contraste, pas la busyness uniforme, qui rend la decision de
     raffinement non triviale.
+
+    `background_noise` DESACTIVE par defaut (0.0), pas juste petit. Un
+    bruit blanc, une fois derive par le rotationnel, s'amplifie en
+    1/dx : a `background_noise=0.02` seul (aucune structure), mesure
+    |v|_rms = 0.20 pour dx = 2*pi/48 -- comparable a l'intensite des
+    structures elles-memes (rms=0.5), ce qui suffisait a faire disparaitre
+    toute zone reellement calme et rendait l'optimum exact du hamiltonien
+    degenere (toujours "tout raffiner" sur 20/20 tirages independants,
+    F1 = 0.500 sans aucune variance). A remettre seulement sous une forme
+    filtree en frequence (comme `MHDSolver.apply_physics_perturbation`),
+    jamais en bruit blanc brut.
     """
     if radius_range is None:
         radius_range = (length_L / 24.0, length_L / 10.0)
