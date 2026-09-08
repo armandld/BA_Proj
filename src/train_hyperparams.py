@@ -243,6 +243,59 @@ SCENARIO_ROTOR = {
 }
 
 # ============================================================
+#  SCENARIOS JOUETS -- IC generique, aucune forme injectee (USER)
+# ============================================================
+#
+# Un hamiltonien dont le biais Z repond a |omega_z|/|J_z| (beta_curl,
+# beta_xpoint) ne doit pas s'entrainer EXCLUSIVEMENT sur des IC qui lui
+# donnent exactement le vortex/point X qu'il cherche. `toy_random`
+# (Simulation/solver.py::MHDSolver.init_toy_random) ne construit ni
+# vortex, ni point X, ni nappe -- un champ aleatoire filtre en frequence
+# (k <= k_max), solenoidal par construction.
+#
+# Meme gabarit physique que les 8 scenarios reels (N, profondeur, DT,
+# HYBRID_DT, K_opt, Re/Rm, shots) : seuls `scenario`/`toy_seed` different.
+# `T_MAX`/`T_START` fixes a la valeur partagee par 3 des 8 scenarios reels
+# (tearing/double_tearing/magnetic_twist) -- une IC aleatoire n'a pas de
+# fenetre de developpement connue a viser, donc pas de raison d'en choisir
+# une autre. Diversite : `toy_seed` (identite du champ, fixe par
+# scenario-jouet, une par slot) x `TRAINING_REGIME_GRID` (Re/graine
+# physique, MEME mecanisme que les scenarios reels, inchange -- voir
+# `_with_physical_regime`).
+
+
+def _toy_scenario(toy_seed):
+    return {
+        "scenario": "toy_random",
+        "toy_seed": toy_seed,
+        "toy_k_max": 8,
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.2,
+        "T_START": 0.3,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    }
+
+
+#: 4 + 4 = 8 instances jouettes, meme COMPTE que 6 (isoles) + 2 (complexes)
+#: -- pas de distinction "isole/complexe" ici (une IC generique n'a pas de
+#: type d'anomalie a isoler) : TOY_SCENARIOS_A est le premier lot
+#: (curriculum, comme phase 1), TOY_SCENARIOS_B un lot DIFFERENT
+#: (toy_seed 4-7, jamais vu par le lot A), TOY_SCENARIOS_ALL les 8
+#: combines (comme phase 3). Meme profil de cout par essai (8 scenarios
+#: simules au maximum) que le chemin reel.
+TOY_SCENARIOS_A = tuple((f"toy{i}", _toy_scenario(i)) for i in range(4))
+TOY_SCENARIOS_B = tuple((f"toy{i}", _toy_scenario(i)) for i in range(4, 8))
+TOY_SCENARIOS_ALL = TOY_SCENARIOS_A + TOY_SCENARIOS_B
+
+
+# ============================================================
 #  PHASE DEFINITIONS
 # ============================================================
 #
@@ -257,6 +310,20 @@ PHASES = {
     "classical_phase1":  {"n_trials": 300, "study_name": "classical_v2_phase1"},
     "classical_phase2":  {"n_trials": 300, "study_name": "classical_v2_phase2"},
     "classical_phase3":  {"n_trials": 300, "study_name": "classical_v2_phase3"},
+
+    # Journaux Optuna SEPARES de ceux ci-dessus (study_name distinct) :
+    # un contrat de campagne jouet n'a pas la meme forme qu'un contrat
+    # reel (scenarios differents), donc ouvrir la MEME etude leverait
+    # `campaign contract mismatch` -- mais mieux vaut deux etudes que
+    # jamais mélangées par construction plutôt que compter sur cette
+    # erreur pour l'empêcher.
+    "toy_phase1_composite":  {"n_trials": 600, "study_name": "q_has_toy_phase1"},
+    "toy_phase2_composite":  {"n_trials": 600, "study_name": "q_has_toy_phase2"},
+    "toy_phase3_validation": {"n_trials": 400, "study_name": "q_has_toy_phase3"},
+
+    "toy_classical_phase1":  {"n_trials": 300, "study_name": "classical_toy_phase1"},
+    "toy_classical_phase2":  {"n_trials": 300, "study_name": "classical_toy_phase2"},
+    "toy_classical_phase3":  {"n_trials": 300, "study_name": "classical_toy_phase3"},
 }
 
 
@@ -1218,6 +1285,160 @@ def _run_classical_phase3(study_c2, seed=None):
 
 
 # ============================================================
+#  MEMES PHASES, POOL JOUET -- entrainement seul, jamais la validation
+# ============================================================
+#
+# Miroir exact de `_run_phase1/2/3`/`_run_classical_phase1/2/3` : mêmes
+# fonctions génériques (`make_composite_objective`, `run_phase`,
+# `_precompute_dns_by_regime`, `_seeds_for`), seuls `TOY_SCENARIOS_*` et
+# les entrées `PHASES["toy_*"]` (études Optuna séparées) changent. Les 8
+# scénarios RÉELS n'apparaissent nulle part ici -- ils restent réservés à
+# `select_by_holdout_validation`, plus bas, jamais vus par ces essais
+# (`CLAUDE.md` : « aucun réglage ne voit le scénario tenu »).
+#
+# Pas encore fait ici, volontairement : `--prepare-only`/`--finalize-only`
+# n'ont pas d'équivalent jouet (portée de ce câblage, pas un oubli).
+
+def _run_toy_phase1(seed=None, n_trials=None, dns_traces_by_regime=None):
+    """Jouet, phase 1 : perte composite sur le premier lot de 4 instances.
+
+    `dns_traces_by_regime` : comme pour le chemin reel, partage entre CE
+    bras et `_run_toy_classical_phase1` quand fourni par l'appelant --
+    « les bras comparés partagent DNS ... seule la règle de décision
+    diffère » (CLAUDE.md). Calculé ici si absent, pour rester appelable
+    seule (tests, reprise manuelle)."""
+    print("=" * 60)
+    print("TOY PHASE 1: Composite Training (4 instances jouettes)")
+    print(f"  Training: {', '.join(search_space())}")
+    print(f"  Scenarios: {', '.join(k for k, _ in TOY_SCENARIOS_A)}")
+    print("=" * 60)
+
+    if dns_traces_by_regime is None:
+        dns_traces_by_regime = _precompute_dns_by_regime(
+            TOY_SCENARIOS_A, label="4 jouettes (lot A)")
+    objective = make_composite_objective(
+        None, TOY_SCENARIOS_A, dns_traces_by_regime=dns_traces_by_regime)
+    phase_config = dict(PHASES["toy_phase1_composite"])
+    if n_trials is not None:
+        phase_config["n_trials"] = n_trials
+    study = run_phase("toy_phase1_composite", phase_config, objective,
+                      seed=seed)
+    _report_best(study, "Toy Phase 1", TOY_SCENARIOS_A)
+    return study
+
+
+def _run_toy_phase2(study_p1, seed=None):
+    """Jouet, phase 2 : un second lot de 4 instances, amorcee par la 1."""
+    print("\n" + "=" * 60)
+    print("TOY PHASE 2: Composite Training (4 instances jouettes, lot B)")
+    print("=" * 60)
+
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        TOY_SCENARIOS_B, label="4 jouettes (lot B)")
+    seed_params = _seeds_for("q_has_toy_phase1", study_p1, 20, "TOY PHASE 2")
+
+    objective = make_composite_objective(
+        None, TOY_SCENARIOS_B, dns_traces_by_regime=dns_traces_by_regime)
+    study = run_phase("toy_phase2_composite", PHASES["toy_phase2_composite"],
+                      objective, seed_params=seed_params, seed=seed)
+    _report_best(study, "Toy Phase 2", TOY_SCENARIOS_B)
+    return study
+
+
+def _run_toy_phase3(study_p2, seed=None):
+    """Jouet, phase 3 : les 8 instances jouettes combinees."""
+    print("\n" + "=" * 60)
+    print("TOY PHASE 3: Composite Training (8 instances jouettes)")
+    print("=" * 60)
+
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        TOY_SCENARIOS_ALL, label="8 jouettes")
+    seed_params = _seeds_for("q_has_toy_phase2", study_p2, 15, "TOY PHASE 3")
+
+    objective = make_composite_objective(
+        None, TOY_SCENARIOS_ALL, dns_traces_by_regime=dns_traces_by_regime)
+    study = run_phase("toy_phase3_validation", PHASES["toy_phase3_validation"],
+                      objective, seed_params=seed_params, seed=seed)
+    _report_best(study, "Toy Phase 3", TOY_SCENARIOS_ALL)
+    return study
+
+
+def _run_toy_classical_phase1(seed=None, dns_traces_by_regime=None):
+    """Jouet, classique 1 : `threshold_amr` sur le premier lot de 4."""
+    print("\n" + "=" * 60)
+    print("TOY CLASSICAL PHASE 1: threshold_amr, 4 instances jouettes")
+    print("=" * 60)
+
+    if dns_traces_by_regime is None:
+        dns_traces_by_regime = _precompute_dns_by_regime(
+            TOY_SCENARIOS_A, label="4 jouettes (lot A, classique)")
+    objective = make_classical_composite_objective(
+        None, TOY_SCENARIOS_A, dns_traces_by_regime=dns_traces_by_regime)
+    study = run_phase("toy_classical_phase1", PHASES["toy_classical_phase1"],
+                      objective, seed_params=_classical_grid_seeds(20),
+                      seed=seed)
+    _report_best(study, "Toy Classical Phase 1", TOY_SCENARIOS_A)
+    return study
+
+
+def _run_toy_classical_phase2(study_c1, seed=None):
+    """Jouet, classique 2 : le second lot de 4 instances."""
+    print("\n" + "=" * 60)
+    print("TOY CLASSICAL PHASE 2: threshold_amr, 4 instances jouettes (lot B)")
+    print("=" * 60)
+
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        TOY_SCENARIOS_B, label="4 jouettes (lot B, classique)")
+    seeds = _seeds_for("classical_toy_phase1", study_c1, 15,
+                       "TOY CLASSICAL PHASE 2")
+    if not seeds:
+        seeds = _classical_grid_seeds(15)
+
+    objective = make_classical_composite_objective(
+        None, TOY_SCENARIOS_B, dns_traces_by_regime=dns_traces_by_regime)
+    study = run_phase("toy_classical_phase2", PHASES["toy_classical_phase2"],
+                      objective, seed_params=seeds, seed=seed)
+    _report_best(study, "Toy Classical Phase 2", TOY_SCENARIOS_B)
+    return study
+
+
+def _run_toy_classical_phase3(study_c2, seed=None):
+    """Jouet, classique 3 : les 8 instances jouettes combinees."""
+    print("\n" + "=" * 60)
+    print("TOY CLASSICAL PHASE 3: threshold_amr, 8 instances jouettes")
+    print("=" * 60)
+
+    dns_traces_by_regime = _precompute_dns_by_regime(
+        TOY_SCENARIOS_ALL, label="8 jouettes (classique)")
+    seeds = _seeds_for("classical_toy_phase2", study_c2, 15,
+                       "TOY CLASSICAL PHASE 3")
+    if not seeds:
+        seeds = _classical_grid_seeds(15)
+
+    objective = make_classical_composite_objective(
+        None, TOY_SCENARIOS_ALL, dns_traces_by_regime=dns_traces_by_regime)
+    study = run_phase("toy_classical_phase3", PHASES["toy_classical_phase3"],
+                      objective, seed_params=seeds, seed=seed)
+    _report_best(study, "Toy Classical Phase 3", TOY_SCENARIOS_ALL)
+    return study
+
+
+def run_toy_holdout(study_toy_p3, study_toy_c3, label="TOY -> REEL"):
+    """Le point du pool jouet : reclasse les candidats entraines SANS
+    jamais voir les 8 scenarios reels par leur perte sur CES scenarios,
+    aux memes regimes tenus a l'ecart que la campagne reelle
+    (`HOLDOUT_GRID`). Reutilise `select_by_holdout_validation` telle
+    quelle -- deja generique en `scenario_list`, aucun code de validation
+    nouveau."""
+    quantum = select_by_holdout_validation(
+        study_toy_p3, SCENARIOS_ALL, label=f"{label} (quantique)")
+    classical = select_by_holdout_validation(
+        study_toy_c3, SCENARIOS_ALL, classical_only=True,
+        label=f"{label} (classique)")
+    return {"quantum": quantum, "classical": classical}
+
+
+# ============================================================
 #  SELECTION PAR VALIDATION TENUE A L'ECART
 # ============================================================
 #
@@ -1601,7 +1822,10 @@ def _deploy(staged_path):
 # ============================================================
 
 PHASE_CHOICES = ("1", "2", "3", "classical_1", "classical_2", "classical_3",
-                 "classical", "all")
+                 "classical", "all",
+                 "toy_1", "toy_2", "toy_3",
+                 "toy_classical_1", "toy_classical_2", "toy_classical_3",
+                 "toy_classical", "toy_all")
 
 
 def parse_args(argv=None):
@@ -1633,11 +1857,13 @@ def parse_args(argv=None):
     args = p.parse_args(argv)
     if args.n_trials is not None and args.n_trials < 1:
         p.error("--n-trials doit etre >= 1")
-    if ((args.n_trials is not None or args.result_path is not None)
-            and args.phase != "1"):
-        p.error("--n-trials et --result-path sont reserves a --phase 1")
+    if args.n_trials is not None and args.phase not in ("1", "toy_1"):
+        p.error("--n-trials est reserve a --phase 1/toy_1")
+    if args.result_path is not None and args.phase != "1":
+        p.error("--result-path est reserve a --phase 1")
     if (args.prepare_only or args.finalize_only) and args.phase != "1":
-        p.error("--prepare-only/--finalize-only sont reserves a --phase 1")
+        p.error("--prepare-only/--finalize-only sont reserves a --phase 1 "
+                "(pas d'equivalent jouet pour l'instant)")
     if args.prepare_only and args.finalize_only:
         p.error("--prepare-only et --finalize-only sont exclusifs")
     return args
@@ -1721,6 +1947,63 @@ def main(argv=None):
                                    dns_traces_by_regime=dns_by_regime)
         c2 = _run_classical_phase2(c1, args.seed)
         _run_classical_phase3(c2, args.seed)
+
+    elif args.phase == "toy_1":
+        target = (args.n_trials if args.n_trials is not None
+                  else PHASES["toy_phase1_composite"]["n_trials"])
+        _run_toy_phase1(args.seed, n_trials=target)
+
+    elif args.phase == "toy_2":
+        _run_toy_phase2(_load_study("toy_phase1_composite"), args.seed)
+
+    elif args.phase == "toy_3":
+        _run_toy_phase3(_load_study("toy_phase2_composite"), args.seed)
+
+    elif args.phase == "toy_classical_1":
+        _run_toy_classical_phase1(args.seed)
+
+    elif args.phase == "toy_classical_2":
+        _run_toy_classical_phase2(_load_study("toy_classical_phase1"), args.seed)
+
+    elif args.phase == "toy_classical_3":
+        _run_toy_classical_phase3(_load_study("toy_classical_phase2"), args.seed)
+
+    elif args.phase == "toy_classical":
+        toy_dns_by_regime = _precompute_dns_by_regime(TOY_SCENARIOS_A,
+                                                       label="4 jouettes (lot A)")
+        tc1 = _run_toy_classical_phase1(
+            args.seed, dns_traces_by_regime=toy_dns_by_regime)
+        tc2 = _run_toy_classical_phase2(tc1, args.seed)
+        _run_toy_classical_phase3(tc2, args.seed)
+
+    elif args.phase == "toy_all":
+        # ENTRAINEMENT complet sur le pool jouet -- les 8 scenarios reels
+        # n'y apparaissent QUE dans `run_toy_holdout`, juste apres, jamais
+        # avant. Volontairement PAS deploye (ni `--no-deploy` ni son
+        # absence n'y changent rien) : deployer un resultat entraine sur
+        # le pool jouet est une decision separee, jamais automatique.
+        toy_dns_by_regime = _precompute_dns_by_regime(TOY_SCENARIOS_A,
+                                                       label="4 jouettes (lot A)")
+        tp1 = _run_toy_phase1(args.seed, dns_traces_by_regime=toy_dns_by_regime)
+        tp2 = _run_toy_phase2(tp1, args.seed)
+        tp3 = _run_toy_phase3(tp2, args.seed)
+        tc1 = _run_toy_classical_phase1(
+            args.seed, dns_traces_by_regime=toy_dns_by_regime)
+        tc2 = _run_toy_classical_phase2(tc1, args.seed)
+        tc3 = _run_toy_classical_phase3(tc2, args.seed)
+        holdout = run_toy_holdout(tp3, tc3)
+        out_path = os.path.join(ensure_dirs(), "toy_holdout_result.json")
+        _atomic_write_json(out_path, {
+            "quantum_winner": (holdout["quantum"]["winner"]
+                              if holdout["quantum"]["winner"] else None),
+            "classical_winner": (holdout["classical"]["winner"]
+                                 if holdout["classical"]["winner"] else None),
+        })
+        print(f"\nResultat de validation tenue a l'ecart (sur les 8 "
+              f"scenarios reels) ecrit dans {out_path} -- PAS deploye.")
+        print("\n" + "=" * 60)
+        print("TOY TRAINING + HOLDOUT VALIDATION COMPLETE")
+        print("=" * 60)
 
     else:  # "all"
         # Meme damier (`dns_by_regime`, DIVERSIFICATION DE L'ENTRAINEMENT

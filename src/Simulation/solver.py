@@ -381,6 +381,53 @@ class MHDSolver:
         self.enforce_incompressibility()
 
     # ----------------------------------------------------------------
+    #  IC générique jouet — AUCUNE forme injectée
+    #
+    #  Sert l'entraînement Optuna (train_hyperparams.py) sur un pool
+    #  synthétique plutôt que sur les 8 scénarios ci-dessus : un hamiltonien
+    #  dont le biais Z répond à |omega_z|/|J_z| (beta_curl/beta_xpoint) ne
+    #  doit pas s'entraîner EXCLUSIVEMENT sur des IC qui lui donnent
+    #  exactement le vortex/point X/nappe qu'il cherche (USER). Ce champ
+    #  n'injecte aucune des trois formes : bruit filtré en fréquence
+    #  (k <= k_max), rien d'autre.
+    # ----------------------------------------------------------------
+    def init_toy_random(self, seed=0, k_max=8, target_velocity_rms=1.0,
+                        target_field_rms=1.0):
+        """Champ aléatoire à bande limitée, solénoïdal par construction.
+
+        Même filtrage spectral que `apply_physics_perturbation` (bruit
+        blanc, FFT, k <= k_max) — PAS le bruit non filtré de
+        `init_noisy_uniform`, qui teste délibérément le cas opposé
+        (incohérence à l'échelle de la grille). vx/vy et Bx/By sont
+        chacun le rotationnel d'une fonction de flux aléatoire
+        indépendante, comme les autres `init_*` de cette classe.
+        """
+        seed = int(seed)
+        rng = np.random.default_rng(seed)
+        N = self.grid.N
+        wave = np.fft.fftfreq(N) * N
+        kx, ky = np.meshgrid(wave, wave, indexing="ij")
+        keep = np.sqrt(kx ** 2 + ky ** 2) <= int(k_max)
+
+        def band_limited_streamfunction():
+            spectrum = np.fft.fft2(rng.standard_normal((N, N)))
+            spectrum[~keep] = 0.0
+            field = np.real(np.fft.ifft2(spectrum))
+            return field / max(float(field.std()), 1e-30)
+
+        def rescaled_curl(psi, target_rms):
+            fx, fy = self._curl_z_fd4(psi, self.dx)
+            rms = float(np.sqrt(np.mean(fx ** 2 + fy ** 2)))
+            scale = target_rms / max(rms, 1e-30)
+            return fx * scale, fy * scale
+
+        self.vx, self.vy = rescaled_curl(band_limited_streamfunction(),
+                                         target_velocity_rms)
+        self.Bx, self.By = rescaled_curl(band_limited_streamfunction(),
+                                         target_field_rms)
+        self.enforce_incompressibility()
+
+    # ----------------------------------------------------------------
     #  Perturbations magnétiques : par fonction de flux
     # ----------------------------------------------------------------
     @staticmethod

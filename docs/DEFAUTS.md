@@ -144,3 +144,20 @@ modèle non-monotone, calibration du seuil de label.
 python study/h2b_prediction/h2b_loso_transfer.py --dim 4
 python study/h2b_prediction/h2b_loso_transfer.py --dim 4 --normalize-per-scenario
 ```
+
+## D-201 — `src/visual.py` a perdu la mention de D-68
+
+**Trouvé en vérifiant `tests/pipeline` en entier** (sans rapport avec le
+câblage jouet en cours) : `test_amr_figure_axes.py::
+test_la_deviation_reste_consignee_dans_le_fichier` exige que `D-68`
+apparaisse dans `src/visual.py` — la raison écrite de ne pas transposer
+un axe. Le commentaire a disparu, probablement dans `fe4fd76` (« src/
+... : suite synthese commentaires »), la même famille de commit qui avait
+déjà effacé une valeur mesurée dans `enforce_incompressibility`
+(corrigé, voir `RESULTS.md`). Pas corrigé ici : il faut d'abord relire ce
+que D-68 disait pour restaurer la bonne raison, pas juste réinsérer la
+chaîne.
+
+```bash
+pytest tests/pipeline/test_amr_figure_axes.py::test_la_deviation_reste_consignee_dans_le_fichier -q
+```
