@@ -10198,3 +10198,186 @@ python study/h0_selection/h0_optimiser_equivalence.py \
     --k-opt 60 --seed 0
 python study/common/rho_gap_f1.py results/h0_optimiser_equivalence_N96_dim3_harris_tearing-kelvin_helmholtz-mhd_rotor-orszag_tang_v1.npz
 ```
+
+# Modèle jouet statique — plafond classique/GBT et réplication H0a/H0b
+
+**Demande USER** : entraîner sur un pool synthétique bon marché plutôt que
+sur les 8 scénarios réels fixes (risque de surapprentissage à un jeu figé
+d'instances), garder les scénarios réels comme validation, comparer à une
+base classique GBT « avec des ressources similaires ». Compatible avec
+`PLAN_PREPRINT.md` sans le restructurer : rien n'y est bâti spécifiquement
+pour les 8 scénarios — l'objectif reste de vérifier que le pipeline
+quantique suit une logique de minimisation d'un hamiltonien et se compare
+loyalement au classique, pas de prouver un avantage.
+
+## Le générateur (`study/common/toy_model.py`)
+
+Statique : une seule paire de fonctions de flux (`psi_v`, `psi_b`), pas
+d'évolution temporelle — `with_psi=False` en aval (flux temporel nul) est
+donc le cas d'usage exact, pas une simplification qui triche (D-122).
+Superpose un nombre aléatoire de structures localisées (vortex, point X,
+nappe de courant) ; `vx, vy = curl(psi_v)`, `Bx, By = curl(psi_b)` —
+solénoïdal PAR CONSTRUCTION, jamais posé composante par composante (le bug
+D-1/D-6/D-7 des scénarios DNS n'a pas de prise ici). `tests/study/
+test_toy_model.py` (5 tests) : formes, finitude, solénoïdalité (< 1e-10),
+reproductibilité par graine, diversité entre graines.
+
+## Deux fausses pistes, écartées par une mesure décisive, pas par intuition
+
+Une première version de `h3_toy_model_check.py` trouvait l'optimum exact
+du hamiltonien TOUJOURS à « tout raffiner » (20/20 tirages, F1 = 0,500
+sans variance). Deux corrections du générateur, chacune plausible sur le
+papier, n'ont RIEN changé au nombre :
+
+1. **Amplitude globale trop grande** (`|v|` mesuré jusqu'à 12,37 contre une
+   échelle de référence ~1) — `_rescale_to_target_rms` + structures moins
+   nombreuses/plus petites (`ba39fba`). Remesuré : 20/20 identique.
+2. **Bruit blanc dans la fonction de flux, amplifié par le rotationnel**
+   (`background_noise=0,02` seul mesure `|v|_rms = 0,205`, comparable à
+   l'intensité des structures) — bruit désactivé par défaut (`eb5561a`).
+   Remesuré : 20/20 identique.
+
+**Résolution, par une mesure décisive plutôt qu'une troisième hypothèse** :
+rejouer le MÊME script sur 5 instantanés DNS RÉELS
+(`dns_harris_tearing_Re400_N96.npz`, même dim=3/18 qubits) donne le MÊME
+motif — 5/5 « tout raffiner ». Ni le générateur ni le script n'ont de
+défaut : `T26` (plus haut dans ce fichier) mesure déjà « uniformité du
+fondamental = 0,50 » à dim=3 sur des scénarios réels, aux hyperparamètres
+de référence — une propriété CONNUE du hamiltonien à cette taille,
+cohérente avec H0b, pas une anomalie du modèle jouet. `toy_model.py`
+documente cette attribution causale corrigée dans son propre docstring
+(`0d63f5f`) — le commit qui l'avait d'abord mal attribuée au bruit le dit
+explicitement, plutôt que de laisser la fausse piste sans trace.
+
+## `h3_toy_model_check.py` — H0a/H0b répliqués sur données jouets
+
+```bash
+python study/h3_representation/h3_toy_model_check.py --n-seeds 20
+pytest tests/study/test_h3_toy_model_check.py -v   # 4 passed
+```
+
+20 instantanés jouets indépendants, N=48, dim=3 (18 qubits), Re=800,
+mêmes trois décisions que sur DNS réelle : optimum exact (énumération
+exhaustive), décision QAOA réellement exécutée, seuil classique ajusté
+par F1 — toutes contre la même vérité terrain générique
+(`patch_l2_errors`, inchangée depuis les scénarios réels) :
+
+| grandeur | moyenne ± écart-type | min | max |
+|---|---|---|---|
+| F1 exact vs vérité terrain | 0,500 ± 0,000 | 0,500 | 0,500 |
+| F1 QAOA vs vérité terrain | 0,673 ± 0,101 | 0,500 | 1,000 |
+| F1 classique vs vérité terrain | 0,699 ± 0,154 | 0,333 | 1,000 |
+| accord QAOA / optimum exact | 0,622 ± 0,147 | 0,222 | 0,889 |
+| fraction refine, optimum exact | 1,000 ± 0,000 | 1,000 | 1,000 |
+| fraction refine, QAOA | 0,622 ± 0,147 | 0,222 | 0,889 |
+
+Seuil classique ajusté sur le pool (20×9 = 180 patches) : 0,4920
+(F1 pool = 0,693).
+
+**H0a répliqué** : QAOA ne s'effondre pas sur l'optimum trivial de son
+propre hamiltonien (accord moyen 0,622, minimum 0,222 — loin de 1,0).
+**H0b répliqué** : NE PAS résoudre H parfaitement donne une MEILLEURE
+décision que le résoudre exactement (F1 QAOA 0,673 > F1 exact 0,500, sur
+les 20 tirages sans exception). Les deux répliquent, sur données jouets,
+un résultat déjà établi sur DNS réelles à cette taille — pas un nouveau
+résultat, une confirmation que le modèle jouet ne s'écarte pas du
+comportement réel sur cette propriété précise.
+
+## Plafond classique — stabilité train/val (`h2b_toy_ceiling.py`)
+
+```bash
+python study/h2b_prediction/h2b_toy_ceiling.py --n-instances 300 --n-splits 10
+pytest tests/study/test_h2b_toy_ceiling.py -v   # 4 passed
+```
+
+300 instances jouets, 10 partages TRAIN/VAL disjoints par INSTANCE
+(70/30), seuil classique ajusté par F1 sur le train, évalué sur le val
+jamais vu à chaque partage (garde contre `CLAUDE.md` : « aucun réglage ne
+voit le scénario tenu ou les labels d'évaluation ») :
+
+| grandeur | moyenne ± écart-type | min | max |
+|---|---|---|---|
+| seuil | 0,4980 ± 0,0040 | 0,4900 | 0,5000 |
+| F1 train | 0,695 ± 0,004 | — | — |
+| F1 val | 0,698 ± 0,012 | 0,681 | 0,718 |
+
+Écart train − val : −0,003 ± 0,015 — le val est, en moyenne, LÉGÈREMENT
+meilleur que le train : aucune signature de mémorisation.
+
+## Plafond GBT/RF/LR (`h2b_toy_gbt_ceiling.py`)
+
+```bash
+python study/h2b_prediction/h2b_toy_gbt_ceiling.py --n-instances 300 --n-splits 5
+pytest tests/study/test_h2b_toy_gbt_ceiling.py -v   # 5 passed
+```
+
+Réutilise `extract_features_2d`/`stencil_features`/`make_model`/
+`fit_eval` de `h2b_ceiling_random_split.py` telles quelles (9 features
+locales — score classique, |v|², |B|², |ω_z|, |J_z|, |∇v|², |∇B|²,
+det(∇B), Re — + 45 features de voisinage, self+N/S/E/W). `early_stopping=
+True` explicite pour TOUS les ajustements GBT dès le départ (piège D-198
+déjà connu sur DNS réelles, où `"auto"` ne se déclenche jamais en dessous
+de 10 000 échantillons). Même discipline train/val que ci-dessus, 5
+partages :
+
+| modèle | F1 val (moyenne ± écart-type) |
+|---|---|
+| seuil classique | 0,702 ± 0,012 (train 0,694 ± 0,004) |
+| régression logistique (site) | **0,726 ± 0,009** |
+| forêt aléatoire (site) | 0,686 ± 0,020 |
+| GBT (site) | 0,677 ± 0,016 |
+| **plafond site (meilleur des 3)** | **0,726 ± 0,009** (LR, 5/5 partages) |
+| GBT (voisinage, 45 features) | 0,723 ± 0,019 |
+
+**Gain réel mais modeste du plafond site sur le seuil classique** :
++0,024 (LR). **Le voisinage n'ajoute rien au-delà du site seul** : −0,003
+— cohérent avec H0b (les couplages n'apportent pas de valeur qu'un
+hamiltonien local, avec ou sans couplages, pourrait exploiter).
+
+**Triangulation du seuil classique, trois pools jouets indépendants, trois
+scripts** : 0,4920 (pool à 20 graines) / 0,4980 ± 0,0040 (300 instances,
+10 partages) / 0,5000 ± 0,0000 (300 instances, 5 partages) — même nombre à
+chaque fois, à la granularité de la grille de seuils près.
+
+**Pourquoi ceci n'est PAS une comparaison LOSO façon D-198** (documenté
+dans le docstring du script) : la cause dominante de D-198 est un signe
+score→label qui s'inverse d'un scénario physique réel à l'autre —
+mesurable seulement parce que ces scénarios sont qualitativement
+différents. Les instances jouets sont des tirages i.i.d. de LA MÊME
+distribution génératrice : inventer un découpage « scénario » jouet
+artificiel ferait semblant de tester un transfert qui n'existe pas dans
+les données. Un partage aléatoire train/val est donc le protocole honnête
+ici, pas un LOSO.
+
+## Ce que ceci établit, et ce que ceci n'établit PAS
+
+**Établit** : le pipeline Q-HAS (mapping physique→Ising, QAOA, seuil
+classique, plafonds GBT/RF/LR) tourne de bout en bout sur un pool
+synthétique bon marché, sans toucher aux 8 scénarios réels ni à leurs
+labels ; les propriétés déjà établies sur DNS réelle à dim=3 (H0a, H0b,
+uniformité du fondamental) s'y répliquent qualitativement ; le seuil
+classique et le plafond GBT/RF/LR jouets sont stables sous partage
+train/val répété, à trois mesures indépendantes qui s'accordent.
+
+**N'établit PAS** : un avantage ou désavantage quantique — ceci est une
+vérification d'infrastructure et de cohérence, pas la comparaison
+confirmatoire de `study/closed_loop/`. Une seule taille mesurée (dim=3,
+N=48, Re=800) ; le générateur reste STATIQUE (psi=0 — `h3_toy_model_check.
+py` figure dans `PSI_STILL_ZERO` par construction du modèle, pas par
+dette de câblage oubliée) ; le branchement du pool jouet comme
+entraînement avec les 8 scénarios réels en validation (l'usage proposé
+par USER) reste à câbler — ce que ceci vérifie, c'est que le pool jouet
+tourne sur une base saine, pas qu'un entraînement réel sur ce pool a déjà
+eu lieu.
+
+```bash
+pytest tests/study/test_toy_model.py tests/study/test_h3_toy_model_check.py \
+    tests/study/test_h2b_toy_ceiling.py tests/study/test_h2b_toy_gbt_ceiling.py -v
+    # 18 passed
+pytest tests/study -q -m "not slow"   # 1340 passed, 70 skipped, 0 failed
+```
+
+Commits : `b2eeaad`..`0d63f5f` (générateur, ses deux fausses pistes et
+leur correction), `cb493a4`/`1d1a353` (harnais H0a/H0b et son artefact
+épinglé), `fec46e9` (plafonds classique/GBT et les 4 régressions de suite
+complète qu'ils ont révélées).
