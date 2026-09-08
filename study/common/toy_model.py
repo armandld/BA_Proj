@@ -113,15 +113,21 @@ def generate_toy_snapshot(N, seed, n_structures_range=(1, 3),
     raffinement non triviale.
 
     `background_noise` DESACTIVE par defaut (0.0), pas juste petit. Un
-    bruit blanc, une fois derive par le rotationnel, s'amplifie en
-    1/dx : a `background_noise=0.02` seul (aucune structure), mesure
+    bruit blanc, une fois derive par le rotationnel, s'amplifie en 1/dx :
+    a `background_noise=0.02` seul (aucune structure), mesure
     |v|_rms = 0.20 pour dx = 2*pi/48 -- comparable a l'intensite des
-    structures elles-memes (rms=0.5), ce qui suffisait a faire disparaitre
-    toute zone reellement calme et rendait l'optimum exact du hamiltonien
-    degenere (toujours "tout raffiner" sur 20/20 tirages independants,
-    F1 = 0.500 sans aucune variance). A remettre seulement sous une forme
-    filtree en frequence (comme `MHDSolver.apply_physics_perturbation`),
-    jamais en bruit blanc brut.
+    structures elles-memes (rms=0.5). C'est un vrai defaut (a remettre
+    seulement filtre en frequence, jamais en bruit blanc brut), mais CE
+    N'EST PAS la cause d'un exact_frac=1.0 systematique observe par
+    ailleurs : rejoue sur cinq instantanes DNS REELS (harris_tearing,
+    Re=400, N=96, meme dim=3), le meme optimum uniforme "tout raffiner"
+    apparait 5 fois sur 5. `T26` (docs/RESULTS.md) le mesure deja sur des
+    scenarios reels a dim=3 : uniformite du fondamental = 0.50 sur son
+    propre echantillon. C'est une propriete connue du hamiltonien aux
+    hyperparametres de reference (coherente avec H0b : mieux resoudre H
+    degrade la decision), pas un defaut de ce generateur -- le modele
+    jouet la reproduit fidelement, ce qui est un bon signe, pas un bug a
+    corriger.
     """
     if radius_range is None:
         radius_range = (length_L / 24.0, length_L / 10.0)
