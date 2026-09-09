@@ -381,81 +381,74 @@ class MHDSolver:
         self.enforce_incompressibility()
 
     # ----------------------------------------------------------------
-    #  IC générique jouet — AUCUNE forme injectée
+    #  IC jouet : une vraie instabilité, paramètres physiques randomisés
     #
-    #  Sert l'entraînement Optuna (train_hyperparams.py) sur un pool
-    #  synthétique plutôt que sur les 8 scénarios ci-dessus : un hamiltonien
-    #  dont le biais Z répond à |omega_z|/|J_z| (beta_curl/beta_xpoint) ne
-    #  doit pas s'entraîner EXCLUSIVEMENT sur des IC qui lui donnent
-    #  exactement le vortex/point X/nappe qu'il cherche (USER). Ce champ
-    #  n'injecte aucune des trois formes : bruit filtré en fréquence
-    #  (k <= k_max), rien d'autre.
+    #  Un hamiltonien réglé pour détecter vortex/points X ne doit pas
+    #  s'entraîner uniquement sur les 8 scénarios fixes (USER). Du bruit
+    #  filtré seul ne suffit pas : mesuré, il ne développe jamais de
+    #  structure (une instabilité réelle en CONCENTRE en évoluant, le
+    #  bruit ne fait que diffuser — voir DEFAUTS.md/RESULTS.md). Cette IC
+    #  tire donc une vraie recette d'instabilité et en randomise les
+    #  paramètres physiques : générique par les paramètres, pas par
+    #  l'absence de structure.
     # ----------------------------------------------------------------
-    def init_toy_random(self, seed=0, k_max=8, envelope_k_max=2,
-                        envelope_floor=0.15, target_velocity_rms=1.0,
-                        target_field_rms=1.0):
-        """Champ aléatoire à bande limitée, solénoïdal par construction --
-        MODULÉ par une enveloppe d'intensité elle-même aléatoire mais
-        lisse (`envelope_k_max` << `k_max`), pas uniforme.
 
-        Sans l'enveloppe (version initiale, `N=256`/`dim=2` réel, T_MAX
-        et K_opt réduits, contrôle direct contre `harris_tearing` aux
-        MÊMES réglages) : le bruit est texturé PARTOUT à intensité
-        égale, donc à `dim=2` (`VQA_N_TRAINING=2`, 4 patches géants) les
-        4 patches se ressemblent tous assez pour que la décision de
-        raffinement sature à `patch_ratio=1.0` -- QAOA ET classique,
-        quel que soit le jeu d'hyperparamètres. Le scénario réel, aux
-        MÊMES réglages, donne `patch_ratio=0.735`/`0.781` : la différence
-        n'était donc pas la taille de grille ni la fenêtre temporelle,
-        mais l'absence de contraste calme/actif -- exactement la raison
-        déjà écrite dans `study/common/toy_model.py` pour le générateur
-        statique (« c'est ce contraste, pas la busyness uniforme, qui
-        rend la décision de raffinement non triviale »), pas encore
-        reportée ici avant cette mesure. L'enveloppe garde le principe
-        « aucune forme injectée » (toujours du bruit, jamais un vortex/
-        point X/nappe analytique) tout en réintroduisant ce contraste.
+    #: Recettes d'instabilité déjà testées (test_scenarios_analytic.py).
+    #: Exclut `orszag_tang` (aucun paramètre) et `noisy_uniform` (bruit
+    #: statique, ne développe rien). Bornes centrées sur le défaut de
+    #: chaque fonction.
+    _TOY_INSTABILITY_RECIPES = {
+        "kelvin_helmholtz": {
+            "shear_width": (0.3, 0.8), "noise_amplitude": (0.05, 0.2),
+            "drift_velocity": (0.3, 0.8)},
+        "magnetic_twist": {
+            "twist_angle": (np.pi / 4, np.pi), "shear_width": (0.15, 0.5),
+            "perturbation": (0.005, 0.03)},
+        "harris_tearing": {
+            "B0": (0.6, 1.4), "shear_width": (0.15, 0.5),
+            "perturbation": (0.005, 0.03), "k_mode": (0.5, 2.0)},
+        "lamb_oseen_vortex": {
+            "circulation": (3.0, 10.0), "core_radius": (0.2, 0.7),
+            "B0": (0.05, 0.2)},
+        "double_tearing": {
+            "B0": (0.4, 0.9), "separation": (0.3, 0.8),
+            "shear_width": (0.1, 0.35), "perturbation": (0.005, 0.03),
+            "k_mode": (1.0, 3.0)},
+        "mhd_rotor": {
+            "omega": (5.0, 16.0), "r0": (0.5, 1.0),
+            "taper_width": (0.08, 0.25), "B0": (0.6, 1.4)},
+        "island_coalescence": {
+            "B0": (0.6, 1.4), "shear_width": (0.15, 0.5),
+            "perturbation": (0.02, 0.1), "k_mode": (0.5, 2.0)},
+    }
 
-        Même filtrage spectral que `apply_physics_perturbation` (bruit
-        blanc, FFT, k <= k_max) — PAS le bruit non filtré de
-        `init_noisy_uniform`, qui teste délibérément le cas opposé
-        (incohérence à l'échelle de la grille). vx/vy et Bx/By sont
-        chacun le rotationnel d'une fonction de flux (bruit x enveloppe)
-        aléatoire indépendante, comme les autres `init_*` de cette
-        classe -- le rotationnel d'un produit de champs scalaires reste
-        exactement à divergence nulle, l'enveloppe ne casse rien.
+    def init_toy_instability(self, seed=0, recipe=None):
+        """Une recette au hasard, ses paramètres au hasard, et un
+        décalage périodique au hasard (position de la structure) --
+        générique par les tirages, pas par l'absence de dynamique. Le
+        choix et ses paramètres sont gardés sur `self.toy_recipe`/
+        `self.toy_recipe_params` pour la provenance.
         """
         seed = int(seed)
         rng = np.random.default_rng(seed)
-        N = self.grid.N
-        wave = np.fft.fftfreq(N) * N
-        kx, ky = np.meshgrid(wave, wave, indexing="ij")
-        keep = np.sqrt(kx ** 2 + ky ** 2) <= int(k_max)
-        keep_envelope = np.sqrt(kx ** 2 + ky ** 2) <= int(envelope_k_max)
+        if recipe is None:
+            recipe = str(rng.choice(list(self._TOY_INSTABILITY_RECIPES)))
+        ranges = self._TOY_INSTABILITY_RECIPES[recipe]
+        params = {name: float(rng.uniform(*bounds))
+                  for name, bounds in ranges.items()}
+        if recipe == "lamb_oseen_vortex":
+            params["circulation"] *= float(rng.choice([-1.0, 1.0]))
 
-        def band_limited_field(mask):
-            spectrum = np.fft.fft2(rng.standard_normal((N, N)))
-            spectrum[~mask] = 0.0
-            field = np.real(np.fft.ifft2(spectrum))
-            return field / max(float(field.std()), 1e-30)
+        getattr(self, f"init_{recipe}")(**params)
 
-        def smooth_activity_envelope():
-            e = band_limited_field(keep_envelope)
-            e = (e - e.min()) / max(e.max() - e.min(), 1e-30)
-            return envelope_floor + (1.0 - envelope_floor) * e
+        shift = tuple(int(rng.integers(0, self.grid.N)) for _ in range(2))
+        self.vx = np.roll(self.vx, shift, axis=(0, 1))
+        self.vy = np.roll(self.vy, shift, axis=(0, 1))
+        self.Bx = np.roll(self.Bx, shift, axis=(0, 1))
+        self.By = np.roll(self.By, shift, axis=(0, 1))
 
-        def rescaled_curl(psi, target_rms):
-            fx, fy = self._curl_z_fd4(psi, self.dx)
-            rms = float(np.sqrt(np.mean(fx ** 2 + fy ** 2)))
-            scale = target_rms / max(rms, 1e-30)
-            return fx * scale, fy * scale
-
-        self.vx, self.vy = rescaled_curl(
-            band_limited_field(keep) * smooth_activity_envelope(),
-            target_velocity_rms)
-        self.Bx, self.By = rescaled_curl(
-            band_limited_field(keep) * smooth_activity_envelope(),
-            target_field_rms)
-        self.enforce_incompressibility()
+        self.toy_recipe = recipe
+        self.toy_recipe_params = dict(params)
 
     # ----------------------------------------------------------------
     #  Perturbations magnétiques : par fonction de flux

@@ -82,12 +82,9 @@ def _rescale_to_target_rms(fx, fy, target_rms):
     """Ramene (fx, fy) a une intensite typique fixe, sans toucher au motif
     spatial. Le rotationnel d'une bosse de rayon r amplifie en 1/r, donc
     amplitude et rayon tires independamment produisent une intensite
-    globale imprevisible (v0=B0=1.0 est l'echelle de reference ailleurs
-    dans le depot) -- sans cette normalisation le nombre et le rayon des
-    structures deviendraient des parametres d'echelle plutot que de
-    forme. Ne suffit PAS a elle seule a eviter un optimum degenere : voir
-    le commentaire sur `background_noise` ci-dessous, la vraie cause
-    trouvee par verification a 20 graines independantes."""
+    globale imprevisible -- sans cette normalisation le nombre et le
+    rayon des structures deviendraient des parametres d'echelle plutot
+    que de forme."""
     rms = np.sqrt(np.mean(fx ** 2 + fy ** 2))
     if rms < 1e-12:
         return fx, fy
@@ -99,35 +96,19 @@ def generate_toy_snapshot(N, seed, n_structures_range=(1, 3),
                           radius_range=None, target_velocity_rms=0.5,
                           target_field_rms=0.5, background_noise=0.0,
                           length_L=2 * np.pi):
-    """Un instantane statique : vx, vy, Bx, By, chacun (N, N).
+    """Un instantane statique : vx, vy, Bx, By, chacun (N, N). Meme seed,
+    memes champs. Intensite globale fixee separement de la forme
+    (`target_velocity_rms`/`target_field_rms`, voir `_rescale_to_target_rms`).
 
-    Nombre, type, position et echelle des structures sont tires de `seed`
-    -- meme seed, memes champs ; seed different, instance differente.
-    L'intensite globale est fixee separement (`target_velocity_rms`,
-    `target_field_rms`) : voir `_rescale_to_target_rms`.
+    `radius_range` par defaut : plus petit qu'un patch typique, pour que
+    la plupart restent calmes et seuls quelques-uns portent une
+    structure -- ce contraste rend la decision de raffinement non
+    triviale (voir RESULTS.md pour la mesure qui l'a etabli).
 
-    `radius_range` par defaut : nettement plus petit qu'un patch typique
-    (`longueur_domaine / n_patches`), pour que la plupart des patches
-    restent calmes et que seuls quelques-uns portent une structure --
-    c'est ce contraste, pas la busyness uniforme, qui rend la decision de
-    raffinement non triviale.
-
-    `background_noise` DESACTIVE par defaut (0.0), pas juste petit. Un
-    bruit blanc, une fois derive par le rotationnel, s'amplifie en 1/dx :
-    a `background_noise=0.02` seul (aucune structure), mesure
-    |v|_rms = 0.20 pour dx = 2*pi/48 -- comparable a l'intensite des
-    structures elles-memes (rms=0.5). C'est un vrai defaut (a remettre
-    seulement filtre en frequence, jamais en bruit blanc brut), mais CE
-    N'EST PAS la cause d'un exact_frac=1.0 systematique observe par
-    ailleurs : rejoue sur cinq instantanes DNS REELS (harris_tearing,
-    Re=400, N=96, meme dim=3), le meme optimum uniforme "tout raffiner"
-    apparait 5 fois sur 5. `T26` (docs/RESULTS.md) le mesure deja sur des
-    scenarios reels a dim=3 : uniformite du fondamental = 0.50 sur son
-    propre echantillon. C'est une propriete connue du hamiltonien aux
-    hyperparametres de reference (coherente avec H0b : mieux resoudre H
-    degrade la decision), pas un defaut de ce generateur -- le modele
-    jouet la reproduit fidelement, ce qui est un bon signe, pas un bug a
-    corriger.
+    `background_noise` desactive par defaut : un bruit blanc derive par
+    le rotationnel s'amplifie en 1/dx (comparable a l'intensite des
+    structures elles-memes) -- a ne remettre que filtre en frequence,
+    jamais brut.
     """
     if radius_range is None:
         radius_range = (length_L / 24.0, length_L / 10.0)

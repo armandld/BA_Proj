@@ -225,14 +225,14 @@ def test_a_diverging_dns_raises_instead_of_returning_garbage():
     assert "raise RuntimeError" in src
 
 
-# ── toy_random : meme chemin de precalcul que les 9 scenarios nommes ──
+# ── toy_instability : meme chemin de precalcul que les 9 scenarios nommes ──
 
-def test_toy_random_can_be_precomputed_through_the_real_pipeline():
+def test_toy_instability_can_be_precomputed_through_the_real_pipeline():
     """Preuve directe (pas seulement `_init_dns_scenario` isole) que le
     solveur reel accepte l'IC jouet de bout en bout : precalcul, quelques
     pas, trace exploitable -- meme contrat que
     `test_every_deployed_scenario_can_be_precomputed`."""
-    trace, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_random",
+    trace, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_instability",
                                    toy_seed=0))
     assert trace and "fluxes" in trace[max(trace)]
     fluxes = trace[max(trace)]["fluxes"]
@@ -240,18 +240,18 @@ def test_toy_random_can_be_precomputed_through_the_real_pipeline():
         assert np.all(np.isfinite(fluxes[k]))
 
 
-def test_toy_random_without_a_seed_raises_rather_than_silently_defaulting():
-    """Deux configs `toy_random` sans `toy_seed` distinct se ressembleraient
+def test_toy_instability_without_a_seed_raises_rather_than_silently_defaulting():
+    """Deux configs `toy_instability` sans `toy_seed` distinct se ressembleraient
     par accident plutot que par choix -- un repli silencieux le cacherait."""
     with pytest.raises(ValueError, match="toy_seed"):
-        precompute_dns(_cfg(T_MAX=0.02, scenario="toy_random"))
+        precompute_dns(_cfg(T_MAX=0.02, scenario="toy_instability"))
 
 
-def test_toy_random_seed_reaches_the_actual_precomputed_trace():
+def test_toy_instability_seed_reaches_the_actual_precomputed_trace():
     """La graine ne doit pas se perdre entre le config et le solveur reel."""
-    trace_a, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_random",
+    trace_a, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_instability",
                                      toy_seed=1))
-    trace_b, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_random",
+    trace_b, _ = precompute_dns(_cfg(T_MAX=0.02, scenario="toy_instability",
                                      toy_seed=2))
     assert not np.array_equal(trace_a[0]["fluxes"]["Bx"],
                               trace_b[0]["fluxes"]["Bx"])

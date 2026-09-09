@@ -243,32 +243,30 @@ SCENARIO_ROTOR = {
 }
 
 # ============================================================
-#  SCENARIOS JOUETS -- IC generique, aucune forme injectee (USER)
+#  SCENARIOS JOUETS -- instabilite reelle, parametres randomises (USER)
 # ============================================================
 #
-# Un hamiltonien dont le biais Z repond a |omega_z|/|J_z| (beta_curl,
-# beta_xpoint) ne doit pas s'entrainer EXCLUSIVEMENT sur des IC qui lui
-# donnent exactement le vortex/point X qu'il cherche. `toy_random`
-# (Simulation/solver.py::MHDSolver.init_toy_random) ne construit ni
-# vortex, ni point X, ni nappe -- un champ aleatoire filtre en frequence
-# (k <= k_max), solenoidal par construction.
+# `toy_instability` (Simulation/solver.py::MHDSolver.init_toy_instability)
+# tire une vraie recette d'instabilite (parmi celles deja utilisees par
+# les scenarios reels) et en randomise les parametres physiques : un
+# hamiltonien regle pour detecter vortex/points X ne s'entraine plus
+# EXCLUSIVEMENT sur les 8 IC fixes, mais chaque tirage reste une vraie
+# dynamique instable -- pas du bruit statique (mesure : le bruit seul ne
+# developpe jamais de structure, voir DEFAUTS.md).
 #
 # Meme gabarit physique que les 8 scenarios reels (N, profondeur, DT,
 # HYBRID_DT, K_opt, Re/Rm, shots) : seuls `scenario`/`toy_seed` different.
 # `T_MAX`/`T_START` fixes a la valeur partagee par 3 des 8 scenarios reels
-# (tearing/double_tearing/magnetic_twist) -- une IC aleatoire n'a pas de
-# fenetre de developpement connue a viser, donc pas de raison d'en choisir
-# une autre. Diversite : `toy_seed` (identite du champ, fixe par
-# scenario-jouet, une par slot) x `TRAINING_REGIME_GRID` (Re/graine
-# physique, MEME mecanisme que les scenarios reels, inchange -- voir
-# `_with_physical_regime`).
+# (tearing/double_tearing/magnetic_twist). Diversite : `toy_seed`
+# (recette + parametres + position, un tirage par slot) x
+# `TRAINING_REGIME_GRID` (Re/graine physique, meme mecanisme que les
+# scenarios reels, inchange -- voir `_with_physical_regime`).
 
 
 def _toy_scenario(toy_seed):
     return {
-        "scenario": "toy_random",
+        "scenario": "toy_instability",
         "toy_seed": toy_seed,
-        "toy_k_max": 8,
         "N": N_TRAINING,
         "max_depth_override": MAX_DEPTH_TRAINING,
         "T_MAX": 1.2,
@@ -283,13 +281,10 @@ def _toy_scenario(toy_seed):
     }
 
 
-#: 4 + 4 = 8 instances jouettes, meme COMPTE que 6 (isoles) + 2 (complexes)
-#: -- pas de distinction "isole/complexe" ici (une IC generique n'a pas de
-#: type d'anomalie a isoler) : TOY_SCENARIOS_A est le premier lot
-#: (curriculum, comme phase 1), TOY_SCENARIOS_B un lot DIFFERENT
-#: (toy_seed 4-7, jamais vu par le lot A), TOY_SCENARIOS_ALL les 8
-#: combines (comme phase 3). Meme profil de cout par essai (8 scenarios
-#: simules au maximum) que le chemin reel.
+#: 4 + 4 = 8 instances jouettes, meme compte que 6 (isoles) + 2 (complexes).
+#: TOY_SCENARIOS_A est le premier lot (curriculum, comme phase 1),
+#: TOY_SCENARIOS_B un lot DIFFERENT (toy_seed 4-7, jamais vu par le lot A),
+#: TOY_SCENARIOS_ALL les 8 combines (comme phase 3).
 TOY_SCENARIOS_A = tuple((f"toy{i}", _toy_scenario(i)) for i in range(4))
 TOY_SCENARIOS_B = tuple((f"toy{i}", _toy_scenario(i)) for i in range(4, 8))
 TOY_SCENARIOS_ALL = TOY_SCENARIOS_A + TOY_SCENARIOS_B
@@ -1288,25 +1283,16 @@ def _run_classical_phase3(study_c2, seed=None):
 #  MEMES PHASES, POOL JOUET -- entrainement seul, jamais la validation
 # ============================================================
 #
-# Miroir exact de `_run_phase1/2/3`/`_run_classical_phase1/2/3` : mêmes
-# fonctions génériques (`make_composite_objective`, `run_phase`,
-# `_precompute_dns_by_regime`, `_seeds_for`), seuls `TOY_SCENARIOS_*` et
-# les entrées `PHASES["toy_*"]` (études Optuna séparées) changent. Les 8
-# scénarios RÉELS n'apparaissent nulle part ici -- ils restent réservés à
-# `select_by_holdout_validation`, plus bas, jamais vus par ces essais
-# (`CLAUDE.md` : « aucun réglage ne voit le scénario tenu »).
+# Miroir de `_run_phase1/2/3`/`_run_classical_phase1/2/3` : memes
+# fonctions generiques, seuls `TOY_SCENARIOS_*` et `PHASES["toy_*"]`
+# (etudes Optuna separees) changent. Les 8 scenarios REELS n'apparaissent
+# nulle part ici -- reserves a `select_by_holdout_validation`, plus bas.
 #
-# Pas encore fait ici, volontairement : `--prepare-only`/`--finalize-only`
-# n'ont pas d'équivalent jouet (portée de ce câblage, pas un oubli).
+# Pas encore fait ici, volontairement : pas d'equivalent jouet a
+# --prepare-only/--finalize-only.
 
 def _run_toy_phase1(seed=None, n_trials=None, dns_traces_by_regime=None):
-    """Jouet, phase 1 : perte composite sur le premier lot de 4 instances.
-
-    `dns_traces_by_regime` : comme pour le chemin reel, partage entre CE
-    bras et `_run_toy_classical_phase1` quand fourni par l'appelant --
-    « les bras comparés partagent DNS ... seule la règle de décision
-    diffère » (CLAUDE.md). Calculé ici si absent, pour rester appelable
-    seule (tests, reprise manuelle)."""
+    """Jouet, phase 1 : perte composite sur le premier lot de 4 instances."""
     print("=" * 60)
     print("TOY PHASE 1: Composite Training (4 instances jouettes)")
     print(f"  Training: {', '.join(search_space())}")
@@ -1424,12 +1410,9 @@ def _run_toy_classical_phase3(study_c2, seed=None):
 
 
 def run_toy_holdout(study_toy_p3, study_toy_c3, label="TOY -> REEL"):
-    """Le point du pool jouet : reclasse les candidats entraines SANS
-    jamais voir les 8 scenarios reels par leur perte sur CES scenarios,
-    aux memes regimes tenus a l'ecart que la campagne reelle
-    (`HOLDOUT_GRID`). Reutilise `select_by_holdout_validation` telle
-    quelle -- deja generique en `scenario_list`, aucun code de validation
-    nouveau."""
+    """Reclasse les candidats jouets par leur perte sur les 8 scenarios
+    REELS (jamais vus a l'entrainement), aux regimes de `HOLDOUT_GRID`.
+    Reutilise `select_by_holdout_validation` telle quelle."""
     quantum = select_by_holdout_validation(
         study_toy_p3, SCENARIOS_ALL, label=f"{label} (quantique)")
     classical = select_by_holdout_validation(

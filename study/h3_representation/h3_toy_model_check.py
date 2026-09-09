@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
 """Le modele jouet (`study/common/toy_model.py`) doit se comporter comme les
 scenarios DNS reels sur les proprietes deja etablies (H0a, H0b), pas juste
-"marcher sans planter". Ce script mesure, sur N instantanes jouets
-independants, exactement les memes quantites que T26/D-53 sur des scenarios
-reels : l'optimum exact du hamiltonien (enumeration, pas d'approximation),
-la decision QAOA reellement executee, et un seuil classique ajuste par F1 --
-toutes les trois contre la meme verite terrain generique (`patch_l2_errors`,
-deja utilisee sur DNS reelles, aucune version "jouet" separee).
-
-Pourquoi verifier contre des DNS reelles plutot que de faire confiance au
-generateur seul : une premiere version de ce script trouvait l'optimum exact
-toujours a "tout raffiner" (20/20 tirages, F1=0.500 sans variance) et deux
-tentatives de correction du generateur (echelle, bruit) n'ont RIEN change.
-Rejoue sur cinq instantanes DNS reels (harris_tearing, Re=400, N=96, meme
-dim), le meme optimum uniforme est apparu 5 fois sur 5 -- ce n'etait donc ni
-un defaut du generateur ni un bug de ce script. `T26` (docs/RESULTS.md)
-mesure deja "uniformite du fondamental = 0.50" a dim=3 sur des scenarios
-reels aux hyperparametres de reference : une proprete connue du hamiltonien,
-coherente avec H0b (mieux resoudre H degrade la decision), pas une anomalie.
-Ce script la retrouve sur donnees jouets -- signe que le modele jouet est
-fidele sur ce point precis, pas un defaut a corriger.
+"marcher sans planter". Mesure, sur N instantanes jouets independants, les
+memes quantites que T26/D-53 sur des scenarios reels : l'optimum exact du
+hamiltonien (enumeration), la decision QAOA reellement executee, et un
+seuil classique ajuste par F1 -- contre la meme verite terrain generique
+(`patch_l2_errors`, deja utilisee sur DNS reelles). Cross-verifie contre 5
+instantanes DNS reels : voir RESULTS.md pour la mesure.
 
 Usage:
   python study/h3_representation/h3_toy_model_check.py --n-seeds 20

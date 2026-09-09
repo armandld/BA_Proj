@@ -10366,9 +10366,10 @@ N=48, Re=800) ; le générateur reste STATIQUE (psi=0 — `h3_toy_model_check.
 py` figure dans `PSI_STILL_ZERO` par construction du modèle, pas par
 dette de câblage oubliée) ; le branchement du pool jouet comme
 entraînement avec les 8 scénarios réels en validation (l'usage proposé
-par USER) reste à câbler — ce que ceci vérifie, c'est que le pool jouet
-tourne sur une base saine, pas qu'un entraînement réel sur ce pool a déjà
-eu lieu.
+par USER) est câblé et a tourné une fois de bout en bout, à une échelle
+bien plus grande (N=256, résolution d'entraînement réelle) où le
+générateur de l'époque s'est révélé dégénéré — voir « Entraînement réel
+sur pool jouet » ci-dessous pour la mesure et le correctif.
 
 ```bash
 pytest tests/study/test_toy_model.py tests/study/test_h3_toy_model_check.py \
@@ -10381,3 +10382,96 @@ Commits : `b2eeaad`..`0d63f5f` (générateur, ses deux fausses pistes et
 leur correction), `cb493a4`/`1d1a353` (harnais H0a/H0b et son artefact
 épinglé), `fec46e9` (plafonds classique/GBT et les 4 régressions de suite
 complète qu'ils ont révélées).
+
+## Entraînement réel sur pool jouet : `init_toy_random` dégénéré à l'échelle d'entraînement
+
+`run_toy_holdout` (`src/train_hyperparams.py`) branche l'entraînement
+Optuna réel sur le pool jouet (huit graines, trois phases) et valide sur
+les 8 scénarios réels — l'usage proposé par USER, distinct de la
+vérification d'infrastructure ci-dessus (dim=3/N=48/statique). Un premier
+passage complet (réglages réduits pour tenir en session : `T_MAX`/nombre
+d'essais abaissés) a tourné 701 s de bout en bout et produit un résultat
+dégénéré : les deux bras (quantique, classique) élisent le même essai #0
+avec la même perte tenue à l'écart (0,285714…) — aucun signal
+discriminant entre eux.
+
+**Hypothèses testées à l'échelle d'entraînement réelle** (N=256,
+`VQA_N_TRAINING=2`, mêmes réglages réduits que le pilote), sur le
+générateur d'alors, `init_toy_random` (bruit filtré en fréquence) :
+
+- `k_max` (8/24/60/100) : `patch_ratio` reste à 1,0 (phys≈1e-15, décision
+  totalement dégénérée — tout est raffiné) pour 8/60/100 ; seul 24 s'en
+  écarte un peu (0,988, phys=2,2e-2) — non monotone, pas un correctif.
+- `envelope_floor` (0,15/0,02/0,0) : le contraste calme/actif (RMS par
+  bloc, 4×4) ne monte que d'environ 2,5 à 4,0 — insuffisant.
+- **Contrôle décisif** : `harris_tearing` RÉEL, mêmes réglages réduits
+  (N=256, `T_MAX=0,15`) : `patch_ratio=0,735` (QAOA) / `0,781`
+  (classique), phys=2,0e-3 / 5,3e-4 — une décision non dégénérée, alors
+  que `harris_tearing` démarre lui aussi quasi au repos (mêmes conditions
+  initiales qualitatives que le bruit jouet). La différence n'est donc
+  pas le bruit spatial à t=0 : c'est l'ABSENCE, dans le bruit filtré,
+  d'un mécanisme qui concentre la structure au cours du temps. Une
+  instabilité réelle le fait ; du bruit filtré diffuse sans jamais le
+  faire.
+
+**Correctif** : `init_toy_random` supprimé, remplacé par
+`init_toy_instability` (`src/Simulation/solver.py`) — tire une des 7
+recettes d'instabilité déjà codées dans le solveur (`kelvin_helmholtz`,
+`magnetic_twist`, `harris_tearing`, `lamb_oseen_vortex`,
+`double_tearing`, `mhd_rotor`, `island_coalescence`), randomise les
+paramètres physiques de CETTE recette autour de ses valeurs par défaut,
+puis applique un décalage périodique aléatoire de la position. Recette et
+paramètres tirés sont conservés (`toy_recipe`/`toy_recipe_params`) pour
+la provenance.
+
+**Vérification du correctif** (5 graines jouets, mêmes réglages réduits,
+score classique seul) :
+
+| graine | recette tirée | `patch_ratio` | `phys_score` |
+|---|---|---|---|
+| 0 | mhd_rotor | 1,000 | 1,2e-15 |
+| 1 | lamb_oseen_vortex | **0,654** | **4,1e-2** |
+| 2 | mhd_rotor | 1,000 | 2,7e-15 |
+| 3 | mhd_rotor | 1,000 | 4,5e-15 |
+| 4 | mhd_rotor | **0,455** | **3,0e-3** |
+
+2/5 donnent une décision non dégénérée. Sur ce petit échantillon, 4/5
+graines tirent `mhd_rotor` (fluctuation d'échantillonnage confirmée
+inoffensive : fréquence des 7 recettes sur 200 graines indépendantes
+mesurée entre 8 % et 18 %, comparable à l'attendu 1/7 ≈ 14 %, aucun biais
+du tirage). `mhd_rotor` RÉEL mesuré isolément, mêmes réglages
+(`patch_ratio=1,0`, phys=2,8e-15), reproduit la signature dégénérée des
+graines 0/2/3 — cohérent avec la dégénérescence documentée dans le
+docstring de `init_mhd_rotor` (le score classique linéaire ne distingue
+pas le cœur du rotor de la nappe). Mais la graine 4, MÊME recette, casse
+cette dégénérescence par ses seuls paramètres physiques tirés
+(`omega`, `r0`, `taper_width`, `B0`) : ce n'est donc pas « `mhd_rotor`
+toujours dégénéré », plutôt une recette qui y est prédisposée sans l'être
+systématiquement.
+
+**Établit** : la cause du plafond dégénéré du pilote (absence de
+mécanisme dynamique qui concentre la structure, pas bruit statique à
+t=0) ; qu'au moins certaines recettes/tirages produisent une décision
+réelle là où le bruit filtré n'y arrivait jamais, à aucune largeur de
+bande testée ; que `mhd_rotor` reste prédisposé à la dégénérescence
+classique déjà connue, sans y être systématiquement soumis une fois ses
+paramètres randomisés.
+
+**N'établit PAS** : que le pilote complet (8 graines jouets, 3 phases,
+deux bras, 701 s) reclasserait différemment quantique et classique avec
+le générateur corrigé — non rejoué depuis le correctif ; le taux réel de
+décisions non dégénérées sur les 7 recettes (5 tirages, 2 recettes
+représentées, n'est pas une mesure de distribution) ; si allonger
+`T_MAX` ou repondérer les tirages `mhd_rotor` améliorerait le taux 2/5 —
+non mesuré.
+
+```bash
+pytest tests/solver/test_scenarios_analytic.py \
+    tests/solver/test_precompute_dns_contracts.py \
+    tests/pipeline/test_toy_training_wiring.py -q -m "not slow"
+    # 208 passed, 3 skipped
+pytest tests/solver -q -m "not slow"   # 331 passed, 3 skipped, 4 deselected
+pytest tests/study -q -m "not slow"    # 1340 passed, 70 skipped, 4 deselected, 1 xfailed
+pytest tests/pipeline -q -m "not slow" # 470 passed, 1 xfailed, 1 failed (D-68/D-201,
+                                        # preexistant, sans rapport avec ce changement)
+```

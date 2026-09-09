@@ -31,7 +31,7 @@ from Simulation.pre_compute_dns import precompute_dns
 # Meme technique que `test_train_hyperparams_smoke.py` (`_tiny`) : le
 # reste de ce fichier verifie le CABLAGE avec un `_composite_loop`
 # simule, deliberement -- mais aucun de ces tests ne prouve que le
-# solveur reel accepte une config `toy_random`. Celui-ci le fait, une
+# solveur reel accepte une config `toy_instability`. Celui-ci le fait, une
 # fois, a une taille qui tourne en ~1s.
 
 def _tiny(config, key):
@@ -42,7 +42,7 @@ def _tiny(config, key):
 
 def test_a_toy_scenario_runs_through_the_real_pipeline():
     """Preuve directe que `pipeline()` (solveur + AMR + mapping Ising +
-    QAOA) accepte `toy_random` de bout en bout, pas seulement
+    QAOA) accepte `toy_instability` de bout en bout, pas seulement
     `precompute_dns` (deja teste dans tests/solver/)."""
     scenarios = tuple((k, _tiny(c, k)) for k, c in training.TOY_SCENARIOS_A)
     with warnings.catch_warnings():

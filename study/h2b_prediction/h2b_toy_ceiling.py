@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """Le seuil classique (`threshold_amr`) ajuste sur donnees jouets doit
-tenir sur des instances JAMAIS vues au moment de l'ajuster -- sinon le F1
-rapporte ne mesure que la capacite a se souvenir du train, pas un plafond
-classique reel (`CLAUDE.md` : « aucun reglage ne voit le scenario tenu ou
-les labels d'evaluation »).
+tenir sur des instances jamais vues au moment de l'ajuster -- sinon le F1
+mesure la memoire du train, pas un plafond reel (`CLAUDE.md` : « aucun
+reglage ne voit le scenario tenu ou les labels d'evaluation »).
 
-Genere un grand pool d'instantanes jouets (pas de QAOA ici, uniquement le
-score classique -- rapide, donc un pool large est abordable), le coupe en
-train/val par plusieurs partages aleatoires DISJOINTS, ajuste le seuil sur
-le train de chaque partage, evalue sur le val correspondant. Un seuil
-instable (F1 val qui varie beaucoup d'un partage a l'autre, ou tres
-inferieur au F1 train) signalerait un ajustement qui a mémorisé le train
-plutot qu'appris un vrai plafond.
+Genere un pool d'instantanes jouets (score classique seul, pas de QAOA --
+rapide), le coupe en train/val par plusieurs partages disjoints, ajuste le
+seuil sur le train, evalue sur le val. Un seuil instable d'un partage a
+l'autre signalerait un ajustement qui a memorise le train.
 
 Usage:
   python study/h2b_prediction/h2b_toy_ceiling.py --n-instances 300 --n-splits 10

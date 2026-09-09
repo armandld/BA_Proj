@@ -1,34 +1,23 @@
 #!/usr/bin/env python3
-"""GBT/RF/LR sur donnees jouets, avec des ressources comparables au pipeline
-QAOA : compare la decision classique (seuil sur `score_classical`) a des
-modeles appris sur les memes features locales, en evitant deux pieges deja
-trouves sur DNS reelles (D-198, `docs/DEFAUTS.md`) :
+"""GBT/RF/LR sur donnees jouets, ressources comparables au pipeline QAOA :
+compare le seuil classique (`score_classical`) a des modeles appris sur les
+memes features locales (`h2b_ceiling_random_split.py`, reutilisees telles
+quelles), en evitant deux pieges deja trouves sur DNS reelles (D-198,
+`docs/DEFAUTS.md`) :
 
-  1. `early_stopping="auto"` (le defaut sklearn) ne se declenche que si
-     `n_samples > 10000`, jamais atteint ici -- aucune protection reelle
-     contre le surapprentissage malgre le nom. `early_stopping=True`
-     explicite est utilise ici des le depart, pas ajoute apres coup.
-  2. Seuil classique ET modeles sont toujours ajustes sur un train et
-     evalues sur un val JAMAIS vu, par PARTAGE D'INSTANCE (pas de patch),
-     sur plusieurs partages disjoints -- meme discipline que
-     `h2b_toy_ceiling.py`, pour detecter un ajustement qui memorise le
-     train plutot qu'un vrai plafond.
+  1. `early_stopping="auto"` (defaut sklearn) ne se declenche qu'au-dela de
+     10000 echantillons, jamais atteint ici -- `early_stopping=True` est
+     explicite des le depart.
+  2. Seuil ET modeles sont ajustes sur un train et evalues sur un val
+     jamais vu, par partage d'INSTANCE (pas de patch), sur plusieurs
+     partages disjoints -- meme discipline que `h2b_toy_ceiling.py`.
 
-Ce que ce script NE reproduit PAS de D-198 : sa cause dominante (le signe
-score->label s'inverse d'un scenario reel a l'autre, mesure par LOSO) ne
-s'applique pas ici -- les instances jouets sont des tirages i.i.d. de LA
-MEME distribution generative, pas quatre regimes physiques qualitativement
-differents entre lesquels un modele devrait transferer. Un partage
-aleatoire train/val (comme `h2b_toy_ceiling.py`), pas un LOSO, est donc le
-protocole honnete pour ce pool -- inventer un decoupage "scenario" jouet
-artificiel ferait semblant de tester un transfert qui n'existe pas dans les
-donnees.
-
-Reutilise `extract_features_2d`/`stencil_features`/`make_model`/`fit_eval`/
-`best_threshold_f1` de `h2b_ceiling_random_split.py` telles quelles (memes
-9 features locales + 45 features de voisinage que sur DNS reelles) --
-aucune version "jouet" separee de l'extraction de features, seule la
-source des champs change.
+Ce script NE reproduit PAS la cause dominante de D-198 (le signe
+score->label s'inverse d'un scenario reel a l'autre, mesure par LOSO) :
+les instances jouets sont des tirages i.i.d. de la meme distribution, pas
+quatre regimes physiques entre lesquels un modele devrait transferer. Un
+partage aleatoire (pas un LOSO artificiel) est donc le protocole honnete
+ici.
 
 Usage:
   python study/h2b_prediction/h2b_toy_gbt_ceiling.py --n-instances 300 --n-splits 5

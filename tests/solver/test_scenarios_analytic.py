@@ -30,7 +30,7 @@ N = 64
 SCENARIOS = [
     "kelvin_helmholtz", "orszag_tang", "magnetic_twist", "noisy_uniform",
     "harris_tearing", "lamb_oseen_vortex",
-    "double_tearing", "mhd_rotor", "island_coalescence", "toy_random",
+    "double_tearing", "mhd_rotor", "island_coalescence", "toy_instability",
 ]
 FIELDS = ("vx", "vy", "Bx", "By")
 
@@ -411,8 +411,7 @@ def test_noisy_uniform_is_a_perturbed_uniform_field():
 
 
 def test_noisy_uniform_honours_its_seed():
-    """Deux graines, deux etats (voir aussi `toy_random`, l'autre scenario
-    a graine explicite)."""
+    """Deux graines, deux etats."""
     a = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
     a.init_noisy_uniform(seed=1)
     b = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
@@ -424,64 +423,48 @@ def test_noisy_uniform_honours_its_seed():
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  toy_random — IC generique pour l'entrainement (USER, campagne jouet)
+#  toy_instability — IC jouet pour l'entrainement (USER, campagne jouet)
 # ══════════════════════════════════════════════════════════════════════
 #
-# Un hamiltonien dont le biais Z repond a |omega_z|/|J_z| ne doit pas
-# s'entrainer EXCLUSIVEMENT sur des IC qui lui donnent exactement le
-# vortex/point X qu'il cherche. Les tests generiques ci-dessus (SCENARIOS)
-# couvrent forme/finitude/bornes/solenoidalite/score classique ; ceux-ci
-# verifient les deux proprietes SPECIFIQUES a ce generateur : la coupure
-# spectrale (pas de bruit blanc brut, deja diagnostique ailleurs comme
-# pathologique sous rotationnel), et l'absence de structure localisee
-# unique (ce qui le distinguerait d'un vortex/point X injecte).
+# Une vraie recette d'instabilite, des parametres physiques randomises --
+# les tests generiques ci-dessus (SCENARIOS) couvrent deja forme/finitude/
+# bornes/solenoidalite/score classique ; ceux-ci verifient ce qui est
+# SPECIFIQUE au tirage : la graine choisit a la fois la recette et ses
+# parametres, et plusieurs recettes sortent reellement sur un echantillon
+# de graines (pas toujours la meme).
 
-def test_toy_random_honours_its_seed():
+def test_toy_instability_honours_its_seed():
     a = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
-    a.init_toy_random(seed=1)
+    a.init_toy_instability(seed=1)
     b = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
-    b.init_toy_random(seed=2)
+    b.init_toy_instability(seed=2)
     assert not np.array_equal(a.Bx, b.Bx), "la graine ne change rien"
     c = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
-    c.init_toy_random(seed=1)
+    c.init_toy_instability(seed=1)
     np.testing.assert_array_equal(a.Bx, c.Bx)
+    assert a.toy_recipe == c.toy_recipe
+    assert a.toy_recipe_params == c.toy_recipe_params
 
 
-def test_toy_random_respects_the_spectral_cutoff():
-    """Pas de bruit blanc brut : la densite spectrale au-dela de
-    `k_max + envelope_k_max` doit etre negligeable, pas seulement plus
-    faible. La borne n'est PAS k_max seul : le champ est un PRODUIT
-    (bruit x enveloppe) en espace reel, donc une CONVOLUTION en Fourier
-    -- le support s'elargit de la largeur de bande de l'enveloppe
-    (mesure qui a fait echouer une premiere version de ce test, ecrite
-    avant l'ajout de l'enveloppe de contraste)."""
-    s = _sim("toy_random", n=64)
-    k_max, envelope_k_max = 8, 2
-    spectrum = np.abs(np.fft.fft2(s.By)) ** 2
-    wave = np.fft.fftfreq(64) * 64
-    kx, ky = np.meshgrid(wave, wave, indexing="ij")
-    beyond = np.sqrt(kx ** 2 + ky ** 2) > (k_max + envelope_k_max)
-    assert spectrum[beyond].max() < 1e-10 * spectrum[~beyond].max(), (
-        "de l'energie fuit au-dela de la coupure spectrale")
+def test_toy_instability_draws_more_than_one_recipe():
+    recipes = set()
+    for seed in range(20):
+        s = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
+        s.init_toy_instability(seed=seed)
+        assert s.toy_recipe in MHDSolver._TOY_INSTABILITY_RECIPES
+        recipes.add(s.toy_recipe)
+    assert len(recipes) > 1, "20 graines tirent toutes la meme recette"
 
 
-def test_toy_random_has_no_single_dominant_structure():
-    """Un vortex/point X injecte concentre l'energie dans un patch ; du
-    bruit filtre en frequence la repartit -- c'est la propriete que ce
-    generateur doit avoir pour ne pas avantager un detecteur construit
-    pour reconnaitre des formes localisees (USER)."""
-    s = _sim("toy_random", n=64)
-    n_blocks = 4
-    bs = 64 // n_blocks
-    speed2 = s.vx ** 2 + s.vy ** 2
-    block_rms = np.array([
-        [float(np.sqrt(speed2[i * bs:(i + 1) * bs, j * bs:(j + 1) * bs].mean()))
-         for j in range(n_blocks)]
-        for i in range(n_blocks)])
-    ratio = block_rms.max() / max(block_rms.mean(), 1e-30)
-    assert ratio < 3.0, (
-        f"un bloc porte {ratio:.1f}x l'intensite moyenne : trop concentre "
-        "pour du bruit filtre en frequence")
+def test_toy_instability_recipe_params_stay_in_their_declared_range():
+    for seed in range(20):
+        s = MHDSolver(PeriodicGrid(32), dt=1e-4, Re=400, Rm=400)
+        s.init_toy_instability(seed=seed)
+        ranges = MHDSolver._TOY_INSTABILITY_RECIPES[s.toy_recipe]
+        for name, value in s.toy_recipe_params.items():
+            lo, hi = ranges[name]
+            assert lo <= abs(value) <= hi, (
+                f"{s.toy_recipe}.{name}={value} hors de [{lo}, {hi}]")
 
 
 @pytest.mark.parametrize("twist", [np.pi / 3, np.pi / 2, np.pi])

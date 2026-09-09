@@ -1,17 +1,17 @@
 from Simulation.grid import PeriodicGrid
 from Simulation.solver import MHDSolver
 
-def _init_dns_scenario(sim, scenario, toy_seed=None, toy_k_max=8):
+def _init_dns_scenario(sim, scenario, toy_seed=None):
     """Dispatch IC pour le DNS de pré-calcul.
 
-    `toy_seed`/`toy_k_max` : seuls utilisés par `scenario == "toy_random"`
-    (`MHDSolver.init_toy_random`) — paramètres optionnels pour ne rien
+    `toy_seed` : utilisé par `scenario == "toy_instability"`
+    (`MHDSolver.init_toy_instability`) — paramètre optionnel pour ne rien
     changer aux 9 appels existants qui ne passent qu'un nom de scénario.
     """
-    if scenario == "toy_random":
+    if scenario == "toy_instability":
         if toy_seed is None:
-            raise ValueError("scenario 'toy_random' exige toy_seed")
-        sim.init_toy_random(seed=toy_seed, k_max=toy_k_max)
+            raise ValueError("scenario 'toy_instability' exige toy_seed")
+        sim.init_toy_instability(seed=toy_seed)
         return
     init_map = {
         'orszag_tang':       sim.init_orszag_tang,
@@ -27,7 +27,7 @@ def _init_dns_scenario(sim, scenario, toy_seed=None, toy_k_max=8):
     if scenario not in init_map:
         raise ValueError(
             f"scenario inconnu : {scenario!r}. Attendu l'un de "
-            + ", ".join(sorted(init_map)) + ", ou 'toy_random'"
+            + ", ".join(sorted(init_map)) + ", ou 'toy_instability'"
         )
     init_map[scenario]()
 
@@ -60,9 +60,7 @@ def precompute_dns(phase_config):
     grid = PeriodicGrid(resolution_N=N)
     sim_dns = MHDSolver(grid, dt=DT, Re=phase_config["Re"], Rm=phase_config["Rm"])
     scenario = phase_config.get("scenario", "orszag_tang")
-    _init_dns_scenario(sim_dns, scenario,
-                      toy_seed=phase_config.get("toy_seed"),
-                      toy_k_max=phase_config.get("toy_k_max", 8))
+    _init_dns_scenario(sim_dns, scenario, toy_seed=phase_config.get("toy_seed"))
     phys_seed = int(phase_config.get("phys_seed", 0))
     noise_amplitude = float(phase_config.get("physics_noise_amplitude", 0.1))
     sim_dns.apply_physics_perturbation(phys_seed, noise_amplitude)
