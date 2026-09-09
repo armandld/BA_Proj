@@ -391,16 +391,38 @@ class MHDSolver:
     #  n'injecte aucune des trois formes : bruit filtré en fréquence
     #  (k <= k_max), rien d'autre.
     # ----------------------------------------------------------------
-    def init_toy_random(self, seed=0, k_max=8, target_velocity_rms=1.0,
+    def init_toy_random(self, seed=0, k_max=8, envelope_k_max=2,
+                        envelope_floor=0.15, target_velocity_rms=1.0,
                         target_field_rms=1.0):
-        """Champ aléatoire à bande limitée, solénoïdal par construction.
+        """Champ aléatoire à bande limitée, solénoïdal par construction --
+        MODULÉ par une enveloppe d'intensité elle-même aléatoire mais
+        lisse (`envelope_k_max` << `k_max`), pas uniforme.
+
+        Sans l'enveloppe (version initiale, `N=256`/`dim=2` réel, T_MAX
+        et K_opt réduits, contrôle direct contre `harris_tearing` aux
+        MÊMES réglages) : le bruit est texturé PARTOUT à intensité
+        égale, donc à `dim=2` (`VQA_N_TRAINING=2`, 4 patches géants) les
+        4 patches se ressemblent tous assez pour que la décision de
+        raffinement sature à `patch_ratio=1.0` -- QAOA ET classique,
+        quel que soit le jeu d'hyperparamètres. Le scénario réel, aux
+        MÊMES réglages, donne `patch_ratio=0.735`/`0.781` : la différence
+        n'était donc pas la taille de grille ni la fenêtre temporelle,
+        mais l'absence de contraste calme/actif -- exactement la raison
+        déjà écrite dans `study/common/toy_model.py` pour le générateur
+        statique (« c'est ce contraste, pas la busyness uniforme, qui
+        rend la décision de raffinement non triviale »), pas encore
+        reportée ici avant cette mesure. L'enveloppe garde le principe
+        « aucune forme injectée » (toujours du bruit, jamais un vortex/
+        point X/nappe analytique) tout en réintroduisant ce contraste.
 
         Même filtrage spectral que `apply_physics_perturbation` (bruit
         blanc, FFT, k <= k_max) — PAS le bruit non filtré de
         `init_noisy_uniform`, qui teste délibérément le cas opposé
         (incohérence à l'échelle de la grille). vx/vy et Bx/By sont
-        chacun le rotationnel d'une fonction de flux aléatoire
-        indépendante, comme les autres `init_*` de cette classe.
+        chacun le rotationnel d'une fonction de flux (bruit x enveloppe)
+        aléatoire indépendante, comme les autres `init_*` de cette
+        classe -- le rotationnel d'un produit de champs scalaires reste
+        exactement à divergence nulle, l'enveloppe ne casse rien.
         """
         seed = int(seed)
         rng = np.random.default_rng(seed)
@@ -408,12 +430,18 @@ class MHDSolver:
         wave = np.fft.fftfreq(N) * N
         kx, ky = np.meshgrid(wave, wave, indexing="ij")
         keep = np.sqrt(kx ** 2 + ky ** 2) <= int(k_max)
+        keep_envelope = np.sqrt(kx ** 2 + ky ** 2) <= int(envelope_k_max)
 
-        def band_limited_streamfunction():
+        def band_limited_field(mask):
             spectrum = np.fft.fft2(rng.standard_normal((N, N)))
-            spectrum[~keep] = 0.0
+            spectrum[~mask] = 0.0
             field = np.real(np.fft.ifft2(spectrum))
             return field / max(float(field.std()), 1e-30)
+
+        def smooth_activity_envelope():
+            e = band_limited_field(keep_envelope)
+            e = (e - e.min()) / max(e.max() - e.min(), 1e-30)
+            return envelope_floor + (1.0 - envelope_floor) * e
 
         def rescaled_curl(psi, target_rms):
             fx, fy = self._curl_z_fd4(psi, self.dx)
@@ -421,10 +449,12 @@ class MHDSolver:
             scale = target_rms / max(rms, 1e-30)
             return fx * scale, fy * scale
 
-        self.vx, self.vy = rescaled_curl(band_limited_streamfunction(),
-                                         target_velocity_rms)
-        self.Bx, self.By = rescaled_curl(band_limited_streamfunction(),
-                                         target_field_rms)
+        self.vx, self.vy = rescaled_curl(
+            band_limited_field(keep) * smooth_activity_envelope(),
+            target_velocity_rms)
+        self.Bx, self.By = rescaled_curl(
+            band_limited_field(keep) * smooth_activity_envelope(),
+            target_field_rms)
         self.enforce_incompressibility()
 
     # ----------------------------------------------------------------

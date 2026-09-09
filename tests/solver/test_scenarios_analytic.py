@@ -448,14 +448,19 @@ def test_toy_random_honours_its_seed():
 
 
 def test_toy_random_respects_the_spectral_cutoff():
-    """Pas de bruit blanc brut : la densite spectrale au-dela de `k_max`
-    doit etre negligeable, pas seulement plus faible."""
+    """Pas de bruit blanc brut : la densite spectrale au-dela de
+    `k_max + envelope_k_max` doit etre negligeable, pas seulement plus
+    faible. La borne n'est PAS k_max seul : le champ est un PRODUIT
+    (bruit x enveloppe) en espace reel, donc une CONVOLUTION en Fourier
+    -- le support s'elargit de la largeur de bande de l'enveloppe
+    (mesure qui a fait echouer une premiere version de ce test, ecrite
+    avant l'ajout de l'enveloppe de contraste)."""
     s = _sim("toy_random", n=64)
-    k_max = 8
+    k_max, envelope_k_max = 8, 2
     spectrum = np.abs(np.fft.fft2(s.By)) ** 2
     wave = np.fft.fftfreq(64) * 64
     kx, ky = np.meshgrid(wave, wave, indexing="ij")
-    beyond = np.sqrt(kx ** 2 + ky ** 2) > k_max
+    beyond = np.sqrt(kx ** 2 + ky ** 2) > (k_max + envelope_k_max)
     assert spectrum[beyond].max() < 1e-10 * spectrum[~beyond].max(), (
         "de l'energie fuit au-dela de la coupure spectrale")
 
