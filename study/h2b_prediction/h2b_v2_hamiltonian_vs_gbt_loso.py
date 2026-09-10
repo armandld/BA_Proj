@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
-"""V2 (hamiltonien SANS PARAMETRE) contre GBT, LOSO, sur DNS reelle --
-sans aucun entrainement de V2 : ses poids sont figes, D-22 (la campagne
-Optuna, jamais lancee -- trop couteuse) ne le concerne pas.
+"""V2 (hamiltonien SANS PARAMETRE) contre GBT et contre lui-meme, LOSO,
+sur DNS reelle -- sans aucun entrainement de V2 : ses poids sont figes,
+D-22 (la campagne Optuna, jamais lancee -- mesuree cette session a
+plusieurs semaines sur ce materiel, trop couteuse) ne le concerne pas.
+
+Trois questions, un seul jeu d'instantanes :
+
+  1. GBT/classique vs QAOA (deja mesure, voir RESULTS.md) ;
+  2. H0a/H0b, ICI : QAOA atteint-il l'optimum exact de SON hamiltonien
+     complet (`exact_refine`, enumeration exhaustive, dim=3 = 18 qubits,
+     tractable) ; si un autre solveur l'atteignait, ferait-il mieux ou
+     pire que QAOA sur la verite terrain ?
+  3. H3, ICI : le hamiltonien complet (biais Z + couplages ZZ/ZZZZ) fait-il
+     mieux que le biais Z SEUL (couplages annules via
+     `h3_term_ablation.zero_hamiltonian_terms`, meme mecanisme que T26),
+     pour QAOA et pour l'optimum exact ?
 
 dim=3 (18 qubits) : la seule taille certifiee non degeneree pour QAOA
 dans ce depot (docs/EVALUATION.md -- dim=2 est degenere, D-45/D-47).
@@ -12,11 +25,13 @@ calcul DNS.
 Psi cable (with_psi=True, instantane precedent de la meme trajectoire
 DNS) -- comme h3_toy_instability_check.py, pas comme h3_toy_model_check.py
 (champ statique, psi=0 exact) : une DNS reelle a un instant precedent.
+Le biais Z seul (ablation ZZ/ZZZZ) garde le meme psi -- psi module le
+biais Z, ce n'est ni un couplage ni un terme ablatable ici.
 
 Le GBT et le seuil classique SONT ajustes -- sur les scenarios
 d'ENTRAINEMENT du pli LOSO, jamais sur le scenario tenu (meme protocole
-que h2b_loso_transfer.py). QAOA n'a rien a ajuster : evalue une seule
-fois par instantane, la meme decision sert a chaque pli.
+que h2b_loso_transfer.py). QAOA et l'optimum exact n'ont rien a ajuster :
+evalues une seule fois par instantane, la meme decision sert a chaque pli.
 
 Usage:
   python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --n-snaps 5
@@ -41,6 +56,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 from qaoa_inputs import prepare_qaoa_inputs, run_qaoa_on_snapshot
 from h2b_ceiling_random_split import (
     extract_features_2d, N_FEATS, best_threshold_f1, make_model, fit_eval)
+from h3_term_ablation import zero_hamiltonian_terms, ground_state_mask
 from config import RESULTS_DIR
 import provenance
 
@@ -49,8 +65,9 @@ SCENARIOS_4 = ("harris_tearing", "kelvin_helmholtz", "mhd_rotor", "orszag_tang")
 
 def gather_scenario(sc, re, N, dim, n_snaps, k_opt, shots, seed):
     """Une ligne par instantane : score classique, verite terrain, features
-    GBT, decision QAOA -- toutes calculees UNE fois, reutilisees dans
-    chaque pli LOSO ou ce scenario sert de train ou de tenu."""
+    GBT, decisions QAOA/exactes (hamiltonien complet ET biais Z seul) --
+    toutes calculees UNE fois, reutilisees dans chaque pli LOSO ou ce
+    scenario sert de train ou de tenu."""
     dns = np.load(os.path.join(RESULTS_DIR, f"dns_{sc}_Re{re}_N{N}.npz"))
     patches = np.load(
         os.path.join(RESULTS_DIR, f"patches_{sc}_Re{re}_N{N}_dim{dim}.npz"))
@@ -76,15 +93,33 @@ def gather_scenario(sc, re, N, dim, n_snaps, k_opt, shots, seed):
         data_in, hamilt_params, _ = prepare_qaoa_inputs(
             vx, vy, Bx, By, N=N, n_patches=dim, Re=re, use_v2=True,
             with_psi=True, prev_fields=prev_fields)
-        _marg, qh, qv, _opt_p, wall = run_qaoa_on_snapshot(
+        t0 = time.time()
+        _marg, qh, qv, _opt_p, _wall = run_qaoa_on_snapshot(
             data_in, hamilt_params, dim=dim, reps=2,
             K_opt=k_opt, shots=shots, seed=seed)
         qaoa_refine = (qh | qv).ravel().astype(int)
 
+        exact_refine, exact_E, degeneracy, _unif = ground_state_mask(
+            hamilt_params, dim)
+        exact_refine = exact_refine.ravel().astype(int)
+
+        hp_zonly = zero_hamiltonian_terms(hamilt_params, ("ZZ", "ZZZZ"))
+        _marg_z, qh_z, qv_z, _opt_p_z, _wall_z = run_qaoa_on_snapshot(
+            data_in, hp_zonly, dim=dim, reps=2,
+            K_opt=k_opt, shots=shots, seed=seed)
+        qaoa_refine_zonly = (qh_z | qv_z).ravel().astype(int)
+        exact_refine_zonly, _E_z, _deg_z, _unif_z = ground_state_mask(
+            hp_zonly, dim)
+        exact_refine_zonly = exact_refine_zonly.ravel().astype(int)
+        wall = time.time() - t0
+
         rows.append(dict(
             scenario=sc, snap=int(si), score=score.ravel(), gt=gt,
             feats_site=feats_2d.reshape(-1, N_FEATS),
-            qaoa_refine=qaoa_refine, wall=wall))
+            qaoa_refine=qaoa_refine, exact_refine=exact_refine,
+            exact_E=exact_E, degeneracy=degeneracy,
+            qaoa_refine_zonly=qaoa_refine_zonly,
+            exact_refine_zonly=exact_refine_zonly, wall=wall))
     return rows
 
 
@@ -104,8 +139,8 @@ def run(re, N, dim, n_snaps, k_opt, shots, seed):
               flush=True)
     print()
 
-    header = (f"  {'tenu a l ecart':<18} {'F1 classique':>13} "
-              f"{'F1 GBT':>8} {'F1 QAOA (V2)':>13}")
+    header = (f"  {'tenu a l ecart':<18} {'classique':>9} {'GBT':>6} "
+              f"{'QAOA':>6} {'exact':>6} | {'QAOA Z':>7} {'exact Z':>8}")
     print(header)
     print("  " + "-" * (len(header) - 2))
     rows_out = []
@@ -128,22 +163,48 @@ def run(re, N, dim, n_snaps, k_opt, shots, seed):
         Qva = _cat(held_rows, "qaoa_refine")
         f1_qaoa = f1_score(Yva, Qva, zero_division=0)
 
-        rows_out.append(dict(held=held, f1_classical=f1_classical,
-                             f1_gbt=res_gbt["f1"], f1_qaoa=f1_qaoa,
-                             thr_classical=thr_cls))
-        print(f"  {held:<18} {f1_classical:>13.3f} {res_gbt['f1']:>8.3f} "
-              f"{f1_qaoa:>13.3f}")
+        # H0a/H0b ici : l'optimum exact du hamiltonien COMPLET.
+        Eva = _cat(held_rows, "exact_refine")
+        f1_exact = f1_score(Yva, Eva, zero_division=0)
+        agree_qaoa_exact = float(np.mean(Qva == Eva))
+
+        # H3 ici : biais Z seul (couplages ZZ/ZZZZ annules).
+        Qva_z = _cat(held_rows, "qaoa_refine_zonly")
+        Eva_z = _cat(held_rows, "exact_refine_zonly")
+        f1_qaoa_zonly = f1_score(Yva, Qva_z, zero_division=0)
+        f1_exact_zonly = f1_score(Yva, Eva_z, zero_division=0)
+
+        rows_out.append(dict(
+            held=held, f1_classical=f1_classical, f1_gbt=res_gbt["f1"],
+            f1_qaoa=f1_qaoa, thr_classical=thr_cls, f1_exact=f1_exact,
+            agree_qaoa_exact=agree_qaoa_exact,
+            f1_qaoa_zonly=f1_qaoa_zonly, f1_exact_zonly=f1_exact_zonly))
+        print(f"  {held:<18} {f1_classical:>9.3f} {res_gbt['f1']:>6.3f} "
+              f"{f1_qaoa:>6.3f} {f1_exact:>6.3f} | "
+              f"{f1_qaoa_zonly:>7.3f} {f1_exact_zonly:>8.3f}")
 
     print()
-    mean_cls = float(np.mean([r["f1_classical"] for r in rows_out]))
-    mean_gbt = float(np.mean([r["f1_gbt"] for r in rows_out]))
-    mean_qaoa = float(np.mean([r["f1_qaoa"] for r in rows_out]))
+    keys = ("f1_classical", "f1_gbt", "f1_qaoa", "f1_exact",
+            "f1_qaoa_zonly", "f1_exact_zonly", "agree_qaoa_exact")
+    means = {k: float(np.mean([r[k] for r in rows_out])) for k in keys}
+    print(f"  moyenne LOSO : classique={means['f1_classical']:.3f}  "
+          f"gbt={means['f1_gbt']:.3f}  qaoa={means['f1_qaoa']:.3f}  "
+          f"exact={means['f1_exact']:.3f}")
+    print(f"  moyenne biais Z seul : qaoa_Z={means['f1_qaoa_zonly']:.3f}  "
+          f"exact_Z={means['f1_exact_zonly']:.3f}")
+    print(f"  accord QAOA/exact (hamiltonien complet) = "
+          f"{means['agree_qaoa_exact']:.3f}")
     n_qaoa_beats_cls = sum(r["f1_qaoa"] > r["f1_classical"] for r in rows_out)
     n_qaoa_beats_gbt = sum(r["f1_qaoa"] > r["f1_gbt"] for r in rows_out)
-    print(f"  moyenne LOSO : classique={mean_cls:.3f}  gbt={mean_gbt:.3f}  "
-          f"qaoa(V2)={mean_qaoa:.3f}")
+    n_full_beats_zonly_qaoa = sum(
+        r["f1_qaoa"] > r["f1_qaoa_zonly"] for r in rows_out)
+    n_full_beats_zonly_exact = sum(
+        r["f1_exact"] > r["f1_exact_zonly"] for r in rows_out)
     print(f"  QAOA bat classique sur {n_qaoa_beats_cls}/4 plis, "
           f"GBT sur {n_qaoa_beats_gbt}/4 plis")
+    print(f"  hamiltonien complet bat le biais Z seul sur "
+          f"{n_full_beats_zonly_qaoa}/4 plis (QAOA), "
+          f"{n_full_beats_zonly_exact}/4 plis (exact)")
 
     payload = dict(
         re=re, N=N, dim=dim, n_snaps=n_snaps, k_opt=k_opt, shots=shots,
@@ -152,7 +213,14 @@ def run(re, N, dim, n_snaps, k_opt, shots, seed):
         f1_classical=np.array([r["f1_classical"] for r in rows_out]),
         f1_gbt=np.array([r["f1_gbt"] for r in rows_out]),
         f1_qaoa=np.array([r["f1_qaoa"] for r in rows_out]),
+        f1_exact=np.array([r["f1_exact"] for r in rows_out]),
+        agree_qaoa_exact=np.array(
+            [r["agree_qaoa_exact"] for r in rows_out]),
+        f1_qaoa_zonly=np.array([r["f1_qaoa_zonly"] for r in rows_out]),
+        f1_exact_zonly=np.array([r["f1_exact_zonly"] for r in rows_out]),
         thr_classical=np.array([r["thr_classical"] for r in rows_out]),
+        degeneracy=np.array([r["degeneracy"] for scen in by_sc.values()
+                             for r in scen]),
         **provenance.finish(started),
     )
     return payload

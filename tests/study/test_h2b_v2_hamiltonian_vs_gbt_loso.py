@@ -2,8 +2,9 @@
 deviation, pas de regression : casse s'il faut le remesurer.
 
 V2 (hamiltonien sans parametre, aucun entrainement) contre GBT et seuil
-classique, LOSO sur 4 scenarios DNS reels (dim=3, la seule taille QAOA
-certifiee non degeneree ici).
+classique, contre son propre optimum exact (H0a/H0b) et contre lui-meme
+sans couplages (H3), LOSO sur 4 scenarios DNS reels (dim=3, la seule
+taille QAOA certifiee non degeneree ici).
 """
 import os
 
@@ -31,7 +32,8 @@ def test_ran_on_the_expected_configuration(artifact):
 
 
 def test_every_fold_produced_a_finite_f1_in_range(artifact):
-    for key in ("f1_classical", "f1_gbt", "f1_qaoa"):
+    for key in ("f1_classical", "f1_gbt", "f1_qaoa", "f1_exact",
+               "agree_qaoa_exact", "f1_qaoa_zonly", "f1_exact_zonly"):
         arr = artifact[key]
         assert arr.shape == (4,)
         assert np.all(np.isfinite(arr))
