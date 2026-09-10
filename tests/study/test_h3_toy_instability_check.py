@@ -4,7 +4,8 @@ precise a change de quelques millièmes.
 
 Meme mesure que `test_h3_toy_model_check.py` (H0a, H0b), mais sur un
 instantane jouet DYNAMIQUE (evolution DNS reelle depuis une recette
-d'instabilite a parametres randomises), pas le champ statique synthetique.
+d'instabilite a parametres randomises, psi cable sur l'instant precedent
+de la meme trajectoire), pas le champ statique synthetique.
 """
 import os
 
@@ -58,13 +59,12 @@ def test_qaoa_does_not_collapse_onto_the_trivial_optimum(artifact):
     assert agree.min() < 1.0
 
 
-def test_qaoa_beats_the_exact_optimum_on_ground_truth_on_average(artifact):
-    """H0b, repliquee sur le jouet dynamique -- en MOYENNE seulement.
-    Contrairement au jouet statique (f1_exact constant a 0,5, f1_qaoa
-    toujours superieur), cet echantillon est plus bruite (n=8, plusieurs
-    recettes) : l'inegalite ne tient pas graine par graine (ex. graine 6 :
-    f1_qaoa=0 < f1_exact=0,4)."""
+def test_qaoa_beats_the_exact_optimum_on_ground_truth(artifact):
+    """H0b, repliquee sur le jouet dynamique : QAOA fait au moins aussi
+    bien que l'optimum exact a chaque graine (egalite a 3/8, strictement
+    mieux a 5/8), et mieux en moyenne."""
     f1_exact = artifact["f1_exact"]
     f1_qaoa = artifact["f1_qaoa"]
     assert np.all(np.isin(np.round(f1_exact, 6), [0.4, 0.5]))
+    assert np.all(f1_qaoa >= f1_exact - 1e-9)
     assert f1_qaoa.mean() > f1_exact.mean()

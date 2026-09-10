@@ -10485,6 +10485,19 @@ position décalée) — pas un champ synthétique. N=256 impose n_patches=2
 (3 ne divise pas 256) : c'est aussi `VQA_N_TRAINING`, la résolution
 réelle d'entraînement, pas dim=3 comme le jouet statique.
 
+**Psi câblé, pas laissé à zéro.** Contrairement au jouet statique (une
+seule paire de fonctions de flux, aucun instant précédent), cette
+trajectoire en a un : `with_psi=True` avec l'avant-dernier instantané de
+la même trace DNS comme `prev_fields` (mode documenté par
+`prepare_qaoa_inputs` pour les études en paire d'instantanés, déjà
+utilisé par `h0_optimiser_equivalence.py`). Trouvé et corrigé après coup
+par `tests/study/test_psi_coverage_inventory.py` — la suite complète, pas
+les sous-suites scopées utilisées jusque-là ; la première mesure
+(psi=0 par omission) a été remesurée plutôt que publiée telle quelle. Les
+deux tableaux ci-dessous sont donc post-correctif ; `exact_frac`/
+`f1_classical` sont identiques à la première mesure (psi n'entre ni dans
+l'optimum exact ni dans le seuil classique), seule la colonne QAOA change.
+
 8 graines (0..7), réglages réduits déjà documentés ci-dessus (N=256,
 `T_MAX=0,15`, `T_START=0,03`, `K_opt=12`, `shots=128`) : 4 recettes
 représentées (`mhd_rotor` ×4, `lamb_oseen_vortex` ×2, `double_tearing`
@@ -10495,26 +10508,27 @@ représentées (`mhd_rotor` ×4, `lamb_oseen_vortex` ×2, `double_tearing`
 | 0 | mhd_rotor | 0,75 | 0,25 | 0,50 | 1,00 |
 | 1 | lamb_oseen_vortex | 1,00 | 1,00 | 0,40 | 0,40 |
 | 2 | mhd_rotor | 0,75 | 0,25 | 0,50 | 1,00 |
-| 3 | mhd_rotor | 1,00 | 0,50 | 0,40 | 0,67 |
+| 3 | mhd_rotor | 1,00 | 0,75 | 0,40 | 0,50 |
 | 4 | mhd_rotor | 1,00 | 0,50 | 0,40 | 0,67 |
 | 5 | double_tearing | 1,00 | 0,50 | 0,40 | 0,67 |
-| 6 | lamb_oseen_vortex | 1,00 | 0,75 | 0,40 | 0,00 |
+| 6 | lamb_oseen_vortex | 1,00 | 1,00 | 0,40 | 0,40 |
 | 7 | island_coalescence | 1,00 | 1,00 | 0,40 | 0,40 |
 
 **H0a répliquée** : QAOA ne s'effondre pas sur son propre optimum exact
-(`agree_qaoa_exact` = 0,656 ± 0,214, min 0,5, max 1,0 — jamais moins de
-50 % d'accord, jamais 100 % sauf aux deux graines où optimum exact ET
+(`agree_qaoa_exact` = 0,719 ± 0,232, min 0,5, max 1,0 — jamais moins de
+50 % d'accord, jamais 100 % sauf aux trois graines où optimum exact ET
 QAOA convergent tous deux sur qaoa_frac=exact_frac=1,0).
 
-**H0b répliquée, en MOYENNE seulement** : F1(QAOA) = 0,600 ± 0,311 >
-F1(exact) = 0,425 ± 0,043 — ne pas résoudre parfaitement le hamiltonien
-donne une MEILLEURE décision, comme sur DNS réelle (T26) et le jouet
-statique. Contrairement au jouet statique (f1_exact CONSTANT à 0,5,
-f1_qaoa TOUJOURS supérieur), l'inégalité ne tient pas graine par graine :
-graine 6, f1_qaoa=0,0 < f1_exact=0,4. L'échantillon dynamique est plus
-bruité (n=8, plusieurs recettes physiquement différentes, pas un pool
-i.i.d. d'une seule distribution synthétique) que le jouet statique (n=20,
-une seule famille de bosses).
+**H0b répliquée, et cette fois graine par graine.** F1(QAOA) = 0,629 ±
+0,238 > F1(exact) = 0,425 ± 0,043 en moyenne, comme sur DNS réelle (T26)
+et le jouet statique — mais ici l'inégalité tient AUSSI instance par
+instance : `f1_qaoa >= f1_exact` aux 8 graines (égalité à 3/8, où les
+deux arms convergent sur « tout raffiner » ; strictement supérieur à
+5/8). Avec psi=0 (mesure précédente, remplacée), une graine (6) violait
+l'inégalité (QAOA pire que l'exact) ; le câblage la corrige. L'échantillon
+reste plus bruité que le jouet statique (n=8, plusieurs recettes
+physiquement différentes, pas un pool i.i.d. d'une seule distribution
+synthétique ; n=20 pour le jouet statique, une seule famille de bosses).
 
 **Optimum exact quasi-uniforme, pas figé** : `exact_frac` ≥ 0,75 partout
 (6/8 à 1,0, 2/8 à 0,75) — même tendance « quasi-uniforme » que sur DNS
@@ -10531,19 +10545,22 @@ lecture des F1 : la vérité terrain n'a que 5 niveaux possibles (0 ; 0,25 ;
 
 **Établit** : l'architecture (hamiltonien → QAOA vs optimum exact)
 reproduit, sur un TROISIÈME générateur indépendant (évolution DNS réelle,
-recettes d'instabilité randomisées) après l'avoir déjà fait sur DNS
-réelle (T26) et le jouet statique, le même H0a et la même direction H0b
-(QAOA bat l'optimum exact EN MOYENNE) — une réplication, pas une
-découverte isolée.
+recettes d'instabilité randomisées, psi câblé) après l'avoir déjà fait
+sur DNS réelle (T26) et le jouet statique, le même H0a et la même
+direction H0b (QAOA bat l'optimum exact, en moyenne ET graine par graine
+ici) — une réplication, pas une découverte isolée.
 
-**N'établit PAS** : que l'inégalité H0b tient graine par graine (elle ne
-tient pas, graine 6) ; un écart quantique/classique — `f1_classical`
+**N'établit PAS** : un écart quantique/classique — `f1_classical`
 (0,542 ± 0,439) est mesuré mais pas interprété ici, ce plan de
 comparaison est `study/closed_loop/`, pas ce harnais ; une distribution
 fiable des recettes (4/7 représentées, n=8) ; un résultat à une autre
-taille que N=256/dim=2.
+taille que N=256/dim=2 ; que l'inégalité graine par graine résisterait à
+un échantillon plus grand — 8 graines suffisent à établir qu'elle N'EST
+PAS automatique (elle a été violée avant le correctif psi), pas qu'elle
+est garantie.
 
 ```bash
-pytest tests/study/test_h3_toy_instability_check.py -v   # 5 passed
+pytest tests/study/test_psi_coverage_inventory.py -v      # 6 passed
+pytest tests/study/test_h3_toy_instability_check.py -v    # 5 passed
 python study/h3_representation/h3_toy_instability_check.py --n-seeds 8
 ```
