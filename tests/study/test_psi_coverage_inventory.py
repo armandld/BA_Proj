@@ -65,6 +65,7 @@ PSI_STILL_ZERO = {
 #  Scripts ou psi est rebranche.
 PSI_WIRED = {
     "h0_optimiser_equivalence.py",
+    "h3_toy_instability_check.py",
 }
 
 

@@ -9,7 +9,12 @@ N=256 (plancher AMR sous lequel tout se raffine, voir
 pas 256) : c'est aussi la resolution reelle d'entrainement
 (`train_hyperparams.VQA_N_TRAINING`), pas le dim=3 du modele jouet
 statique -- meme downstream (Hamiltonien, QAOA, optimum exact) que
-`h3_toy_model_check.py`, seule l'origine de l'instantane change.
+`h3_toy_model_check.py`.
+
+Une vraie trajectoire a un instant precedent : psi est donc branche
+(`with_psi=True`, l'avant-dernier instantane de la meme trace DNS comme
+`prev_fields`), contrairement au modele jouet statique dont psi=0 est le
+cas d'usage exact (`tests/study/test_psi_coverage_inventory.py`).
 
 Usage:
   python study/h3_representation/h3_toy_instability_check.py --n-seeds 8
@@ -50,13 +55,25 @@ def _stat(name, arr):
 
 
 def _evolved_snapshot(toy_seed, N, re, T_MAX, T_START):
-    """Instantane apres evolution DNS reelle -- pas le champ a t=0."""
+    """Instantane apres evolution DNS reelle, avec son PREDECESSEUR de la
+    meme trajectoire -- pas le champ a t=0, et pas psi=0 par defaut : cette
+    trajectoire a un instant precedent utilisable, contrairement au modele
+    jouet statique (`h3_toy_model_check.py`, une seule paire de fonctions
+    de flux, aucun instant precedent -- voir
+    `tests/study/test_psi_coverage_inventory.py`)."""
     cfg = dict(scenario="toy_instability", toy_seed=toy_seed, N=N,
                T_MAX=T_MAX, T_START=T_START, DT=1e-3, HYBRID_DT=0.06,
                Re=re, Rm=re)
     trace, _hot = precompute_dns(cfg)
-    fluxes = trace[max(trace)]["fluxes"]
-    return fluxes["vx"], fluxes["vy"], fluxes["Bx"], fluxes["By"]
+    snaps = sorted(k for k, v in trace.items() if "fluxes" in v)
+    if len(snaps) < 2:
+        raise RuntimeError(
+            f"toy_seed={toy_seed} : {len(snaps)} instantane(s) seulement, "
+            "il en faut 2 pour un psi non nul (reduire HYBRID_DT ou "
+            "augmenter T_MAX)")
+    fluxes = trace[snaps[-1]]["fluxes"]
+    prev_fields = trace[snaps[-2]]["fluxes"]
+    return fluxes["vx"], fluxes["vy"], fluxes["Bx"], fluxes["By"], prev_fields
 
 
 def run(n_seeds, N, n_patches, re, k_opt, shots, threshold_amr, base_seed,
@@ -66,7 +83,8 @@ def run(n_seeds, N, n_patches, re, k_opt, shots, threshold_amr, base_seed,
     rows = []
     for i in range(n_seeds):
         seed = base_seed + i
-        vx, vy, Bx, By = _evolved_snapshot(seed, N, re, T_MAX, T_START)
+        vx, vy, Bx, By, prev_fields = _evolved_snapshot(
+            seed, N, re, T_MAX, T_START)
 
         l2 = patch_l2_errors(vx, vy, Bx, By, n_patches)
         gt = (l2 >= np.percentile(l2, L2_PERCENTILE_HARD)).ravel()
@@ -82,7 +100,8 @@ def run(n_seeds, N, n_patches, re, k_opt, shots, threshold_amr, base_seed,
         exact_refine = (dec_h | dec_v).ravel()
 
         data_in, hamilt_params, score_vqa2 = prepare_qaoa_inputs(
-            vx, vy, Bx, By, N=N, n_patches=n_patches, Re=re)
+            vx, vy, Bx, By, N=N, n_patches=n_patches, Re=re,
+            with_psi=True, prev_fields=prev_fields)
         _marg, qh, qv, _opt_p, wall = run_qaoa_on_snapshot(
             data_in, hamilt_params, dim=n_patches, reps=2,
             K_opt=k_opt, shots=shots, seed=seed)
