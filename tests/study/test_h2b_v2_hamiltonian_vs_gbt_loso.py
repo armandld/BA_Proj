@@ -65,3 +65,52 @@ def test_qaoa_beats_classical_on_average_without_any_training(artifact):
     """V2 n'a aucun parametre a regler (D-22 ne le concerne pas) et bat
     quand meme le seuil classique en moyenne LOSO."""
     assert artifact["f1_qaoa"].mean() > artifact["f1_classical"].mean()
+
+
+def test_qaoa_does_not_collapse_onto_the_trivial_optimum(artifact):
+    """H0a, ici : accord QAOA/optimum exact tres variable d'un scenario a
+    l'autre (0,067 a mhd_rotor, 0,978 a kelvin_helmholtz) -- QAOA
+    n'atteint pas de facon fiable l'optimum de son propre hamiltonien."""
+    agree = artifact["agree_qaoa_exact"]
+    assert agree.mean() < 0.95
+    assert agree.min() < 0.5
+
+
+def test_qaoa_beats_the_exact_optimum_on_ground_truth(artifact):
+    """H0b, ici : F1(QAOA) > F1(exact) en moyenne et sur 3 plis/4 --
+    resoudre parfaitement le hamiltonien fait PIRE que l'optimisation
+    ratee de QAOA, comme sur DNS reelle (T26/D-53/D-200), le jouet
+    statique et le jouet dynamique. Seul orszag_tang fait exception
+    (exact bat QAOA)."""
+    f1_exact = artifact["f1_exact"]
+    f1_qaoa = artifact["f1_qaoa"]
+    held = list(artifact["held"])
+    assert f1_qaoa.mean() > f1_exact.mean()
+    n_qaoa_beats_exact = int(np.sum(f1_qaoa > f1_exact))
+    assert n_qaoa_beats_exact == 3
+    assert f1_exact[held.index("orszag_tang")] > f1_qaoa[held.index("orszag_tang")]
+
+
+def test_couplings_never_help_the_exact_optimum(artifact):
+    """H3, ici, pour l'optimum EXACT (pas QAOA) : le hamiltonien complet
+    ne bat jamais le biais Z seul (couplages ZZ/ZZZZ annules) -- 0/4
+    plis, comme T26 (dim=3 exhaustif : le complet est INFERIEUR au biais
+    Z seul)."""
+    f1_exact = artifact["f1_exact"]
+    f1_exact_zonly = artifact["f1_exact_zonly"]
+    assert np.all(f1_exact <= f1_exact_zonly + 1e-9)
+    assert f1_exact.mean() < f1_exact_zonly.mean()
+
+
+def test_couplings_never_hurt_qaoa_here_unlike_the_exact_optimum(artifact):
+    """H3, ici, pour QAOA : nuance par rapport a l'optimum exact --
+    jamais de perte (egalite ou mieux sur les 4 plis), et legerement
+    mieux en moyenne. Ne PAS lire comme "H3 refute" : QAOA ne resout pas
+    le hamiltonien (H0a), donc ce que "les couplages aident QAOA" mesure
+    ici, c'est l'effet des couplages sur une recherche ratee, pas sur la
+    representation elle-meme -- c'est l'optimum exact (test ci-dessus)
+    qui repond a la question de H3."""
+    f1_qaoa = artifact["f1_qaoa"]
+    f1_qaoa_zonly = artifact["f1_qaoa_zonly"]
+    assert np.all(f1_qaoa >= f1_qaoa_zonly - 1e-9)
+    assert f1_qaoa.mean() > f1_qaoa_zonly.mean()

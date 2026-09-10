@@ -10588,8 +10588,14 @@ scénarios d'ENTRAÎNEMENT du pli, jamais sur le tenu — même discipline que
 `h2b_loso_transfer.py`. QAOA(V2) n'a rien à ajuster : une seule
 évaluation par instantané, la même décision sert à chaque pli.
 
-Mesuré, pas supposé : ~15 s/instantané (K_opt=60/shots=4096, dim=3) →
-~5 min pour les 20 instantanés, tout compris.
+Étendu depuis la première mesure (voir commits) pour ajouter, sur les
+MÊMES instantanés, sans rien recalculer de redondant : l'optimum exact du
+hamiltonien complet (H0a/H0b, énumération exhaustive, dim=3=18 qubits,
+tractable) et le biais Z seul, couplages ZZ/ZZZZ annulés via
+`h3_term_ablation.zero_hamiltonian_terms` (H3), pour QAOA ET pour
+l'exact. Mesuré, pas supposé : ~34,5 s/instantané (2 appels QAOA + 2
+énumérations exhaustives par instantané) → ~11,5 min pour les 20
+instantanés, tout compris.
 
 | tenu à l'écart | F1 classique | F1 GBT | F1 QAOA (V2) |
 |---|---|---|---|
@@ -10621,20 +10627,81 @@ classique UNIFORME dans le pipeline complet à N=256, docstring du
 générateur) : ici c'est l'inverse, classique est le MEILLEUR, pas
 dégénéré. Mécanisme différent, non expliqué, seulement constaté.
 
+### H0a/H0b ici : l'optimum exact du même hamiltonien, sur les mêmes instantanés
+
+| tenu à l'écart | F1 QAOA | F1 exact | accord QAOA/exact |
+|---|---|---|---|
+| harris_tearing | 0,667 | 0,500 | 0,667 |
+| kelvin_helmholtz | 0,400 | 0,393 | 0,978 |
+| mhd_rotor | 0,462 | 0,364 | **0,067** |
+| orszag_tang | 0,333 | 0,364 | 0,578 |
+| **moyenne** | **0,465** | **0,405** | **0,572** |
+
+**H0a répliquée ici** : l'accord QAOA/exact varie énormément d'un
+scénario à l'autre — de 6,7 % (`mhd_rotor`, QAOA et l'optimum exact sont
+quasiment toujours en désaccord) à 97,8 % (`kelvin_helmholtz`, presque
+toujours d'accord). QAOA n'atteint pas fiablement l'optimum de son propre
+hamiltonien.
+
+**H0b répliquée ici, sur DNS réelle, dans le protocole LOSO/GBT lui-même**
+: F1(QAOA) > F1(exact) sur 3 plis/4 (`harris_tearing`, `kelvin_helmholtz`,
+`mhd_rotor`) et en moyenne (0,465 contre 0,405) — résoudre PARFAITEMENT
+le hamiltonien donne une décision PIRE que l'optimisation ratée de QAOA,
+comme sur DNS réelle (T26/D-53/D-200), le jouet statique et le jouet
+dynamique : QUATRE contextes indépendants, même direction. Seul
+`orszag_tang` fait exception (exact bat QAOA, 0,364 contre 0,333) — pas
+caché, juste minoritaire.
+
+### H3 ici : biais Z seul (couplages ZZ/ZZZZ annulés), même mécanisme que T26
+
+| tenu à l'écart | F1 QAOA | F1 QAOA (Z seul) | F1 exact | F1 exact (Z seul) |
+|---|---|---|---|---|
+| harris_tearing | 0,667 | 0,667 | 0,500 | 0,667 |
+| kelvin_helmholtz | 0,400 | 0,400 | 0,393 | 0,393 |
+| mhd_rotor | 0,462 | 0,429 | 0,364 | 0,556 |
+| orszag_tang | 0,333 | 0,245 | 0,364 | 0,364 |
+| **moyenne** | **0,465** | **0,435** | **0,405** | **0,495** |
+
+**Pour l'optimum EXACT, les couplages ne gagnent JAMAIS** : le
+hamiltonien complet ne bat le biais Z seul sur AUCUN pli (0/4) — égalité
+sur 2 (`kelvin_helmholtz`, `orszag_tang`), net en dessous sur 2
+(`harris_tearing` : 0,500 contre 0,667 ; `mhd_rotor` : 0,364 contre
+0,556). Réplique directement T26 (dim=3 exhaustif : le complet est
+INFÉRIEUR au biais Z seul) — ici, sur DNS réelle, dans ce protocole
+LOSO/GBT.
+
+**Pour QAOA, nuance à ne pas confondre avec « H3 réfuté »** : le
+hamiltonien complet ne perd JAMAIS non plus (0/4, égalité sur 2, mieux
+sur 2 — `mhd_rotor`, `orszag_tang`), et gagne légèrement en moyenne
+(0,465 contre 0,435). QAOA ne résout pas le hamiltonien (H0a ci-dessus) :
+ce que ce chiffre mesure, c'est l'effet des couplages sur une recherche
+ratée, pas sur la représentation elle-même — c'est la ligne EXACTE
+au-dessus qui répond à la question que H3 pose. Les deux lignes
+racontent la même histoire que le reste du dépôt : les couplages
+n'apportent rien à ce que le hamiltonien encode vraiment (exact), et
+QAOA, en ne le résolvant pas, ne peut pas être pénalisé par ce que les
+couplages y ajoutent de mauvais.
+
 **Établit** : sur DNS réelle, sans aucun entraînement Q-HAS, V2 bat le
 seuil classique en moyenne (3 plis/4) et égale ou approche un GBT
 entraîné (identique à 3 plis/4, net en dessous sur le 4ᵉ) — une mesure
-directe, sans passer par la campagne D-22.
+directe, sans passer par la campagne D-22. H0a, H0b et H3 (pour l'exact)
+répliqués dans ce même protocole réel/LOSO — un QUATRIÈME contexte
+indépendant (après DNS réelle T26/D-53, le jouet statique, le jouet
+dynamique) qui converge vers le même verdict.
 
 **N'établit PAS** : que les égalités QAOA=GBT sont la même décision
 cellule par cellule (non vérifié) ; un résultat à `n_snaps` plus grand ou
 à une autre taille que dim=3/N=96 ; pourquoi `mhd_rotor` favorise
-spécifiquement le classique ici ; une comparaison confirmatoire au sens
-du protocole (`study/closed_loop/`, budget apparié, IC bootstrap par
-trajectoire, correction de Holm) — ceci est 5 instantanés/scénario avec
-un seuil/GBT ajustés une fois, pas le protocole confirmatoire complet.
+spécifiquement le classique ici, ni pourquoi son accord QAOA/exact est
+si bas (6,7 %) — constaté, non expliqué ; une comparaison confirmatoire
+au sens du protocole (`study/closed_loop/`, budget apparié, IC bootstrap
+par trajectoire, correction de Holm) — ceci est 5 instantanés/scénario
+avec un seuil/GBT ajustés une fois, pas le protocole confirmatoire
+complet ; que le léger avantage moyen des couplages pour QAOA (0,465
+contre 0,435) est un effet réel plutôt que du bruit à 4 plis.
 
 ```bash
-pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso.py -v   # 5 passed
+pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso.py -v   # 9 passed
 python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --n-snaps 5
 ```
