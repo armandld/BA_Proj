@@ -36,3 +36,30 @@ def test_every_fold_produced_a_finite_f1_in_range(artifact):
         assert arr.shape == (4,)
         assert np.all(np.isfinite(arr))
         assert np.all((arr >= 0.0) & (arr <= 1.0))
+
+
+def test_qaoa_never_strictly_beats_gbt(artifact):
+    """QAOA(V2) egale GBT a 3 plis sur 4 (harris_tearing, mhd_rotor,
+    orszag_tang) et perd sur le 4e (kelvin_helmholtz) -- jamais mieux."""
+    f1_gbt = artifact["f1_gbt"]
+    f1_qaoa = artifact["f1_qaoa"]
+    assert np.all(f1_qaoa <= f1_gbt + 1e-9)
+    assert np.sum(np.isclose(f1_qaoa, f1_gbt)) == 3
+
+
+def test_mhd_rotor_favours_the_classical_threshold_over_both_learners(artifact):
+    """Seul pli ou classique bat QAOA ET GBT. Ne pas confondre avec la
+    degenerescence de `init_mhd_rotor` documentee ailleurs (score
+    classique uniforme dans le pipeline complet a N=256) : ici classique
+    est au contraire le MEILLEUR, pas degenere -- mecanisme different,
+    non explique, seulement constate."""
+    held = list(artifact["held"])
+    i = held.index("mhd_rotor")
+    assert artifact["f1_classical"][i] > artifact["f1_gbt"][i]
+    assert artifact["f1_classical"][i] > artifact["f1_qaoa"][i]
+
+
+def test_qaoa_beats_classical_on_average_without_any_training(artifact):
+    """V2 n'a aucun parametre a regler (D-22 ne le concerne pas) et bat
+    quand meme le seuil classique en moyenne LOSO."""
+    assert artifact["f1_qaoa"].mean() > artifact["f1_classical"].mean()

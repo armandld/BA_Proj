@@ -10564,3 +10564,77 @@ pytest tests/study/test_psi_coverage_inventory.py -v      # 6 passed
 pytest tests/study/test_h3_toy_instability_check.py -v    # 5 passed
 python study/h3_representation/h3_toy_instability_check.py --n-seeds 8
 ```
+
+## V2 (hamiltonien SANS paramètre) contre GBT, LOSO, DNS réelle (`h2b_v2_hamiltonian_vs_gbt_loso.py`)
+
+D-22 (la campagne Optuna) coûte, mesuré cette session (pas supposé) sur ce
+matériel, plusieurs semaines de calcul continu — décision : ne pas la
+lancer. Ce script répond à la question qui reste posable SANS elle :
+comment le mappeur V2 — zéro hyperparamètre, poids figés, D-22 ne le
+concerne pas — se comporte-t-il face à un GBT, sur DNS réelle, sans
+qu'aucun des deux bras Q-HAS n'ait vu le scénario tenu ?
+
+**Protocole.** 4 scénarios canoniques (`harris_tearing`,
+`kelvin_helmholtz`, `mhd_rotor`, `orszag_tang`), Re=400, N=96, dim=3 (18
+qubits — la seule taille QAOA certifiée non dégénérée ici, la même que
+`h0_optimiser_equivalence.py`). 5 instantanés/scénario, mêmes DNS et
+labels déjà utilisés par `h0_optimiser_equivalence.py` et
+`h2b_ceiling_random_split.py` (aucun nouveau calcul DNS). `K_opt=60`,
+`shots=4096`, `reps=2` — les réglages déjà établis pour le QAOA réel sur
+DNS réelle. Psi câblé (instant précédent de la même trajectoire, comme
+`h3_toy_instability_check.py`). LOSO sur les 4 scénarios : seuil
+classique et GBT (`early_stopping=True`, D-198) ajustés sur les 3
+scénarios d'ENTRAÎNEMENT du pli, jamais sur le tenu — même discipline que
+`h2b_loso_transfer.py`. QAOA(V2) n'a rien à ajuster : une seule
+évaluation par instantané, la même décision sert à chaque pli.
+
+Mesuré, pas supposé : ~15 s/instantané (K_opt=60/shots=4096, dim=3) →
+~5 min pour les 20 instantanés, tout compris.
+
+| tenu à l'écart | F1 classique | F1 GBT | F1 QAOA (V2) |
+|---|---|---|---|
+| harris_tearing | 0,483 | 0,667 | 0,667 |
+| kelvin_helmholtz | 0,393 | 0,537 | 0,400 |
+| mhd_rotor | 0,667 | 0,462 | 0,462 |
+| orszag_tang | 0,133 | 0,333 | 0,333 |
+| **moyenne** | **0,419** | **0,500** | **0,465** |
+
+**QAOA n'égale ou ne bat jamais GBT que par égalité, jamais strictement**
+: F1(QAOA) = F1(GBT) EXACTEMENT sur 3 plis/4 (`harris_tearing`,
+`mhd_rotor`, `orszag_tang`) ; GBT gagne net sur le 4ᵉ
+(`kelvin_helmholtz`, 0,537 contre 0,400). Les trois égalités n'ont pas
+été vérifiées au niveau décision-par-décision (seul le F1 agrégé est
+comparé) — une coïncidence de F1 sur des décisions différentes reste
+possible, à vérifier avant de la citer comme « même décision ».
+
+**QAOA bat le seuil classique en moyenne, sans aucun entraînement** :
+0,465 contre 0,419, sur 3 plis/4 (tous sauf `mhd_rotor`) — même
+qualitatively que H0b (un hamiltonien Ising, même mal résolu ou ici même
+sans réglage, tend à faire au moins aussi bien que le seuil linéaire
+qu'il prolonge), mais mesuré ici contre un troisième comparateur (GBT),
+pas seulement contre l'exact ou le classique.
+
+**`mhd_rotor` : le seul pli où classique bat les deux apprenants.**
+Classique (0,667) bat GBT (0,462) ET QAOA (0,462) — à ne pas confondre
+avec la dégénérescence déjà documentée de `init_mhd_rotor` (score
+classique UNIFORME dans le pipeline complet à N=256, docstring du
+générateur) : ici c'est l'inverse, classique est le MEILLEUR, pas
+dégénéré. Mécanisme différent, non expliqué, seulement constaté.
+
+**Établit** : sur DNS réelle, sans aucun entraînement Q-HAS, V2 bat le
+seuil classique en moyenne (3 plis/4) et égale ou approche un GBT
+entraîné (identique à 3 plis/4, net en dessous sur le 4ᵉ) — une mesure
+directe, sans passer par la campagne D-22.
+
+**N'établit PAS** : que les égalités QAOA=GBT sont la même décision
+cellule par cellule (non vérifié) ; un résultat à `n_snaps` plus grand ou
+à une autre taille que dim=3/N=96 ; pourquoi `mhd_rotor` favorise
+spécifiquement le classique ici ; une comparaison confirmatoire au sens
+du protocole (`study/closed_loop/`, budget apparié, IC bootstrap par
+trajectoire, correction de Holm) — ceci est 5 instantanés/scénario avec
+un seuil/GBT ajustés une fois, pas le protocole confirmatoire complet.
+
+```bash
+pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso.py -v   # 5 passed
+python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --n-snaps 5
+```
