@@ -66,6 +66,7 @@ PSI_STILL_ZERO = {
 PSI_WIRED = {
     "h0_optimiser_equivalence.py",
     "h3_toy_instability_check.py",
+    "h2b_v2_hamiltonian_vs_gbt_loso.py",
 }
 
 
