@@ -186,3 +186,85 @@ def test_format_table_is_renderable_with_one_fold(tmp_path):
     txt = format_table(recs, primary_analysis(recs), secondary_analysis(recs))
     assert "Primary endpoint" in txt and "Secondary" in txt
     assert "no fold has a budget-matched run yet" in txt
+
+
+#: `secondary_analysis` reproduisait le meme defaut que D-92
+#: (`figures/pareto_frontier.py`, retracte dans RESULTS.md) avant d'etre
+#: corrige a son tour : point Q-HAS = tirage unique non verifie plutot que
+#: la moyenne des tirages T20 acheves, frontiere non purgee des points
+#: avortes. Corrige : `secondary_analysis(records, results_dir)` reprend
+#: `verified_qhas_point`/`load_trace_audit`/`drop_aborted` de
+#: `figures/pareto_frontier.py` (une seule definition, importee, pas une
+#: nouvelle copie).
+_RETRACTED_RATIOS = {"kh": 4.41, "ot": 2.57, "rotor": 3.62, "tearing": 4.38}
+_CORRECTED_RATIOS = {"kh": 2.10, "ot": 1.79, "rotor": 2.49, "tearing": 1.98}
+
+
+@pytest.mark.parametrize("fold", ["kh", "ot", "rotor", "tearing"])
+def test_real_data_no_longer_reproduces_the_retracted_ratio(fold):
+    """Rejoue `secondary_analysis` sur les artefacts geles de `results/`
+    (memes 4 folds que `test_pareto_frontier_retracted_ratio.py`) et
+    verifie qu'elle rend les memes ratios CORRIGES, pas les retractes."""
+    _repo_root = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    results_dir = os.path.join(_repo_root, "results")
+    path = os.path.join(results_dir, f"t15b_budget_matched_{fold}.json")
+    if not os.path.exists(path):
+        pytest.skip("artefact gele absent : " + path)
+
+    rec = load_fold(results_dir, fold)
+    sec = secondary_analysis([rec], results_dir)
+    row = sec["rows"][0]
+
+    assert row["ratio_vs_frontier"] == pytest.approx(
+        _CORRECTED_RATIOS[fold], abs=0.01)
+    assert row["ratio_vs_frontier"] != pytest.approx(
+        _RETRACTED_RATIOS[fold], abs=0.05)
+
+
+def test_rotor_flips_from_dominated_to_not_once_qhas_point_is_verified():
+    """Le seul changement de verdict, pas seulement de magnitude : sous le
+    tirage unique retracte, les 4 folds geles se lisaient "Q-HAS domine".
+    Sous le point T20 verifie, `rotor` seul ne l'est plus (mesure, pas
+    suppose -- voir RESULTS.md)."""
+    _repo_root = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    results_dir = os.path.join(_repo_root, "results")
+    recs = [r for r in (load_fold(results_dir, f)
+                        for f in ("kh", "ot", "rotor", "tearing"))
+            if r is not None and r["budget"] is not None]
+    if len(recs) < 4:
+        pytest.skip("artefacts geles t15b incomplets")
+    sec = secondary_analysis(recs, results_dir)
+    by = {r["fold"]: r["qhas_dominated"] for r in sec["rows"]}
+    assert by["rotor"] is False
+    assert by["kh"] is True and by["ot"] is True and by["tearing"] is True
+    assert sec["n_qhas_dominated"] == 3
+
+
+def test_interp_frontier_refuses_to_extrapolate():
+    """D-92 : extrapoler hors de la trace balayee rendrait sans broncher
+    la valeur du bord -- `interp_frontier` doit rendre None plutot que ce
+    nombre d'apparence normale pour une comparaison qui n'existe pas."""
+    trace = [{"patch_ratio": 0.2, "phys_score": 0.5},
+             {"patch_ratio": 0.9, "phys_score": 0.01}]
+    assert interp_frontier(trace, 0.1) is None
+    assert interp_frontier(trace, 0.95) is None
+    assert interp_frontier(trace, 0.5) is not None
+
+
+def test_secondary_analysis_falls_back_to_the_single_draw_without_results_dir(
+        tmp_path):
+    """Sans `results_dir` (les tests synthetiques existants, par ex.), le
+    comportement precedent est preserve a l'identique : repli explicite
+    sur le tirage unique, pas un crash ni un silence."""
+    _mk_fold(str(tmp_path), "ot", 0.33, 0.44, q_patch=0.68, q_phys=0.194,
+             matched={"threshold": 0.19, "patch_ratio": 0.64,
+                      "phys_score": 0.083, "combined": 0.24},
+             trace=[{"patch_ratio": 0.64, "phys_score": 0.083},
+                    {"patch_ratio": 0.95, "phys_score": 0.011}])
+    rec = load_fold(str(tmp_path), "ot")
+    sec_no_dir = secondary_analysis([rec])
+    sec_with_dir = secondary_analysis([rec], str(tmp_path))
+    assert sec_no_dir["rows"][0]["qhas_phys"] == pytest.approx(0.194)
+    assert sec_with_dir["rows"][0]["qhas_phys"] == pytest.approx(0.194)

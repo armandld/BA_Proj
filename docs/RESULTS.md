@@ -10878,3 +10878,108 @@ taille que dim=3/N=96.
 pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso_multire.py -v
 python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --re 400 800 1200 1600 --n-snaps 10
 ```
+
+---
+
+## D-92 bis — `closed_loop_fold_synthesis.py` portait le même défaut retracté que `pareto_frontier.py`
+
+**Où ça a été trouvé.** Passe de clarté sur `study/`, pas une campagne :
+une revue systématique de `study/closed_loop/` a repéré trois copies
+indépendantes d'une même interpolation de frontière classique
+(`interp_frontier`/`frontier_at`), dont une seule — `frontier_at`
+(`closed_loop_leak_free_summary.py`) — refuse d'extrapoler hors de la
+trace balayée. Les deux autres ne le faisaient pas : `interp_frontier`
+dans `closed_loop_fold_synthesis.py` (script T15c, la synthèse
+inter-folds du niveau 3) et dans `figures/pareto_frontier.py`.
+
+**Sur `figures/pareto_frontier.py` : latent, jamais déclenché sur les 4
+folds gelés (`ot`/`kh`/`rotor`/`tearing`), vérifié directement — pas
+touché.** Ajouter la garde sans corriger tous ses appelants (`build_figure`,
+les impressions de `main()`, `pareto_panel.py::_panel`) aurait remplacé un
+trou jamais atteint par un crash s'il l'était un jour — un risque ajouté
+sans bénéfice mesurable ici.
+
+**Sur `closed_loop_fold_synthesis.py` : pas latent, déjà déclenché — le
+script produit AUJOURD'HUI les ratios déjà RETRACTÉS par D-92.**
+`secondary_analysis()` (le diagnostic post-hoc à budget apparié,
+« Secondary (post-hoc, defect D4) ») prenait `qhas_patch`/`qhas_phys`
+directement du champ `qhas` de `t15_level3_fold_{f}.json` — un tirage
+UNIQUE d'un bras non déterministe (D11), jamais celui moyenné des 5
+tirages de T20 — et interpolait sur la trace `t15b` SANS retirer les
+points issus d'une trajectoire avortée (audit T19). **Exactement les deux
+défauts que D-92 avait déjà nommés et corrigés dans
+`figures/pareto_frontier.py`/`pareto_panel.py`**, mais qui n'avaient
+jamais été portés à ce module-ci — une deuxième instance du même défaut,
+pas une régression du premier correctif.
+
+Mesuré sur les 4 artefacts gelés (`results/t15b_budget_matched_*.json`),
+avant correction :
+
+| fold | `ratio_vs_frontier` (avant) | déjà nommé « retracté » par D-92 |
+|---|---|---|
+| kh | 4,405 | 4,41 |
+| ot | 2,569 | 2,57 |
+| rotor | 3,623 | 3,62 |
+| tearing | 4,383 | 4,38 |
+
+Identiques à la décimale près aux quatre nombres que
+`tests/study/test_pareto_frontier_retracted_ratio.py` nomme explicitement
+`_RETRACTED_RATIOS`. `results/t15c_fold_synthesis.json` — l'artefact que
+`study/common/aggregate_master_table.py::rows_t15c` lit pour la table
+maître — et sa version markdown (`format_table`, colonne « Q-HAS/frontier »)
+servaient donc ces mêmes nombres retractés, sans aucune mise en garde,
+jusqu'à cette correction.
+
+**Sans conséquence sur la table maître actuelle — vérifié, pas supposé.**
+D-196 (`docs/COUVERTURE.md`) protège déjà les trois lignes `t15c` qui
+dépendraient de `secondary_analysis` (`folds where Q-HAS better`,
+`Pareto-dominated at equal budget`, `mean delta phys`) : elles restent
+`MISSING` tant que `len(recs) < len(folds)` (4/8 folds, D-197), quel que
+soit ce que `secondary_analysis` calcule. Le défaut ci-dessus était donc
+dormant du point de vue de tout nombre déjà cité dans `PLAN_PREPRINT.md`
+ou la table maître — mais bien réel dans l'artefact et la table imprimée
+que quiconque lit directement.
+
+**Corrigé** : `secondary_analysis(records, results_dir=None)` reprend
+`verified_qhas_point`/`load_trace_audit`/`drop_aborted` de
+`figures/pareto_frontier.py` (une seule définition, importée — pas une
+nouvelle copie, le motif D-60/D-61 que ce dépôt a déjà rencontré deux
+fois) ; repli explicite sur le tirage unique si `results_dir` est omis
+(préserve tous les tests synthétiques existants) ou si aucun artefact T20
+n'existe pour le fold. `interp_frontier` refuse maintenant d'extrapoler
+(rend `None`), comme `frontier_at`.
+
+Rejoué sur les 4 mêmes artefacts gelés, après correction — reproduit
+EXACTEMENT `_CORRECTED_RATIOS` de `test_pareto_frontier_retracted_ratio.py` :
+
+| fold | `ratio_vs_frontier` (après) | `_CORRECTED_RATIOS` (D-92) | `qhas_dominated` |
+|---|---|---|---|
+| kh | 2,104 | 2,10 | oui |
+| ot | 1,786 | 1,79 | oui |
+| rotor | 2,489 | 2,49 | **non** (était « oui ») |
+| tearing | 1,984 | 1,98 | oui |
+
+**`rotor` change de verdict, pas seulement de magnitude** :
+`n_qhas_dominated` passe de 4/4 à 3/4. Sous le point T20 vérifié, Q-HAS
+n'est plus strictement Pareto-dominé sur ce pli — mesuré en rejouant le
+script, pas déduit.
+
+**L'analyse PRIMAIRE, pré-enregistrée (`primary_analysis`, le critère
+`combined` du protocole L3 §4A) n'est pas touchée** : elle continue de lire
+`r["qhas"]["combined"]` du JSON `t15` directement, comme avant. Rien
+n'indique que le tirage unique y soit inapproprié — le pré-enregistrement
+spécifie cette valeur précisément, moyenner après coup y introduirait un
+choix d'estimateur fait après avoir vu les données, l'inverse de ce qu'un
+critère pré-enregistré garantit. Seul le diagnostic SECONDAIRE, post-hoc
+(D4), qui n'a jamais eu cette contrainte, est concerné.
+
+**N'établit PAS** : que `delta_phys_matched` (repris tel quel du champ
+JSON de `t15b`, jamais recalculé ici) porte ou non le même défaut à un
+stade antérieur du pipeline (`closed_loop_budget_matched.py`, script T15b,
+non audité dans cette passe) — protégé de toute façon par D-196 tant que
+la table maître affiche `MISSING`, donc non poursuivi ici.
+
+```bash
+pytest tests/study/test_t15c_synthesis.py -v   # 18 passed
+python study/closed_loop/closed_loop_fold_synthesis.py --folds kh ot rotor tearing
+```

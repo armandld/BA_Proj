@@ -44,10 +44,14 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
             "h3_representation", "h4_transfer", "closed_loop", "common")]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
+_FIGURES = os.path.join(_REPO_ROOT, "figures")
+if _FIGURES not in sys.path:
+    sys.path.insert(0, _FIGURES)
 # -------------------------------------------------------------------------
 
 from h2b_feature_selection import git_commit_hash
 from stats_confirmatory import holm_correction, tost_equivalence
+from pareto_frontier import drop_aborted, load_trace_audit, verified_qhas_point
 
 # Marge d'equivalence pre-enregistree : 5% du `combined` classique moyen.
 TOST_MARGIN_FRAC = 0.05
@@ -107,12 +111,17 @@ def load_fold(results_dir, fold, prefix="t15_level3"):
 
 def interp_frontier(trace, patch):
     """Erreur classique attendue au budget `patch`, par interpolation
-    lineaire de la trace de bissection (reprise de make_pareto_figure pour
-    garder une definition unique)."""
+    lineaire de la trace de bissection. Rend None si `patch` tombe hors de
+    la plage balayee -- extrapoler y rendrait sans broncher la valeur du
+    bord, un nombre d'apparence normale pour une comparaison qui n'existe
+    pas (meme garde que `frontier_at` dans
+    `closed_loop_leak_free_summary.py`, D-92)."""
     pts = sorted(({"patch": r["patch_ratio"], "phys": r["phys_score"]}
                   for r in trace), key=lambda r: r["patch"])
     xs = np.array([r["patch"] for r in pts])
     ys = np.array([r["phys"] for r in pts])
+    if patch < xs[0] or patch > xs[-1]:
+        return None
     return float(np.interp(patch, xs, ys))
 
 
@@ -178,18 +187,40 @@ def primary_analysis(records, margin_frac=TOST_MARGIN_FRAC):
     return out
 
 
-def secondary_analysis(records):
+def secondary_analysis(records, results_dir=None):
     """Analyse post-hoc a budget apparie (defaut D4). Ne porte que sur les
-    folds pour lesquels t15b a tourne."""
+    folds pour lesquels t15b a tourne.
+
+    Point Q-HAS : moyenne des tirages ACHEVES de T20 quand `results_dir`
+    est fourni et que l'artefact existe (repli sur le tirage unique de
+    t15/t15b sinon, comme `qhas_patch`/`qhas_phys` avant cette fonction) ;
+    frontiere purgee des points issus d'une trace avortee (audit T19).
+    Memes deux corrections que D-92 dans `figures/pareto_frontier.py`, qui
+    portait ce meme defaut avant d'etre corrige -- ce module le portait
+    encore (voir RESULTS.md)."""
+    audit = load_trace_audit(results_dir) if results_dir else None
     rows, deltas = [], []
     for r in records:
         b = r["budget"]
         if b is None:
             continue
-        q_patch = r["qhas"]["patch_ratio"]
-        q_phys = r["qhas"]["phys_score"]
+        qv = (verified_qhas_point(results_dir, r["fold"])
+              if results_dir else None)
+        if qv is not None:
+            q_patch, q_phys = qv["patch"], qv["phys"]
+        else:
+            q_patch = r["qhas"]["patch_ratio"]
+            q_phys = r["qhas"]["phys_score"]
         m = b["matched"]
-        front_at_q = interp_frontier(b["trace"], q_patch)
+        trace = b["trace"]
+        if audit:
+            marked = [{"patch_ratio": t["patch_ratio"],
+                       "phys_score": t["phys_score"],
+                       "thr": t.get("threshold")} for t in trace]
+            kept, _ = drop_aborted(marked, audit.get(r["fold"], []))
+            trace = [{"patch_ratio": t["patch_ratio"],
+                      "phys_score": t["phys_score"]} for t in kept]
+        front_at_q = interp_frontier(trace, q_patch)
         rows.append({
             "fold": r["fold"],
             "qhas_patch": q_patch,
@@ -200,7 +231,8 @@ def secondary_analysis(records):
             "delta_phys_matched": b["delta_phys_matched"],
             "frontier_phys_at_qhas_budget": front_at_q,
             "ratio_vs_frontier": (float(q_phys / front_at_q)
-                                  if front_at_q > 0 else None),
+                                  if front_at_q is not None and front_at_q > 0
+                                  else None),
             "budget_gap": abs(m["patch_ratio"] - q_patch),
             "qhas_dominated": bool(m["patch_ratio"] <= q_patch
                                    and m["phys_score"] <= q_phys),
@@ -335,7 +367,7 @@ def main():
     primary = primary_analysis(records)
     primary["excluded_failed_folds"] = excluded
     primary["audit_present"] = audit is not None
-    secondary = secondary_analysis(records)
+    secondary = secondary_analysis(records, results_dir)
     table = format_table(records, primary, secondary)
     print()
     print(table)
