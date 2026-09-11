@@ -223,10 +223,14 @@ def test_real_data_no_longer_reproduces_the_retracted_ratio(fold):
 
 
 def test_rotor_flips_from_dominated_to_not_once_qhas_point_is_verified():
-    """Le seul changement de verdict, pas seulement de magnitude : sous le
-    tirage unique retracte, les 4 folds geles se lisaient "Q-HAS domine".
-    Sous le point T20 verifie, `rotor` seul ne l'est plus (mesure, pas
-    suppose -- voir RESULTS.md)."""
+    """Teste `secondary_analysis` isolement, PAS l'artefact publie : dans
+    `main()`, `rotor` est deja exclu par l'audit T19 (pre-registration
+    §5, raison sans rapport avec ce correctif) avant meme d'atteindre
+    cette fonction, donc `results/t15c_fold_synthesis.json` ne le montre
+    jamais. Ici, sans ce filtre, `rotor` change de verdict de domination
+    (pas seulement de magnitude) sous le point T20 verifie -- preuve que
+    la correction a une vraie prise sur au moins un pli (mesure, pas
+    supposee -- voir RESULTS.md)."""
     _repo_root = os.path.abspath(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     results_dir = os.path.join(_repo_root, "results")

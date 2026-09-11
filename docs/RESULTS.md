@@ -10912,8 +10912,11 @@ défauts que D-92 avait déjà nommés et corrigés dans
 jamais été portés à ce module-ci — une deuxième instance du même défaut,
 pas une régression du premier correctif.
 
-Mesuré sur les 4 artefacts gelés (`results/t15b_budget_matched_*.json`),
-avant correction :
+Mesuré en appelant `secondary_analysis` directement sur les 4 artefacts
+gelés (`results/t15b_budget_matched_*.json`), avant correction — `rotor`
+inclus ici pour comparer aux quatre plis que D-92 nomme, même s'il
+n'atteignait déjà jamais cette étape dans `main()` (voir plus bas, exclu
+par l'audit T19 pour une raison sans rapport) :
 
 | fold | `ratio_vs_frontier` (avant) | déjà nommé « retracté » par D-92 |
 |---|---|---|
@@ -10927,7 +10930,8 @@ Identiques à la décimale près aux quatre nombres que
 `_RETRACTED_RATIOS`. `results/t15c_fold_synthesis.json` — l'artefact que
 `study/common/aggregate_master_table.py::rows_t15c` lit pour la table
 maître — et sa version markdown (`format_table`, colonne « Q-HAS/frontier »)
-servaient donc ces mêmes nombres retractés, sans aucune mise en garde,
+servaient donc, pour `kh`/`ot`/`tearing` (les 3 plis que `main()` publie
+réellement), ces mêmes nombres retractés, sans aucune mise en garde,
 jusqu'à cette correction.
 
 **Sans conséquence sur la table maître actuelle — vérifié, pas supposé.**
@@ -10949,20 +10953,40 @@ fois) ; repli explicite sur le tirage unique si `results_dir` est omis
 n'existe pour le fold. `interp_frontier` refuse maintenant d'extrapoler
 (rend `None`), comme `frontier_at`.
 
-Rejoué sur les 4 mêmes artefacts gelés, après correction — reproduit
-EXACTEMENT `_CORRECTED_RATIOS` de `test_pareto_frontier_retracted_ratio.py` :
+**L'artefact réel n'a que 3 lignes, pas 4 — `rotor` en est absent pour une
+raison SANS RAPPORT avec ce correctif.** `main()` applique l'audit de
+divergence T19 avant `secondary_analysis` : `rotor` y est
+`EXCLUDED as failed` (pre-registration §5, un bras n'a pas fini sa
+trajectoire) — un filtre préexistant, indépendant de ce défaut, qui
+tournait déjà ainsi avant cette correction. Rejoué sur
+`--folds kh ot rotor tearing`, `results/t15c_fold_synthesis.json` ne
+contient donc que `kh`/`ot`/`tearing`, et reproduit EXACTEMENT
+`_CORRECTED_RATIOS` de `test_pareto_frontier_retracted_ratio.py` sur ces
+trois plis :
 
 | fold | `ratio_vs_frontier` (après) | `_CORRECTED_RATIOS` (D-92) | `qhas_dominated` |
 |---|---|---|---|
 | kh | 2,104 | 2,10 | oui |
 | ot | 1,786 | 1,79 | oui |
-| rotor | 2,489 | 2,49 | **non** (était « oui ») |
 | tearing | 1,984 | 1,98 | oui |
 
-**`rotor` change de verdict, pas seulement de magnitude** :
-`n_qhas_dominated` passe de 4/4 à 3/4. Sous le point T20 vérifié, Q-HAS
-n'est plus strictement Pareto-dominé sur ce pli — mesuré en rejouant le
-script, pas déduit.
+`n_qhas_dominated` reste 3/3 dans l'artefact réel — le COMPTE ne change
+pas ici, seule la magnitude des ratios passe de retractée à corrigée.
+
+**Le correctif a quand même une vraie prise, montrée séparément (pas
+sur l'artefact réel) : `rotor` change de verdict de domination sous le
+point T20 vérifié.** En appelant `secondary_analysis` directement sur les
+4 plis chargés — donc SANS le filtre T19 de `main()`, qui l'exclut pour
+une raison différente — le tirage unique gelé de `rotor` (`qhas_phys`
+0,168) devient 0,147 sous la moyenne des tirages T20 : suffisant pour que
+`qhas_dominated` passe de vrai à **faux** (`matched_phys` ne descend plus
+sous ce point). C'est
+`test_rotor_flips_from_dominated_to_not_once_qhas_point_is_verified` :
+un test de `secondary_analysis` isolément, pas une lecture de l'artefact
+publié — les deux mécanismes (exclusion T19, correction du point Q-HAS)
+sont indépendants et n'interagissent pas ici seulement parce que le
+premier exclut déjà `rotor` avant que le second ait l'occasion de
+compter.
 
 **L'analyse PRIMAIRE, pré-enregistrée (`primary_analysis`, le critère
 `combined` du protocole L3 §4A) n'est pas touchée** : elle continue de lire
