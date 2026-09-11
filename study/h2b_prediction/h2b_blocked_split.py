@@ -14,7 +14,7 @@ copie de la boucle d'evaluation de phase 11, avec :
     classique : B1 = block_avg (convention V1), B2 = block_max
     (convention V2). Les deux agregent le MEME champ fin
     (`full_score` de build_patch_hamiltonian), seul l'operateur change
-    (miroir du `_block_avg` de phase11e_v1h_loso.py) ;
+    (miroir du `_block_avg` de `h2b_ceiling_random_split.py`) ;
   - metriques Task 2 : CE(b) pour b dans {0.10, 0.25, 0.50} + AUC de la
     courbe CE et rho de Spearman contre le e_i CONTINU, calcules PAR
     SNAPSHOT (classement des dim^2 patches d'un pas de temps, fidele au
@@ -30,7 +30,7 @@ Sortie : results/t4_blocked_split_N{N}_dim{D}.npz
          (hash git + arguments CLI complets)
 
 Usage :
-  python study/v3/t4_blocked_split.py --N 256 --dim 4
+  python study/h2b_prediction/h2b_blocked_split.py --N 256 --dim 4
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -55,14 +55,11 @@ from h2b_neighbour_cone_curve import blocked_split_indices
 BUDGETS = (0.10, 0.25, 0.50)
 
 # Critere d'acceptation de la tache 4 (protocole v3, section 8.3) —
-# « les nombres du split aleatoire correspondent a la tache 0 ». Il etait
-# imprime en prose et jamais compare, donc il ne pouvait pas echouer ; le
-# test du fichier renvoyait sa verification a « l'execution sur les vraies
-# donnees », ou elle n'avait pas lieu.
-#
-# Les deux references sont des nombres d'ARCHIVE d'avant l'audit (meme
-# provenance que celles de `aggregate_v3.py`). Elles ne sont pas
-# reajustees : un seuil perime se remesure, il ne se retouche pas.
+# « les nombres du split aleatoire correspondent a la tache 0 ». Les deux
+# references sont des nombres d'ARCHIVE d'avant l'audit (meme provenance
+# que celles de `aggregate_v3.py`, D-49). Elles ne sont pas reajustees :
+# un seuil perime se remesure (D-85, `docs/RESULTS.md`), il ne se
+# retouche pas.
 ACCEPTANCE_REFS = (
     ("B2 classical (block_max)", 0.475),
     ("B4 gbt-9 (max)", 0.980),
@@ -388,10 +385,7 @@ def main():
               f"{rr['f1'] - rb['f1']:>+8.3f}")
 
     # Compare reellement les nombres du split aleatoire (au lieu de les
-    # imprimer sans verification). Mesure de reference (`--dim 4 --N 256
-    # --seed 0`, Re=400, identique a --max-snaps 30 et 80, GBT deterministe) :
-    # B2 classique 0,472 contre 0,475 (ecart 0,003, dans la bande) ; B4
-    # gbt-9(max) 0,908 contre 0,980 (ecart 0,072, HORS bande).
+    # imprimer sans verification, D-85) contre ACCEPTANCE_REFS.
     print(f"\n  [ACCEPTANCE] tache 0, split aleatoire "
           f"(tolerance {TOL_ACCEPT:.3f})")
     acc_rows = check_acceptance({r["name"]: r["f1"] for r in rows_r})

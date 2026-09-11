@@ -1,4 +1,4 @@
-# scripts/execute.py
+# src/VQA/execute.py
 import numpy as np
 from scipy.optimize import minimize
 from qiskit_aer import AerSimulator

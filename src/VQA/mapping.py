@@ -1,4 +1,4 @@
-# scripts/mapping.py
+# src/VQA/mapping.py
 
 import numpy as np
 

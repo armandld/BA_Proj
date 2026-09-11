@@ -15,7 +15,7 @@ bras CLASSIQUE diverge apparait alors comme une VICTOIRE de Q-HAS, alors
 qu'aucune comparaison n'a eu lieu.
 
 C'est precisement le cas prevu par la pre-registration
-(`docs/level3_preregistration.md` §5) :
+(`docs/archive/level3_preregistration.md` §5) :
 
   « Folds that fail to complete (divergence penalty, solver failure) are
     reported as failures and excluded from the paired statistics; the count

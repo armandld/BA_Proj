@@ -3,7 +3,7 @@
 
 Pourquoi
 --------
-`phase2_hard_patches.py` calcule le seuil « dur » comme le percentile 75 des
+`hard_patch_labels.py` calcule le seuil « dur » comme le percentile 75 des
 erreurs L2 **de chaque scenario pris separement**. Chaque scenario a donc
 exactement 25 % de patches durs, avec des seuils qui different d'un facteur
 2.8 (0.2779 pour harris_tearing, 0.7698 pour mhd_rotor a dim=4).
@@ -65,7 +65,7 @@ def relabel(dim, N, Re, percentile=L2_PERCENTILE_HARD, outdir=RESULTS_DIR):
     if not paths:
         raise SystemExit(
             f"aucun artefact patches_*_Re{Re}_N{N}_dim{dim}.npz — lancer "
-            "d'abord phase2_hard_patches.py"
+            "d'abord hard_patch_labels.py"
         )
 
     pooled = []

@@ -34,7 +34,7 @@ Sortie : results/t1b_cone_curve_N{N}_dim{D}.npz
          (hash git + arguments CLI complets, cf. garde-fous v3)
 
 Usage :
-  python study/v3/t1b_cone_curve.py --N 256 --dim 4
+  python study/h2b_prediction/h2b_neighbour_cone_curve.py --N 256 --dim 4
 """
 import argparse, json, os, subprocess, sys, time
 import numpy as np
@@ -146,7 +146,7 @@ def capped_model_factory(n_features, seed, base_factory=None):
 # -------------------------------------------------------------------
 
 def _gather_feats_per_snapshot(by_scene, dim, max_snaps):
-    """Comme phase11b._gather_scenario mais conserve les tenseurs
+    """Comme h2b_loso_transfer._gather_scenario mais conserve les tenseurs
     (dim, dim, 9) par snapshot + l'ordre temporel par (scenario, Re).
 
     Retourne {sc: list of dict(re=, pos=, feats=, y=, s=)} dans l'ordre
@@ -410,7 +410,7 @@ def main():
     print("  per-hop deltas (LOSO mean): "
           + ", ".join(f"{d:+.3f}" for d in deltas))
     print("  Section-2 decision rule (flat: every |delta| <= 0.01 -> cone "
-          "retired; rising -> slope quoted): stated in study/v3/RESULTS.md.")
+          "retired; rising -> slope quoted): stated in docs/RESULTS.md.")
 
     footprints = [khop_distinct_footprint(k, args.dim) for k in K_VALUES]
     saturated_ks = [K_VALUES[i] for i in range(1, len(K_VALUES))

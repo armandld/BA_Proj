@@ -42,7 +42,7 @@ k in {0, 1, 2}, a chaque horizon h -> matrice k x h (CE@0.25 et F1).
 
 Sortie : results/t7_horizon_N{N}_dim{D}.npz
 Usage :
-  python study/v3/t7_horizon.py --N 256 --dim 4
+  python study/h2b_prediction/h2b_prediction_horizon.py --N 256 --dim 4
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -175,7 +175,6 @@ def _gather(by_scene, dim, max_snaps, beta4):
             n_snaps = len(vx_all)
             step = max(1, n_snaps // max_snaps)
             idx = list(range(0, n_snaps, step))[:max_snaps]
-            ps = N // dim
 
             F9, FE2D, E, Y, Sa, Sx = [], [], [], [], [], []
             P4, PV2 = [], []
@@ -208,8 +207,7 @@ def _gather(by_scene, dim, max_snaps, beta4):
                 FE2D.append(feats_2d)
                 E.append(l2_all[si].ravel().astype(np.float64))
                 Y.append((l2_all[si] >= l2_thr).ravel().astype(int))
-                Sa.append(full_score.reshape(dim, ps, dim, ps)
-                          .mean(axis=(1, 3)).ravel())
+                Sa.append(block_agg(full_score, dim, "avg").ravel())
                 Sx.append(s_max.ravel())
                 P4.append(p4.ravel())
                 PV2.append(pv2.ravel())

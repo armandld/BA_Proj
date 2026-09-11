@@ -141,28 +141,19 @@ READING_THRESHOLD = 0.1
 def reading_message(slope):
     """La phrase de conclusion de T11b, extraite pour etre testable.
 
-    Le verdict lisait `prog_all`, la moyenne d'UN tirage QAOA par
-    instantane : trois executions de la commande publiee (`--N 256 --dim
-    2 --n-snaps 2`, reps 1-4) rendaient 0.1034 / 0.0850 / 0.0859 contre
-    le seuil de 0.1 — une execution sur trois imprimait la conclusion
-    inverse.
+    Lit `slope` (`slope_paired` dans l'artefact) : la pente APPARIEE
+    progress(reps=max) - progress(reps=min), sur les memes instantanes aux
+    deux profondeurs (voir `main`, juste au-dessus de l'appel) -- e.g. le
+    progres BOUGE-T-IL avec la profondeur, ce qui distingue directement
+    une perturbation de l'encodage classique (pente ~ 0) d'une
+    minimisation reelle du cout (pente qui croit avec la profondeur).
 
-    Il lit desormais `slope` (`slope_paired` dans l'artefact) : la pente
-    APPARIEE progress(reps=max) - progress(reps=min), sur les memes
-    instantanes aux deux profondeurs (voir `main`, juste au-dessus de
-    l'appel). Question differente, plus proche de la motivation du
-    fichier : pas seulement decide -- e.g. le progres BOUGE-T-IL avec
-    la profondeur, ce qui distingue directement une perturbation de
-    l'encodage classique (pente ~ 0) d'une minimisation reelle du cout
-    (pente qui croit avec la profondeur).
-
-    Le seuil 0.1 est INCHANGE et reste sans provenance ecrite propre a
-    `slope` : sa nature a change (d'une moyenne de tirage a une pente
-    appariee), sa reproductibilite n'a pas ete remesuree sur plusieurs
-    executions independantes -- seulement verifiee sur UNE execution que
-    la logique s'applique sans planter. Une inversion de conclusion d'une
-    execution a l'autre reste possible ; personne ne l'a mesuree pour
-    cette grandeur.
+    Le seuil 0.1 reste sans provenance ecrite propre a `slope` (une
+    moyenne de tirage unique, `prog_all`, a deja fait imprimer la
+    conclusion inverse sur un tirage sur trois avant ce changement) et sa
+    reproductibilite sur `slope` specifiquement n'a pas ete remesuree sur
+    plusieurs executions independantes -- seulement verifiee sur UNE
+    execution que la logique s'applique sans planter.
     """
     return (READING_FLAT if abs(slope) < READING_THRESHOLD
             else READING_MOVES)

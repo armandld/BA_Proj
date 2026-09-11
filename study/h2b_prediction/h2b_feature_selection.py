@@ -7,7 +7,7 @@ Reutilise EXACTEMENT les folds LOSO de phase 11b : memes fichiers d'entree,
 meme assemblage par scenario (`_gather_scenario`), meme ordre de
 concatenation des scenarios d'entrainement, meme `make_model("gbt", seed)`
 et meme `fit_eval` (seuil choisi sur train). La ligne "full-9" doit donc
-reproduire le 0.189 publie (logs/Result_phase11b.txt).
+reproduire le 0.189 publie (results/logs_v2/Result_phase11b.txt).
 
 Lignes produites :
   - classical  : baseline phase 11b (seuil optimal sur train, appli. val)
@@ -24,7 +24,7 @@ Sortie : results/t1_feature_selection_N{N}_dim{D}.npz
          (inclut hash git + arguments CLI complets, cf. garde-fous v3)
 
 Usage :
-  python study/v3/t1_feature_selection.py --N 256 --dim 4
+  python study/h2b_prediction/h2b_feature_selection.py --N 256 --dim 4
 """
 import argparse, json, os, subprocess, sys, time
 import numpy as np
@@ -41,7 +41,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-# NB : les imports lourds (config, phase11_upper_bound, phase11b_loso)
+# NB : les imports lourds (config, h2b_ceiling_random_split, h2b_loso_transfer)
 # sont faits paresseusement dans main() / les helpers, pour que les
 # fonctions pures restent testables sans la pile qiskit.
 
@@ -239,7 +239,7 @@ def main():
           + f"   mean F1 = {best_step['mean']:.3f}")
     print("\n  Section-2 decision rule inputs: compare B5 vs classical "
           "(B1/B2) and vs full-9 (B4); the branch is stated in "
-          "study/v3/RESULTS.md.")
+          "docs/RESULTS.md.")
 
     # ---- sauvegarde (hash git + CLI, garde-fous v3) ----
     out = os.path.join(RESULTS_DIR,

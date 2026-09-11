@@ -81,7 +81,7 @@ from sklearn.metrics import f1_score
 from Simulation.grid import forward_curl_z
 
 from h2b_ceiling_random_split import (
-    extract_features_2d, N_FEATS, best_threshold_f1, _block_avg,
+    extract_features_2d, N_FEATS, best_threshold_f1, _block_avg, snap_f1,
 )
 
 
@@ -233,13 +233,6 @@ def gather_scenario(scen_configs, dim, max_snaps, beta):
             Sv1f.append(s1f.ravel())
 
     return dict(Xf=Xf, Y=Y, Sv2c=Sv2c, Sv1c=Sv1c, Sv1cM=Sv1cM, Sv1f=Sv1f)
-
-
-def snap_f1(Y_list, P_list, thr):
-    """Aggregated F1 over a list of per-snapshot arrays at threshold thr."""
-    Y = np.concatenate(Y_list)
-    P = np.concatenate(P_list)
-    return f1_score(Y, (P > thr).astype(int), zero_division=0)
 
 
 def paired_bootstrap_delta(

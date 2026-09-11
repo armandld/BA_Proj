@@ -48,31 +48,19 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 
 from h2b_feature_selection import git_commit_hash
 from dynamic_patch_labels import downsample_fields
-from dns_validation import total_energy   # V2, reutilise
+from dns_validation import total_energy, matched_divergence   # V2, reutilise
 
 FIELDS = ("vx", "vy", "Bx", "By")
 
 
-def div_B_matched(Bx, By, dx):
-    """Divergence de B avec l'operateur qui la GARANTIT — pas un autre.
-
-    N'utilise PAS `dns_validation.div_B` (spectral) : cet operateur ne
-    correspond plus a la convention du solveur, qui ne projette plus B
-    spectralement (`MHDSolver.PROJECT_B = False`). B est aujourd'hui
-    solenoidal par construction aux DIFFERENCES FINIES — `rhs_B` en forme
-    rotationnelle, de divergence FD4 exactement nulle car les decalages de
-    `np.roll` commutent. Mesurer au spectral compare deux operateurs, pas la
-    contrainte reelle, avec un faux signal qui grandit aux grilles
-    grossieres alors que la contrainte FD4 reste a machine precision
-    partout.
-
-    Le stencil n'est pas reimplemente : `_fd_grad` est celui de V1, celui-la
-    meme qui assemble `rhs_Bx`/`rhs_By` dans `_compute_rhs_fd`.
-    """
-    from Simulation.solver import MHDSolver
-    g_Bx_x, _ = MHDSolver._fd_grad(Bx, dx)
-    _, g_By_y = MHDSolver._fd_grad(By, dx)
-    return g_Bx_x + g_By_y
+#: Divergence de B avec l'operateur qui la GARANTIT — pas un autre. B est
+#: solenoidal par construction aux DIFFERENCES FINIES (`rhs_B` en forme
+#: rotationnelle, de divergence FD4 exactement nulle car les decalages de
+#: `np.roll` commutent) : mesurer au spectral comparerait deux operateurs,
+#: pas la contrainte reelle. `dns_validation.matched_divergence` est deja
+#: cet operateur FD (renomme depuis l'ancien `div_B` spectral, `d3d7573`) --
+#: reutilise ici sous son ancien nom local plutot que reimplemente.
+div_B_matched = matched_divergence
 
 
 # -------------------------------------------------------------------

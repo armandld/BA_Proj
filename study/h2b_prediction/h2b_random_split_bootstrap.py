@@ -44,7 +44,7 @@ from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N
 
 from h2b_ceiling_random_split import (
     FEATURE_NAMES, N_FEATS, extract_features_2d, stencil_features,
-    make_model, fit_eval, best_threshold_f1,
+    make_model, fit_eval, best_threshold_f1, snap_f1,
 )
 from sklearn.metrics import f1_score
 
@@ -73,11 +73,6 @@ def gather_per_snapshot(scenarios, res, N, dim, max_snaps):
                 Ss.append(sc_v.ravel())
                 tags.append(sc)
     return Xs, Xst, Ys, Ss, tags
-
-
-def snap_f1(Y_list, P_list, thr):
-    Y = np.concatenate(Y_list); P = np.concatenate(P_list)
-    return f1_score(Y, (P > thr).astype(int), zero_division=0)
 
 
 def bootstrap_ci(Y_list, P_list, thr, n_boot, rng, alpha=0.05):

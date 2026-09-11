@@ -1,4 +1,4 @@
-# scripts/postprocess.py
+# src/VQA/postprocess.py
 import numpy as np
 
 
@@ -9,8 +9,7 @@ def postprocess(distribution, num_qubits, verbose):
 
     Convention de bits : Qiskit ecrit le qubit 0 A DROITE de la chaine, d'ou
     le parcours `bitstring[::-1]`. C'est bien la convention de
-    `Statevector.probabilities_dict()` et de `get_counts()` ; l'ancien
-    commentaire annoncait l'inverse.
+    `Statevector.probabilities_dict()` et de `get_counts()`.
 
     Le contrat d'entree est une distribution NORMALISEE, pas des comptes.
     `execute` divise deja par le nombre de tirs dans ses trois branches. Le

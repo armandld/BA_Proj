@@ -90,6 +90,13 @@ def _block_avg(f, patch_size, dim):
     return f.reshape(dim, patch_size, dim, patch_size).mean(axis=(1, 3))
 
 
+def snap_f1(Y_list, P_list, thr):
+    """Aggregated F1 over a list of per-snapshot arrays at threshold thr."""
+    Y = np.concatenate(Y_list)
+    P = np.concatenate(P_list)
+    return f1_score(Y, (P > thr).astype(int), zero_division=0)
+
+
 def extract_features_2d(vx, vy, Bx, By, N, dim, Re):
     """Return (dim, dim, n_features) feature tensor + (dim, dim) score."""
     _, score_vqa, _ = build_patch_hamiltonian(

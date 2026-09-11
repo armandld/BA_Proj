@@ -16,8 +16,8 @@ Output: results/coefficients_{scenario}_Re{Re}_N{N}_dim{D}.npz
         Printed analysis and correlation tables.
 
 Usage:
-  python study/hamiltonian_coefficients.py
-  python study/hamiltonian_coefficients.py --re 800 --dim 4
+  python study/pipeline/hamiltonian_coefficients.py
+  python study/pipeline/hamiltonian_coefficients.py --re 800 --dim 4
 """
 import argparse, os, sys, glob
 import numpy as np

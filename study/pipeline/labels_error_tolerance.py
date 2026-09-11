@@ -3,7 +3,7 @@
 
 Pourquoi
 --------
-`phase2_hard_patches.py` seuille au percentile 75 de chaque scenario : le
+`hard_patch_labels.py` seuille au percentile 75 de chaque scenario : le
 label est un rang intra-scenario, chaque scenario a exactement 25 % de
 patches durs, et le LOSO demande de predire ce rang sans avoir vu le seuil
 du scenario tenu a l'ecart.
@@ -87,7 +87,7 @@ def label_at(tau, dim, N, Re, outdir=RESULTS_DIR):
     if not paths:
         raise SystemExit(
             f"aucun artefact patches_*_Re{Re}_N{N}_dim{dim}.npz ; lancer "
-            "d'abord phase2_hard_patches.py")
+            "d'abord hard_patch_labels.py")
 
     rows, written = [], []
     for p in paths:

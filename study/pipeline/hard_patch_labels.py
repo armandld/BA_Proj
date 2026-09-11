@@ -15,8 +15,8 @@ Input:  results/dns_{scenario}_Re{Re}_N{N}.npz  (from Phase 1)
 Output: results/patches_{scenario}_Re{Re}_N{N}_dim{D}.npz
 
 Usage:
-  python study/hard_patch_labels.py
-  python study/hard_patch_labels.py --re 800 --dim 4
+  python study/pipeline/hard_patch_labels.py
+  python study/pipeline/hard_patch_labels.py --re 800 --dim 4
 """
 import argparse, os, sys, glob
 import numpy as np

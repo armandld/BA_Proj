@@ -5,11 +5,11 @@ V4 Task 15c - Synthese inter-folds du niveau 3 (closed loop).
 Ce module NE CALCULE AUCUNE SIMULATION. Il agrege les sorties deja
 produites par t15 (`t15_level3_fold_{f}.json`) et t15b
 (`t15b_budget_matched_{f}.json`) et applique, sans les modifier, les regles
-de decision figees dans `docs/level3_preregistration.md` §4.
+de decision figees dans `docs/archive/level3_preregistration.md` §4.
 
 DEUX NIVEAUX D'ANALYSE, explicitement separes :
 
-  A. PRIMAIRE, PRE-ENREGISTRE (`docs/level3_preregistration.md` §4)
+  A. PRIMAIRE, PRE-ENREGISTRE (`docs/archive/level3_preregistration.md` §4)
      Critere `combined` = (phys + lambda*patch)/(1+lambda), apparie par
      fold, Q-HAS contre le bras classique REGLE (celui du fold). Regles :
        - comptage : un bras gagnant sur >= 3/4 folds ;

@@ -3,7 +3,7 @@
 V4 - Statistiques confirmatoires (audit, Priorite 0).
 
 Le protocole v3 fournit deja le bootstrap par blocs au niveau trajectoire
-(`study/v3/stats.py` : bootstrap_by_trajectory, paired_delta_bootstrap).
+(`study/common/stats.py` : bootstrap_by_trajectory, paired_delta_bootstrap).
 L'audit demande trois briques supplementaires, ajoutees ici SANS redefinir
 les fonctions v3 (elles sont importees et reutilisees telles quelles) :
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 V3 Task 5 - Rerun corrige de phase 11E (protocole v3, prerequis de la
-section 3 ; retire ou ressuscite psi). Copie de phase11e_v1h_loso.py
-avec quatre changements :
+section 3 ; retire ou ressuscite psi). Copie de
+`h2b_v1_hamiltonian_loso.py` avec quatre changements :
 
   (1) parametres V1 de study/config.py TRAINED_* (essai Optuna #4 :
       beta=9.94, thr=0.1496) ; l'execution codee en dur a l'essai #85
@@ -33,7 +33,7 @@ en metriques continues CE(b) arrive au niveau 2 (Task 7).
 
 Sortie : results/t5_v1_psi_loso_N{N}_dim{D}.npz
 Usage :
-  python study/v3/t5_v1_psi_loso.py --N 256 --dim 4
+  python study/h2b_prediction/h2b_psi_feature_loso.py --N 256 --dim 4
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -54,7 +54,7 @@ from h2b_feature_selection import git_commit_hash
 from stats import paired_delta_bootstrap
 
 # essai Optuna #4 (study/config.py TRAINED_*) vs essai #85 (code en dur
-# dans phase11e_v1h_loso.py) — divergence journalisee dans main()
+# dans h2b_v1_hamiltonian_loso.py) — divergence journalisee dans main()
 from config import TRAINED_BETA as BETA_TRIAL4          # 9.94
 from config import TRAINED_THRESHOLD as THR_TRIAL4      # 0.1496
 from config import V2_THRESHOLD

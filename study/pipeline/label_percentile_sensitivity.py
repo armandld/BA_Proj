@@ -29,8 +29,8 @@ Input:  results/dns_{sc}_Re{re}_N{N}.npz
 Output: results/percentile_sensitivity_N{N}_dim{D}.npz
 
 Usage:
-  python study/label_percentile_sensitivity.py --dim 4
-  python study/label_percentile_sensitivity.py --dim 4 \\
+  python study/pipeline/label_percentile_sensitivity.py --dim 4
+  python study/pipeline/label_percentile_sensitivity.py --dim 4 \\
          --percentiles 50 60 70 75 80 85 90
 """
 import argparse, os, sys, time

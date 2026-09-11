@@ -3,7 +3,7 @@
 
 Pourquoi
 --------
-`phase11b_loso.py` imprime des conclusions du type
+`h2b_loso_transfer.py` imprime des conclusions du type
 « stencil > site by +0.033 under LOSO ==> neighbourhood couplings help for
 transfer » a partir d'une moyenne sur QUATRE folds dont l'ecart-type vaut
 0.29, et dont deux valent exactement 0.400 (tout positif) ou 0.000 (tout
@@ -22,8 +22,8 @@ de la chaine existante — rien n'est reimplemente.
 
 Usage
 -----
-  python study/h2b_prediction/t29_loso_delta_ci.py --dim 4 16
-  python study/h2b_prediction/t29_loso_delta_ci.py --dim 16 --label-suffix _globalthr
+  python study/h2b_prediction/h2b_loso_delta_ci.py --dim 4 16
+  python study/h2b_prediction/h2b_loso_delta_ci.py --dim 16 --label-suffix _globalthr
 """
 import argparse
 import os

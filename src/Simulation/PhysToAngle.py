@@ -15,7 +15,7 @@ def _lohner_estimator(f):
     Les noms `_x` / `_y` ci-dessous suivent la convention inverse de celle du
     depot (axis=1 y est lu comme x). C'est sans consequence numerique : la
     formule est SYMETRIQUE par echange des deux axes, donc echanger les
-    etiquettes ne change pas la valeur rendue. `tests/test_mapper_contracts.py`
+    etiquettes ne change pas la valeur rendue. `tests/mapping/test_mapper_contracts.py`
     fige cette symetrie — c'est elle qui rend le mauvais nom inoffensif, et
     toute edition qui la briserait rendrait le nom dangereux.
     """
@@ -224,7 +224,7 @@ class AngleMapper:
             passe `mini_score` deux fois). En deploiement θ_h ≡ θ_v : les deux
             familles de qubits partent du meme etat, et ne se distinguent que
             par ψ et par C_horiz / C_vert dans l'Hamiltonien.
-            `tests/test_mapper_contracts.py` fige cette equivalence : si un
+            `tests/mapping/test_mapper_contracts.py` fige cette equivalence : si un
             appelant venait a passer deux cartes differentes, ce serait un
             changement de comportement scientifique, pas un detail.
         phi_dict_prev, phi_dict : dict or None

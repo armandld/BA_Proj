@@ -28,7 +28,7 @@ calculation uses the deployed constants from ``study/pipeline/config.py``.
 
 Sortie : results/t9_prop2_N{N}.npz ; une table par dim.
 Usage :
-  python study/v3/t9_prop2_check.py --N 256 --dim 2 4
+  python study/h3_representation/h3_locality_proposition.py --N 256 --dim 2 4
 """
 import argparse, json, os, sys, time
 import numpy as np

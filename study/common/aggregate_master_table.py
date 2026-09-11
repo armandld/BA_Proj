@@ -2,7 +2,7 @@
 """
 V4 Task 16 - Agregation : table maitresse de la reponse a l'audit.
 
-Meme role que `study/v3/aggregate_v3.py` pour V3 : une seule commande qui
+Meme role que `study/common/aggregate_v3.py` pour V3 : une seule commande qui
 rassemble tous les chiffres titres de la campagne V4, chacun accompagne de
 sa valeur de REFERENCE publiee dans `docs/RESULTS.md` et d'un statut
 OK / DIFF / MISSING. La table est donc auto-verifiante : une execution sur
