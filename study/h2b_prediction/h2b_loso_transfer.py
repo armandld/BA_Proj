@@ -2,7 +2,7 @@
 """
 Phase 11B - Leave-One-Scenario-Out validation of the upper bound.
 
-Phase 11 (phase11_upper_bound.py) reports F1_site ~= 0.99 with a random
+`h2b_ceiling_random_split.py` reports F1_site ~= 0.99 with a random
 snapshot split. A reviewer will ask: "does the classifier memorise
 signatures per scenario via |B|^2 / Re, or is the ceiling a real
 per-site property?"
@@ -21,12 +21,13 @@ Interpretation:
   - F1_site_LOSO ~= F1_classical  ->  the phase 11 ceiling was
       inter-scenario memorisation; real per-site signal is weak.
 
-Uses the same 9 features and stencil construction as phase 11.
+Uses the same 9 features and stencil construction as
+`h2b_ceiling_random_split.py`.
 
 Output: results/upper_bound_loso_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11b_loso.py --dim 4
+  python study/h2b_prediction/h2b_loso_transfer.py --dim 4
 """
 import argparse, os, sys, time
 import numpy as np

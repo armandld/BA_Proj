@@ -45,7 +45,7 @@ Input:  results/dns_{sc}_Re{re}_N{N}.npz
 Output: results/specialisation_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11d_specialisation.py --dim 4
+  python study/h2b_prediction/h2b_scenario_specialisation.py --dim 4
 """
 import argparse, os, sys, time
 import numpy as np

@@ -38,7 +38,7 @@ This is the cleanest mechanistic test of the central paper claim.
 Output: results/scenario_ablation_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11g_scenario_ablation.py --dim 4 --max-snaps 30
+  python study/h2b_prediction/h2b_scenario_ablation.py --dim 4 --max-snaps 30
 """
 import argparse, os, sys, time
 import numpy as np

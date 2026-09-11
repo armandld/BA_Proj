@@ -49,7 +49,7 @@ Input:  results/dns_{sc}_Re{re}_N{N}.npz
 Output: results/upper_bound_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11_upper_bound.py --dim 4
+  python study/h2b_prediction/h2b_ceiling_random_split.py --dim 4
 """
 import argparse, os, sys, time
 import numpy as np

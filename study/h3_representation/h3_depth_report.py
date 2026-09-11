@@ -18,8 +18,9 @@ Output: results/depth_report_N{N}_dim{D}{sfx}.csv (per-run rows)
         stdout summary table
 
 Usage:
-  python study/phase8_depth_report.py --dim 2 3 4
-  python study/phase8_depth_report.py --dim 4 --prune-eps 0 0.05 0.1 0.2
+  python study/h3_representation/h3_depth_report.py --dim 2 3 4
+  python study/h3_representation/h3_depth_report.py --dim 4 \\
+      --prune-eps 0 0.05 0.1 0.2
 """
 import argparse, csv, os, sys
 import numpy as np

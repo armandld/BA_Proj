@@ -32,7 +32,8 @@ whose headline is "QAOA does not help here".
 Output: results/vqc_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase12_vqc.py --dim 4 --n-train 1500 --n-val 500
+  python study/h2b_prediction/h2b_variational_classifier.py --dim 4 \\
+      --n-train 1500 --n-val 500
 
 Requires: qiskit-machine-learning (already in environment.yaml).
 """

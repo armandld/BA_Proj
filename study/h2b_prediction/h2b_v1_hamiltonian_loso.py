@@ -59,7 +59,8 @@ Statistical rigour (post-update):
 Output: results/v1h_loso_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11e_v1h_loso.py --dim 4 --max-snaps 30 --n-boot 500
+  python study/h2b_prediction/h2b_v1_hamiltonian_loso.py --dim 4 \\
+      --max-snaps 30 --n-boot 500
 """
 import argparse, os, sys, time, json
 import numpy as np
@@ -80,7 +81,7 @@ from sklearn.metrics import f1_score
 from Simulation.grid import forward_curl_z
 
 from h2b_ceiling_random_split import (
-    extract_features_2d, N_FEATS, best_threshold_f1,
+    extract_features_2d, N_FEATS, best_threshold_f1, _block_avg,
 )
 
 
@@ -96,10 +97,6 @@ V1_BEST = dict(
     beta_curl=0.8199244525306656,
     beta_xpoint=0.4256467677055795,
 )
-
-
-def _block_avg(f, patch_size, dim):
-    return f.reshape(dim, patch_size, dim, patch_size).mean(axis=(1, 3))
 
 
 def _block_max(f, patch_size, dim):

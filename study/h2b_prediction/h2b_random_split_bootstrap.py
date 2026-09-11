@@ -25,8 +25,8 @@ Method:
 Output: results/random_split_bootstrap_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11h_random_split_bootstrap.py --dim 4 --max-snaps 80 \\
-      --n-boot 500 --seed 0
+  python study/h2b_prediction/h2b_random_split_bootstrap.py --dim 4 \\
+      --max-snaps 80 --n-boot 500 --seed 0
 """
 import argparse, os, sys, time
 import numpy as np

@@ -19,7 +19,7 @@ they decompose the noise budget the V1 protocol expects.
 Output: results/multiseed_N{N}_dim{D}.npz
 
 Usage:
-  python study/phase11f_multiseed.py --dim 4 --n-seeds 10 --max-snaps 30
+  python study/h2b_prediction/h2b_multiseed.py --dim 4 --n-seeds 10 --max-snaps 30
 """
 import argparse, os, sys, time
 import numpy as np

@@ -34,8 +34,8 @@ Output: results/learned_h_N{N}_dim{D}.npz
                 per_scene_f1_learned, per_scene_f1_class
 
 Usage:
-  python study/phase11c_learned_h.py --dim 4
-  python study/phase11c_learned_h.py --dim 4 --loso
+  python study/h2b_prediction/h2b_learned_meanfield_h.py --dim 4
+  python study/h2b_prediction/h2b_learned_meanfield_h.py --dim 4 --loso
 """
 import argparse, os, sys, time
 import numpy as np
