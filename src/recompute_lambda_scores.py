@@ -95,7 +95,11 @@ def load_completed_trials(db_path, study_name):
 
 
 def _detect_scenario_keys(completed):
-    """Auto-detect which scenario keys are actually present in user_attrs."""
+    """Auto-detect which scenario keys are actually present in user_attrs.
+
+    Checks the `phys_{key}` marker, not `loss_{key}` like the sibling copy
+    in `analyze_hyperparams._detect_scenario_keys` -- see that docstring
+    for why the two stay in agreement."""
     found = set()
     for t in completed[:10]:
         for key in ALL_SCENARIO_KEYS:

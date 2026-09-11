@@ -14,7 +14,6 @@ static label; no key changes meaning between label types.
 import argparse
 import glob
 import os
-import subprocess
 import sys
 import time
 
@@ -31,6 +30,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
 # -------------------------------------------------------------------------
 from config import RESULTS_DIR, L2_PERCENTILE_HARD          # noqa: E402
 from hard_patch_labels import patch_l2_errors, patch_classical_scores  # noqa: E402
+from h2b_feature_selection import git_commit_hash as git_hash  # noqa: E402
 from Simulation.grid import PeriodicGrid                     # noqa: E402
 from Simulation.solver import MHDSolver                      # noqa: E402
 
@@ -43,15 +43,6 @@ MIN_AMPLIFICATION_LOG_IQR = np.log(1.10)
 #: Garde-fou : au-dela, la sequence de pas est trop longue pour un horizon
 #: aussi court — signe que `adapt_dt` a rendu un pas absurde.
 MAX_SUBSTEPS = 5000
-
-
-def git_hash():
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT,
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return "unknown"
 
 
 # -------------------------------------------------------------------
@@ -273,7 +264,14 @@ def seuil_global(d_empile, percentile=L2_PERCENTILE_HARD):
 
 
 def spearman(a, b):
-    """rho de Spearman, sans dependance : rang puis Pearson."""
+    """rho de Spearman, sans dependance : rang puis Pearson.
+
+    Independant de `study/common/metrics.py::spearman` (qui delegue a
+    `scipy.stats.spearmanr`) par choix, pas par oubli : ce module reste
+    sans dependance scipy, et cette version garde explicitement les cas
+    degeneres (n<3, entree quasi constante) plutot que de laisser scipy
+    emettre un `ConstantInputWarning`. Les deux calculent la meme
+    grandeur sur une entree non degeneree."""
     a, b = np.asarray(a, float).ravel(), np.asarray(b, float).ravel()
     if a.size < 3 or np.allclose(a, a[0]) or np.allclose(b, b[0]):
         return float("nan")

@@ -65,7 +65,8 @@ def _loaded(study, study_name):
 def load_study(db_path, study_name):
     """Load a legacy SQLite study."""
     return _loaded(optuna.load_study(
-        study_name=study_name, storage=f"sqlite:///{db_path}"), study_name)
+        study_name=study_name,
+        storage=f"sqlite:///{os.path.abspath(db_path)}"), study_name)
 
 
 def load_journal(journal_path, study_name):
@@ -115,6 +116,7 @@ SCENARIO_LABELS = {
     "ot_predict": "Orszag-Tang",
     "rotor_predict": "MHD Rotor",
     "gt": "Ghost Twisting",
+    "gt_predict": "Ghost Twisting",
 }
 SCENARIO_COLORS = {
     "kh": "tab:blue",
@@ -130,6 +132,7 @@ SCENARIO_COLORS = {
     "ot_predict": "tab:purple",
     "rotor_predict": "tab:brown",
     "gt": "tab:pink",
+    "gt_predict": "tab:pink",
 }
 
 
@@ -143,8 +146,16 @@ def _detect_scenario_keys(completed):
     obtiendrait un `KeyError`, ou pire une moyenne polluee de `NaN` sur des
     cles inventees.
 
-    Le comportement doit rester identique a la copie dans
-    `recompute_lambda_scores._detect_scenario_keys`.
+    Verifie `loss_{key}`, pas `phys_{key}` comme la copie dans
+    `recompute_lambda_scores._detect_scenario_keys` : deux marqueurs
+    differents, pas la meme cle. Ils rendent le meme ensemble de scenarios
+    parce que `train_hyperparams._composite_loop` pose toujours les deux
+    ensemble pour chaque scenario evalue (`set_user_attr(f"phys_{key}", ..)`
+    dans `_run_one_scenario`, puis `set_user_attr(f"loss_{key}", ..)` une
+    fois la boucle finie ou elaguee) -- verifie en lisant ce module, pas
+    suppose. Cet invariant n'est impose par aucun test : une modification
+    future de `_composite_loop`/`_run_one_scenario` qui poserait l'un sans
+    l'autre ferait diverger silencieusement les deux copies.
     """
     trouvees = set()
     for t in completed[:10]:
