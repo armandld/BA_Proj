@@ -8,9 +8,14 @@ Ce qui est corrigé n'est **pas** ici — c'est un résultat, il vit dans
 
 ---
 
-## D-22 — la campagne à venir doit encore tourner
+## D-22 — la campagne d'entraînement est écartée, pour son coût
 
-**Ne se corrige pas par du code seul. Seule la campagne le règle.**
+**Décision, pas blocage de code.** Mesuré sur le matériel disponible :
+plusieurs semaines de calcul continu pour la seule réoptimisation —
+hors de portée. Ne sera pas lancée. Voie retenue à la place :
+`h2b_v2_hamiltonian_vs_gbt_loso.py` remesure H0a/H0b/H3 sans aucun
+entraînement, sur DNS réelle (`RESULTS.md`) — le mécanisme ci-dessous
+reste documenté pour mémoire, pas comme une tâche en attente.
 
 Le mécanisme de provenance est en place : `_save_results` écrit un JSON
 traçable (jeu complet de paramètres, hash du commit, `sys.argv`) et
@@ -41,15 +46,11 @@ de synthèse de commentaires. Aucune autre ligne rouge à ce jour.
 
 ```bash
 python src/train_hyperparams.py --print-space   # verifie l'espace, ne calcule rien
-python src/train_hyperparams.py --phase all --seed <graine>   # la campagne elle-meme
 ```
-
-C'est un blocage de **campagne** (plusieurs jours de calcul), pas un
-défaut de code : il se ferme quand la campagne tourne, pas avant.
 
 ---
 
-## D-197 — la campagne LOSO du niveau 3 (H4) n'a que 4 des 8 folds requis
+## D-197 — la campagne LOSO du niveau 3 (H4) est écartée, même décision que D-22
 
 H4 (transfert sur conditions inédites) répond exclusivement sur
 `study/closed_loop/` — structurellement **séparé** de
@@ -76,10 +77,11 @@ plutôt que d'afficher un nombre non représentatif. Le protocole L3 exige
 pré-enregistrée ne peut être appliquée sans biais de sélection sur QUELS
 folds ont tourné.
 
-**Coût, même ordre que D-22.** Compléter les 4 folds manquants demande
-~170 essais Optuna chacun — un ordre de grandeur d'heures par fold, du
-même ordre que la campagne d'hyperparamètres mais structurellement
-distinct d'elle. À lancer sur la même machine, avec elle.
+**Coût, même ordre que D-22 — même décision : ne pas lancer.** Compléter
+les 4 folds manquants demanderait ~170 essais Optuna chacun, un ordre de
+grandeur d'heures par fold. Contrairement à D-22, H4 n'a pas de voie de
+repli sans entraînement : elle reste une conjecture (`PLAN_PREPRINT.md`,
+§3), faute d'expérience dédiée.
 
 ```bash
 ls results/t15_level3_fold_*.json                 # 4 presents, 4 manquants

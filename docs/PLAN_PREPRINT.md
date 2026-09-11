@@ -236,8 +236,9 @@ indépendamment, pour la même conclusion.
 
 **Limites qui bornent ces conclusions.** Un seul solveur classique de
 référence, protocole à 8 scénarios canoniques et 5 graines physiques (le
-protocole confirmatoire lui-même n'a pas encore tourné à cette échelle —
-`DEFAUTS.md`, D-22), non-déterminisme du bras QAOA (dispersion par appel
+protocole confirmatoire à cette échelle a été écarté pour son coût, pas
+lancé — `DEFAUTS.md`, D-22 ; Appendice A), non-déterminisme du bras QAOA
+(dispersion par appel
 1,79e−1 à 3,61e−1 — les conclusions de CLASSEMENT tiennent, celles qui
 reposeraient sur une valeur précise ne tiennent pas), chute d'ordre du
 solveur commune aux deux bras. Chiffrées dans `RESULTS.md`.
@@ -274,13 +275,18 @@ numériques suffisent-ils seuls à expliquer l'échec ?) est partiel ; H4
 d'expérience dédiée. Ni l'un ni l'autre ne porte sur la question que H0b
 et H3 tranchent.
 
-**Ce qui manque avant de publier ce verdict tel quel.** Les nombres
+**La campagne d'entraînement a été écartée, pas oubliée.** Les nombres
 ci-dessus viennent des hyperparamètres de RÉFÉRENCE, pas d'une campagne
-d'entraînement qui a réellement tourné (`DEFAUTS.md`, D-22). D-200 montre
-que ce point de départ est déjà dans la zone que H0b qualifie de
-pathologique, et H3 ne dépend d'aucun hyperparamètre entraîné — mais le
-verdict gagnerait à être redit avec les nombres d'une vraie campagne.
-C'est la seule étape qui reste : voir Appendice A.
+Optuna qui a tourné (`DEFAUTS.md`, D-22) — décision explicite : le coût
+mesuré sur le matériel disponible (plusieurs semaines de calcul continu
+pour la seule réoptimisation, un ordre comparable pour les 8 folds
+confirmatoires du niveau 3, D-197) dépasse ce que la question justifie,
+sachant que D-200 montre que ce point de départ est DÉJÀ dans la zone que
+H0b qualifie de pathologique. À la place : H0a, H0b et H3 ont été
+remesurés directement, sans aucun entraînement, sur DNS réelle, dans le
+même protocole LOSO qu'une comparaison contre un GBT entraîné
+(`h2b_v2_hamiltonian_vs_gbt_loso.py`) — un QUATRIÈME contexte indépendant
+qui confirme le même verdict. Voir Appendice A.
 
 ## 9. Bibliographie
 
@@ -290,34 +296,34 @@ C'est la seule étape qui reste : voir Appendice A.
 
 *Transitoire, disparaîtra du manuscrit.*
 
-**Il ne reste qu'une chose à faire : lancer la campagne.** Tout le reste
-qui la précédait dans l'ordre contraint est réglé :
+**La campagne n'a pas été lancée : elle a été écartée, pour son coût.**
+Mesuré sur le matériel disponible (pas supposé) : plusieurs semaines de
+calcul continu pour la réoptimisation seule, un ordre comparable pour les
+8 folds confirmatoires du niveau 3 — hors de portée ici. La voie retenue
+à la place est décrite plus bas.
 
-1. **Réoptimisation — prête, jamais lancée.** `train_hyperparams.py
-   --phase all` règle 8 hyperparamètres (`beta`, `w_z_frac`, `sigma`,
-   `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`) sur
-   8 scénarios canoniques. La sélection finale de la phase 3 est
-   protégée par un damier de validation tenu à l'écart (`HOLDOUT_GRID`,
-   6 régimes physiques jamais vus en entraînement, classement par perte
-   MOYENNE du damier) ; l'entraînement lui-même tire un régime physique
-   différent par essai (`TRAINING_REGIME_GRID`, 4 régimes, coût par
-   essai inchangé — seul le précalcul DNS grossit) ; les deux damiers
-   sont disjoints par construction. `_save_results`/`_deploy` écrivent
-   un JSON traçable (jeu complet de paramètres, hash de commit,
-   `sys.argv`) et le copient automatiquement où `pipeline.py`/`study/`
-   le lisent. Rien ne manque au mécanisme ; seule la campagne — plusieurs
-   jours de calcul — n'a pas tourné (`DEFAUTS.md`, D-22).
+1. **Réoptimisation — le mécanisme est prêt, la décision est de ne pas
+   le lancer.** `train_hyperparams.py --phase all` règle 8
+   hyperparamètres (`beta`, `w_z_frac`, `sigma`, `beta_curl`,
+   `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`) sur 8 scénarios
+   canoniques, avec damier de validation tenu à l'écart et diversité de
+   régime à l'entraînement déjà en place — rien n'y manque techniquement
+   (`DEFAUTS.md`, D-22). Reste un choix assumé, pas une tâche en attente.
    ```bash
    python src/train_hyperparams.py --print-space   # verifie l'espace, ne calcule rien
-   python src/train_hyperparams.py --phase all --seed <graine>
    ```
-2. **Relance des campagnes** — attend l'item 1, aucun autre obstacle.
-3. **Table maître — à jour.** `study/common/aggregate_master_table.py
-   --allow-missing` rend aujourd'hui **268 lignes, 139 OK / 6 DIFF /
-   123 MISSING** ; les MISSING sont les lignes de la campagne
-   confirmatoire qui n'a pas encore tourné (item 2), pas une régression.
-   Ce compte doit être recalculé au moment de rédiger, pas recopié
-   d'ici — il bougera dès que la campagne aura tourné.
+2. **La voie retenue : remesurer H0a/H0b/H3 sans entraînement, sur DNS
+   réelle.** `h2b_v2_hamiltonian_vs_gbt_loso.py` — le mappeur V2
+   (aucun hyperparamètre, hors de portée de la campagne) évalué par QAOA
+   réel, LOSO sur les 4 scénarios canoniques et les régimes Re
+   disponibles, contre son propre optimum exact (H0a/H0b), contre lui-même
+   sans couplages (H3), et contre un GBT entraîné. Chiffres :
+   `docs/RESULTS.md`, section correspondante.
+3. **Table maître — les lignes MISSING resteront MISSING.**
+   `study/common/aggregate_master_table.py --allow-missing` rendait
+   **268 lignes, 139 OK / 6 DIFF / 123 MISSING** ; les MISSING sont les
+   lignes de la campagne confirmatoire, qui ne tournera pas. Ce compte
+   doit être recalculé au moment de rédiger, pas recopié d'ici.
 4. **Témoin « mixeur seul » — mesuré, non intégrable au panel H0b sans
    travail supplémentaire.** Mesuré par balayage exhaustif de (β, γ)
    (`RESULTS.md`, « Ce que le circuit peut déplacer » — médiane 0,254,
@@ -328,15 +334,16 @@ qui la précédait dans l'ordre contraint est réglé :
    refuse à raison de construire un tel circuit. La mesure par balayage
    direct reste la bonne méthode pour cette question précise ; en faire
    un solveur comparable aux autres (même E_gap, même F1) demande un
-   mécanisme différent, pas encore conçu.
-5. **H4/D-197 — la campagne LOSO du niveau 3 n'a que 4 des 8 folds.**
-   Complément distinct de la campagne d'hyperparamètres, structurellement
-   séparé (`closed_loop_campaign.py` ne lit jamais
-   `best_hyperparams.json`). Compléter les 4 folds manquants
-   (`vortex`, `coalescence`, `double_tearing`, `magnetic_twist`) demande
-   ~170 essais Optuna chacun — un ordre de grandeur d'heures par fold, du
-   même ordre que la campagne d'hyperparamètres. À lancer avec elle sur
-   la même machine, pas un correctif de code.
+   mécanisme différent, pas encore conçu. Sans rapport avec la décision
+   de ne pas lancer la campagne.
+5. **H4/D-197 — même décision que l'item 1, même raison.** La campagne
+   LOSO du niveau 3 n'a que 4 des 8 folds requis (`vortex`,
+   `coalescence`, `double_tearing`, `magnetic_twist` manquants), à
+   échelle fumée et sans contrat valide — structurellement séparée de la
+   réoptimisation (`closed_loop_campaign.py` ne lit jamais
+   `best_hyperparams.json`), mais du même ordre de coût. H4 reste donc
+   une conjecture, faute d'expérience dédiée — pas de voie de repli
+   sans entraînement pour celle-ci comme il y en a une pour H0/H3.
 
 **Ce qui reste un résultat négatif non résolu, documenté honnêtement
 plutôt que forcé.** D-198 : le plafond GBT sous LOSO (H2b) souffre d'un
