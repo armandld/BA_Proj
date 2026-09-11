@@ -43,6 +43,20 @@ Verrouillé par `pytest tests/study/test_h0_certified_dim3_contradicts_criterion
 verrouillé par un test dédié). Une limite demeure : un seul point du domaine
 de recherche à 9 dimensions a été mesuré pour V1, pas un balayage.
 
+**Corroboré à plus grande échelle, DNS réelle/LOSO/GBT, IC95 bootstrap.**
+`h2b_v2_hamiltonian_vs_gbt_loso.py --re 400 800 1200 1600` (4 scénarios ×
+4 régimes Re, n=40 instantanés tenus/pli, jeu d'instantanés et protocole
+indépendants de ceux ci-dessus) : H0a (accord QAOA/exact de 10,6 % à
+99,4 % selon le scénario) et H0b (F1(QAOA) > F1(exact), IC95, sur
+3 plis/4 — `orszag_tang` seule exception, comme ci-dessus) confirmés sans
+changement de direction. Même artefact : le seuil classique domine aussi
+QAOA(V2) ET un GBT entraîné sur les 4 plis (IC95 négatif confiant,
+`p=0,000`, sur 3 plis/4 pour QAOA, égalité exacte sur `harris_tearing`) —
+répond à la question centrale de `PLAN_PREPRINT.md` §2 sans aucun
+entraînement Q-HAS. Verrouillé par `pytest
+tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso_multire.py` (12 tests),
+artefact `results/h2b_v2_hamiltonian_vs_gbt_loso_N96_dim3_n10_multire.npz`.
+
 **H3 — les couplages ZZ/ZZZZ n'aident jamais, et dégradent la décision dès
 qu'ils cessent d'être inertes.** Balayage causal (ablation + F1 contre
 vérité terrain) de `dim = 2` à `dim = 8` :
@@ -63,6 +77,15 @@ jamais mieux que le biais Z seul, et le dépassent en médiocrité de 0,03 à
 point `dim = 3` ; le reste de la table vient de `h3_size_scan.py`
 (`RESULTS.md`, T26), avec ses propres contrôles (glouton validé contre
 l'exhaustif à `dim = 2`, `--force-greedy`).
+
+**H3 pour l'optimum exact, corroboré dans ce même protocole, avec IC95.**
+Le hamiltonien complet ne bat jamais le biais Z seul (0 pli/4 : 2
+égalités exactes, 2 infériorités confiantes `p=0,000`). Pour QAOA (qui ne
+résout pas H, H0a), la nuance dépend de l'échelle — légèrement mieux avec
+les couplages à 5 instantanés/Re=400 seul, comparable ou pire à 40
+instantanés × 4 régimes Re — hors de propos pour la catégorie A : c'est
+la lecture sur l'optimum EXACT, stable quelle que soit l'échelle, qui
+répond à la question que H3 pose.
 
 **Les défauts corrigés, chacun mesuré avant/après.** Le matériau le plus
 solide du travail : chaque mesure est déterministe, refaite par une

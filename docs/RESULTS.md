@@ -10567,6 +10567,16 @@ python study/h3_representation/h3_toy_instability_check.py --n-seeds 8
 
 ## V2 (hamiltonien SANS paramètre) contre GBT, LOSO, DNS réelle (`h2b_v2_hamiltonian_vs_gbt_loso.py`)
 
+> **SUPERSEDED — ne pas citer la comparaison QAOA-contre-classique de
+> cette section.** Mesurée sur Re=400 seul, 5 instantanés/scénario, sans
+> intervalle de confiance. La mesure multi-Re + bootstrap plus bas dans ce
+> fichier (n=40 instantanés/pli, 4 régimes Re, IC95) **inverse** ce
+> verdict : QAOA perd contre le classique, avec confiance, sur 3 plis/4.
+> H0a, H0b et H3-pour-l'exact sont en revanche répliqués sans changement
+> de direction ; seule la nuance H3-pour-QAOA s'inverse aussi. Section
+> gardée pour la comparaison entre les deux échelles — voir *V2 contre
+> GBT, multi-Re + IC95 bootstrap* plus bas pour le verdict qui tient.
+
 D-22 (la campagne Optuna) coûte, mesuré cette session (pas supposé) sur ce
 matériel, plusieurs semaines de calcul continu — décision : ne pas la
 lancer. Ce script répond à la question qui reste posable SANS elle :
@@ -10704,4 +10714,167 @@ contre 0,435) est un effet réel plutôt que du bruit à 4 plis.
 ```bash
 pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso.py -v   # 9 passed
 python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --n-snaps 5
+```
+
+---
+
+## V2 contre GBT, multi-Re + IC95 bootstrap (`h2b_v2_hamiltonian_vs_gbt_loso.py --re 400 800 1200 1600`)
+
+Suite directe de la section précédente, même script étendu (commit
+`3d5fe73`) pour empiler les 4 régimes Re DISPONIBLES (400/800/1200/1600,
+déjà présents sous `results/dns_*_Re*_N96.npz`, aucun nouveau calcul DNS)
+et pour chiffrer chaque delta par bootstrap percentile IC95
+(`paired_bootstrap_delta` de `h2b_v1_hamiltonian_loso.py`, réutilisée
+telle quelle sur des masques binaires via `thr=0,5`, `n_boot=1000`). LOSO
+empile les 4 Re PAR scénario tenu — un pli tient un scénario à l'écart sur
+TOUS les Re, entraîne sur les 3 autres scénarios sur TOUS les Re (même
+convention que `h2b_loso_transfer.py` : Re est un axe de régime, le
+scénario est l'axe LOSO). `n_snaps=10` par (scénario, Re) → **n=40
+instantanés tenus par pli**, 8× le volume de la section précédente. Mêmes
+réglages QAOA (`K_opt=60`, `shots=4096`, dim=3, psi câblé) ; 12 nouveaux
+`patches_*_Re{800,1200,1600}_N96_dim3.npz` générés depuis la DNS déjà
+présente (`dns_sweep.make_labels`, aucun calcul DNS neuf). Mesuré, pas
+supposé : ~30,7 s/instantané en moyenne, ~78,5 min de mesure QAOA totale
+pour les 160 instantanés (4 scénarios × 4 Re × 10).
+
+| tenu à l'écart | classique | GBT | QAOA | exact | QAOA (Z) | exact (Z) | n |
+|---|---|---|---|---|---|---|---|
+| harris_tearing | 0,667 | 0,667 | 0,667 | 0,500 | 0,667 | 0,667 | 40 |
+| kelvin_helmholtz | 0,571 | 0,571 | 0,423 | 0,421 | 0,422 | 0,421 | 40 |
+| mhd_rotor | 0,690 | 0,456 | 0,476 | 0,351 | 0,485 | 0,569 | 40 |
+| orszag_tang | 0,379 | 0,286 | 0,220 | 0,349 | 0,374 | 0,349 | 40 |
+| **moyenne** | **0,577** | **0,495** | **0,446** | **0,405** | **0,487** | **0,501** | |
+
+### Le verdict QAOA-contre-classique s'inverse à cette échelle
+
+**QAOA bat le seuil classique sur 0 pli/4** (contre 3/4 dans la mesure à
+n=5), **et perd avec confiance sur 3 des 4** — IC95 bootstrap du delta
+F1(QAOA)-F1(classique), percentile, 1000 tirages :
+
+| tenu à l'écart | IC95 QAOA-classique | p(QAOA≥classique) |
+|---|---|---|
+| harris_tearing | [+0,000, +0,000] | 1,000 (égalité exacte) |
+| kelvin_helmholtz | [-0,154, -0,143] | 0,000 |
+| mhd_rotor | [-0,337, -0,119] | 0,000 |
+| orszag_tang | [-0,246, -0,079] | 0,000 |
+
+Trois IC95 entièrement négatifs (`p=0,000`, QAOA perd avec confiance) ; le
+quatrième est une égalité EXACTE, pas une victoire — classique, GBT et
+QAOA rendent le même F1 (0,667) sur les 40 instantanés tenus de
+`harris_tearing`, et l'IC est de largeur nulle : tout tirage bootstrap
+donne le même delta, ce qui n'arrive que si les masques comparés
+coïncident cellule par cellule sur chacun des 40 instantanés (mécanisme
+plausible, pas vérifié indépendamment au niveau cellule — le test le plus
+dur du protocole n'est donc pas `harris_tearing`).
+
+**Ce que ça remplace précisément.** La section précédente concluait « QAOA
+bat le seuil classique en moyenne, sans aucun entraînement » sur la base
+de 5 instantanés/scénario, un seul régime Re, sans IC. À 8× l'échantillon
+et 4 régimes Re, cette conclusion ne tient pas : le classique bat ou
+égale les DEUX apprenants (GBT et QAOA) sur les 4 plis, jamais l'inverse.
+Ce n'est pas un désaccord entre deux mesures bruitées — les IC95 sur 3 des
+4 plis sont strictement négatifs et n'incluent pas zéro. La lecture à n=5
+n'était pas une mesure fausse en soi, seulement sans la puissance
+statistique pour distinguer un delta réel d'un tirage favorable.
+
+**Face à GBT, QAOA bat GBT strictement sur 1 pli/4** (`mhd_rotor` : 0,476
+contre 0,456), égalise sur 1 (`harris_tearing`, dégénéré ci-dessus), perd
+sur 2 (`kelvin_helmholtz`, `orszag_tang`) — nuance la section précédente
+(« jamais strictement », qui ne portait que sur Re=400).
+
+### H0a/H0b : confirmés, même direction qu'à n=5
+
+**Accord QAOA/exact** (hamiltonien complet) : 0,667 / 0,994 / 0,106 /
+0,622, moyenne 0,597 — la même hétérogénéité extrême par scénario que la
+mesure à n=5 (6,7 % à 97,8 % alors), H0a répliqué sans changement de
+direction.
+
+**H0b tient, avec IC95, sur 3 plis/4** — résoudre l'optimum EXACT du même
+hamiltonien donne une décision PIRE que l'optimisation ratée de QAOA :
+
+| tenu à l'écart | IC95 QAOA-exact | p(QAOA≥exact) |
+|---|---|---|
+| harris_tearing | [+0,167, +0,167] | 1,000 |
+| kelvin_helmholtz | [+0,000, +0,005] | 1,000 |
+| mhd_rotor | [+0,071, +0,187] | 1,000 |
+| orszag_tang | [-0,200, -0,064] | 0,000 |
+
+`orszag_tang` reste la seule exception (exact bat QAOA, confiant : IC95
+strictement négatif) — déjà l'exception à n=5. H0b tient dans un
+CINQUIÈME contexte indépendant (DNS réelle T26/D-53/D-200, jouet
+statique, jouet dynamique, la mesure à n=5 ci-dessus, et maintenant
+celle-ci à n=40 × 4 Re avec IC), toujours la même direction sur 3
+scénarios/4.
+
+### H3 : confirmé pour l'exact, INVERSÉ pour QAOA
+
+**Pour l'optimum exact, les couplages ne gagnent toujours JAMAIS** (0
+pli/4, IC95 bootstrap) :
+
+| tenu à l'écart | IC95 complet-Zseul (exact) | p |
+|---|---|---|
+| harris_tearing | [-0,167, -0,167] | 0,000 |
+| kelvin_helmholtz | [+0,000, +0,000] | 1,000 (égalité) |
+| mhd_rotor | [-0,263, -0,169] | 0,000 |
+| orszag_tang | [+0,000, +0,000] | 1,000 (égalité) |
+
+Confirme T26 et la mesure à n=5, maintenant avec IC : le complet est
+strictement inférieur ou égal au biais Z seul sur les 4 plis, jamais
+supérieur — deux égalités sont des dégénérescences exactes (même F1),
+deux infériorités sont confiantes (`p=0,000`).
+
+**Pour QAOA, la nuance de la section précédente s'inverse.** À n=5, le
+complet gagnait légèrement en moyenne (0,465 contre 0,435). À n=40 × 4 Re :
+
+| tenu à l'écart | IC95 complet-Zseul (QAOA) | p |
+|---|---|---|
+| harris_tearing | [+0,000, +0,000] | 1,000 (égalité) |
+| kelvin_helmholtz | [+0,000, +0,003] | 1,000 (complet gagne, marge quasi nulle) |
+| mhd_rotor | [-0,108, +0,075] | 0,408 (NON significatif) |
+| orszag_tang | [-0,233, -0,085] | 0,000 (Z seul gagne, confiant) |
+
+Le complet ne bat JAMAIS le biais Z seul avec une marge significative (1
+pli où il « gagne » techniquement est une égalité quasi exacte, 1 pli est
+non conclusif, 1 pli le perd avec confiance) — la nuance « QAOA profite un
+peu des couplages » de la section précédente ne tient pas à cette échelle.
+QAOA rejoint l'exact : les couplages n'aident nulle part, ratés par QAOA
+ou résolus exactement.
+
+### Dégénérescence de l'énumération exhaustive
+
+`dim=3` (18 qubits) reste non dégénéré sur les 160 instantanés mesurés
+(4 scénarios × 4 Re × 10 instantanés) : un état fondamental unique à
+chaque appel de `exhaustive_ground_state`, aucun ex aequo — même
+conclusion que T26, vérifiée ici sur un échantillon 8× plus grand.
+
+### Provenance
+
+`git_hash_at_start=3d5fe73` (le commit qui a ajouté ce script multi-Re),
+`git_hash_at_save=cc502b5`, `head_moved_during_run=True` — HEAD a avancé
+de 2 commits pendant les ~78,5 min de mesure (`bff63a0` : dédoublonnage de
+`_block_avg`, jamais utilisé par ce script et sans effet sur
+`paired_bootstrap_delta` ; `cc502b5` : documentation seule). Vérifié, pas
+supposé : ni l'un ni l'autre ne touche le code exécuté par ce run. Arbre
+propre au départ (`dirty_at_start=False`).
+
+**Établit** : à l'échelle (4 Re, n=40/pli, IC95 bootstrap), le seuil
+classique bat ou égale QAOA(V2) ET GBT sur les 4 plis LOSO, avec confiance
+sur 3 — inverse le signal encourageant de la mesure à n=5. H0a et H0b
+tiennent sans changement de direction (H0b confirmé 3 plis/4, IC95). H3
+pour l'exact tient sans changement (couplages jamais utiles). H3 pour
+QAOA s'inverse : plus de bénéfice mesurable des couplages, cohérent avec
+l'exact.
+
+**N'établit PAS** : pourquoi `mhd_rotor` et `orszag_tang` favorisent le
+classique aussi nettement — constaté, non expliqué ; que les décisions
+QAOA/classique/GBT coïncident cellule par cellule sur `harris_tearing`
+(IC de largeur nulle observé, pas vérifié directement) ; une comparaison
+confirmatoire au sens du protocole (`study/closed_loop/`, budget apparié,
+correction de Holm multi-hypothèses) — ceci reste une comparaison
+LOSO/GBT, pas le protocole confirmatoire complet ; un résultat à une autre
+taille que dim=3/N=96.
+
+```bash
+pytest tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso_multire.py -v
+python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py --re 400 800 1200 1600 --n-snaps 10
 ```

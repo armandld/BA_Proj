@@ -66,11 +66,11 @@ par une relecture ligne à ligne. → `DEFAUTS.md` pour ce qui reste ouvert,
 
 | hypothèse | verdict | portée |
 |---|---|---|
-| H0a | **NON** — QAOA atteint l'optimum sur 0,000–0,156 des instantanés, contre 1,000 exigé | à `dim = 3` (18 qubits), la seule taille certifiée non dégénérée, sur les deux mappeurs (V2 : D-53 ; V1, celui que la campagne règle : D-200, 0/12) |
-| H0b | **NON** — ρ(E_gap, F1) = +0,87 à +0,89 : mieux résoudre H **dégrade** la décision | même protocole, 9 solveurs, V2 et V1 (D-53, D-200) — mesuré aux hyperparamètres de référence, avant toute campagne |
+| H0a | **NON** — QAOA atteint l'optimum sur 0,000–0,156 des instantanés, contre 1,000 exigé | à `dim = 3` (18 qubits), la seule taille certifiée non dégénérée, sur les deux mappeurs (V2 : D-53 ; V1, celui que la campagne règle : D-200, 0/12) — confirmé aussi sur DNS réelle/LOSO/GBT à n=40 instantanés × 4 régimes Re (accord QAOA/exact de 10,6 % à 99,4 % selon le scénario tenu, `h2b_v2_hamiltonian_vs_gbt_loso.py`, `RESULTS.md`) |
+| H0b | **NON** — ρ(E_gap, F1) = +0,87 à +0,89 : mieux résoudre H **dégrade** la décision | même protocole, 9 solveurs, V2 et V1 (D-53, D-200) — mesuré aux hyperparamètres de référence, avant toute campagne ; confirmé avec IC95 bootstrap sur 3 plis LOSO/4 (n=40×4 Re), `orszag_tang` la seule exception, dans les deux mesures |
 | H1 | **PARTIEL** | les défauts numériques comptent, ne suffisent pas seuls |
-| QH2a / H2b | **RÉFUTÉ** | modèle libre testé (`study/h2b_prediction/`), ne bat pas la baseline |
-| H3 | **NON** — les couplages ne détectent jamais mieux, et dégradent le F1 dès qu'ils cessent d'être inertes | balayage exhaustif/glouton `dim = 2` à `dim = 8` (T26) ; à `dim = 2` (8 qubits) l'optimum exact est le prédicteur constant, donc rien n'y peut jamais paraître causal — dès `dim = 3` (exhaustif) les couplages changent 6,9–15,3 % des décisions et le F1 baisse de 0,033 à 0,057 par rapport au biais Z seul |
+| QH2a / H2b | **RÉFUTÉ** | modèle libre testé (`study/h2b_prediction/`), ne bat pas la baseline — à n=40×4 Re, le GBT n'égale (2 plis/4) ou ne perd (2 plis/4) contre le seuil classique jamais, ne le bat strictement sur aucun pli (`h2b_v2_hamiltonian_vs_gbt_loso.py`) |
+| H3 | **NON** — les couplages ne détectent jamais mieux, et dégradent le F1 dès qu'ils cessent d'être inertes | balayage exhaustif/glouton `dim = 2` à `dim = 8` (T26) ; à `dim = 2` (8 qubits) l'optimum exact est le prédicteur constant, donc rien n'y peut jamais paraître causal — dès `dim = 3` (exhaustif) les couplages changent 6,9–15,3 % des décisions et le F1 baisse de 0,033 à 0,057 par rapport au biais Z seul ; confirmé pour l'optimum exact à n=40×4 Re avec IC95 (0 pli/4 où le complet gagne) — pour QAOA (qui ne résout pas H, H0a), l'échelle change la lecture : légèrement mieux avec couplages à n=5/Re=400, comparable ou pire à n=40×4 Re (`RESULTS.md`) |
 | H4 | **CONJECTURE** | pas d'expérience dédiée qui l'isole du reste |
 | H5 | **MIXTE** | à l'horizon physique `t_x` : `harris_tearing`/`kelvin_helmholtz` restent redondants avec le label statique (ρ ≈ 1,0), `mhd_rotor`/`orszag_tang` divergent réellement (ρ jusqu'à 0,66) — corriger l'horizon expose un signal sur la moitié du panel canonique, pas sur tout |
 
@@ -285,8 +285,21 @@ sachant que D-200 montre que ce point de départ est DÉJÀ dans la zone que
 H0b qualifie de pathologique. À la place : H0a, H0b et H3 ont été
 remesurés directement, sans aucun entraînement, sur DNS réelle, dans le
 même protocole LOSO qu'une comparaison contre un GBT entraîné
-(`h2b_v2_hamiltonian_vs_gbt_loso.py`) — un QUATRIÈME contexte indépendant
-qui confirme le même verdict. Voir Appendice A.
+(`h2b_v2_hamiltonian_vs_gbt_loso.py`, 4 scénarios × 4 régimes Re, n=40
+instantanés tenus par pli, IC95 bootstrap) — pour H0b, un CINQUIÈME
+contexte indépendant qui confirme le même verdict (3 plis/4, `orszag_tang`
+seule exception, comme dans les quatre précédents). Même mesure, même
+direction pour H0a (l'accord QAOA/exact reste très hétérogène par
+scénario) et pour H3 sur l'optimum exact (0 pli/4 où les couplages
+gagnent). Ce même protocole répond aussi à une question que le
+verdict ci-dessus ne couvrait pas encore explicitement : sans aucun
+entraînement, QAOA(V2) ne bat le seuil classique sur AUCUN pli à cette
+échelle (IC95 négatif avec confiance sur 3 plis/4, égalité exacte sur le
+4ᵉ) — et le GBT ENTRAÎNÉ non plus (égalité sur 2 plis/4, perte sur 2,
+jamais de victoire stricte). Le seuil classique bon marché domine les
+deux apprenants, quantique et classique, sur cette tâche : le constat
+central du travail (§2) tient à l'échelle la plus large mesurée à ce
+jour, sans exception qui le nuance. Voir Appendice A et `RESULTS.md`.
 
 ## 9. Bibliographie
 
@@ -315,10 +328,21 @@ calcul continu pour la réoptimisation seule, un ordre comparable pour les
 2. **La voie retenue : remesurer H0a/H0b/H3 sans entraînement, sur DNS
    réelle.** `h2b_v2_hamiltonian_vs_gbt_loso.py` — le mappeur V2
    (aucun hyperparamètre, hors de portée de la campagne) évalué par QAOA
-   réel, LOSO sur les 4 scénarios canoniques et les régimes Re
-   disponibles, contre son propre optimum exact (H0a/H0b), contre lui-même
-   sans couplages (H3), et contre un GBT entraîné. Chiffres :
-   `docs/RESULTS.md`, section correspondante.
+   réel, LOSO sur les 4 scénarios canoniques × 4 régimes Re disponibles
+   (400/800/1200/1600, n=40 instantanés tenus/pli, IC95 bootstrap
+   `n_boot=1000`), contre son propre optimum exact (H0a/H0b), contre
+   lui-même sans couplages (H3), et contre un GBT entraîné. Verdict final
+   (`docs/RESULTS.md`, section « V2 contre GBT, multi-Re + IC95
+   bootstrap ») : le seuil classique bat ou égale QAOA ET GBT sur les 4
+   plis (confiant sur 3, IC95 strictement négatif) ; H0a et H0b
+   répliqués sans changement de direction (H0b confiant sur 3 plis/4) ;
+   H3 pour l'exact répliqué sans changement (couplages jamais utiles,
+   0 pli/4) ; H3 pour QAOA s'inverse par rapport à la mesure préliminaire
+   à n=5/Re=400 (plus de bénéfice mesurable des couplages, cohérent avec
+   l'exact). Cette mesure préliminaire (Re=400 seul, n=5, sans IC) reste
+   documentée dans `RESULTS.md`, marquée SUPERSEDED sur le seul point qui
+   s'inverse (QAOA-contre-classique) — gardée pour montrer l'effet de
+   l'échelle d'échantillon sur ce genre de comparaison.
 3. **Table maître — les lignes MISSING resteront MISSING.**
    `study/common/aggregate_master_table.py --allow-missing` rendait
    **268 lignes, 139 OK / 6 DIFF / 123 MISSING** ; les MISSING sont les
