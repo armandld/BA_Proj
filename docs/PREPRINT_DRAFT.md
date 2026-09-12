@@ -612,3 +612,273 @@ against this manuscript's own citations in the text above.
 31. A. Mignone, P. Rossi, G. Bodo, A. Ferrari, and S. Massaglia, "PLUTO: A
     numerical code for computational astrophysics," Astrophys. J. Suppl.
     Ser. 170, 228-242 (2007).
+
+## Appendix A: Hamiltonian architecture
+
+This appendix carries over the Hamiltonian design from the originating
+report (Presentation), at the level of detail needed to reproduce or extend
+it. Sections 2.3-2.4 above describe the mapping only at the level needed to
+read the results.
+
+At high Reynolds number, MHD dynamics arise from a small number of
+physically distinct anomaly types: shear flows, vortices, magnetic
+reconnection, and helical kink modes. Each has a characteristic spatial
+signature, and the Hamiltonian assigns one term per signature. Classical AMR
+detects an instability only once it has already produced a large gradient;
+the design intent behind Q-HAS was to encode the structure of the plasma
+state at time t to anticipate which regions will require refinement, rather
+than to react after the fact.
+
+### A.1 Design principle: a decoupled weight x topology x scale x signal product
+
+Every coefficient in the Hamiltonian is a product of three independent
+factors, not a single tuned number:
+
+```
+Coefficient = Weight x g(topology) x f(scale) x T_rcf(signal)
+```
+
+This separates three things the design treats as independent: the magnitude
+of the anomaly (T_rcf, a threshold-relative contrast filter), global
+thermodynamic scaling (f, a normal-critical gate), and local topology (g, a
+leaky sigmoid gate). The ZZ and ZZZZ interaction weights are fixed at 2 and
+1 respectively and are not tunable. The single-qubit Z bias instead uses an
+adaptive weight, alpha_z = w_z_frac x median(|C|, |K|), where w_z_frac is a
+free parameter and the median is taken over the ZZ coefficients C and ZZZZ
+coefficients K elsewhere in the same Hamiltonian instance. This keeps the Z
+term subordinate to the spatial-correlation terms while breaking a
+degeneracy that would otherwise appear: without it, the ferromagnetic
+ZZ/ZZZZ coupling makes the all-0 and all-1 states exactly degenerate.
+
+All normalization uses fixed physical constants (e.g. Re_crit = 1,
+Rm_crit = 1), never a relative in-domain normalization such as dividing by
+the maximum value present in one snapshot, so a coefficient means the same
+thing at every grid resolution and simulation time.
+
+**Trainable parameters — a discrepancy between the originating report and
+this codebase.** The originating report's own architecture chapter lists
+five trainable hyperparameters: the encoding steepness (beta), the
+uncertainty-band width (sigma), the two per-term contrast sensitivities
+(beta_curl, beta_xpoint), and the Z-bias fraction (w_z_frac). It freezes
+three more at values fixed by that report's own training: gamma_hydro = 2.0,
+gamma_mag = 0.5, kappa = 10.0 (and threshold_amr = 0.1496, frozen from
+classical training rather than from this Hamiltonian). The present
+codebase's search space (`src/train_hyperparams.py`, `SEARCH_SPACE`;
+`docs/DEFAUTS.md`, D-22) instead treats all eight of beta, w_z_frac, sigma,
+beta_curl, beta_xpoint, gamma_hydro, gamma_mag, and kappa as free — wider
+than what the originating report trained. The seed the codebase uses to
+reproduce the originating report's own result (`train_hyperparams.py`,
+`PHASE1_SEED_GRID`) still carries that report's exact frozen values —
+gamma_hydro=2.0, gamma_mag=0.5, kappa=10.0 — alongside its trained values,
+beta=0.7, sigma=0.10, beta_curl=0.1, beta_xpoint=0.1, w_z_frac=500.0. So the
+two accounts agree on what was actually trained and measured; they disagree
+only on how wide a future re-optimization should search, and no number in
+this report depends on that wider search, since no hyperparameter campaign
+was run under either scheme (Section 5).
+
+### A.2 The structural and mixer Hamiltonians
+
+QAOA is used for two reasons: the flux-graph formulation of instability
+detection maps onto the combinatorial graph-optimization problem class QAOA
+targets, and the Hamiltonian's Ising-model structure needs no
+diagonalization to define its phase operator, which is what makes QAOA
+computationally natural for it. QAOA alternates a structural (cost)
+Hamiltonian, which imprints a phase on each basis state proportional to its
+energy, with a mixer Hamiltonian, which drives transitions between basis
+states; over p layers the circuit is intended to converge toward the
+structural Hamiltonian's ground state.
+
+The structural Hamiltonian has four terms:
+
+```
+H_struct = sum_i h_i Z_i                        Activity Bias         (adaptive weight alpha_z)
+         + sum_<i,j> C_ij Z_i Z_j                Gradient Coupling     (weight 2)
+         + sum_p K_p (product_{l in p} Z_l)      Circulation Plaquette (weight 1)
+         + sum_p K_xpoint,p (product_{l in p} Z_l)  X-point Reconnection  (weight 1, optional)
+```
+
+and the mixer is H_mixer = product_i X_i.
+
+The X-point term is a 4-body plaquette operator, enabled by a separate flag
+and detailed in A.6. A fifth term, for kink modes, is defined in the
+theoretical formulation but disabled in the 2D implementation used
+throughout this report: kink modes require helical deformation along a
+third (toroidal) axis, so the term has no 2D analogue, and it involves a
+Dzyaloshinskii-Moriya XY - YX interaction that is not diagonal in the Z
+basis QAOA uses, which would also make it more expensive to implement than
+the four active terms.
+
+### A.3 Activity bias — the validity sensor
+
+This single-body term biases each qubit by whether its classical
+instability score exceeds the AMR threshold:
+
+```
+h_i = alpha_z . (s_i - threshold_amr),   alpha_z = w_z_frac x median(|C|, |K|)
+```
+
+s_i is the same classical multi-indicator score used by the classical
+baseline (Section 2.5). When s_i exceeds the threshold, h_i is positive and
+biases the qubit toward |1> (refine); when it is below, h_i is negative and
+biases toward |0> (do not refine). Because the qubit's initial amplitude
+(A.8) is set from the same score s, the bias and the initial state agree by
+construction, and the QAOA interaction terms can only move probability near
+the threshold, where the classical score is genuinely uncertain.
+
+### A.4 Gradient coupling — the boundary sensor
+
+This 2-body term detects spatial discontinuities between neighboring edges
+— a strong gradient marks a boundary (shear layer, shock front, vortex
+edge) that needs refinement:
+
+```
+C_ij = 2 . g_strain(Q_OW) . || ( f_hydro(Re).T_rcf(delta_v), f_mag(Rm).T_rcf(delta_B) ) ||
+         . exp( -((s_bar_ij - threshold_amr) / sigma)^2 )
+```
+
+s_bar_ij is the average classical score of the two cells the edge connects,
+the leading 2 is the fixed (non-trainable) ZZ weight, and:
+
+- g_strain is a leaky sigmoid gate on the Okubo-Weiss Q-criterion,
+  g_strain(Q) = 1 / (1 + exp(-kappa . Q / Q_crit)); positive Q marks
+  strain-dominated regions, and kappa (trainable) sets the transition's
+  steepness.
+- f is a normal-critical gate: f(x, x_crit, gamma) = x / x_crit below the
+  critical value, and 1 + gamma . ln(x / x_crit) above it, applied
+  separately to the hydrodynamic (Re) and magnetic (Rm) channels. The
+  logarithmic branch bounds growth (Re = 3000, gamma = 2 gives f ≈ 17, not
+  infinity), so one extreme edge cannot dominate the Hamiltonian.
+- T_rcf is a threshold-relative contrast filter:
+  T_rcf(val, val_crit, beta) = beta . max(0, val/val_crit - 1). Unlike a
+  Michelson-style contrast, which vanishes once the whole domain is active,
+  T_rcf compares against a fixed physical threshold, so the signal survives
+  even when the whole domain is already disturbed.
+
+The trailing Gaussian concentrates the ZZ coupling near the decision
+boundary (s_bar ≈ threshold_amr), where the classical score is least
+trustworthy; sigma (trainable, in [0.02, 0.30]) sets its width. Away from
+the boundary the Gaussian suppresses C_ij exponentially and the bias term
+alone drives the decision, which also keeps circuit depth down. For the ZZ
+term specifically, T_rcf's own sensitivity is fixed at beta = 1.0 — the
+effective sensitivity comes from sigma instead.
+
+### A.5 Circulation plaquette — the vortex and current sensor
+
+Vorticity and current density are both detected as 4-body plaquette
+interactions, implementing a discrete Stokes theorem: the circulation
+around a closed loop measures the curl it encloses. Horizontal edges carry
+v_x and B_x; vertical edges carry v_y and B_y, giving two independent
+discrete curls:
+
+```
+omega_z(i,j)   = v_x(i,j) - v_x(i,j+1) + v_y(i+1,j) - v_y(i,j)   (discrete vorticity)
+J_z,curl(i,j)  = B_x(i,j) - B_x(i,j+1) + B_y(i+1,j) - B_y(i,j)   (discrete current density)
+```
+
+each approximating a continuum curl times a cell area (partial_x v_y -
+partial_y v_x for omega_z, Ampere's law partial_x B_y - partial_y B_x for
+J_z,curl). The plaquette coefficient follows the same f x g architecture as
+the gradient coupling, but with independent gates for the fluid and
+magnetic channels:
+
+```
+K_p = || ( g_rot(Q_OW).f_hydro(Re).T_rcf(omega_z, omega_z_crit, beta_curl),
+           g_mag(|J_z|).f_mag(Rm).T_rcf(J_z_curl, J_z_crit, beta_curl) ) ||
+```
+
+with omega_z_crit = Re_crit . nu / dx^2 and J_z_crit = Rm_crit . eta / dx^2.
+g_rot(Q) = 1 / (1 + exp(+kappa . Q/Q_crit)) activates in rotation-dominated
+regions (Q_OW < 0), the complement of g_strain; g_mag(|J_z|) =
+1 / (1 + exp(-kappa . (|J_z|/J_crit - 1))) activates once the current
+density crosses its own critical threshold. Because the two branches are
+gated independently, a vortex without a current sheet only activates the
+g_rot branch, and a current sheet without vorticity only activates g_mag; a
+uniform or irrotational region gives K_p = 0.
+
+### A.6 X-point reconnection — optional, advanced anomalies
+
+Magnetic reconnection at X-points (hyperbolic null points of the magnetic
+field) is detected by a second 4-body plaquette term, gated on the
+determinant of the magnetic field's Jacobian:
+
+```
+K_xpoint = f_mag(Rm) . T_rcf( max(0, -det(grad B)), val_crit, beta_xpoint )
+det(grad B) = (partial_x B_x)(partial_y B_y) - (partial_x B_y)(partial_y B_x)
+```
+
+At an X-point the field lines form a hyperbolic pattern and det(grad B) < 0;
+the max(0, -det(grad B)) factor keeps only topologically hyperbolic
+regions. val_crit = (Rm_crit . eta / (dx . B_0))^2. This term is
+self-limiting — it activates only where the local magnetic topology is
+genuinely hyperbolic, without needing a separate topological gate — and is
+enabled by a dedicated flag rather than always active.
+
+### A.7 Summary of anomaly mapping
+
+| Anomaly | Physical origin | Term | Operator | Weight |
+|---|---|---|---|---|
+| Activity bias | alpha_z . (s_i - threshold_amr) | Z bias | Z_i | adaptive (alpha_z) |
+| Shear / gradient | g_strain x f x T_rcf x Gaussian(sigma) | ZZ coupling | Z_i Z_j | 2 (fixed) |
+| Vortex / current | omega_z, J_z,curl (Stokes) | ZZZZ plaquette | loop product of Z_k | 1 (fixed) |
+| X-point reconnection | f_mag x T_rcf(-det(grad B)) | ZZZZ plaquette | loop product of Z_k | 1 (optional) |
+| Kink (3D only) | J . B | DM interaction | X_i Y_j - Y_i X_j | disabled |
+
+### A.8 State encoding and the variational ansatz
+
+Each qubit is mapped to a point on the Bloch sphere, (theta, phi), and the
+two angles are given deliberately different physical roles.
+
+theta is derived from the classical score s, not from the raw stress flux:
+
+```
+theta_ij = 2 . arcsin(sqrt(s_ij))   so that   P(|1>) = sin^2(theta_ij/2) = s_ij
+```
+
+This gives every qubit exactly the classical detector's own flagging
+probability before any QAOA layer runs, so the circuit refines the
+classical baseline rather than starting from scratch.
+
+phi carries the temporal-derivative phase that Section 2.3 above refers to
+as psi — the same quantity; this appendix keeps the originating report's
+own symbol, phi, to match its formulas:
+
+```
+phi_ij(t) = (pi/2) . tanh( beta . (Phi_ij(t) - Phi_ij(t - dt_hybrid)) / mean(|delta_Phi|) )
+```
+
+Phi_ij is the local stress flux behind the classical score, dt_hybrid is the
+interval between VQA updates, beta is the same trainable encoding-steepness
+parameter as A.1, and mean(|delta_Phi|) is the mean absolute flux change
+over the whole domain, used as a dimensionless normalization. This maps phi
+into [-pi/2, +pi/2]: phi ≈ +pi/2 for a locally growing instability, phi ≈ 0
+for background evolution, phi ≈ -pi/2 for damping.
+
+Each edge qubit is initialized as |q_ij> = cos(theta_ij/2)|0> +
+exp(i.phi_ij) sin(theta_ij/2)|1>, and the full circuit starts from the
+product state |psi_0> = (tensor product over all edges <i,j>) |q_ij> — a
+warm start, not a uniform superposition. This constrains the search to the
+neighborhood of the classical solution, which reduces the QAOA iterations
+needed and mitigates the barren-plateau problem common to randomly
+initialized variational circuits.
+
+For depth p, the trial state is:
+
+```
+|psi(Omega, Gamma)> = product_{k=1}^{p} ( U_mixer(Omega_k) . U_struct(Gamma_k) ) |psi_0>
+```
+
+with U_struct(Gamma_k) = exp(-i . Gamma_k . H_struct) embedding the MHD
+constraints into each basis state's phase, and U_mixer(Omega_k) =
+exp(-i . Omega_k . H_mixer) = product_i exp(-i . Omega_k . X_i) generating
+the spin flips that let interference amplify low-energy states. The
+variational parameters Gamma, Omega are optimized by a classical COBYLA
+loop to minimize E = <psi|H_struct|psi>; the resulting state's most
+probable bitstring is read out as the refinement decision.
+
+This is the architecture tested in Section 4: the Hamiltonian-exactness
+results (H0a, Section 4.2) ask whether QAOA's evolution actually reaches
+this H_struct's ground state; the decision-quality results (H0b,
+Section 4.3) ask whether that ground state, when reached, is the better
+refinement decision; and the ablations (H3, throughout Section 4) turn the
+ZZ and ZZZZ terms above off one at a time to ask whether the coupling
+structure earns its added circuit depth.
