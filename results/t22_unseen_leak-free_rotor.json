@@ -1,0 +1,213 @@
+{
+ "fold": "rotor",
+ "scenario": "mhd_rotor",
+ "mode": "leak-free",
+ "classical_reference_source": "budget-matched threshold 0.0969 (forced)",
+ "classical_tuned_arm_completed": null,
+ "unseen_condition": {
+  "ic": {
+   "omega": 8.0,
+   "r0": 0.6,
+   "taper_width": 0.2,
+   "perturbation": 0.01
+  },
+  "note": "slower, smaller rotor with a wider taper"
+ },
+ "qaoa_threshold_leaked": false,
+ "arms": {
+  "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 0,
+   "n_completed_unseen": 3,
+   "n_aborted": 7,
+   "canonical_runs": [
+    {
+     "combined": 0.6225003362467559,
+     "phys_score": 0.7786449453831396,
+     "patch_ratio": 0.2321388134057971,
+     "completed": false,
+     "abort": {
+      "abort_step": 288,
+      "abort_time": 0.379,
+      "partial_combined": 0.6225,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.6321771106433819,
+     "phys_score": 0.8352733154776576,
+     "patch_ratio": 0.1244365985576923,
+     "completed": false,
+     "abort": {
+      "abort_step": 254,
+      "abort_time": 0.3335,
+      "partial_combined": 0.6322,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.5327035763363895,
+     "phys_score": 0.6369674393033777,
+     "patch_ratio": 0.27204391891891894,
+     "completed": false,
+     "abort": {
+      "abort_step": 335,
+      "abort_time": 0.4442,
+      "partial_combined": 0.5327,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.5474246759860819,
+     "phys_score": 0.6851445463805146,
+     "patch_ratio": 0.203125,
+     "completed": false,
+     "abort": {
+      "abort_step": 198,
+      "abort_time": 0.2612,
+      "partial_combined": 0.5474,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.42237803766541565,
+     "phys_score": 0.5554456320419267,
+     "patch_ratio": 0.08970905172413793,
+     "completed": false,
+     "abort": {
+      "abort_step": 353,
+      "abort_time": 0.4695,
+      "partial_combined": 0.4224,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.669768993393953,
+     "phys_score": 0.9153611733368123,
+     "patch_ratio": 0.055788543536804305,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.7453695872784715,
+     "phys_score": 0.9957021567031343,
+     "patch_ratio": 0.11953816371681415,
+     "completed": false,
+     "abort": {
+      "abort_step": 203,
+      "abort_time": 0.4431,
+      "partial_combined": 0.7454,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.6490003409935968,
+     "phys_score": 0.8663372368165293,
+     "patch_ratio": 0.10565810143626571,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.585761423295583,
+     "phys_score": 0.7787761586820388,
+     "patch_ratio": 0.10322458482944345,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.9468344466737769,
+     "phys_score": 1.2703584039147162,
+     "patch_ratio": 0.13802455357142857,
+     "completed": false,
+     "abort": {
+      "abort_step": 440,
+      "abort_time": 0.9794,
+      "partial_combined": 0.9468,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    }
+   ],
+   "status": "total_abort",
+   "degradation_ratio": NaN
+  },
+  "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.14008900555369172,
+     "phys_score": 0.0536450871441004,
+     "patch_ratio": 0.3561988015776699,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.14008900555369172,
+     "phys_score": 0.0536450871441004,
+     "patch_ratio": 0.3561988015776699,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.1297018288911998,
+     "phys_score": 0.0281994814530657,
+     "patch_ratio": 0.383457697486535,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.1297018288911998,
+     "phys_score": 0.0281994814530657,
+     "patch_ratio": 0.383457697486535,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.14008900555369172,
+    "phys_score": 0.0536450871441004,
+    "patch_ratio": 0.3561988015776699
+   },
+   "unseen": {
+    "combined": 0.1297018288911998,
+    "phys_score": 0.0281994814530657,
+    "patch_ratio": 0.383457697486535
+   },
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "status": "completed",
+   "degradation_ratio": 0.5256675485924144
+  }
+ },
+ "dns_signature_canonical": 92742.66049605537,
+ "dns_signature_unseen": 78034.97383391239,
+ "dns_relative_shift": 0.1585859903465735,
+ "unseen_condition_is_weak": false,
+ "status": "total_abort",
+ "total_abort_arms": [
+  "qhas"
+ ],
+ "git_hash": "ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41",
+ "cli_args": {
+  "fold": "rotor",
+  "mode": "leak-free",
+  "prefix": "t15_level3",
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
+ },
+ "wall_s": 3243.4865384101868
+}

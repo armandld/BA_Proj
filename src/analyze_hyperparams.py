@@ -3,7 +3,8 @@
 Hyperparameter Analysis for Q-HAS Training
 ===========================================
 
-Loads an Optuna study from SQLite and generates diagnostic plots:
+Loads an Optuna study from the campaign journal (or a legacy SQLite file) and
+generates diagnostic plots:
 
   Section 1 — Optuna built-ins:
       parameter importance (fANOVA), contour, slice, parallel coords, history
@@ -19,15 +20,15 @@ Loads an Optuna study from SQLite and generates diagnostic plots:
       field-importance correlation heatmap
 
 Usage:
-    python analyze_hyperparams.py --db-path ../Train_results/q_has_phase1.db --study-name q_has_phase1
-    python analyze_hyperparams.py --db-path ../Train_results/q_has_phase3.db --study-name q_has_phase3
+    python analyze_hyperparams.py --journal-path ../results/hyperparams/reoptimisation/journal/q_has_v2_phase1.log --study-name q_has_v2_phase1
 """
 
 import argparse
 import os
+import sys
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")           # non-interactive backend (safe on servers / Colab)
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 import optuna
@@ -49,9 +50,7 @@ from optuna.visualization.matplotlib import (
 #  Helpers
 # ─────────────────────────────────────────────────────────
 
-def load_study(db_path, study_name):
-    storage_url = f"sqlite:///{db_path}"
-    study = optuna.load_study(study_name=study_name, storage=storage_url)
+def _loaded(study, study_name):
     completed = [
         t for t in study.trials
         if t.state == optuna.trial.TrialState.COMPLETE
@@ -61,6 +60,23 @@ def load_study(db_path, study_name):
     print(f"Loaded study '{study_name}': "
           f"{len(study.trials)} total, {len(completed)} completed (finite)")
     return study, completed
+
+
+def load_study(db_path, study_name):
+    """Load a legacy SQLite study."""
+    return _loaded(optuna.load_study(
+        study_name=study_name,
+        storage=f"sqlite:///{os.path.abspath(db_path)}"), study_name)
+
+
+def load_journal(journal_path, study_name):
+    """Load the journal produced by the rented-machine campaign."""
+    from optuna.storages.journal import (JournalFileBackend,
+                                         JournalFileOpenLock)
+    storage = optuna.storages.JournalStorage(JournalFileBackend(
+        journal_path, lock_obj=JournalFileOpenLock(journal_path)))
+    return _loaded(
+        optuna.load_study(study_name=study_name, storage=storage), study_name)
 
 
 def get_param_names(completed):
@@ -100,6 +116,7 @@ SCENARIO_LABELS = {
     "ot_predict": "Orszag-Tang",
     "rotor_predict": "MHD Rotor",
     "gt": "Ghost Twisting",
+    "gt_predict": "Ghost Twisting",
 }
 SCENARIO_COLORS = {
     "kh": "tab:blue",
@@ -115,20 +132,38 @@ SCENARIO_COLORS = {
     "ot_predict": "tab:purple",
     "rotor_predict": "tab:brown",
     "gt": "tab:pink",
+    "gt_predict": "tab:pink",
 }
 
 
 def _detect_scenario_keys(completed):
-    """Auto-detect which scenario keys are present in user_attrs."""
+    """Rend les cles de scenario REELLEMENT presentes dans `user_attrs`.
+
+    Verifie chaque cle individuellement plutot que de rendre toute sa
+    famille (les sept `_predict`, ou les sept non-`_predict`) des qu'une
+    seule y est vue : une etude ne couvre pas toujours les sept scenarios
+    d'une famille, et un appelant qui ferait confiance a la liste
+    obtiendrait un `KeyError`, ou pire une moyenne polluee de `NaN` sur des
+    cles inventees.
+
+    Verifie `loss_{key}`, pas `phys_{key}` comme la copie dans
+    `recompute_lambda_scores._detect_scenario_keys` : deux marqueurs
+    differents, pas la meme cle. Ils rendent le meme ensemble de scenarios
+    parce que `train_hyperparams._composite_loop` pose toujours les deux
+    ensemble pour chaque scenario evalue (`set_user_attr(f"phys_{key}", ..)`
+    dans `_run_one_scenario`, puis `set_user_attr(f"loss_{key}", ..)` une
+    fois la boucle finie ou elaguee) -- verifie en lisant ce module, pas
+    suppose. Cet invariant n'est impose par aucun test : une modification
+    future de `_composite_loop`/`_run_one_scenario` qui poserait l'un sans
+    l'autre ferait diverger silencieusement les deux copies.
+    """
+    trouvees = set()
     for t in completed[:10]:
         for key in ALL_SCENARIO_KEYS:
             if f"loss_{key}" in t.user_attrs:
-                # Found one key format, return all keys of same format
-                if "_predict" in key:
-                    return [k for k in ALL_SCENARIO_KEYS if "_predict" in k]
-                else:
-                    return [k for k in ALL_SCENARIO_KEYS if "_predict" not in k]
-    return []
+                trouvees.add(key)
+    # Ordre canonique d'ALL_SCENARIO_KEYS, comme dans recompute_lambda_scores.
+    return [k for k in ALL_SCENARIO_KEYS if k in trouvees]
 
 
 def has_scenario_data(completed):
@@ -147,14 +182,25 @@ def _find_available_keys(completed, candidates, prefix=""):
 
 
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
-    """Binned median trend line."""
+    """Binned median trend line.
+
+    La derniere classe est FERMEE : les bornes viennent de
+    `linspace(x.min(), x.max())`, donc le dernier bord EST `x.max()`. Avec
+    un `<` strict, l'essai qui porte la plus grande valeur du parametre
+    n'entrerait dans aucune classe — la tendance omettrait silencieusement
+    le point extreme, celui qui decide justement du sens de la pente au
+    bord du domaine echantillonne.
+    """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
         return
     bins = np.linspace(x.min(), x.max(), n_bins + 1)
     centers, medians = [], []
     for k in range(n_bins):
-        mask = (x >= bins[k]) & (x < bins[k + 1])
+        if k == n_bins - 1:
+            mask = (x >= bins[k]) & (x <= bins[k + 1])
+        else:
+            mask = (x >= bins[k]) & (x < bins[k + 1])
         if mask.sum() >= 2:
             centers.append((bins[k] + bins[k + 1]) / 2)
             medians.append(np.median(y[mask]))
@@ -349,8 +395,13 @@ def plot_2d_landscapes(completed, param_names, output_dir):
                 Zi = griddata((x, y), scores, (Xi, Yi), method="cubic")
                 cf = ax.contourf(Xi, Yi, Zi, levels=25, cmap="viridis_r", alpha=0.85)
                 fig.colorbar(cf, ax=ax, label="Combined Score")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Le contour interpolé peut échouer (points colinéaires,
+                # trop peu d'essais). On garde le nuage de points, mais on
+                # le DIT : une figure amputée de sa surface ressemble
+                # sinon à une figure normale.
+                print(f"[FIGURE] contour interpole indisponible : "
+                      f"{type(exc).__name__}: {exc}", file=sys.stderr)
 
             # Actual points
             ax.scatter(x, y, c=scores, cmap="viridis_r", s=25,
@@ -556,17 +607,88 @@ def plot_field_correlation_heatmap(completed, param_names, output_dir):
     _save(fig, output_dir, "11_field_correlation_heatmap.png")
 
 
+#: Les noms sous lesquels le seuil de raffinement a réellement été
+#: échantillonné. `train_hyperparams.make_classical_composite_objective`
+#: appelle `trial.suggest_float("threshold_amr", ...)` ; `"threshold"` tout
+#: court n'apparaît dans aucune base du dépôt ni dans aucune ligne de
+#: `src/`, mais reste le nom qu'une fonction en aval exigeait.
+THRESHOLD_PARAM_NAMES = ("threshold_amr", "threshold")
+
+
+def _threshold_param_name(trial):
+    """Le nom sous lequel CET essai porte son seuil, ou None."""
+    for name in THRESHOLD_PARAM_NAMES:
+        if name in trial.params:
+            return name
+    return None
+
+
+def _decomposed_series(completed):
+    """`(phys, patch)` par essai, quel que soit le schéma d'attributs.
+
+    Deux écrivains, deux schémas, et cette fonction ne lisait que le
+    premier :
+
+      * `pipeline.py` (objectif mono-scénario) écrit `phys_score` et
+        `patch_ratio` ;
+      * `train_hyperparams._run_one_scenario` — le chemin de la campagne
+        déployée — écrit `phys_<scenario>` et `patch_<scenario>`, un par
+        scénario, et **jamais** les deux clés globales.
+
+    L'agrégation composite est la MOYENNE des scénarios parce que c'est
+    celle que la perte elle-même applique (`_composite_loop` rend
+    `total / len(scenario_list)`) : on mesure avec l'opérateur qui a
+    construit la grandeur, pas avec un autre.
+
+    Rend `(None, None, None)` si aucun des deux schémas n'est présent —
+    c'est l'appelant qui le dit, il ne se tait pas. Le troisième élément
+    nomme la provenance, pour qu'une figure ne puisse pas laisser croire
+    qu'un seul scénario a été mesuré là où quatre ont été moyennés.
+    """
+    if not completed:
+        return None, None, None
+
+    if all("phys_score" in t.user_attrs and "patch_ratio" in t.user_attrs
+           for t in completed):
+        phys  = np.array([t.user_attrs["phys_score"]  for t in completed])
+        patch = np.array([t.user_attrs["patch_ratio"] for t in completed])
+        return phys, patch, "single run"
+
+    keys = _find_available_keys(completed, ALL_SCENARIO_KEYS, prefix="phys_")
+    keys = [k for k in keys
+            if all(f"phys_{k}" in t.user_attrs and f"patch_{k}" in t.user_attrs
+                   for t in completed)]
+    if not keys:
+        return None, None, None
+
+    phys  = np.array([[t.user_attrs[f"phys_{k}"]  for k in keys]
+                      for t in completed]).mean(axis=1)
+    patch = np.array([[t.user_attrs[f"patch_{k}"] for k in keys]
+                      for t in completed]).mean(axis=1)
+    return phys, patch, "mean over " + ", ".join(keys)
+
+
 def plot_threshold_operating_curve(completed, output_dir):
     """
-    If 'threshold' is among the optimized params, plot the threshold
-    operating curve: phys_score and patch_ratio vs threshold.
+    If a refinement threshold is among the optimized params, plot the
+    threshold operating curve: phys_score and patch_ratio vs threshold.
     """
-    if "threshold" not in completed[0].params:
+    name = _threshold_param_name(completed[0]) if completed else None
+    if name is None:
         return
 
-    thresholds = np.array([t.params["threshold"] for t in completed])
-    phys  = np.array([t.user_attrs["phys_score"]  for t in completed])
-    patch = np.array([t.user_attrs["patch_ratio"] for t in completed])
+    completed = [t for t in completed if name in t.params]
+    phys, patch, source = _decomposed_series(completed)
+    if phys is None:
+        # Un balayage vide doit crier : sans ce message, une étude dont le
+        # seuil EST le paramètre optimisé rendait une analyse sans sa
+        # figure de décision, indiscernable d'une analyse complète.
+        print("[FIGURE] courbe de seuil indisponible : ni "
+              "(phys_score, patch_ratio) ni (phys_<scenario>, "
+              "patch_<scenario>) dans les user_attrs", file=sys.stderr)
+        return
+
+    thresholds = np.array([t.params[name] for t in completed])
 
     fig, ax1 = plt.subplots(figsize=(10, 6))
     ax2 = ax1.twinx()
@@ -576,9 +698,11 @@ def plot_threshold_operating_curve(completed, output_dir):
     _add_trend(ax1, thresholds, phys,  color="tab:blue",   n_bins=20)
     _add_trend(ax2, thresholds, patch, color="tab:orange", n_bins=20)
 
-    ax1.set_xlabel("Threshold", fontsize=13)
-    ax1.set_ylabel("Physics Score (L2 error)", color="tab:blue", fontsize=12)
-    ax2.set_ylabel("Patch Ratio (cost)",       color="tab:orange", fontsize=12)
+    ax1.set_xlabel(name, fontsize=13)
+    ax1.set_ylabel(f"Physics Score (L2 error, {source})",
+                   color="tab:blue", fontsize=12)
+    ax2.set_ylabel(f"Patch Ratio (cost, {source})",
+                   color="tab:orange", fontsize=12)
     ax1.set_title("Threshold Operating Curve\n"
                   "Higher threshold \u2192 fewer patches \u2192 cheaper but less accurate",
                   fontsize=13)
@@ -832,8 +956,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--db-path", required=True,
-                        help="Path to Optuna SQLite database (.db file)")
+    storage = parser.add_mutually_exclusive_group(required=True)
+    storage.add_argument("--journal-path",
+                         help="Path to the Optuna campaign journal")
+    storage.add_argument("--db-path",
+                         help="Path to a legacy Optuna SQLite database")
     parser.add_argument("--study-name", required=True,
                         help="Optuna study name inside the database")
     parser.add_argument("--output-dir", default=None,
@@ -844,8 +971,9 @@ def main():
     args = parser.parse_args()
 
     if args.output_dir is None:
+        storage_path = args.journal_path or args.db_path
         args.output_dir = os.path.join(
-            os.path.dirname(args.db_path),
+            os.path.dirname(storage_path),
             f"analysis_{args.study_name}",
         )
     os.makedirs(args.output_dir, exist_ok=True)
@@ -854,58 +982,72 @@ def main():
     if args.show:
         matplotlib.use("TkAgg")
 
+    # Ce `try` ne couvre que le CHARGEMENT de l'étude ; l'échec sort en
+    # code 1. Une exception levée par l'une des treize fonctions de trace
+    # plus bas (clé d'attribut absente, scénario manquant) ne doit pas
+    # être confondue avec une étude introuvable — élargir ce bloc
+    # masquerait sa vraie cause derrière un message de chargement.
+    storage_path = args.journal_path or args.db_path
     try:
-        study, completed = load_study(args.db_path, args.study_name)
-        param_names = get_param_names(completed)
-
-        if not completed:
-            print("[ERROR] No completed trials with finite score.")
-            return
-
-        # Summary
-        generate_summary(study, completed, param_names, args.output_dir)
-
-        # Section 1: Optuna built-in
-        plot_optuna_builtins(study, args.output_dir, param_names, args.full)
-
-        # Section 2: Convergence
-        plot_convergence(study, completed, args.output_dir)
-
-        # Section 3: 2D Landscapes
-        if args.full:
-            plot_2d_landscapes(completed, param_names, args.output_dir)
-
-        # Section 4: Decomposed analysis (only with user_attrs)
-        if has_decomposed_data(completed):
-            print("\n=== Section 4: Decomposed Score Analysis ===")
-            plot_pareto_front(completed, args.output_dir)
-            plot_score_decomposition(completed, param_names, args.output_dir)
-            plot_per_field_sensitivity(completed, param_names, args.output_dir)
-            plot_field_correlation_heatmap(completed, param_names, args.output_dir)
-            plot_threshold_operating_curve(completed, args.output_dir)
-        else:
-            print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
-            print("       Sections 1–3 are available from existing trials.")
-
-        # Section 5: Per-scenario analysis (Phase 2 composite)
-        if has_scenario_data(completed):
-            print("\n=== Section 5: Per-Scenario Analysis (Composite) ===")
-            plot_scenario_breakdown_bar(completed, args.output_dir)
-            plot_scenario_sensitivity(completed, param_names, args.output_dir)
-            plot_scenario_correlation_heatmap(completed, param_names, args.output_dir)
-            plot_scenario_pairwise(completed, args.output_dir)
-
-        print(f"\nAll plots saved to: {args.output_dir}")
-
-        if args.show:
-            plt.show()
-
-    except KeyError:
-        # This triggers if the study name isn't found in the Neon DB
-        print(f"⚠️  Skipping {args.study_name}: Study does not exist on Neon yet.")
+        loader = load_journal if args.journal_path else load_study
+        study, completed = loader(storage_path, args.study_name)
     except Exception as e:
-        print(f"❌ Error loading study: {e}")
-        return
+        print(f"[ERREUR] chargement de '{args.study_name}' depuis "
+              f"{storage_path} : {e}", file=sys.stderr)
+        sys.exit(1)
+
+    param_names = get_param_names(completed)
+
+    if not completed:
+        print(f"[ERREUR] '{args.study_name}' ne contient aucun essai COMPLETE "
+              f"a valeur finie — rien a analyser.", file=sys.stderr)
+        sys.exit(1)
+
+    # Summary
+    generate_summary(study, completed, param_names, args.output_dir)
+
+    # Section 1: Optuna built-in
+    plot_optuna_builtins(study, args.output_dir, param_names, args.full)
+
+    # Section 2: Convergence
+    plot_convergence(study, completed, args.output_dir)
+
+    # Section 3: 2D Landscapes
+    if args.full:
+        plot_2d_landscapes(completed, param_names, args.output_dir)
+
+    # Section 4: Decomposed analysis (only with user_attrs)
+    if has_decomposed_data(completed):
+        print("\n=== Section 4: Decomposed Score Analysis ===")
+        plot_pareto_front(completed, args.output_dir)
+        plot_score_decomposition(completed, param_names, args.output_dir)
+        plot_per_field_sensitivity(completed, param_names, args.output_dir)
+        plot_field_correlation_heatmap(completed, param_names, args.output_dir)
+    else:
+        print("\n[INFO] No decomposed score data (phys_score, patch_ratio, per-field errors).")
+        print("       Sections 1–3 are available from existing trials.")
+
+    # Volontairement hors de la garde `has_decomposed_data` : celle-ci ne
+    # teste que `phys_score`, que seul l'objectif mono-scénario de
+    # `pipeline.py` écrit. La garder empêcherait la courbe de seuil de
+    # sortir sur toute étude composite, y compris l'étude classique dont
+    # le seuil EST le seul paramètre optimisé — la fonction porte ses
+    # propres gardes.
+    plot_threshold_operating_curve(completed, args.output_dir)
+
+    # Section 5: Per-scenario analysis (Phase 2 composite)
+    if has_scenario_data(completed):
+        print("\n=== Section 5: Per-Scenario Analysis (Composite) ===")
+        plot_scenario_breakdown_bar(completed, args.output_dir)
+        plot_scenario_sensitivity(completed, param_names, args.output_dir)
+        plot_scenario_correlation_heatmap(completed, param_names, args.output_dir)
+        plot_scenario_pairwise(completed, args.output_dir)
+
+    print(f"\nAll plots saved to: {args.output_dir}")
+
+    if args.show:
+        plt.show()
+
 
 
 if __name__ == "__main__":

@@ -1,0 +1,32 @@
+Environnement Local detecte. Ecriture directe sur le disque.
+====================================================================================
+  V4 T25 - physics robustness, fold ot (orszag_tang)
+  1 extra initial condition(s), 3 Q-HAS draws each
+  classical frontier anchored at the matched threshold 0.1906
+====================================================================================
+
+--- Pre-computing DNS traces for robust/canonical-ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (robust/canonical-ot) ---
+
+  canonical DNS signature = 1.458888e+05
+
+  --- ot_re900: init_orszag_tang takes NO parameters; this varies the Reynolds number, which is NOT an initial-condition variation and must not be counted as one ---
+
+--- Pre-computing DNS traces for robust/ot_re900 ---
+Hot-Start captured at t=2.0001
+DNS pre-computed: 1141 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (robust/ot_re900) ---
+
+    DNS signature 1.460678e+05  shift vs canonical 0.1227%
+    WARNING: this condition moves the trajectory by only 0.1227% (< 1%) — it tests almost nothing and must be reported as such
+    => SKIPPED: no draws run. The finding is the shift itself, not a comparison.
+    [checkpoint] ot_re900
+  1 condition(s) excluded as vacuous (trajectory shift < 1%)
+
+  ------------------------------------------------------------------------------
+  direction held on 0/0 decidable condition(s) for fold ot
+  saved: t25_physics_robustness_ot.json (109s)
+
+V4 Task 25 complete.

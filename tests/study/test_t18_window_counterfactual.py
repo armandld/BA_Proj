@@ -1,0 +1,137 @@
+"""Tests V4 T18 : contrefactuel « ZZ sans la fenetre ».
+
+L'enjeu de cette tache est une conclusion NEGATIVE (« annuler ZZ ne change
+rien, meme a couplage plein »). Une conclusion negative n'a de valeur que
+si l'instrument sait produire un positif : les tests ci-dessous verifient
+donc surtout que `ablate_all` DETECTE un changement quand il y en a un, et
+que la neutralisation de la fenetre est bien verifiee plutot que supposee.
+"""
+import os
+import sys
+
+import numpy as np
+import pytest
+
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+from h3_term_ablation import ABLATIONS
+from h3_window_counterfactual import (HUGE_SIGMA, _c_amplitude, ablate_all,
+                                      prepare_both_arms)
+
+
+def _hp(dim=2, c=0.0, k=0.0, z=None):
+    """Hamiltonien jouet au format attendu par `ground_state_mask`."""
+    z = np.zeros((dim, dim)) if z is None else np.asarray(z, dtype=float)
+    return {
+        "H_edges": (z, z),
+        "C_edges": (np.full((dim, dim), c), np.full((dim, dim), c)),
+        "K_plaquettes": np.full((dim, dim), k),
+        "threshold_amr": 0.0,
+        "w_z_frac": 0.15,
+    }
+
+
+def test_c_amplitude_handles_tuple_and_array():
+    assert _c_amplitude(_hp(c=-3.0)) == pytest.approx(3.0)
+    hp = _hp()
+    hp["C_edges"] = np.array([[-2.0, 1.0], [0.5, 0.0]])
+    assert _c_amplitude(hp) == pytest.approx(2.0)
+
+
+def test_huge_sigma_neutralises_the_gaussian():
+    """La constante utilisee pour le bras `no_window` doit vraiment rendre
+    la fenetre unitaire en double precision, sinon le contrefactuel
+    compare deux versions attenuees."""
+    from h3_uncertainty_window import uncertainty_window
+    score = np.random.default_rng(0).random((8, 8))
+    w = uncertainty_window(score, 0.1496, HUGE_SIGMA)
+    assert w.min() > 1.0 - 1e-12
+
+
+def test_control_ablation_changes_nothing():
+    """`full` est le controle de la chaine de mesure : il compare le
+    Hamiltonien a lui-meme et doit rendre exactement 0."""
+    gt = np.array([[True, False], [False, True]])
+    res, _ = ablate_all(_hp(c=-1.0, k=-0.5, z=[[0.3, -0.2], [0.1, 0.4]]),
+                        2, gt)
+    full = [r for r in res if r["ablation"] == "full"][0]
+    assert full["changed"] == 0.0
+
+
+def test_ablation_detects_a_real_change():
+    """Test de sensibilite : avec un biais Z qui porte seul la decision,
+    retirer Z DOIT changer le masque. Sans ce controle positif, un
+    'changed = 0' partout ne prouverait rien."""
+    gt = np.zeros((2, 2), dtype=bool)
+    hp = _hp(c=0.0, k=0.0, z=[[0.9, 0.8], [0.7, 0.6]])
+    res, _ = ablate_all(hp, 2, gt)
+    by = {r["ablation"]: r for r in res}
+    assert by["no_Z"]["changed"] > 0.0
+    assert by["full"]["changed"] == 0.0
+
+
+def test_dropping_an_all_zero_family_is_a_no_op():
+    """Si ZZ est deja nul, l'annuler ne peut rien changer — coherence
+    interne de l'instrument."""
+    gt = np.zeros((2, 2), dtype=bool)
+    res, _ = ablate_all(_hp(c=0.0, k=-0.4, z=[[0.5, -0.5], [0.5, -0.5]]),
+                        2, gt)
+    by = {r["ablation"]: r for r in res}
+    assert by["no_ZZ"]["changed"] == 0.0
+
+
+def test_every_declared_ablation_is_reported():
+    gt = np.zeros((2, 2), dtype=bool)
+    res, _ = ablate_all(_hp(c=-1.0, k=-0.5), 2, gt)
+    assert {r["ablation"] for r in res} == {n for n, _ in ABLATIONS}
+    for r in res:
+        assert 0.0 <= r["changed"] <= 1.0
+        assert 0.0 <= r["refined"] <= 1.0
+
+
+def test_prepare_both_arms_runs_without_crashing_and_restores_sigma():
+    """D-195 (audit H1/H3/H4, 26 aout) : `prepare_both_arms` substituait
+    `qaoa_inputs.TRAINED_SIGMA`, qui n'existe plus depuis que
+    `qaoa_inputs.py` importe la fonction groupee `trained_mapper_params()`
+    au lieu des constantes `TRAINED_*` individuelles (refactor du
+    24 aout) -- chaque appel levait `AttributeError`. Aucun test existant
+    n'appelait cette fonction (les autres tests de ce fichier n'exercent
+    que `_c_amplitude` et `ablate_all`) ; celui-ci la couvre directement,
+    avec un champ synthetique minimal (pas de DNS reelle necessaire), et
+    verifie a la fois l'absence de crash et que `config.TRAINED_SIGMA`
+    (la ou `trained_mapper_params()` la lit reellement) revient a sa
+    valeur d'origine apres l'appel."""
+    import config
+
+    rng = np.random.default_rng(0)
+    N, dim = 8, 2
+    vx, vy, Bx, By = (rng.standard_normal((N, N)) for _ in range(4))
+    saved = config.TRAINED_SIGMA
+
+    hp_w, hp_nw, a_w, a_nw = prepare_both_arms(vx, vy, Bx, By, N, dim, 400)
+
+    assert config.TRAINED_SIGMA == saved, "sigma leaked past the call"
+    assert a_nw >= a_w * (1.0 - 1e-9), (
+        "neutralisation n'a pas eu d'effet mesurable : le contrefactuel "
+        "serait vide de sens")
+    for hp in (hp_w, hp_nw):
+        assert "C_edges" in hp
+
+
+def test_reported_fields_are_present_and_finite():
+    gt = np.zeros((2, 2), dtype=bool)
+    res, uni = ablate_all(_hp(c=-1.0, k=-0.5, z=[[0.2, 0.1], [0.0, 0.3]]),
+                          2, gt)
+    assert isinstance(uni, bool)
+    for r in res:
+        for key in ("changed", "refined", "f1", "dE", "n_optima"):
+            assert np.isfinite(r[key]), key

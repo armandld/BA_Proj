@@ -13,6 +13,125 @@ AXIS_X = 0
 AXIS_Y = 1
 
 
+# =====================================================================
+# OPERATEURS DISCRETS EN DIFFERENCES AVANT
+# =====================================================================
+# Les mappeurs forment rotationnel et divergence par différences avant, sans
+# division par dx. Deux conventions explicites sont disponibles :
+#
+#   - `forward_curl_z` / `forward_divergence` respectent AXIS_X / AXIS_Y
+#     declares ci-dessus (convention indexing='ij'). Ce sont celles de
+#     `grad`, `div`, `_compute_q_criterion` et `MHDSolver.get_fluxes`.
+#
+#   - `legacy_forward_curl_z` / `legacy_forward_divergence` reproduisent la
+#     variante d'ablation indexing='xy'. Sous la convention courante :
+#         legacy_curl = df_y/dy - df_x/dx      (difference de deformations
+#                                               normales)
+#         legacy_div  = df_x/dy + df_y/dx      (deformation de cisaillement)
+#     c'est-a-dire deux composantes du tenseur des deformations, aveugles
+#     a la rotation solide et a la compression isotrope.
+#
+# La variante ``fixed_curl=False`` est réservée aux ablations.
+# =====================================================================
+
+def forward_curl_z(fx, fy):
+    """omega_z = df_y/dx - df_x/dy, differences avant, convention AXIS_X/AXIS_Y.
+
+    Non divise par dx : les mappeurs normalisent eux-memes.
+    """
+    return ((np.roll(fy, -1, axis=AXIS_X) - fy)
+            - (np.roll(fx, -1, axis=AXIS_Y) - fx))
+
+
+def forward_divergence(fx, fy):
+    """div f = df_x/dx + df_y/dy, differences avant, convention AXIS_X/AXIS_Y."""
+    return ((np.roll(fx, -1, axis=AXIS_X) - fx)
+            + (np.roll(fy, -1, axis=AXIS_Y) - fy))
+
+
+def legacy_forward_curl_z(fx, fy):
+    """Forme historique des mappeurs (correcte sous indexing='xy' seulement).
+
+    Sous la convention du depot elle vaut df_y/dy - df_x/dx.
+    """
+    return ((np.roll(fy, -1, axis=AXIS_Y) - fy)
+            - (np.roll(fx, -1, axis=AXIS_X) - fx))
+
+
+def legacy_forward_divergence(fx, fy):
+    """Forme historique des mappeurs (correcte sous indexing='xy' seulement).
+
+    Sous la convention du depot elle vaut df_x/dy + df_y/dx.
+    """
+    return ((np.roll(fx, -1, axis=AXIS_Y) - fx)
+            + (np.roll(fy, -1, axis=AXIS_X) - fy))
+
+
+def curl_z(fx, fy, fixed_curl=True):
+    """Rotationnel discret : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
+    historique si `fixed_curl=False` est demande explicitement. Verifie
+    par `tests/solver/test_analytic_fields.py`.
+    """
+    return (forward_curl_z(fx, fy) if fixed_curl
+            else legacy_forward_curl_z(fx, fy))
+
+
+def divergence(fx, fy, fixed_curl=True):
+    """Divergence discrete : forme 'ij' (AXIS_X/AXIS_Y) par defaut, forme
+    historique si `fixed_curl=False` est demande explicitement.
+    """
+    return (forward_divergence(fx, fy) if fixed_curl
+            else legacy_forward_divergence(fx, fy))
+
+
+def project_divergence_free_any(vx, vy):
+    """Projection spectrale a divergence nulle, a TOUTE taille de grille.
+
+    `PeriodicGrid.project_divergence_free` est liee a `self.N` : appelee sur
+    un champ d'une autre taille, elle leve. Or le solveur en a besoin a
+    plusieurs resolutions — `step_layered` calcule sa phase 1 sur le champ
+    global SOUS-ECHANTILLONNE, qui reste periodique mais n'a plus la taille
+    de la grille.
+
+    Cette fonction deduit la taille du tableau. Elle est identique a la
+    methode pour un champ de taille N : meme traitement du mode de
+    Nyquist, meme garde sur la singularite k=0.
+
+    PRECONDITION : le champ doit etre PERIODIQUE. Sur un patch local avec
+    halo, qui ne l'est pas, le resultat n'a pas de sens physique — la
+    fonction ne peut pas le verifier, l'appelant doit le savoir.
+    """
+    n, m = vx.shape
+    if n != m:
+        raise ValueError(f"grille non carree : {vx.shape}")
+    if vy.shape != vx.shape:
+        raise ValueError(f"formes incompatibles : {vx.shape} et {vy.shape}")
+
+    k = np.fft.fftfreq(n, d=1.0 / n)
+    KX, KY = np.meshgrid(k, k, indexing='ij')
+
+    # Annuler la derivee au Nyquist, sans quoi la projection n'est ni
+    # exacte ni idempotente sur un champ bruite.
+    if n % 2 == 0:
+        nyq = n // 2
+        KX = KX.copy()
+        KY = KY.copy()
+        KX[nyq, :] = 0.0
+        KY[:, nyq] = 0.0
+
+    K2 = KX ** 2 + KY ** 2
+    K2 = np.where(K2 == 0.0, 1.0, K2)
+    K2[0, 0] = 1.0
+
+    vx_hat = np.fft.fft2(vx)
+    vy_hat = np.fft.fft2(vy)
+    div_hat = 1j * KX * vx_hat + 1j * KY * vy_hat
+    phi_hat = -div_hat / K2
+    vx_hat = vx_hat - 1j * KX * phi_hat
+    vy_hat = vy_hat - 1j * KY * phi_hat
+    return np.real(np.fft.ifft2(vx_hat)), np.real(np.fft.ifft2(vy_hat))
+
+
 class PeriodicGrid:
     """
     Représente une grille spatiale 2D périodique [0, L] x [0, L].
@@ -107,11 +226,31 @@ class PeriodicGrid:
         # Grille des fréquences (Attention à l'ordre 'ij' comme dans __init__)
         KX, KY = np.meshgrid(kx, ky, indexing='ij')
 
+        # ── Mode de Nyquist ──
+        # Pour un champ RÉEL de taille paire, le mode k = N/2 est ambigu
+        # (+N/2 et -N/2 indiscernables) et son coefficient de Fourier est
+        # réel ; multiplier par i·k le rend imaginaire pur, que le
+        # `np.real(ifft2(...))` final jette. Sans l'annuler explicitement,
+        # la divergence portée par ce mode traverserait la projection
+        # intacte dès qu'un champ a du contenu à l'échelle de la maille —
+        # bruit, mais aussi les tapers raides du rotor et de Lamb-Oseen.
+        # Convention standard : annuler la dérivée au Nyquist.
+        nyq = self.N // 2
+        if self.N % 2 == 0:
+            KX = KX.copy()
+            KY = KY.copy()
+            KX[nyq, :] = 0.0
+            KY[:, nyq] = 0.0
+
         # 3. Calcul du carré de la norme du vecteur d'onde |k|^2
         K2 = KX**2 + KY**2
         
         # Gestion de la singularité à k=0 (la composante moyenne / DC)
         # On évite la division par 0. La moyenne du flux n'est pas modifiée par la projection.
+        # Annuler la dérivée au Nyquist crée d'autres K2 nuls (le coin
+        # (nyq, nyq) notamment) : la correction y est nulle de toute façon,
+        # puisque KX et KY y valent zéro. On remplace donc tous les zéros.
+        K2 = np.where(K2 == 0.0, 1.0, K2)
         K2[0, 0] = 1.0 
 
         # 4. Calcul de la correction (Projection)
@@ -159,14 +298,23 @@ class PeriodicGrid:
         dvy_dy = 0.5 * (np.roll(vy, -1, axis=AXIS_Y) - np.roll(vy, 1, axis=AXIS_Y)) / _dx
 
         omega = dvy_dx - dvx_dy
-        S_11 = dvx_dx
-        S_22 = dvy_dy
-        S_12 = 0.5 * (dvx_dy + dvy_dx)
-        
-        strain_sq = S_11**2 + S_22**2 + 2 * S_12**2
-        
-        # Q = 0.5 * (Omega^2 - 2 * Strain^2) based on 2D decomposition
-        # simplified here to relative magnitude
+
+        # Déformations DÉVIATORIQUES, au sens d'Okubo-Weiss :
+        #   S_n = dvx/dx - dvy/dy   (normale)
+        #   S_s = dvy/dx + dvx/dy   (cisaillement)
+        #
+        # Utiliser le tenseur complet (S_11² + S_22² + 2·S_12²) au lieu de
+        # ces deux composantes déviatoriques sous-pondère la déformation
+        # face à la rotation et laisse filtrer la partie ISOTROPE du
+        # tenseur : un cisaillement pur ou une expansion pure, pourtant
+        # neutres au sens d'Okubo-Weiss, ne sortiraient plus à Q≈0.
+        #
+        # Le préfacteur 0.5 est conservé : une rotation solide donne
+        # toujours Q = 2, donc Q_CRIT = 2.0 garde sa calibration.
+        S_n = dvx_dx - dvy_dy
+        S_s = dvy_dx + dvx_dy
+        strain_sq = S_n**2 + S_s**2
+
         Q_OW = 0.5 * (omega**2 - strain_sq)
         return Q_OW
     

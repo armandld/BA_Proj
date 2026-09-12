@@ -2,13 +2,30 @@ import numpy as np
 from scipy.ndimage import zoom
 
 from call_vqa_shell import call_vqa_shell
+from VQA.cost_hamiltonian import NullHamiltonianError
 
 from help_visual import visualize_vqa_step
 
 from Simulation.RescaleArrays import get_adaptive_flux, _process_score
 
 
-from Simulation.utils import slice_hamiltonian_params, get_periodic_patch
+from Simulation.utils import get_periodic_patch
+
+
+#: Patches dont l'Hamiltonien était vide (tous coefficients < COEFF_MIN).
+#: Renseigné à l'exécution ; consultable via `null_hamiltonian_patches()`.
+#: Ces patches conservent leur décision classique — le VQA n'est pas appelé.
+_NULL_HAMILTONIAN_PATCHES = []
+
+
+def null_hamiltonian_patches():
+    """Patches rencontrés sans Hamiltonien, depuis le dernier reset."""
+    return list(_NULL_HAMILTONIAN_PATCHES)
+
+
+def reset_null_hamiltonian_patches():
+    """Vide le compteur (à appeler en début de run si on veut le mesurer)."""
+    _NULL_HAMILTONIAN_PATCHES.clear()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -68,20 +85,37 @@ def _downsample_fields(fields, y_s, y_e, x_s, x_e, target_dim, pad=0):
 
     Uses mean-pooling (area averaging) which preserves the physical
     mean in each coarse cell — appropriate for velocity/magnetic fields.
+
+    Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue du
+    patch, comme dans `RescaleArrays._maxabs_pool_2d` : decouper puis jeter
+    le reste de la division ferait decrire aux deux chemins des REGIONS
+    DIFFERENTES du domaine (systematiquement les dernieres lignes et
+    colonnes — precisement le HALO qui porte l'information de voisinage).
+
+    Quand h % out_dim == 0, les bornes retombent sur les memes blocs et la
+    sortie est bit-a-bit identique.
     """
     result = {}
+    out_dim = target_dim + 2 * pad
     for key in ('vx', 'vy', 'Bx', 'By', 'Jz'):
         patch = get_periodic_patch(fields[key], y_s, y_e, x_s, x_e, pad)
         h, w = patch.shape
-        # Mean-pool to target_dim (+ 2*pad if bounded)
-        out_dim = target_dim + 2 * pad
         bh = h // out_dim
         bw = w // out_dim
         if bh < 1 or bw < 1:
             result[key] = zoom(patch, (out_dim / h, out_dim / w), order=1)
+        elif h == out_dim * bh and w == out_dim * bw:
+            # Division exacte : le chemin rapide donne exactement les memes
+            # blocs, on le garde pour ne rien changer au cas deploye.
+            result[key] = patch.reshape(out_dim, bh, out_dim, bw).mean(axis=(1, 3))
         else:
-            cropped = patch[:out_dim * bh, :out_dim * bw]
-            result[key] = cropped.reshape(out_dim, bh, out_dim, bw).mean(axis=(1, 3))
+            ii = np.linspace(0, h, out_dim + 1).astype(int)
+            jj = np.linspace(0, w, out_dim + 1).astype(int)
+            out = np.empty((out_dim, out_dim), dtype=float)
+            for a in range(out_dim):
+                for b in range(out_dim):
+                    out[a, b] = patch[ii[a]:ii[a + 1], jj[b]:jj[b + 1]].mean()
+            result[key] = out
     return result
 
 
@@ -129,9 +163,14 @@ def _prepare_vqa_input(
     )
     patch_phys_size = (y_e - y_s) / full_phi_h.shape[0] * sim.grid.L
     dx_eff = patch_phys_size / target_dim
-    mini_score_for_hamilt = _process_score(
-        local_score, depth == 0, target_dim + 2 * pad if pad > 0 else target_dim,
-    )
+    # `target_dim`, PAS `target_dim + 2 * pad` : a depth > 0,
+    # `_process_score` emprunte `_resize_padded_maxpool`, dont le contrat
+    # est « entree (N+2, M+2) -> sortie (t_dim+2, t_dim+2) » — le halo est
+    # deja ajoute par la fonction. L'ajouter une seconde fois ici
+    # desalignerait `H_edges` (biais Z, bati sur le score) de `C_edges` /
+    # `K_plaquettes` (batis sur les champs) : les deux decriraient des
+    # grilles DIFFERENTES, le biais Z d'un patch lu avec un halo decale.
+    mini_score_for_hamilt = _process_score(local_score, depth == 0, target_dim)
     mini_hamilt_params = HamiltMapper.compute_coefficients(
         sim, mini_score_for_hamilt, mini_fields, threshold_amr,
         advanced_anomalies_enabled=args.AdvAnomaliesEnable,
@@ -241,31 +280,49 @@ def _run_level(
             if ws_params is None:
                 ws_params = warm_start_cache.get('_global')
 
-        result = call_vqa_shell(
-            angles, mini_hamilt_params, verbose, args,
-            period_bound=period_bound,
-            vqa_runtime=vqa_runtime,
-            warm_start_params=ws_params,
-        )
-        if result is None:
-            continue
-        probs, optimal_params = result
+        try:
+            result = call_vqa_shell(
+                angles, mini_hamilt_params, verbose, args,
+                period_bound=period_bound,
+                vqa_runtime=vqa_runtime,
+                warm_start_params=ws_params,
+            )
+        except NullHamiltonianError as exc:
+            # Le patch ne définit aucun problème d'optimisation : tous ses
+            # coefficients sont sous COEFF_MIN. On garde explicitement la
+            # décision classique (θ-init) et on compte l'événement, au lieu
+            # de faire tourner le VQA contre un opérateur fabriqué.
+            _NULL_HAMILTONIAN_PATCHES.append({'bounds': bounds, 'depth': depth})
+            if verbose:
+                print(f"\n  ┌─ Depth {depth} | Patch {bounds} | {exc}")
+                print(f"  │  décision classique conservée (VQA non appelé)")
+                print(f"  └─")
+            prob_map = np.asarray(prob_map_avant_qaoa, dtype=float)
+            optimal_params = ws_params
+            result = None
+        else:
+            if result is None:
+                continue
+            probs, optimal_params = result
+
+            num_edges = target_dim * target_dim
+            probs_h = probs[:num_edges].reshape(target_dim, target_dim)
+            probs_v = probs[num_edges:].reshape(target_dim, target_dim)
+            prob_map = 0.5 * (probs_h + probs_v)
 
         # Store optimal params for warm-starting next hybrid step
-        if warm_start_cache is not None:
+        if warm_start_cache is not None and optimal_params is not None:
             warm_start_cache[bounds] = optimal_params
             warm_start_cache['_global'] = optimal_params  # fallback for new patches
-
-        num_edges = target_dim * target_dim
-        probs_h = probs[:num_edges].reshape(target_dim, target_dim)
-        probs_v = probs[num_edges:].reshape(target_dim, target_dim)
-        prob_map = 0.5 * (probs_h + probs_v)
 
         # Boundary activation detection (for directional probing info)
         boundary_flags = _boundary_activation(prob_map, target_dim)
 
         if verbose:
-            effective_thr = threshold_amr + (1.0 - threshold_amr) * depth / max_depth
+            # Le seuil AFFICHE doit etre celui APPLIQUE (voir
+            # `effective_threshold` plus bas) : sinon le journal annonce un
+            # seuil different de celui que le code applique reellement.
+            effective_thr = threshold_amr
             print(f"\n  ┌─ Depth {depth} | Patch {bounds} | eff_threshold={effective_thr:.3f}")
             print(f"  │  θ-only  (before QAOA): {np.array2string(prob_map_avant_qaoa, precision=3, suppress_small=True)}")
             print(f"  │  QAOA    (after  QAOA): {np.array2string(prob_map, precision=3, suppress_small=True)}")
@@ -299,6 +356,24 @@ def _run_level(
                            and ttl_key in ttl_map
                            and ttl_map[ttl_key] > 0)
 
+                # Sondage de bord : signal marginal ET anomalie qui touche
+                # le bord dans cette direction -> on descend quand meme.
+                #
+                # La decision DOIT rester un seul if/elif/else : un bloc de
+                # sondage separe qui rajoute le sous-patch dans `next_level`
+                # APRES qu'une branche `else` l'ait deja enregistre comme
+                # feuille ferait compter la meme region deux fois (feuille
+                # non raffinee ET redecoupee), et tout budget/couverture lu
+                # sur la liste finale surcompterait.
+                should_probe = (
+                    local_prob < effective_threshold
+                    and local_prob >= effective_threshold * 0.5
+                    and ((i == 0 and 'top' in boundary_flags)
+                         or (i == target_dim - 1 and 'bottom' in boundary_flags)
+                         or (j == 0 and 'left' in boundary_flags)
+                         or (j == target_dim - 1 and 'right' in boundary_flags))
+                )
+
                 if local_prob >= effective_threshold:
                     next_level.append(sub_bounds)
                     # Reset TTL on fresh detection
@@ -310,29 +385,15 @@ def _run_level(
                     ttl_map[ttl_key] -= 1
                     if verbose:
                         print(f"  │  TTL keep: {sub_bounds} (ttl={ttl_map[ttl_key]})")
+                elif should_probe:
+                    next_level.append(sub_bounds)
+                    if verbose:
+                        print(f"  │  Boundary probe: {sub_bounds} (prob={local_prob:.3f})")
                 else:
                     active_patches.append({
                         'bounds': sub_bounds, 'depth': depth + _offset,
                         'score': local_prob, 'type': 'coarse_leaf',
                     })
-
-                # Boundary-aware probing: if anomaly touches the boundary
-                # toward this sub-cell, force refinement even if prob is marginal
-                if not has_ttl and local_prob < effective_threshold:
-                    should_probe = False
-                    if i == 0 and 'top' in boundary_flags:
-                        should_probe = True
-                    if i == target_dim - 1 and 'bottom' in boundary_flags:
-                        should_probe = True
-                    if j == 0 and 'left' in boundary_flags:
-                        should_probe = True
-                    if j == target_dim - 1 and 'right' in boundary_flags:
-                        should_probe = True
-                    if should_probe and local_prob >= effective_threshold * 0.5:
-                        # Marginal signal + boundary activation → probe deeper
-                        next_level.append(sub_bounds)
-                        if verbose:
-                            print(f"  │  Boundary probe: {sub_bounds} (prob={local_prob:.3f})")
 
     return next_level
 
@@ -417,6 +478,20 @@ def _run_level_classical(
                            and ttl_key in ttl_map
                            and ttl_map[ttl_key] > 0)
 
+                # Sondage de bord : meme logique que le chemin VQA, y compris
+                # la correction du double enregistrement (voir `_run_level`).
+                # Les deux bras doivent rester structurellement identiques,
+                # sans quoi leur comparaison mesure la difference de code
+                # autant que celle du critere.
+                should_probe = (
+                    local_score < effective_threshold
+                    and local_score >= effective_threshold * 0.5
+                    and ((i == 0 and 'top' in boundary_flags)
+                         or (i == target_dim - 1 and 'bottom' in boundary_flags)
+                         or (j == 0 and 'left' in boundary_flags)
+                         or (j == target_dim - 1 and 'right' in boundary_flags))
+                )
+
                 if local_score >= effective_threshold:
                     next_level.append(sub_bounds)
                     # Reset TTL on fresh detection
@@ -428,27 +503,16 @@ def _run_level_classical(
                     ttl_map[ttl_key] -= 1
                     if verbose:
                         print(f"  │  TTL keep (classical): {sub_bounds} (ttl={ttl_map[ttl_key]})")
+                elif should_probe:
+                    next_level.append(sub_bounds)
+                    if verbose:
+                        print(f"  │  Boundary probe (classical): {sub_bounds} "
+                              f"(score={local_score:.3f})")
                 else:
                     active_patches.append({
                         'bounds': sub_bounds, 'depth': depth + _offset,
                         'score': local_score, 'type': 'coarse_leaf',
                     })
-
-                # Boundary-aware probing (same logic as VQA path)
-                if not has_ttl and local_score < effective_threshold:
-                    should_probe = False
-                    if i == 0 and 'top' in boundary_flags:
-                        should_probe = True
-                    if i == target_dim - 1 and 'bottom' in boundary_flags:
-                        should_probe = True
-                    if j == 0 and 'left' in boundary_flags:
-                        should_probe = True
-                    if j == target_dim - 1 and 'right' in boundary_flags:
-                        should_probe = True
-                    if should_probe and local_score >= effective_threshold * 0.5:
-                        next_level.append(sub_bounds)
-                        if verbose:
-                            print(f"  │  Boundary probe (classical): {sub_bounds} (score={local_score:.3f})")
 
     return next_level
 

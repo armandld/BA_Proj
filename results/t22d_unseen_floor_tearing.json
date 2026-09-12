@@ -1,0 +1,33 @@
+{
+ "fold": "tearing",
+ "scenario": "harris_tearing",
+ "threshold": 0.05,
+ "floor_canonical": {
+  "combined": 0.2770479573349137,
+  "phys_score": 0.003967683747140063,
+  "patch_ratio": 0.9597486413043478,
+  "completed": true
+ },
+ "floor_unseen": {
+  "combined": 0.19451697347738806,
+  "phys_score": 0.0015467358413161919,
+  "patch_ratio": 0.6769425675675675,
+  "completed": true
+ },
+ "arms": {
+  "qhas": {
+   "canonical_over_floor": 3.6481091136492854,
+   "unseen_over_floor": 1.548873179478643
+  },
+  "classical": {
+   "canonical_over_floor": 1.1162333949808774,
+   "unseen_over_floor": 1.1148527533128463
+  }
+ },
+ "both_arms_at_floor_on_unseen": false,
+ "git_hash": "bfa3abc3ac06a51cd322554847b13cccb999a6e1",
+ "cli_args": {
+  "fold": "tearing",
+  "threshold": 0.05
+ }
+}

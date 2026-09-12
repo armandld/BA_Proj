@@ -1,0 +1,47 @@
+====================================================================================
+  V4 T22 - fold tearing (harris_tearing)  mode=unseen-ic
+  unseen condition: thinner current sheet, mode 2 instead of mode 1
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  classical reference: budget-matched threshold 0.4250 (forced)
+  QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
+  classical threshold = 0.42500000000000004   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (canonical/tearing) ---
+
+
+--- Pre-computing DNS traces for unseen/tearing ---
+Hot-Start captured at t=0.3059
+DNS pre-computed: 99 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (unseen/tearing) ---
+
+
+  DNS signature canonical=5.690435e+04  unseen=4.742551e+04
+  trajectory actually changed: True
+    [qhas] canonical run 1/5: phys=0.00998 patch=0.8163
+    [qhas] canonical run 2/5: phys=0.01347 patch=0.7196
+    [qhas] canonical run 3/5: phys=0.02114 patch=0.7980
+    [qhas] canonical run 4/5: phys=0.00879 patch=0.9541
+    [qhas] canonical run 5/5: phys=0.01899 patch=0.7661
+    [qhas] unseen run 1/5: phys=0.00235 patch=0.8971
+    [qhas] unseen run 2/5: phys=0.00268 patch=0.8589
+    [qhas] unseen run 3/5: phys=0.00211 patch=0.6880
+    [qhas] unseen run 4/5: phys=0.00266 patch=0.7631
+    [qhas] unseen run 5/5: phys=0.00219 patch=0.9234
+  [qhas] canonical phys=0.01447+-0.00544  unseen phys=0.00240+-0.00026  degradation x0.17
+    [classical] canonical run 1/2: phys=0.00443 patch=0.6250
+    [classical] canonical run 2/2: phys=0.00443 patch=0.6250
+    [classical] unseen run 1/2: phys=0.00172 patch=0.6250
+    [classical] unseen run 2/2: phys=0.00172 patch=0.6250
+  [classical] canonical phys=0.00443+-0.00000  unseen phys=0.00172+-0.00000  degradation x0.39
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.17  classical x0.39
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_tearing.json (4057s)
+
+V4 Task 22 complete.

@@ -1,0 +1,190 @@
+{
+ "fold": "kh",
+ "scenario": "kelvin_helmholtz",
+ "mode": "leak-free",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "classical_tuned_arm_completed": null,
+ "unseen_condition": {
+  "ic": {
+   "shear_width": 0.35,
+   "noise_amplitude": 0.05,
+   "drift_velocity": 0.7
+  },
+  "note": "narrower shear layer, weaker seed, faster drift"
+ },
+ "qaoa_threshold_leaked": false,
+ "qaoa_threshold_amr": 0.46161012794549355,
+ "classical_threshold_amr": 0.19062500000000002,
+ "arms": {
+  "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 5,
+   "n_completed_unseen": 5,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.1789045930182224,
+     "phys_score": 0.03479952409524316,
+     "patch_ratio": 0.5391672653256705,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.17344569474600746,
+     "phys_score": 0.01952416421529165,
+     "patch_ratio": 0.5582495210727969,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.17351518454871884,
+     "phys_score": 0.028577388636405597,
+     "patch_ratio": 0.5358596743295019,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.17893003526654627,
+     "phys_score": 0.033889262016842905,
+     "patch_ratio": 0.5415319683908046,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.18084829243018563,
+     "phys_score": 0.020452935072757923,
+     "patch_ratio": 0.5818366858237548,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.1940453505735574,
+     "phys_score": 0.09042412005468106,
+     "patch_ratio": 0.4530984268707483,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.18340976233850012,
+     "phys_score": 0.09056937305621307,
+     "patch_ratio": 0.4155107355442177,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.19503767057469373,
+     "phys_score": 0.08597259424674807,
+     "patch_ratio": 0.46770036139455784,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.21205251527763044,
+     "phys_score": 0.1112283258104513,
+     "patch_ratio": 0.46411298894557823,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.35324126194174404,
+     "phys_score": 0.2854284980109586,
+     "patch_ratio": 0.5227731717687075,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.17712876000193611,
+    "phys_score": 0.027448654807308247,
+    "patch_ratio": 0.5513290229885057
+   },
+   "unseen": {
+    "combined": 0.22755731214122515,
+    "phys_score": 0.13272458223581043,
+    "patch_ratio": 0.4646391369047619
+   },
+   "canonical_phys_sd": 0.007220255991308406,
+   "unseen_phys_sd": 0.0859254241712116,
+   "status": "completed",
+   "degradation_ratio": 4.8353765664491615
+  },
+  "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.22813540490992895,
+     "phys_score": 0.0016812335405671738,
+     "patch_ratio": 0.7942708333333334,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.22813540490992895,
+     "phys_score": 0.0016812335405671738,
+     "patch_ratio": 0.7942708333333334,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.18020971923933218,
+     "phys_score": 0.0022936069350650555,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.18020971923933218,
+     "phys_score": 0.0022936069350650555,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.22813540490992895,
+    "phys_score": 0.0016812335405671738,
+    "patch_ratio": 0.7942708333333334
+   },
+   "unseen": {
+    "combined": 0.18020971923933218,
+    "phys_score": 0.0022936069350650555,
+    "patch_ratio": 0.625
+   },
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "status": "completed",
+   "degradation_ratio": 1.3642405291838837
+  }
+ },
+ "thresholds_match": false,
+ "dns_signature_canonical": 61756.79037528209,
+ "dns_signature_unseen": 66395.9251107193,
+ "dns_relative_shift": 0.07511942747099111,
+ "unseen_condition_is_weak": false,
+ "resumed_from_checkpoint": true,
+ "n_runs_resumed": 1,
+ "status": "completed",
+ "qhas_degrades_more": true,
+ "git_hash_at_start": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
+ "dirty_at_start": true,
+ "git_hash_at_save": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
+ "head_moved_during_run": true,
+ "git_hash": "c9ec648c0bf91a892fdf7097b9831b82ec7fcf95",
+ "cli_args": {
+  "fold": "kh",
+  "mode": "leak-free",
+  "no_resume": false,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
+ },
+ "wall_s": 6748.664231300354
+}

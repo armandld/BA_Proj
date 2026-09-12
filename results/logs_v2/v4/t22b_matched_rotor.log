@@ -1,0 +1,49 @@
+====================================================================================
+  V4 T22 - fold rotor (mhd_rotor)  mode=unseen-ic
+  unseen condition: slower, smaller rotor with a wider taper
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  classical reference: budget-matched threshold 0.0969 (forced)
+  QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
+  classical threshold = 0.09687500000000002   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (canonical/rotor) ---
+
+
+--- Pre-computing DNS traces for unseen/rotor ---
+Hot-Start captured at t=0.2003
+DNS pre-computed: 648 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (unseen/rotor) ---
+
+
+  DNS signature canonical=9.274266e+04  unseen=7.803497e+04
+  trajectory actually changed: True
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] canonical run 1/5: phys=0.16363 patch=0.3709
+    [qhas] canonical run 2/5: phys=0.11524 patch=0.3592
+    [qhas] canonical run 3/5: phys=0.09389 patch=0.3385
+    [qhas] canonical run 4/5: phys=0.13924 patch=0.3538
+    [qhas] canonical run 5/5: phys=0.15226 patch=0.3578
+    [qhas] unseen run 1/5: phys=0.03916 patch=0.4373
+    [qhas] unseen run 2/5: phys=0.02439 patch=0.4087
+    [qhas] unseen run 3/5: phys=0.03387 patch=0.4130
+    [qhas] unseen run 4/5: phys=0.05648 patch=0.4050
+    [qhas] unseen run 5/5: phys=0.05302 patch=0.3837
+  [qhas] canonical phys=0.13285+-0.02826  unseen phys=0.04139+-0.01336  degradation x0.31
+    [classical] canonical run 1/2: phys=0.05365 patch=0.3562
+    [classical] canonical run 2/2: phys=0.05365 patch=0.3562
+    [classical] unseen run 1/2: phys=0.02820 patch=0.3835
+    [classical] unseen run 2/2: phys=0.02820 patch=0.3835
+  [classical] canonical phys=0.05365+-0.00000  unseen phys=0.02820+-0.00000  degradation x0.53
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.31  classical x0.53
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_rotor.json (10052s)
+
+V4 Task 22 complete.

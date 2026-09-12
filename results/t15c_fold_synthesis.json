@@ -1,0 +1,408 @@
+{
+ "folds_available": [
+  "kh",
+  "ot",
+  "tearing"
+ ],
+ "folds_missing": [],
+ "records": [
+  {
+   "fold": "kh",
+   "scenario": "kelvin_helmholtz",
+   "train_on": [
+    "ot",
+    "tearing",
+    "rotor"
+   ],
+   "n_trials": 4,
+   "qhas": {
+    "combined": 0.24432829297933184,
+    "phys_score": 0.007002138906696718,
+    "patch_ratio": 0.8376436781609196,
+    "wall_s": 578.6740922927856
+   },
+   "classical": {
+    "combined": 0.1800140864155247,
+    "phys_score": 0.002019720981734553,
+    "patch_ratio": 0.625,
+    "wall_s": 213.1109824180603
+   },
+   "hyperparams": {
+    "gamma_hydro": 2.0,
+    "gamma_mag": 0.5,
+    "kappa": 10.0,
+    "beta": 5.713728287309586,
+    "w_z_frac": 72.57005721594277,
+    "sigma": 0.18877374530006025,
+    "beta_curl": 2.724415914984484,
+    "beta_xpoint": 2.1182739966945237,
+    "threshold_amr": 0.14959824837662078
+   },
+   "classical_params": {
+    "threshold_amr": 0.46161012794549355
+   },
+   "t_tune": 4267.038781642914,
+   "git_hash": "1858c5a5f31ebad5ab12931fefd0e7abd8cafec5",
+   "budget": {
+    "target_patch": 0.8376436781609196,
+    "matched": {
+     "threshold": 0.19062500000000002,
+     "patch_ratio": 0.7942708333333334,
+     "phys_score": 0.0016812335405671738,
+     "combined": 0.22813540490992895,
+     "wall_s": 248.27087450027466
+    },
+    "delta_phys_matched": 0.005320905366129544,
+    "trace": [
+     {
+      "threshold": 0.05,
+      "patch_ratio": 1.0,
+      "phys_score": 0.0012642911303210368,
+      "combined": 0.2866173508073722,
+      "wall_s": 287.06794929504395
+     },
+     {
+      "threshold": 0.8,
+      "patch_ratio": 0.10678579980842912,
+      "phys_score": 0.09137811089758731,
+      "combined": 0.0957803077292564,
+      "wall_s": 70.33968615531921
+     },
+     {
+      "threshold": 0.42500000000000004,
+      "patch_ratio": 0.625,
+      "phys_score": 0.002019720981734553,
+      "combined": 0.1800140864155247,
+      "wall_s": 198.28946256637573
+     },
+     {
+      "threshold": 0.23750000000000002,
+      "patch_ratio": 0.7008800287356322,
+      "phys_score": 0.0018584650005786171,
+      "combined": 0.2015789117820225,
+      "wall_s": 214.46561932563782
+     },
+     {
+      "threshold": 0.14375000000000002,
+      "patch_ratio": 0.950475933908046,
+      "phys_score": 0.0013509877222628649,
+      "combined": 0.2725295437753438,
+      "wall_s": 279.01412773132324
+     },
+     {
+      "threshold": 0.19062500000000002,
+      "patch_ratio": 0.7942708333333334,
+      "phys_score": 0.0016812335405671738,
+      "combined": 0.22813540490992895,
+      "wall_s": 248.27087450027466
+     }
+    ]
+   }
+  },
+  {
+   "fold": "ot",
+   "scenario": "orszag_tang",
+   "train_on": [
+    "kh",
+    "tearing",
+    "rotor"
+   ],
+   "n_trials": 4,
+   "qhas": {
+    "combined": 0.3327835513988278,
+    "phys_score": 0.19403454741107523,
+    "patch_ratio": 0.6796560613682092,
+    "wall_s": 1069.0502347946167
+   },
+   "classical": {
+    "combined": 0.4386043836627596,
+    "phys_score": 0.48450639869727985,
+    "patch_ratio": 0.32384934607645877,
+    "wall_s": 370.50210905075073
+   },
+   "hyperparams": {
+    "gamma_hydro": 2.0,
+    "gamma_mag": 0.5,
+    "kappa": 10.0,
+    "beta": 5.7137,
+    "w_z_frac": 72.5701,
+    "sigma": 0.1888,
+    "beta_curl": 2.7244,
+    "beta_xpoint": 2.1183,
+    "threshold_amr": 0.14959824837662078
+   },
+   "classical_params": {
+    "threshold_amr": 0.46161012794549355
+   },
+   "t_tune": 5236.0,
+   "git_hash": "f876fc5ad499573a1d4145a885d9edf6916bfd54",
+   "budget": {
+    "target_patch": 0.6796560613682092,
+    "matched": {
+     "threshold": 0.19062500000000002,
+     "patch_ratio": 0.6411673163983903,
+     "phys_score": 0.08269889925338406,
+     "combined": 0.24226130415195732,
+     "wall_s": 638.1224915981293
+    },
+    "delta_phys_matched": 0.11133564815769117,
+    "trace": [
+     {
+      "threshold": 0.05,
+      "patch_ratio": 0.9480319416498993,
+      "phys_score": 0.011106421412697493,
+      "combined": 0.2787994271947552,
+      "wall_s": 830.3985693454742
+     },
+     {
+      "threshold": 0.8,
+      "patch_ratio": 0.015625,
+      "phys_score": 0.5893687323133459,
+      "combined": 0.4254419516523899,
+      "wall_s": 127.16526508331299
+     },
+     {
+      "threshold": 0.42500000000000004,
+      "patch_ratio": 0.3554433847402597,
+      "phys_score": 0.28985850110150235,
+      "combined": 0.30859703928400445,
+      "wall_s": 127.82953238487244
+     },
+     {
+      "threshold": 0.23750000000000002,
+      "patch_ratio": 0.5865977112676056,
+      "phys_score": 0.10267759172743349,
+      "combined": 0.24094048302462556,
+      "wall_s": 615.7877588272095
+     },
+     {
+      "threshold": 0.14375000000000002,
+      "patch_ratio": 0.7368979502012073,
+      "phys_score": 0.06487712990029917,
+      "combined": 0.25688307855770154,
+      "wall_s": 734.0835812091827
+     },
+     {
+      "threshold": 0.19062500000000002,
+      "patch_ratio": 0.6411673163983903,
+      "phys_score": 0.08269889925338406,
+      "combined": 0.24226130415195732,
+      "wall_s": 638.1224915981293
+     }
+    ]
+   }
+  },
+  {
+   "fold": "tearing",
+   "scenario": "harris_tearing",
+   "train_on": [
+    "kh",
+    "ot",
+    "rotor"
+   ],
+   "n_trials": 4,
+   "qhas": {
+    "combined": 0.23301354925847778,
+    "phys_score": 0.018542338527086213,
+    "patch_ratio": 0.7691915760869565,
+    "wall_s": 240.1191532611847
+   },
+   "classical": {
+    "combined": 0.18173490078520044,
+    "phys_score": 0.004428861099280601,
+    "patch_ratio": 0.625,
+    "wall_s": 72.74688696861267
+   },
+   "hyperparams": {
+    "gamma_hydro": 2.0,
+    "gamma_mag": 0.5,
+    "kappa": 10.0,
+    "beta": 6.635994074133233,
+    "w_z_frac": 5.627932047415165,
+    "sigma": 0.2696964402189823,
+    "beta_curl": 4.818313802505147,
+    "beta_xpoint": 1.9172075941288886,
+    "threshold_amr": 0.14959824837662078
+   },
+   "classical_params": {
+    "threshold_amr": 0.46161012794549355
+   },
+   "t_tune": 1549.4685208797455,
+   "git_hash": "4f3b2c382c76c317b2e53d49404e82f269d6972c",
+   "budget": {
+    "target_patch": 0.7691915760869565,
+    "matched": {
+     "threshold": 0.42500000000000004,
+     "patch_ratio": 0.625,
+     "phys_score": 0.004428861099280601,
+     "combined": 0.18173490078520044,
+     "wall_s": 70.92863965034485
+    },
+    "delta_phys_matched": 0.014113477427805613,
+    "trace": [
+     {
+      "threshold": 0.05,
+      "patch_ratio": 0.9597486413043478,
+      "phys_score": 0.003967683747140063,
+      "combined": 0.2770479573349137,
+      "wall_s": 94.98010158538818
+     },
+     {
+      "threshold": 0.8,
+      "patch_ratio": 0.07269021739130435,
+      "phys_score": 4.1258313756677625,
+      "combined": 2.967791044731632,
+      "wall_s": 20.207184076309204
+     },
+     {
+      "threshold": 0.42500000000000004,
+      "patch_ratio": 0.625,
+      "phys_score": 0.004428861099280601,
+      "combined": 0.18173490078520044,
+      "wall_s": 70.92863965034485
+     },
+     {
+      "threshold": 0.23750000000000002,
+      "patch_ratio": 0.625,
+      "phys_score": 0.004428861099280601,
+      "combined": 0.18173490078520044,
+      "wall_s": 71.44876050949097
+     },
+     {
+      "threshold": 0.14375000000000002,
+      "patch_ratio": 0.625,
+      "phys_score": 0.004428861099280601,
+      "combined": 0.18173490078520044,
+      "wall_s": 70.1979193687439
+     },
+     {
+      "threshold": 0.09687500000000002,
+      "patch_ratio": 0.625,
+      "phys_score": 0.004428861099280601,
+      "combined": 0.18173490078520044,
+      "wall_s": 69.9515540599823
+     }
+    ]
+   }
+  }
+ ],
+ "primary": {
+  "n_folds": 3,
+  "folds": [
+   "kh",
+   "ot",
+   "tearing"
+  ],
+  "qhas_combined": [
+   0.24432829297933184,
+   0.3327835513988278,
+   0.23301354925847778
+  ],
+  "classical_combined": [
+   0.1800140864155247,
+   0.4386043836627596,
+   0.18173490078520044
+  ],
+  "delta": [
+   0.06431420656380715,
+   -0.1058208322639318,
+   0.051278648473277344
+  ],
+  "mean_delta": 0.0032573409243842333,
+  "n_qhas_better": 1,
+  "n_classical_better": 2,
+  "win_rule_min": 3,
+  "margin": 0.013339222847724744,
+  "margin_frac": 0.05,
+  "qhas_wins_rule": false,
+  "classical_wins_rule": false,
+  "paired_t_p": 0.9579056366267156,
+  "sign_test_p": 1.0,
+  "sign_test_p_min_attainable": 0.25,
+  "tost": {
+   "diff": 0.0032573409243842333,
+   "p_lower": 0.39505754175989305,
+   "p_upper": 0.4353459218515665,
+   "p_tost": 0.4353459218515665,
+   "equivalent": false,
+   "margin": 0.013339222847724744,
+   "df": 2.0
+  },
+  "holm": {
+   "labels": [
+    "paired_t(difference)",
+    "TOST(equivalence)"
+   ],
+   "p_adjusted": [
+    0.9579056366267156,
+    0.870691843703133
+   ],
+   "reject": [
+    false,
+    false
+   ]
+  },
+  "excluded_failed_folds": [
+   "rotor"
+  ],
+  "audit_present": true
+ },
+ "secondary": {
+  "n_folds": 3,
+  "rows": [
+   {
+    "fold": "kh",
+    "qhas_patch": 0.8703663793103449,
+    "qhas_phys": 0.003198878045951007,
+    "matched_threshold": 0.19062500000000002,
+    "matched_patch": 0.7942708333333334,
+    "matched_phys": 0.0016812335405671738,
+    "delta_phys_matched": 0.005320905366129544,
+    "frontier_phys_at_qhas_budget": 0.001520353801313899,
+    "ratio_vs_frontier": 2.1040352865145713,
+    "budget_gap": 0.07609554597701151,
+    "qhas_dominated": true
+   },
+   {
+    "fold": "ot",
+    "qhas_patch": 0.7558067152917505,
+    "qhas_phys": 0.10726652191539332,
+    "matched_threshold": 0.19062500000000002,
+    "matched_patch": 0.6411673163983903,
+    "matched_phys": 0.08269889925338406,
+    "delta_phys_matched": 0.11133564815769117,
+    "frontier_phys_at_qhas_budget": 0.060061525891831335,
+    "ratio_vs_frontier": 1.785944001965193,
+    "budget_gap": 0.11463939889336017,
+    "qhas_dominated": true
+   },
+   {
+    "fold": "tearing",
+    "qhas_patch": 0.9101732336956522,
+    "qhas_phys": 0.008005634162466713,
+    "matched_threshold": 0.42500000000000004,
+    "matched_patch": 0.625,
+    "matched_phys": 0.004428861099280601,
+    "delta_phys_matched": 0.014113477427805613,
+    "frontier_phys_at_qhas_budget": 0.0040359829196869035,
+    "ratio_vs_frontier": 1.9835649262578545,
+    "budget_gap": 0.2851732336956522,
+    "qhas_dominated": true
+   }
+  ],
+  "n_qhas_dominated": 3,
+  "mean_delta_phys_matched": 0.04359001031720878,
+  "n_qhas_worse_at_equal_budget": 3
+ },
+ "git_hash": "570de11dc80399705274eb418eebedc26269119c",
+ "cli_args": {
+  "folds": [
+   "kh",
+   "ot",
+   "rotor",
+   "tearing"
+  ],
+  "prefix": "t15_level3",
+  "results_dir": null
+ }
+}

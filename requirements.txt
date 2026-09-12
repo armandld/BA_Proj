@@ -1,0 +1,20 @@
+# Environnement de campagne valide (Python 3.11). La campagne doit
+# toujours etre lancee depuis un commit exact ; ses artefacts enregistrent
+# ce commit et les arguments CLI.
+
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.0
+pandas==3.0.5
+matplotlib==3.11.1
+networkx==3.6.1
+
+optuna==4.9.0
+cma==4.4.4
+
+qiskit==2.5.2
+qiskit-aer==0.17.2
+qiskit-ibm-runtime==0.49.0
+qiskit-machine-learning==0.9.0
+
+pytest==9.1.1

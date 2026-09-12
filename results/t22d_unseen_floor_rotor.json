@@ -1,0 +1,33 @@
+{
+ "fold": "rotor",
+ "scenario": "mhd_rotor",
+ "threshold": 0.05,
+ "floor_canonical": {
+  "combined": 0.14128723881694166,
+  "phys_score": 0.03394822050876686,
+  "patch_ratio": 0.4096347845873786,
+  "completed": true
+ },
+ "floor_unseen": {
+  "combined": 0.17781109788981267,
+  "phys_score": 0.0287436609236551,
+  "patch_ratio": 0.5504796903052065,
+  "completed": true
+ },
+ "arms": {
+  "qhas": {
+   "canonical_over_floor": 3.913373858390545,
+   "unseen_over_floor": 1.4398026587978918
+  },
+  "classical": {
+   "canonical_over_floor": 1.580203213604288,
+   "unseen_over_floor": 0.9810678440705666
+  }
+ },
+ "both_arms_at_floor_on_unseen": true,
+ "git_hash": "7aaf34a05301bb9fe1c3b9a82a057f3ef518ee55",
+ "cli_args": {
+  "fold": "rotor",
+  "threshold": 0.05
+ }
+}

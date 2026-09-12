@@ -171,77 +171,77 @@ log "=============================================================="
 # ── DEFAULT: Run all test suites ──
 if $RUN_ALL; then
     # Tier 0: Fast structural tests (< 5s)
-    run_stage "v9 Hamiltonian diagnostics" python -m pytest tests/test_hamiltonian_v9_diagnostic.py -v
-    run_stage "v9 metrics (Tier 0)" python -m pytest tests/test_v9_metrics.py -v
+    run_stage "v9 Hamiltonian diagnostics" python -m pytest tests/mapping/test_hamiltonian_v9_diagnostic.py -v
+    run_stage "v9 metrics (Tier 0)" python -m pytest tests/pipeline/test_v9_metrics.py -v
 
     # Tier 1: Module validation (< 30s)
-    run_stage "Module validation" python -m pytest tests/test_module_validation.py -v
-    run_stage "Signal contribution" python -m pytest tests/test_signal_contribution.py -v
+    run_stage "Module validation" python -m pytest tests/pipeline/test_module_validation.py -v
+    run_stage "Signal contribution" python -m pytest tests/mapping/test_signal_contribution.py -v
 
     # Tier 1b: Additional structural tests
-    run_stage "Shock gradient / X-point" python -m pytest tests/test_shock_gradient_proposal.py -v
-    run_stage "Beta X-point sensitivity" python -m pytest tests/test_beta_xpoint.py -v
+    run_stage "Shock gradient / X-point" python -m pytest tests/mapping/test_shock_gradient_proposal.py -v
+    run_stage "Beta X-point sensitivity" python -m pytest tests/mapping/test_beta_xpoint.py -v
 
     # Tier 1c: Diagnostic scripts (standalone, not pytest-compatible)
-    run_stage "Hamiltonian balance diagnostic" bash -c "cd tests && python diag_hamiltonian_balance.py"
-    run_stage "QAOA contribution diagnostic" bash -c "cd tests && python diag_qaoa_contribution.py"
+    run_stage "Hamiltonian balance diagnostic" bash -c "cd tests/tools && python diag_hamiltonian_balance.py"
+    run_stage "QAOA contribution diagnostic" bash -c "cd tests/tools && python diag_qaoa_contribution.py"
 
     # Tier 2: VQA chain (< 60s)
-    run_stage "VQA anomaly cases" python -m pytest tests/test_vqa_anomaly_cases.py -v
-    run_stage "QAOA end-to-end pipeline" python -m pytest tests/QAOA_test.py -v
+    run_stage "VQA anomaly cases" python -m pytest tests/quantum/test_vqa_anomaly_cases.py -v
+    run_stage "QAOA end-to-end pipeline" python -m pytest tests/quantum/QAOA_test.py -v
 
     # Tier 3: Physics decision tests (< 120s)
-    run_stage "QAOA physics decisions" python -m pytest tests/test_qaoa_physics_decision.py -v
-    run_stage "QAOA controlled decisions" bash -c "cd tests && python test_qaoa_decisions.py"
+    run_stage "QAOA physics decisions" python -m pytest tests/quantum/test_qaoa_physics_decision.py -v
+    run_stage "QAOA controlled decisions" bash -c "cd tests/quantum && python test_qaoa_decisions.py"
 
     # Tier 4: Solver convergence (slow, ~8min)
-    run_stage "MHD solver convergence" python -m pytest tests/test_solver_convergence.py -v
+    run_stage "MHD solver convergence" python -m pytest tests/solver/test_solver_convergence.py -v
 
     # Tier 5: Evaluation figures (slow, ~5-10min each)
-    run_stage "QAOA advantage" python tests/test_qaoa_advantage.py
-    run_stage "QAOA noise & early detection" python -m pytest tests/test_qaoa_noise_and_early.py -v
-    run_stage "QAOA scaling & hparams" python -m pytest tests/test_qaoa_scaling_and_hparams.py -v
+    run_stage "QAOA advantage" python tests/quantum/test_qaoa_advantage.py
+    run_stage "QAOA noise & early detection" python -m pytest tests/quantum/test_qaoa_noise_and_early.py -v
+    run_stage "QAOA scaling & hparams" python -m pytest tests/quantum/test_qaoa_scaling_and_hparams.py -v
 
     # Tier 6: Diagnostic convergence (standalone scripts)
-    run_stage "Diagnostic convergence" bash -c "cd tests && python diagnose_convergence.py"
+    run_stage "Diagnostic convergence" bash -c "cd tests/tools && python diagnose_convergence.py"
 fi
 
 # ── TARGETED: Individual test groups ──
 
 if $RUN_SOLVER; then
-    run_stage "MHD solver convergence" python -m pytest tests/test_solver_convergence.py -v
+    run_stage "MHD solver convergence" python -m pytest tests/solver/test_solver_convergence.py -v
 fi
 
 if $RUN_VQA; then
-    run_stage "VQA anomaly cases" python -m pytest tests/test_vqa_anomaly_cases.py -v
+    run_stage "VQA anomaly cases" python -m pytest tests/quantum/test_vqa_anomaly_cases.py -v
 fi
 
 if $RUN_QAOA; then
-    run_stage "QAOA end-to-end pipeline" python -m pytest tests/QAOA_test.py -v
+    run_stage "QAOA end-to-end pipeline" python -m pytest tests/quantum/QAOA_test.py -v
 fi
 
 if $RUN_V9; then
-    run_stage "v9 Hamiltonian diagnostics" python -m pytest tests/test_hamiltonian_v9_diagnostic.py -v
-    run_stage "v9 metrics (Tier 0)" python -m pytest tests/test_v9_metrics.py -v
+    run_stage "v9 Hamiltonian diagnostics" python -m pytest tests/mapping/test_hamiltonian_v9_diagnostic.py -v
+    run_stage "v9 metrics (Tier 0)" python -m pytest tests/pipeline/test_v9_metrics.py -v
 fi
 
 if $RUN_MODULES; then
-    run_stage "Module validation" python -m pytest tests/test_module_validation.py -v
-    run_stage "Signal contribution" python -m pytest tests/test_signal_contribution.py -v
-    run_stage "Hamiltonian balance diagnostic" bash -c "cd tests && python diag_hamiltonian_balance.py"
+    run_stage "Module validation" python -m pytest tests/pipeline/test_module_validation.py -v
+    run_stage "Signal contribution" python -m pytest tests/mapping/test_signal_contribution.py -v
+    run_stage "Hamiltonian balance diagnostic" bash -c "cd tests/tools && python diag_hamiltonian_balance.py"
 fi
 
 if $RUN_FIGURES; then
-    run_stage "QAOA advantage" python tests/test_qaoa_advantage.py
-    run_stage "QAOA noise & early detection" python -m pytest tests/test_qaoa_noise_and_early.py -v
-    run_stage "QAOA scaling & hparams" python -m pytest tests/test_qaoa_scaling_and_hparams.py -v
-    run_stage "QAOA controlled decisions" bash -c "cd tests && python test_qaoa_decisions.py"
-    run_stage "QAOA physics decisions" python -m pytest tests/test_qaoa_physics_decision.py -v
+    run_stage "QAOA advantage" python tests/quantum/test_qaoa_advantage.py
+    run_stage "QAOA noise & early detection" python -m pytest tests/quantum/test_qaoa_noise_and_early.py -v
+    run_stage "QAOA scaling & hparams" python -m pytest tests/quantum/test_qaoa_scaling_and_hparams.py -v
+    run_stage "QAOA controlled decisions" bash -c "cd tests/quantum && python test_qaoa_decisions.py"
+    run_stage "QAOA physics decisions" python -m pytest tests/quantum/test_qaoa_physics_decision.py -v
 fi
 
 if $RUN_DIAGNOSE; then
-    run_stage "Diagnostic convergence" bash -c "cd tests && python diagnose_convergence.py"
-    run_stage "QAOA contribution diagnostic" bash -c "cd tests && python diag_qaoa_contribution.py"
+    run_stage "Diagnostic convergence" bash -c "cd tests/tools && python diagnose_convergence.py"
+    run_stage "QAOA contribution diagnostic" bash -c "cd tests/tools && python diag_qaoa_contribution.py"
 fi
 
 # -----------------------------

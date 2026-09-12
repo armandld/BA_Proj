@@ -1,0 +1,43 @@
+====================================================================================
+  V4 T20 - Q-HAS run-to-run variance, fold kh
+  5 Q-HAS runs + 2 classical (determinism control), identical inputs
+  V1 fixes no RNG seed: Estimator/Sampler run at 256 shots.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for variance/kh ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+--- DNS pre-computation complete (variance/kh) ---
+
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+  Q-HAS run 1/5: combined=0.2251 phys=0.0018 patch=0.7832
+  Q-HAS run 2/5: combined=0.2540 phys=0.0066 patch=0.8724
+  Q-HAS run 3/5: combined=0.2612 phys=0.0018 patch=0.9098
+  Q-HAS run 4/5: combined=0.2566 phys=0.0035 patch=0.8893
+  Q-HAS run 5/5: combined=0.2580 phys=0.0023 patch=0.8972
+  classical run 1/2: combined=0.1800 phys=0.0020
+  classical run 2/2: combined=0.1800 phys=0.0020
+
+  --------------------------------------------------------------------------------
+  metric          Q-HAS mean       std     range      CV   | classical range
+  combined            0.2510    0.0147    0.0361   0.059   | 0.00e+00
+  phys_score          0.0032    0.0020    0.0048   0.636   | 0.00e+00
+  patch_ratio         0.8704    0.0506    0.1266   0.058   | 0.00e+00
+
+  classical arm deterministic: True  (control — if False, the measurement chain itself is suspect)
+
+  classical reference: budget-matched classical
+
+  Q-HAS run-to-run std on phys : 0.00203  (CV 0.636)
+  stored fold value 0.00700 sits at the 100th percentile of the draws
+  gap / std, from the STORED draw : 2.62
+  gap / std, from the MEAN draw   : 0.75   <- the one to quote
+  => against sampling noise the between-arm gap is NOT large;
+     a single run per arm cannot support a directional claim on
+     the magnitude. Report the dominance count instead.
+
+  saved: t20_qhas_run_variance_kh.json (3046s)
+
+V4 Task 20 complete.

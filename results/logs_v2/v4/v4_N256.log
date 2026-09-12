@@ -1,0 +1,249 @@
++ cd /home/user/BA_Proj
++ SC='orszag_tang harris_tearing kelvin_helmholtz mhd_rotor'
++ python study/v4/t14_numerical_validation.py --scenario orszag_tang --grids 64 128 256 --t-end 0.25 --re-out 200 3200 --split-N 256
+========================================================================================
+  V4 Task 14: grid convergence, conservation, out-of-grid Re
+  scenarios=['orszag_tang']  grids=[64, 128, 256]  t_end=0.25  CFL=0.4
+========================================================================================
+
+  [A] self-convergence (all solutions compared on the coarsest grid)
+    orszag_tang      N=64    steps=14     [0s]
+    orszag_tang      N=128   steps=28     [1s]
+    orszag_tang      N=256   steps=57     [6s]
+    pair               ||u_N - u_2N||_rel
+    64 vs 128                  3.3440e-02
+    128 vs 256                 1.6727e-02
+    observed order between the two gaps: 1.00
+
+  [B] conservation and solenoidal constraint along the trajectory
+  scenario             N     Re     E(0)    E drop  E monotone   max|divB|/rmsB
+  orszag_tang         64    400    0.999      0.6%        True         1.56e-14
+  orszag_tang        128    400    1.000      0.4%        True         3.29e-14
+  orszag_tang        256    400    1.000      0.3%        True         8.02e-14
+
+  [C] Reynolds numbers outside the training grid {400, 800, 1200, 1600}
+  orszag_tang      N=128   Re=200    E drop=  0.6%  monotone=True  max|divB|/rmsB=3.36e-14  [1s]
+  orszag_tang      N=128   Re=3200   E drop=  0.2%  monotone=True  max|divB|/rmsB=3.43e-14  [1s]
+
+  [D] temporal order with and without the divergence-free projection
+      (step_full applies RK4 then projection: a first-order Lie splitting)
+      resolution N=256
+    with_projection:
+      steps=  16  err=3.3504e-03  order=  n/a
+      steps=  32  err=1.6282e-03  order= 1.04
+      steps=  64  err=7.6151e-04  order= 1.10
+      steps= 128  err=3.2673e-04  order= 1.22
+    without:
+      steps=  16  err=3.7555e-07  order=  n/a
+      steps=  32  err=2.3599e-08  order= 3.99
+      steps=  64  err=1.4779e-09  order= 4.00
+      steps= 128  err=9.2121e-11  order= 4.00
+    observed order: with projection 1.12 | without 4.00
+
+  ALL CHECKS (divB <= 1e-3 and monotone energy): True
+  saved: t14_numerical_validation.npz
+
+V4 Task 14 complete.
++ python study/v4/t11_solver_attribution.py --N 256 --dim 2 --n-snaps 3 --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor --qaoa-reps 1 2 3
+========================================================================================
+  V4 Task 11: quantum-contribution attribution (dim=2 -> 8 qubits)
+  N=256  Re=[400]  mapper=v2  snaps/cfg=3  SA sweeps=500x5
+  Pre-registered rule: all solvers at the optimum with identical masks => value is attributable to H, not to quantum optimisation.
+========================================================================================
+
+  orszag_tang        Re=400 snap=10  n_optima=1   E*=-20.6356  [6.4s]
+  orszag_tang        Re=400 snap=19  n_optima=1   E*=-20.5023  [5.7s]
+  orszag_tang        Re=400 snap=29  n_optima=1   E*=-20.5307  [6.5s]
+  harris_tearing     Re=400 snap=6   n_optima=1   E*=-20.5608  [4.3s]
+  harris_tearing     Re=400 snap=13  n_optima=1   E*=-20.5563  [4.5s]
+  harris_tearing     Re=400 snap=19  n_optima=1   E*=-20.5380  [4.0s]
+  kelvin_helmholtz   Re=400 snap=10  n_optima=1   E*=-20.7594  [5.1s]
+  kelvin_helmholtz   Re=400 snap=19  n_optima=1   E*=-20.8467  [5.2s]
+  kelvin_helmholtz   Re=400 snap=29  n_optima=1   E*=-20.9989  [5.0s]
+  mhd_rotor          Re=400 snap=10  n_optima=1   E*=-20.6984  [5.4s]
+  mhd_rotor          Re=400 snap=19  n_optima=1   E*=-20.6636  [5.1s]
+  mhd_rotor          Re=400 snap=29  n_optima=1   E*=-20.7829  [5.6s]
+
+  cost Hamiltonian diagonal (Z/ZZ/ZZZZ only) on all 12 snapshots: True
+
+  ====================================================================================
+  solver              hit_opt      E_gap  agree_spin  mask_match      F1   wall_s
+  ------------------------------------------------------------------------------------
+  exhaustive            1.000  -1.44e-17       1.000       1.000   0.389    0.000
+  sa                    0.583   1.41e-02       0.792       0.583   0.367    0.139
+  sa_warm               1.000  -1.44e-17       1.000       1.000   0.389    0.133
+  greedy                1.000  -1.44e-17       1.000       1.000   0.389    0.000
+  classical_init        1.000  -1.44e-17       1.000       1.000   0.389    0.000
+  qaoa_p1               1.000  -1.44e-17       1.000       1.000   0.389    0.751
+  qaoa_p2               1.000  -1.44e-17       1.000       1.000   0.389    1.122
+  qaoa_p3               1.000  -1.44e-17       1.000       1.000   0.389    1.423
+  qaoa_shots_p3         1.000  -1.44e-17       1.000       1.000   0.389    1.603
+  ------------------------------------------------------------------------------------
+
+  DECISION RULE:
+  * solvers reaching the certified optimum on every snapshot: exhaustive, sa_warm, greedy, qaoa_p1, qaoa_p2, qaoa_p3, qaoa_shots_p3
+  * QAOA masks identical to the exact ground state on every snapshot: True
+  * => quantum optimisation is NOT the source of any gain; value is attributable to the Hamiltonian.
+
+  saved: t11_solver_attribution_N256_dim2.npz
+
+V4 Task 11 complete.
++ python study/v4/t11b_qaoa_displacement.py --N 256 --dim 2 --n-snaps 2 --reps 1 2 3 4 --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+========================================================================================
+  V4 Task 11b: does the QAOA optimise its own Hamiltonian?
+  N=256  dim=2 (8 qubits)  mapper=v2  reps=[1, 2, 3, 4]  K_opt=100
+  progress = 0 -> decision unchanged from the classical encoding;
+  progress = 1 -> circuit reaches the optimum of its own cost.
+========================================================================================
+
+  orszag_tang        Re=400 snap=14  gs_uniform=True n_optima=1
+  orszag_tang        Re=400 snap=29  gs_uniform=True n_optima=1
+  harris_tearing     Re=400 snap=10  gs_uniform=True n_optima=1
+  harris_tearing     Re=400 snap=19  gs_uniform=True n_optima=1
+  kelvin_helmholtz   Re=400 snap=14  gs_uniform=True n_optima=1
+  kelvin_helmholtz   Re=400 snap=29  gs_uniform=True n_optima=1
+  mhd_rotor          Re=400 snap=14  gs_uniform=True n_optima=1
+  mhd_rotor          Re=400 snap=29  gs_uniform=True n_optima=1
+
+  ====================================================================================
+   reps   progress   ||disp||  ||required||  ||remaining||  mean marg  agree_gs
+  ------------------------------------------------------------------------------------
+      1     0.1588     0.1685        0.7487         0.6504     0.7739     1.000
+      2     0.1192     0.1569        0.7487         0.6759     0.7653     1.000
+      3     0.0766     0.1392        0.7487         0.7055     0.7555     1.000
+      4    -0.0132     0.1706        0.7487         0.7662     0.7376     1.000
+  ------------------------------------------------------------------------------------
+
+  exact ground state is a UNIFORM mask on 100.0% of snapshots (no spatial information at the optimum)
+  mean variational progress toward that optimum: 0.0854
+  change in progress from reps=1 to 4: -0.1720
+
+  READING: the circuit stays at the classical encoding; the deployed decision is not a minimiser of its declared cost.
+
+  saved: t11b_qaoa_displacement_N256_dim2.npz
+
+V4 Task 11b complete.
++ python study/v4/t13_term_ablation.py --N 256 --dim 2 --n-snaps 3 --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+========================================================================================
+  V4 Task 13: causal ablation of Hamiltonian term families
+  N=256  dim=2  mapper=v2  snaps/cfg=3
+  'full' is a control: it must produce exactly zero change.
+========================================================================================
+
+  orszag_tang        Re=400 snap=10  base_uniform=True
+  orszag_tang        Re=400 snap=19  base_uniform=True
+  orszag_tang        Re=400 snap=29  base_uniform=True
+  harris_tearing     Re=400 snap=6   base_uniform=True
+  harris_tearing     Re=400 snap=13  base_uniform=True
+  harris_tearing     Re=400 snap=19  base_uniform=True
+  kelvin_helmholtz   Re=400 snap=10  base_uniform=True
+  kelvin_helmholtz   Re=400 snap=19  base_uniform=True
+  kelvin_helmholtz   Re=400 snap=29  base_uniform=True
+  mhd_rotor          Re=400 snap=10  base_uniform=True
+  mhd_rotor          Re=400 snap=19  base_uniform=True
+  mhd_rotor          Re=400 snap=29  base_uniform=True
+
+  ================================================================================
+  ablation             changed   uniform   refined       F1   n_optima
+  --------------------------------------------------------------------------------
+  full                  0.0000     1.000     1.000    0.389        1.0
+  no_Z                  1.0000     1.000     0.000    0.000        8.0
+  no_ZZ                 0.0000     1.000     1.000    0.389        1.0
+  no_ZZZZ               0.0000     1.000     1.000    0.389        1.0
+  Z_only                0.0000     1.000     1.000    0.389        1.0
+  couplings_only        1.0000     1.000     0.000    0.000        8.0
+  --------------------------------------------------------------------------------
+
+  control ('full' ablation) changed fraction = 0.000000 (must be 0.0)
+  READING: a term whose removal changes no decision is inert for the deployed
+  decision at this grid size, whatever its magnitude in the cost function.
+
+  saved: t13_term_ablation_N256_dim2.npz
+
+V4 Task 13 complete.
++ python study/v4/t12_equivariance.py --N 256 --dim 8 --n-snaps 1 --gs-solver sa --no-qaoa --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+========================================================================================
+  V4 Task 12: equivariance test (solver commutation, then orbit error)
+  N=256  dim=8  ops=['flip0', 'flip1', 'rot180', 'rot90']  mapper=v2
+========================================================================================
+
+  orszag_tang        Re=400 snap=29 done
+  harris_tearing     Re=400 snap=19 done
+  kelvin_helmholtz   Re=400 snap=29 done
+  mhd_rotor          Re=400 snap=29 done
+
+  [1] solver commutation defect  eps = ||T(step(U)) - step(T(U))|| / ||step(U)||
+  op         axial B     mean eps      max eps
+  flip0         True    4.005e-10    1.468e-09
+  flip0        False    4.005e-10    1.468e-09
+  flip1         True    4.005e-10    1.468e-09
+  flip1        False    4.005e-10    1.468e-09
+  rot180        True    2.879e-16    3.394e-16
+  rot180       False    2.879e-16    3.394e-16
+  rot90         True    4.005e-10    1.468e-09
+  rot90        False    4.005e-10    1.468e-09
+
+  [2] orbit error of the decision map (fraction of patches where D(T(U)) != T(D(U)))
+  op             classical    ground_state
+  ----------------------------------------
+  flip0             0.0078          0.4688
+  flip1             0.0156          0.4336
+  rot180            0.0195          0.3750
+  rot90             0.0156          0.4102
+  ----------------------------------------
+  MEAN              0.0146          0.4219
+
+  [3] CONTROL - ground-state solver noise floor (same field, different anneal seeds): 0.3613
+      spread of refined fraction across seeds: 0.2148
+      ground-state orbit error 0.4219 vs floor 0.3613 -> NOT interpretable: the optimiser is less reproducible than the effect being measured
+
+  READING: a solver defect at machine precision with a non-zero orbit error
+  localises the asymmetry in the decision map, not in the physics.
+
+  saved: t12_equivariance_N256_dim8.npz
+
+V4 Task 12 complete.
++ python study/v4/t12_equivariance.py --N 256 --dim 2 --n-snaps 1 --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor
+========================================================================================
+  V4 Task 12: equivariance test (solver commutation, then orbit error)
+  N=256  dim=2  ops=['flip0', 'flip1', 'rot180', 'rot90']  mapper=v2
+========================================================================================
+
+  orszag_tang        Re=400 snap=29 done
+  harris_tearing     Re=400 snap=19 done
+  kelvin_helmholtz   Re=400 snap=29 done
+  mhd_rotor          Re=400 snap=29 done
+
+  [1] solver commutation defect  eps = ||T(step(U)) - step(T(U))|| / ||step(U)||
+  op         axial B     mean eps      max eps
+  flip0         True    4.005e-10    1.468e-09
+  flip0        False    4.005e-10    1.468e-09
+  flip1         True    4.005e-10    1.468e-09
+  flip1        False    4.005e-10    1.468e-09
+  rot180        True    2.879e-16    3.394e-16
+  rot180       False    2.879e-16    3.394e-16
+  rot90         True    4.005e-10    1.468e-09
+  rot90        False    4.005e-10    1.468e-09
+
+  [2] orbit error of the decision map (fraction of patches where D(T(U)) != T(D(U)))
+  op             classical    ground_state            qaoa
+  --------------------------------------------------------
+  flip0             0.0000          0.0000          0.0000
+  flip1             0.0000          0.0000          0.0000
+  rot180            0.0000          0.0000          0.0000
+  rot90             0.0000          0.0000          0.0000
+  --------------------------------------------------------
+  MEAN              0.0000          0.0000          0.0000
+
+  [3] CONTROL - ground-state solver noise floor (same field, different anneal seeds): 0.0000
+      spread of refined fraction across seeds: 0.0000
+      ground-state orbit error 0.0000 vs floor 0.0000 -> NOT interpretable: the optimiser is less reproducible than the effect being measured
+
+  READING: a solver defect at machine precision with a non-zero orbit error
+  localises the asymmetry in the decision map, not in the physics.
+
+  saved: t12_equivariance_N256_dim2.npz
+
+V4 Task 12 complete.
++ echo '=== ALL V4 N=256 DONE ==='
+=== ALL V4 N=256 DONE ===

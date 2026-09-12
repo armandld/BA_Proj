@@ -1,0 +1,178 @@
+{
+ "fold": "rotor",
+ "scenario": "mhd_rotor",
+ "repeats": 5,
+ "n_aborted": 2,
+ "n_completed_qhas": 3,
+ "qhas_runs": [
+  {
+   "combined": 0.6404009331825672,
+   "phys_score": 0.7699435224704916,
+   "patch_ratio": 0.31654445996275604,
+   "completed": false,
+   "abort": {
+    "abort_step": 687,
+    "abort_time": 0.9888,
+    "partial_combined": 0.6404,
+    "diverged_fields": 0,
+    "n_fields": 5
+   }
+  },
+  {
+   "combined": 0.16765918192369036,
+   "phys_score": 0.10037819449899174,
+   "patch_ratio": 0.33586165048543687,
+   "completed": true,
+   "abort": null
+  },
+  {
+   "combined": 0.22853209429343438,
+   "phys_score": 0.17222610616129352,
+   "patch_ratio": 0.3692970646237864,
+   "completed": true,
+   "abort": null
+  },
+  {
+   "combined": 0.4130883462834818,
+   "phys_score": 0.45219125905430013,
+   "patch_ratio": 0.31533106435643565,
+   "completed": false,
+   "abort": {
+    "abort_step": 655,
+    "abort_time": 0.9346,
+    "partial_combined": 0.4131,
+    "diverged_fields": 0,
+    "n_fields": 5
+   }
+  },
+  {
+   "combined": 0.22302966698356846,
+   "phys_score": 0.16914763207796665,
+   "patch_ratio": 0.35773475424757284,
+   "completed": true,
+   "abort": null
+  }
+ ],
+ "classical_runs": [
+  {
+   "combined": 0.14008900555369172,
+   "phys_score": 0.0536450871441004,
+   "patch_ratio": 0.3561988015776699,
+   "completed": true,
+   "abort": null
+  },
+  {
+   "combined": 0.14008900555369172,
+   "phys_score": 0.0536450871441004,
+   "patch_ratio": 0.3561988015776699,
+   "completed": true,
+   "abort": null
+  }
+ ],
+ "qhas_stats": {
+  "combined": {
+   "n": 3,
+   "mean": 0.20640698106689773,
+   "std": 0.03366917181052789,
+   "min": 0.16765918192369036,
+   "max": 0.22853209429343438,
+   "range": 0.060872912369744014,
+   "cv": 0.1631203151971663,
+   "values": [
+    0.16765918192369036,
+    0.22853209429343438,
+    0.22302966698356846
+   ]
+  },
+  "phys_score": {
+   "n": 3,
+   "mean": 0.147250644246084,
+   "std": 0.040621904923830124,
+   "min": 0.10037819449899174,
+   "max": 0.17222610616129352,
+   "range": 0.07184791166230178,
+   "cv": 0.2758691150847744,
+   "values": [
+    0.10037819449899174,
+    0.17222610616129352,
+    0.16914763207796665
+   ]
+  },
+  "patch_ratio": {
+   "n": 3,
+   "mean": 0.35429782311893204,
+   "std": 0.016980609569093842,
+   "min": 0.33586165048543687,
+   "max": 0.3692970646237864,
+   "range": 0.03343541413834955,
+   "cv": 0.04792750183902125,
+   "values": [
+    0.33586165048543687,
+    0.3692970646237864,
+    0.35773475424757284
+   ]
+  }
+ },
+ "classical_stats": {
+  "combined": {
+   "n": 2,
+   "mean": 0.14008900555369172,
+   "std": 0.0,
+   "min": 0.14008900555369172,
+   "max": 0.14008900555369172,
+   "range": 0.0,
+   "cv": 0.0,
+   "values": [
+    0.14008900555369172,
+    0.14008900555369172
+   ]
+  },
+  "phys_score": {
+   "n": 2,
+   "mean": 0.0536450871441004,
+   "std": 0.0,
+   "min": 0.0536450871441004,
+   "max": 0.0536450871441004,
+   "range": 0.0,
+   "cv": 0.0,
+   "values": [
+    0.0536450871441004,
+    0.0536450871441004
+   ]
+  },
+  "patch_ratio": {
+   "n": 2,
+   "mean": 0.3561988015776699,
+   "std": 0.0,
+   "min": 0.3561988015776699,
+   "max": 0.3561988015776699,
+   "range": 0.0,
+   "cv": 0.0,
+   "values": [
+    0.3561988015776699,
+    0.3561988015776699
+   ]
+  }
+ },
+ "classical_deterministic": true,
+ "stored_qhas_phys": 0.1677724617088707,
+ "stored_classical_phys": 0.0536450871441004,
+ "gap_phys_from_stored": 0.11412737456477029,
+ "gap_phys_from_mean": 0.0936055571019836,
+ "gap_over_std_from_stored": 2.8095032662493256,
+ "gap_over_std_from_mean": 2.3043123476730787,
+ "gap_over_std": 2.3043123476730787,
+ "stored_percentile_among_draws": 50.0,
+ "classical_reference_source": "budget-matched classical (tuned arm ABORTED)",
+ "classical_arm_completed": false,
+ "shots": 256,
+ "git_hash": "b05ad439c58b33bd6f11217dd2f63bd875bcaab7",
+ "cli_args": {
+  "fold": "rotor",
+  "repeats": 5,
+  "classical_repeats": 2,
+  "prefix": "t15_level3",
+  "seed": 0
+ },
+ "wall_s": 2735.2029662132263
+}

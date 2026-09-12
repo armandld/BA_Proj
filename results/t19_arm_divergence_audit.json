@@ -1,0 +1,150 @@
+{
+ "results": [
+  {
+   "fold": "kh",
+   "scenario": "kelvin_helmholtz",
+   "arms": {
+    "qhas": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.25103540426590587,
+     "phys_score": 0.005616232638934766,
+     "patch_ratio": 0.8645833333333334,
+     "flat_penalty": false,
+     "replay_wall_s": 554.3675498962402,
+     "stored_combined": 0.24432829297933184,
+     "replay_matches_stored": false
+    },
+    "classical": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.1800140864155247,
+     "phys_score": 0.002019720981734553,
+     "patch_ratio": 0.625,
+     "flat_penalty": false,
+     "replay_wall_s": 199.8751654624939,
+     "stored_combined": 0.1800140864155247,
+     "replay_matches_stored": true
+    }
+   },
+   "fold_usable": true
+  },
+  {
+   "fold": "ot",
+   "scenario": "orszag_tang",
+   "arms": {
+    "qhas": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.26865450340730385,
+     "phys_score": 0.10957015285875657,
+     "patch_ratio": 0.666365379778672,
+     "flat_penalty": false,
+     "replay_wall_s": 556.9024579524994,
+     "stored_combined": 0.3327835513988278,
+     "replay_matches_stored": false
+    },
+    "classical": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.4386043836627596,
+     "phys_score": 0.48450639869727985,
+     "patch_ratio": 0.32384934607645877,
+     "flat_penalty": false,
+     "replay_wall_s": 231.0335021018982,
+     "stored_combined": 0.4386043836627596,
+     "replay_matches_stored": true
+    }
+   },
+   "fold_usable": true
+  },
+  {
+   "fold": "rotor",
+   "scenario": "mhd_rotor",
+   "arms": {
+    "qhas": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.23056745988086258,
+     "phys_score": 0.17948057854194546,
+     "patch_ratio": 0.35828466322815533,
+     "flat_penalty": false,
+     "replay_wall_s": 524.4078719615936,
+     "stored_combined": 0.22729591795085774,
+     "replay_matches_stored": false
+    },
+    "classical": {
+     "completed": false,
+     "abort": {
+      "abort_step": 208,
+      "abort_time": 0.2739,
+      "partial_combined": 0.9294,
+      "diverged_fields": 0,
+      "n_fields": 5
+     },
+     "combined": 0.9294453583596828,
+     "phys_score": 1.1730985017035558,
+     "patch_ratio": 0.3203125,
+     "flat_penalty": false,
+     "replay_wall_s": 27.20154905319214,
+     "stored_combined": 0.9294453583596828,
+     "replay_matches_stored": true
+    }
+   },
+   "fold_usable": false
+  },
+  {
+   "fold": "tearing",
+   "scenario": "harris_tearing",
+   "arms": {
+    "qhas": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.2541254070210902,
+     "phys_score": 0.013910760046917561,
+     "patch_ratio": 0.8546620244565217,
+     "flat_penalty": false,
+     "replay_wall_s": 286.37020468711853,
+     "stored_combined": 0.23301354925847778,
+     "replay_matches_stored": false
+    },
+    "classical": {
+     "completed": true,
+     "abort": null,
+     "combined": 0.18173490078520044,
+     "phys_score": 0.004428861099280601,
+     "patch_ratio": 0.625,
+     "flat_penalty": false,
+     "replay_wall_s": 81.20660901069641,
+     "stored_combined": 0.18173490078520044,
+     "replay_matches_stored": true
+    }
+   },
+   "fold_usable": true
+  }
+ ],
+ "usable_folds": [
+  "kh",
+  "ot",
+  "tearing"
+ ],
+ "failed_folds": [
+  "rotor"
+ ],
+ "git_hash": "d480259adad13ccbf7b5975beb275e0487274ba5",
+ "cli_args": {
+  "folds": [
+   "ot",
+   "kh",
+   "rotor"
+  ],
+  "arms": [
+   "qhas",
+   "classical"
+  ],
+  "prefix": "t15_level3",
+  "seed": 0,
+  "trace_only": false
+ },
+ "wall_s": 2303.317455768585
+}

@@ -1,0 +1,263 @@
+"""`src/compare_rotor_budget.py` — D-10 et ses defauts de configuration.
+
+Ce script est la demonstration d'avantage quantique sous budget contraint :
+quand seuls K blocs sur n^2 peuvent etre raffines, l'indicateur lineaire
+classique ne distingue pas « forte vorticite sans Jz » (coeur du rotor,
+lisse) de « forte vorticite ET fort Jz » (gaine magnetique, a raffiner).
+
+Il ecrit un `.npz` — c'est donc un PRODUCTEUR de resultat, pas un
+analyseur. Il n'avait aucun test, et il n'avait jamais tourne :
+
+  D-10  `PhysicalMapper(..., beta=0.5, ...)` levait `TypeError` a l'etape
+        4 sur 5, apres avoir paye le DNS. `beta` a quitte le constructeur
+        du mapper pour devenir un argument de `run_adaptive_vqa`.
+
+  defauts impossibles : `--n-blocks 4` demande 2*4^2 = 32 qubits, soit
+        69 Go de statevector ; et une fois n_blocks ramene a 3, la
+        resolution 128 n'est plus divisible par 3.
+"""
+
+import ast
+import os
+import pathlib
+import subprocess
+import sys
+
+import pytest
+
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_SRC = os.path.join(_REPO, "src")
+_SCRIPT = os.path.join(_SRC, "compare_rotor_budget.py")
+
+
+@pytest.fixture(scope="module")
+def crb():
+    if _SRC not in sys.path:
+        sys.path.insert(0, _SRC)
+    import matplotlib
+    matplotlib.use("Agg")
+    return pytest.importorskip("compare_rotor_budget")
+
+
+def _mots_cles_appel_mapper():
+    """Mots-cles passes a `PhysicalMapper(...)` dans `qhas_block_scores`.
+
+    Lu sur l'AST : le texte du fichier contient aussi le commentaire qui
+    documente D-10, et une recherche par chaine y trouve un faux `beta=`.
+    """
+    arbre = ast.parse(pathlib.Path(_SCRIPT).read_text())
+    fn = next(n for n in ast.walk(arbre)
+              if isinstance(n, ast.FunctionDef) and n.name == "qhas_block_scores")
+    appels = [n for n in ast.walk(fn)
+              if isinstance(n, ast.Call)
+              and getattr(n.func, "id", None) == "PhysicalMapper"]
+    assert len(appels) == 1, f"{len(appels)} appels a PhysicalMapper, 1 attendu"
+    return {kw.arg for kw in appels[0].keywords}
+
+
+def _defauts():
+    """Valeurs par defaut declarees par la CLI du script."""
+    arbre = ast.parse(pathlib.Path(_SCRIPT).read_text())
+    fn = next(n for n in ast.walk(arbre)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    out = {}
+    for n in ast.walk(fn):
+        if (isinstance(n, ast.Call)
+                and getattr(n.func, "attr", None) == "add_argument" and n.args):
+            nom = getattr(n.args[0], "value", None)
+            for kw in n.keywords:
+                if kw.arg == "default" and isinstance(kw.value, ast.Constant):
+                    out[nom] = kw.value.value
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-10 — le script doit pouvoir se construire
+# ══════════════════════════════════════════════════════════════════════
+
+def test_d10_le_mapper_se_construit(crb):
+    """`qhas_block_scores` construisait `PhysicalMapper(beta=...)`, un
+    mot-cle retire de la signature."""
+    import inspect
+    from Simulation.HamiltParams import PhysicalMapper
+
+    params = inspect.signature(PhysicalMapper.__init__).parameters
+    assert "beta" not in params, (
+        "`beta` est revenu dans la signature — verifier que ce test est "
+        "encore utile")
+    mots = _mots_cles_appel_mapper()
+    assert "beta" not in mots, (
+        f"`beta=` est repasse dans l'appel a PhysicalMapper : {sorted(mots)}")
+
+
+def test_le_mapper_recoit_les_hyperparametres_deployes(crb):
+    """Les constantes en dur `gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0`
+    n'etaient celles d'aucune campagne."""
+    import inspect
+    mots = _mots_cles_appel_mapper()
+    for cle in ("gamma_hydro", "gamma_mag", "kappa", "sigma",
+                "beta_curl", "beta_xpoint", "w_z_frac"):
+        assert cle in mots, f"{cle} absent de l'appel a PhysicalMapper"
+    assert "load_hyperparams" in inspect.getsource(crb.qhas_block_scores), (
+        "les hyperparametres ne sont plus charges depuis le fichier deploye")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  La taille du circuit — refuser AVANT de payer le DNS
+# ══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("n_blocks,attendu", [(2, 8), (3, 18), (4, 32)])
+def test_le_nombre_de_qubits_est_bien_2n2(crb, n_blocks, attendu):
+    """Une arete par qubit, horizontales et verticales : 2*n^2."""
+    assert crb.qubits_requis(n_blocks) == attendu
+
+
+def test_la_garde_refuse_une_taille_hors_memoire(crb):
+    """32 qubits = 69 Go. Mesure : qiskit-aer levait `Insufficient
+    memory ... Required memory: 65536M` — a l'etape 4 sur 5."""
+    with pytest.raises(ValueError, match="qubits"):
+        crb.verifier_taille_circuit(4, "state_vector")
+
+
+def test_la_garde_laisse_passer_ce_qui_tient(crb):
+    """Garde-fou : refuser l'impossible ne doit pas refuser le possible."""
+    crb.verifier_taille_circuit(2, "state_vector")
+    crb.verifier_taille_circuit(3, "state_vector")
+
+
+def test_les_defauts_forment_une_configuration_executable(crb):
+    """Le couple d'origine (resolution 128, n_blocks 4) violait deux
+    contraintes a la fois. Les defauts d'un script doivent tourner."""
+    d = _defauts()
+    N, n_blocks, budget = d["--resolution"], d["--n-blocks"], d["--budget"]
+
+    assert N % n_blocks == 0, (
+        f"defauts incoherents : resolution {N} non divisible par "
+        f"n_blocks {n_blocks}")
+    assert budget <= n_blocks ** 2, f"budget {budget} > {n_blocks**2} blocs"
+    crb.verifier_taille_circuit(n_blocks, d["--backend"])
+
+    # Le budget doit CONTRAINDRE : raffiner tous les blocs ne compare rien.
+    assert budget < n_blocks ** 2, (
+        f"budget {budget} = tous les {n_blocks**2} blocs : la contrainte "
+        f"serait vide, et le test ne separerait rien")
+
+
+def test_la_divisibilite_est_refusee_avec_une_suggestion():
+    """Un message d'erreur qui ne dit pas quoi faire fait perdre un tour."""
+    r = subprocess.run(
+        [sys.executable, _SCRIPT, "--resolution", "128", "--n-blocks", "3"],
+        capture_output=True, text=True, timeout=300)
+    assert r.returncode != 0
+    assert "--resolution" in r.stderr, (
+        f"le message doit suggerer une resolution valide :\n{r.stderr}")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Les fonctions pures
+# ══════════════════════════════════════════════════════════════════════
+
+def test_select_top_k_prend_bien_les_plus_grands(crb):
+    import numpy as np
+    scores = np.array([[0.1, 0.9], [0.5, 0.3]])
+    assert crb.select_top_k(scores, 1) == [(0, 1)]
+    assert set(crb.select_top_k(scores, 2)) == {(0, 1), (1, 0)}
+    assert len(crb.select_top_k(scores, 4)) == 4
+
+
+def test_compute_solution_error_est_nulle_sur_identite(crb):
+    import numpy as np
+    champs = {k: np.random.RandomState(0).rand(8, 8)
+              for k in ("vx", "vy", "Bx", "By", "Jz")}
+    err = crb.compute_solution_error(champs, champs)
+    assert err == pytest.approx(0.0, abs=1e-12), (
+        f"un champ compare a lui-meme doit donner 0, obtenu {err}")
+
+
+def test_compute_solution_error_croit_avec_l_ecart(crb):
+    """Champ qui SEPARE : sans cela, une erreur constante passerait."""
+    import numpy as np
+    base = {k: np.ones((8, 8)) for k in ("vx", "vy", "Bx", "By", "Jz")}
+    proche = {k: v * 1.01 for k, v in base.items()}
+    loin = {k: v * 1.5 for k, v in base.items()}
+    e1 = crb.compute_solution_error(proche, base)
+    e2 = crb.compute_solution_error(loin, base)
+    assert 0 < e1 < e2, f"erreurs non ordonnees : {e1} puis {e2}"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  D-91 — la "verite terrain" par bloc est une erreur RELATIVE, pas absolue
+# ══════════════════════════════════════════════════════════════════════
+
+def test_d91_la_vraie_structure_bat_le_bruit_de_fond(crb):
+    """SEUIL REMESURE — D-91 est CORRIGE, ce test dit desormais l'inverse.
+
+    Il epinglait le defaut : `ref = sqrt(mean(dns_block**2)) + 1e-10`
+    normalisait CHAQUE bloc par sa propre amplitude, seul le denominateur
+    portant un plancher. Deux blocs au MEME ecart absolu recevaient donc
+    des scores dans le rapport inverse de leurs amplitudes.
+
+    Champ d'essai qui SEPARE : un bloc quasi-vide (DNS ~ 1e-6) et un bloc
+    a forte structure (DNS = 10.0), avec un ecart DNS/grossier identique
+    au bit pres sur les deux. Un champ ou les deux blocs auraient la meme
+    amplitude ne separerait rien.
+
+    Mesure, meme champ d'essai, avant et apres :
+
+        avant : bloc de bruit 2.000e-01, bloc de structure 2.000e-08
+                -> le bruit domine d'un facteur 1.000e+07
+        apres : bloc de bruit 4.000e-08, bloc de structure 4.000e-08
+                -> a ecart absolu egal, contribution egale
+
+    La normalisation est desormais GLOBALE (RMS du champ sur tout le
+    domaine), ce qui garde la comparabilite entre champs d'amplitudes
+    differentes sans donner de prime a un bloc vide.
+    """
+    import numpy as np
+    N, n_blocks = 4, 2
+    zeros = lambda: np.zeros((N, N))
+    dns = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+    coarse = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+
+    ecart_absolu = 1e-6
+    # bloc (0,0) : bruit de fond, signal DNS quasi nul
+    dns["Jz"][0:2, 0:2] = 1e-6
+    coarse["Jz"][0:2, 0:2] = 1e-6 + ecart_absolu
+    # bloc (1,1) : vraie structure, meme ecart absolu que le bloc de bruit
+    dns["Jz"][2:4, 2:4] = 10.0
+    coarse["Jz"][2:4, 2:4] = 10.0 + ecart_absolu
+
+    errors = crb.compute_block_errors(dns, coarse, N, n_blocks)
+    assert errors[0, 0] == pytest.approx(errors[1, 1], rel=1e-9), (
+        f"a ecart absolu IDENTIQUE, le bloc de bruit ({errors[0, 0]:.3e}) "
+        f"et le bloc de structure ({errors[1, 1]:.3e}) doivent contribuer "
+        "autant : la normalisation ne doit plus dependre de l'amplitude "
+        "locale (D-91)")
+
+
+def test_d91_le_bloc_qui_porte_la_structure_est_selectionne(crb):
+    """Ce que la fonction PROMET : « which blocks truly need refinement ».
+
+    A ecart RELATIF egal mais amplitude differente, c'est le bloc de forte
+    amplitude qui contribue le plus a l'erreur L2 globale — la quantite
+    que la campagne minimise — donc c'est lui qu'il faut raffiner. Sous
+    l'ancienne metrique les deux etaient a egalite, et le bruit gagnait
+    des qu'il etait un peu plus errone en relatif.
+    """
+    import numpy as np
+    N, n_blocks = 4, 2
+    zeros = lambda: np.zeros((N, N))
+    dns = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+    coarse = {k: zeros() for k in ("vx", "vy", "Bx", "By", "Jz")}
+
+    # meme erreur RELATIVE (10 %), amplitudes separees par 1e7
+    dns["Jz"][0:2, 0:2] = 1e-6
+    coarse["Jz"][0:2, 0:2] = 1e-6 * 1.10
+    dns["Jz"][2:4, 2:4] = 10.0
+    coarse["Jz"][2:4, 2:4] = 10.0 * 1.10
+
+    errors = crb.compute_block_errors(dns, coarse, N, n_blocks)
+    assert errors[1, 1] > 1e5 * errors[0, 0], (
+        f"le bloc de structure ({errors[1, 1]:.3e}) doit dominer le bloc "
+        f"de bruit ({errors[0, 0]:.3e}) : c'est lui qui porte l'erreur L2 "
+        "globale, donc lui qui a besoin d'etre raffine")

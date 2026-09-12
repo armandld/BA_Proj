@@ -1,35 +1,36 @@
-import argparse
-import warnings
-import json
-import numpy as np
-import networkx as nx
-import os
-import matplotlib.pyplot as plt
+"""Circuit transpilation for calls that do not use :class:`VQARuntime`."""
 
 from qiskit_aer import AerSimulator
-from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator
-from qiskit_ibm_runtime import SamplerV2 as Sampler
-from qiskit_ibm_runtime.fake_provider import FakeFez
 from qiskit.transpiler import generate_preset_pass_manager
 
 
-def optimize(qc, backend, opt_level, verbose):
+SUPPORTED_BACKENDS = ("state_vector", "matrix_product_state", "aer")
 
-    if backend == "aer":
-        backend = AerSimulator()
-    elif backend == "estimator":
-        backend = FakeFez()
-    elif backend == "state_vector":
-        backend = AerSimulator(method='statevector')
-        opt_level = 0
+
+def optimize(qc, backend, opt_level, verbose, seed=0):
+    """Transpile ``qc`` for a seeded local simulator."""
+    if backend == "state_vector":
+        simulator = AerSimulator(
+            method="statevector", seed_simulator=seed)
+        effective_level = 0
+    elif backend == "matrix_product_state":
+        simulator = AerSimulator(
+            method="matrix_product_state", seed_simulator=seed)
+        effective_level = 0
+    elif backend == "aer":
+        simulator = AerSimulator(seed_simulator=seed)
+        effective_level = opt_level
     else:
-        raise ValueError("Unsupported backend")
+        raise ValueError(
+            f"Unsupported backend: {backend!r}. Expected one of "
+            f"{SUPPORTED_BACKENDS}.")
 
-    # Create pass manager for transpilation
-    pm = generate_preset_pass_manager(optimization_level=opt_level, backend=backend)
-
-    circuit = pm.run(qc)
+    pass_manager = generate_preset_pass_manager(
+        optimization_level=effective_level,
+        backend=simulator,
+        seed_transpiler=seed,
+    )
+    circuit = pass_manager.run(qc)
     if verbose:
-        print("Optimization Level: ", opt_level)
-    
+        print("Optimization Level:", effective_level)
     return circuit

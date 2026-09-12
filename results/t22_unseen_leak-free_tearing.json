@@ -1,0 +1,181 @@
+{
+ "fold": "tearing",
+ "scenario": "harris_tearing",
+ "mode": "leak-free",
+ "classical_reference_source": "budget-matched threshold 0.4250 (forced)",
+ "classical_tuned_arm_completed": null,
+ "unseen_condition": {
+  "ic": {
+   "B0": 0.8,
+   "shear_width": 0.22,
+   "perturbation": 0.02,
+   "k_mode": 2.0
+  },
+  "note": "thinner current sheet, mode 2 instead of mode 1"
+ },
+ "qaoa_threshold_leaked": false,
+ "arms": {
+  "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 5,
+   "n_completed_unseen": 5,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 3.9570923915348257,
+     "phys_score": 5.373879755757452,
+     "patch_ratio": 0.41512398097826086,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 1.9886109869898934,
+     "phys_score": 2.6851253546119374,
+     "patch_ratio": 0.24732506793478262,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 3.433097450713425,
+     "phys_score": 4.608527327737925,
+     "patch_ratio": 0.4945227581521739,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 1.7139933220486947,
+     "phys_score": 2.307335216085564,
+     "patch_ratio": 0.23063858695652173,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 2.796367412336457,
+     "phys_score": 3.7007329914014746,
+     "patch_ratio": 0.5354534646739131,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 2.3403813015869144,
+     "phys_score": 3.113738214113572,
+     "patch_ratio": 0.4069890202702703,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 1.9050494090952856,
+     "phys_score": 2.546503294355021,
+     "patch_ratio": 0.30141469594594594,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 3.0059137660899755,
+     "phys_score": 4.003021671174614,
+     "patch_ratio": 0.5131440033783784,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.28482394363768687,
+     "phys_score": 0.2612535210927616,
+     "patch_ratio": 0.34375,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 2.2113872121871987,
+     "phys_score": 2.875587367332348,
+     "patch_ratio": 0.5508868243243243,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 2.777832312724659,
+    "phys_score": 3.735120129118871,
+    "patch_ratio": 0.38461277173913044
+   },
+   "unseen": {
+    "combined": 1.9495111265194118,
+    "phys_score": 2.560020813613663,
+    "patch_ratio": 0.42323690878378384
+   },
+   "canonical_phys_sd": 1.2836096084984323,
+   "unseen_phys_sd": 1.3940005804208517,
+   "status": "completed",
+   "degradation_ratio": 0.6853918281384919
+  },
+  "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.18173490078520044,
+     "phys_score": 0.004428861099280601,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.18173490078520044,
+     "phys_score": 0.004428861099280601,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.17980313050809932,
+     "phys_score": 0.0017243827113390183,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.17980313050809932,
+     "phys_score": 0.0017243827113390183,
+     "patch_ratio": 0.625,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.18173490078520044,
+    "phys_score": 0.004428861099280601,
+    "patch_ratio": 0.625
+   },
+   "unseen": {
+    "combined": 0.17980313050809932,
+    "phys_score": 0.0017243827113390183,
+    "patch_ratio": 0.625
+   },
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "status": "completed",
+   "degradation_ratio": 0.3893512739921144
+  }
+ },
+ "dns_signature_canonical": 56904.34618755703,
+ "dns_signature_unseen": 47425.50837041255,
+ "dns_relative_shift": 0.16657493587400474,
+ "unseen_condition_is_weak": false,
+ "status": "completed",
+ "qhas_degrades_more": true,
+ "git_hash": "ca27c47d5ce5ee898d587a2cfe1267f1bdc2fb41",
+ "cli_args": {
+  "fold": "tearing",
+  "mode": "leak-free",
+  "prefix": "t15_level3",
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
+ },
+ "wall_s": 2725.854322195053
+}

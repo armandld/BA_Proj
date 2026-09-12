@@ -1,0 +1,266 @@
+"""T28/T29 — le label ne doit plus etre un rang intra-scenario, et aucune
+conclusion de transfert ne doit sortir sans intervalle de confiance.
+
+Deux defauts sont verrouilles ici :
+
+1. `phase2_hard_patches.py` seuille au percentile 75 DE CHAQUE SCENARIO, donc
+   chaque scenario a exactement 25 % de patches durs et les seuils different
+   d'un facteur 2.8. Le label devient un rang intra-scenario, que le LOSO
+   demande de predire sans jamais montrer le seuil du scenario tenu a
+   l'ecart. T28 produit la variante a seuil global.
+
+2. `phase11b_loso.py` imprime « neighbourhood couplings help for transfer »
+   a partir d'une moyenne sur quatre folds d'ecart-type 0.29, dont deux sont
+   des predicteurs constants. T29 exige un IC95 par fold et refuse de
+   conclure quand il contient zero.
+"""
+
+import os
+import sys
+
+import numpy as np
+import pytest
+
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+RESULTS = os.path.join(_REPO_ROOT, "results")
+
+
+def _study_file(name):
+    for _d in ("pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+               "h3_representation", "h4_transfer", "closed_loop", "common"):
+        _c = os.path.join(_REPO_ROOT, "study", _d, name)
+        if os.path.exists(_c):
+            return _c
+    raise FileNotFoundError(name)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  T28 — le label a seuil global
+# ═══════════════════════════════════════════════════════════════════════
+
+SCENARIOS = ("orszag_tang", "kelvin_helmholtz", "mhd_rotor", "harris_tearing")
+
+
+def _paths(dim, suffix=""):
+    return [os.path.join(RESULTS,
+                         f"patches_{sc}_Re400_N256_dim{dim}{suffix}.npz")
+            for sc in SCENARIOS]
+
+
+@pytest.mark.parametrize("dim", [4, 16, 32, 64])
+def test_per_scenario_labels_force_the_same_prevalence(dim):
+    """Le defaut lui-meme, epingle : 25.00 % partout, par construction."""
+    paths = _paths(dim)
+    if not all(os.path.exists(p) for p in paths):
+        pytest.skip(f"artefacts dim={dim} absents")
+    prevalences, thresholds = [], []
+    for p in paths:
+        d = np.load(p, allow_pickle=True)
+        prevalences.append(float(np.asarray(d["is_hard"]).mean()))
+        thresholds.append(float(d["l2_threshold"]))
+    assert max(prevalences) - min(prevalences) < 1e-3, (
+        "les labels par scenario sont censes imposer la meme prevalence ; "
+        f"mesure {prevalences}"
+    )
+    assert max(thresholds) / min(thresholds) > 2.0, (
+        "si les seuils devenaient comparables, le probleme decrit ici "
+        f"n'existerait plus : {thresholds}"
+    )
+
+
+@pytest.mark.parametrize("dim", [4, 16, 32, 64])
+def test_global_labels_let_the_prevalence_vary(dim):
+    """La variante a seuil global doit rendre la prevalence mesuree."""
+    paths = _paths(dim, "_globalthr")
+    if not all(os.path.exists(p) for p in paths):
+        pytest.skip(f"artefacts dim={dim} _globalthr absents")
+    prevalences, thresholds = [], []
+    for p in paths:
+        d = np.load(p, allow_pickle=True)
+        prevalences.append(float(np.asarray(d["is_hard"]).mean()))
+        thresholds.append(float(d["l2_threshold"]))
+        assert str(d["label_variant"]) == "global_percentile"
+    assert len(set(np.round(thresholds, 12))) == 1, (
+        f"un seuil global doit etre unique : {thresholds}"
+    )
+    assert max(prevalences) - min(prevalences) > 0.10, (
+        "avec un seuil commun la prevalence doit refleter la physique de "
+        f"chaque scenario ; mesure {prevalences}"
+    )
+
+
+def test_the_variant_never_overwrites_the_original():
+    """Le suffixe doit apparaitre dans le nom de sortie (defaut D9)."""
+    src = open(_study_file("labels_global_threshold.py"),
+               encoding="utf-8").read()
+    assert 'SUFFIX = "_globalthr"' in src
+    assert 'replace(".npz", f"{SUFFIX}.npz")' in src, (
+        "l'artefact relabellise doit porter le suffixe, sinon il ecrase la "
+        "variante par scenario et les deux deviennent indiscernables"
+    )
+
+
+def test_the_variant_is_written_beside_the_original_not_over_it(tmp_path,
+                                                                monkeypatch):
+    """D-129 : le non-ecrasement mesure, pas lu dans le texte du source.
+
+    `test_the_variant_never_overwrites_the_original` ci-dessus cherche
+    `SUFFIX = "_globalthr"` et `replace(".npz", f"{SUFFIX}.npz")` dans le
+    source. Son objet est un COMPORTEMENT — l'artefact par scenario doit
+    survivre a la relabellisation — que le texte ne fait qu'indiquer.
+    Mesure par mutation, les deux sens :
+
+    * **A'** — une ligne `out = out.replace(SUFFIX, "")` ajoutee APRES le
+      calcul du chemin : les deux chaines cherchees restent, la variante
+      ecrase l'original, et les deux fichiers de test concernes restent
+      **72 passed**. Faux vert, et c'est exactement le defaut D9 que ce
+      garde existe pour empecher.
+    * **B** — reecriture EQUIVALENTE
+      `os.path.basename(path)[:-len(".npz")] + SUFFIX + ".npz"`, chemin bit
+      a bit identique : **ROUGE**. Faux rouge sur un changement voulu.
+
+    L'entree qui SEPARE : appeler `relabel()` pour de vrai sur des artefacts
+    NON degeneres (le seul chemin deja teste leve avant d'ecrire), puis
+    comparer les octets des originaux avant et apres. Un chemin de sortie
+    sans suffixe les remplacerait.
+    """
+    import hashlib
+    import importlib
+
+    lgt = importlib.import_module("labels_global_threshold")
+    monkeypatch.setattr(lgt, "RESULTS_DIR", str(tmp_path))
+
+    #  Des distributions L2 DIFFERENTES par scenario : sans cela les
+    #  prevalences coincident, `relabel` leve, et rien n'est ecrit.
+    rng = np.random.default_rng(0)
+    originals = {}
+    for k, sc in enumerate(SCENARIOS):
+        l2 = np.abs(rng.standard_normal(64)) * (1.0 + k)
+        src = os.path.join(tmp_path, f"patches_{sc}_Re1_N4_dim4.npz")
+        np.savez_compressed(
+            src, l2_errors=l2, classical_scores=rng.random(64),
+            is_hard=l2 >= np.percentile(l2, 75), l2_threshold=
+            float(np.percentile(l2, 75)),
+            scenario=sc, Re=1, N=4, n_patches=64, t=0.0,
+        )
+        originals[src] = hashlib.sha256(open(src, "rb").read()).hexdigest()
+
+    written, thr, prev = lgt.relabel(dim=4, N=4, Re=1, outdir=str(tmp_path))
+
+    assert written, "relabel n'a ecrit aucun artefact"
+    for out in written:
+        assert os.path.basename(out).endswith(f"{lgt.SUFFIX}.npz"), (
+            f"{os.path.basename(out)} ne porte pas le suffixe : la variante "
+            "ecrase l'artefact par scenario et les deux deviennent "
+            "indiscernables")
+        assert out not in originals, "la variante a ete ecrite SUR un original"
+
+    #  La preuve directe : les originaux sont intacts, octet pour octet.
+    for src, digest in originals.items():
+        assert os.path.exists(src), f"{src} a disparu"
+        assert hashlib.sha256(open(src, "rb").read()).hexdigest() == digest, (
+            f"{os.path.basename(src)} a ete reecrit par la relabellisation")
+
+    #  Et le filtre de `collect` doit ecarter ce qu'on vient d'ecrire,
+    #  sinon une seconde execution relabelliserait ses propres sorties.
+    assert set(lgt.collect(4, 4, 1)) == set(originals)
+
+
+def test_the_relabeller_refuses_a_degenerate_threshold(tmp_path, monkeypatch):
+    """Un seuil nul labelliserait 100 % des patches comme durs.
+
+    C'est ce qui arrive a N=64 dim=64 (patches de 1x1 cellule) dans
+    phase2 : seuil 0.000000, 100 % durs, et rien ne crie.
+
+    Remesure du 16 aout (D-115). La version precedente cherchait les
+    chaines "seuil global degenere" et "thr_global <= 0.0" dans le
+    source de `labels_global_threshold.py`, sans jamais appeler
+    `relabel()`. Un garde desactive (`if False:` au lieu du test reel,
+    le texte du message laisse intact plus bas comme code mort) laisse
+    ce texte en place : l'ancienne version du test passait toujours.
+    Le test interroge desormais le comportement : des artefacts dont
+    les erreurs L2 sont toutes nulles doivent faire lever `SystemExit`.
+    """
+    import importlib
+    labels_global_threshold = importlib.import_module(
+        "labels_global_threshold")
+    monkeypatch.setattr(labels_global_threshold, "RESULTS_DIR",
+                         str(tmp_path))
+
+    for sc in SCENARIOS:
+        np.savez_compressed(
+            os.path.join(tmp_path, f"patches_{sc}_Re1_N4_dim4.npz"),
+            l2_errors=np.zeros(4), classical_scores=np.zeros(4),
+            is_hard=np.zeros(4, dtype=bool), l2_threshold=0.0,
+            scenario=sc, Re=1, N=4, n_patches=4, t=0.0,
+        )
+
+    with pytest.raises(SystemExit, match="seuil global degenere"):
+        labels_global_threshold.relabel(dim=4, N=4, Re=1,
+                                         outdir=str(tmp_path))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  T29 — pas de verdict sans intervalle
+# ═══════════════════════════════════════════════════════════════════════
+
+def test_verdict_requires_confidence_intervals():
+    """La fonction verdict n'a que trois sorties, et deux exigent un IC."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "t29mod", _study_file("h2b_loso_delta_ci.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    def row(lo, hi, constant=""):
+        return dict(ci_low=lo, ci_high=hi, constant=constant)
+
+    # IC tous strictement positifs -> conclusion permise
+    assert m.verdict([row(0.01, 0.05), row(0.02, 0.09)]) == "aident"
+    # IC tous strictement negatifs -> conclusion permise
+    assert m.verdict([row(-0.09, -0.02), row(-0.05, -0.01)]) == "nuisent"
+    # un seul IC qui contient zero -> indecidable
+    assert m.verdict([row(0.01, 0.05), row(-0.02, 0.09)]) == "indecidable"
+    # folds qui se contredisent -> indecidable
+    assert m.verdict([row(0.01, 0.05), row(-0.09, -0.02)]) == "indecidable"
+
+
+def test_constant_predictors_do_not_vote():
+    """Un F1 obtenu en predisant toujours la meme classe n'est pas un score.
+
+    A dim=32 et 64, `harris_tearing` donne F1 = 0.000 exactement (tout
+    negatif) et `orszag_tang` 0.400 exactement (tout positif, prevalence
+    0.25). Ces folds ne doivent pas peser dans une conclusion.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "t29mod2", _study_file("h2b_loso_delta_ci.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    assert m.constant_predictor(np.zeros(10, dtype=int))
+    assert m.constant_predictor(np.ones(10, dtype=int))
+    assert not m.constant_predictor(np.array([0, 1, 0, 1]))
+
+    rows = [dict(ci_low=0.01, ci_high=0.05, constant="sten"),
+            dict(ci_low=0.02, ci_high=0.09, constant="site")]
+    assert m.verdict(rows) == "indecidable", (
+        "tous les folds sont degeneres : aucune conclusion possible, meme "
+        "avec des IC positifs"
+    )
+
+
+def test_bootstrap_blocks_are_complete_physics_trajectories():
+    """Neither patches nor snapshots are independent replication units."""
+    src = open(_study_file("h2b_loso_delta_ci.py"), encoding="utf-8").read()
+    assert "bootstrap_by_trajectory" in src
+    assert "np.full(len(Y), trajectory_id" in src
+    assert "bootstrap_by_trajectory" in src

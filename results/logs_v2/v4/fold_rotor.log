@@ -1,0 +1,125 @@
+=== [rotor] start 01:16:24 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['rotor']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = rotor (mhd_rotor)  |  tuned on ['kh', 'ot', 'tearing']
+====================================================================================
+
+--- Pre-computing DNS traces for train/rotor ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (train/rotor) ---
+
+
+--- Pre-computing DNS traces for held/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (held/rotor) ---
+
+  DNS traces ready in 189s
+  QAOA tuning: 4 trials, best composite loss 0.2341, 5957s
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+  classical tuning: best loss 0.2607, params {'threshold_amr': 0.5863920247793146}, 918s
+  tuning checkpoint saved -> t15_level3_tuning_rotor.json
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 8.0214, 'w_z_frac': 13.0491, 'sigma': 0.1791, 'beta_curl': 4.628, 'beta_xpoint': 0.3552, 'threshold_amr': 0.1496}
+=== [rotor] start 19:46:22 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['rotor']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = rotor (mhd_rotor)  |  tuned on ['kh', 'ot', 'tearing']
+====================================================================================
+
+--- Pre-computing DNS traces for train/rotor ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (train/rotor) ---
+
+
+--- Pre-computing DNS traces for held/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (held/rotor) ---
+
+  DNS traces ready in 200s
+  [resume] tuning checkpoint found -> t15_level3_tuning_rotor.json
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 8.0214, 'w_z_frac': 13.0491, 'sigma': 0.1791, 'beta_curl': 4.628, 'beta_xpoint': 0.3552, 'threshold_amr': 0.1496}
+  [Q-HAS]     combined=0.2273 phys=0.1678 patch=0.3761 (584s)
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+  [classical] combined=0.9294 phys=1.1731 patch=0.3203 (29s)
+  saved fold -> t15_level3_fold_rotor.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  rotor             0.1678    1.1731   -1.0053    0.3761    0.3203   -0.7021
+  ------------------------------------------------------------------------------------
+  combined       mean delta = -0.7021   Q-HAS better on 1/1 folds
+  phys_score     mean delta = -1.0053   Q-HAS better on 1/1 folds
+  patch_ratio    mean delta = +0.0558   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+=== [rotor] t15 done 20:00:04 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold rotor
+  Q-HAS realised patch_ratio = 0.3761  (phys 0.1678)
+  tuned classical            = 0.3203  (phys 1.1731, thr 0.5864)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/rotor ---
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (held/rotor) ---
+
+    thr=0.0500 -> patch=0.4096 phys=0.0339 (target patch 0.3761)
+[WARNING] Violation CFL détéctée : 1.12 > 1.0.
+[WARNING] Violation CFL détéctée : 1.12 > 1.0.
+    thr=0.8000 -> patch=0.1523 phys=0.7690 (target patch 0.3761)
+[WARNING] Violation CFL détéctée : 1.23 > 1.0.
+[WARNING] Violation CFL détéctée : 1.23 > 1.0.
+    thr=0.4250 -> patch=0.2544 phys=0.6666 (target patch 0.3761)
+    thr=0.2375 -> patch=0.3181 phys=0.3859 (target patch 0.3761)
+    thr=0.1438 -> patch=0.3353 phys=0.1142 (target patch 0.3761)
+    thr=0.0969 -> patch=0.3562 phys=0.0536 (target patch 0.3761)
+
+  ====================================================================================
+  budget-matched classical: thr=0.0969  patch=0.3562  phys=0.0536
+  Q-HAS                   : patch=0.3761  phys=0.1678
+  delta phys at matched budget = +0.1141 (negative favours Q-HAS)
+  budget mismatch remaining    = -0.0199
+
+  READING: at equal compute the classical arm recovers the fidelity; the Level-3 gap was a move along the error-cost frontier, not a better decision rule.
+
+  saved: t15b_budget_matched_rotor.json
+
+V4 Task 15b complete.
+=== [rotor] COMPLETE 20:31:06 ===

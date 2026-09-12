@@ -1,0 +1,21 @@
+{
+ "hyperparams": {
+  "gamma_hydro": 2.0,
+  "gamma_mag": 0.5,
+  "kappa": 10.0,
+  "beta": 6.635994074133233,
+  "w_z_frac": 5.627932047415165,
+  "sigma": 0.2696964402189823,
+  "beta_curl": 4.818313802505147,
+  "beta_xpoint": 1.9172075941288886,
+  "threshold_amr": 0.14959824837662078
+ },
+ "best_train_loss": 0.25512030409188696,
+ "n_trials": 4,
+ "classical_params": {
+  "threshold_amr": 0.46161012794549355
+ },
+ "classical_train_loss": 0.3835050725284849,
+ "t_tune": 1549.4685208797455,
+ "t_tune_classical": 871.4586725234985
+}

@@ -1,0 +1,33 @@
+{
+ "fold": "kh",
+ "scenario": "kelvin_helmholtz",
+ "threshold": 0.05,
+ "floor_canonical": {
+  "combined": 0.2866173508073722,
+  "phys_score": 0.0012642911303210368,
+  "patch_ratio": 1.0,
+  "completed": true
+ },
+ "floor_unseen": {
+  "combined": 0.2868965590136766,
+  "phys_score": 0.001655182619147235,
+  "patch_ratio": 1.0,
+  "completed": true
+ },
+ "arms": {
+  "qhas": {
+   "canonical_over_floor": 2.9046394443916017,
+   "unseen_over_floor": 2.2786291312713787
+  },
+  "classical": {
+   "canonical_over_floor": 1.3297835445070822,
+   "unseen_over_floor": 1.3857123126671922
+  }
+ },
+ "both_arms_at_floor_on_unseen": false,
+ "git_hash": "f06f94abd5eb073d3c26e5220d69d2292899c5d3",
+ "cli_args": {
+  "fold": "kh",
+  "threshold": 0.05
+ }
+}

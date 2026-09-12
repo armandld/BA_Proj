@@ -1,3 +1,4 @@
+import warnings
 import argparse
 import sys
 from math import log
@@ -6,7 +7,7 @@ from math import log
 import numpy as np
 from types import SimpleNamespace
 
-from Simulation.grid import PeriodicGrid
+from Simulation.grid import AXIS_X, AXIS_Y, PeriodicGrid
 from Simulation.solver import MHDSolver
 from Simulation.PhysToAngle import AngleMapper
 from Simulation.HamiltParams import PhysicalMapper
@@ -19,6 +20,144 @@ from hyperparams_loader import load_hyperparams
 
 FREQUENCY = 1  # Fréquence d'affichage (en nombre de pas de temps)
 DIVERGENCE_PENALTY = 10.0  # Finite penalty for diverged trials (replaces inf)
+# Definition unique : ne pas la redefinir localement ailleurs, une copie
+# locale masquerait celle-ci silencieusement.
+
+# ══════════════════════════════════════════════════════════════════
+#  Configuration par scenario — la table qui fait foi
+# ══════════════════════════════════════════════════════════════════
+#
+# Sortie du corps de main() pour etre testable : c'est de la donnee, pas de
+# la logique, et elle decide ce qu'une campagne mesure. Un test verifie que
+# chaque entree porte T_MAX > T_START.
+
+N_TRAINING         = 256
+MAX_DEPTH_TRAINING = 4
+
+PHASE={
+    "orszag_tang": {
+        "scenario": "orszag_tang",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 2.8,
+        "T_START": 2.3,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        # Required for the X-point term.
+        "AdvAnomaliesEnable": True,
+    },
+
+    "kelvin_helmholtz": {
+        "scenario": "kelvin_helmholtz",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.7,
+        "T_START": 1.3,      # KH instability develops around t~1.0-1.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "lamb_oseen_vortex": {
+        "scenario": "lamb_oseen_vortex",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.0,
+        "T_START": 0.6,       # Vortex is present from t=0, start early
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "harris_tearing" : {
+        "scenario": "harris_tearing",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.1,
+        "T_START": 0.7,       # Tearing mode develops around t~0.5-1.0
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "double_tearing": {
+        "scenario": "double_tearing",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.2,
+        "T_START": 0.3,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "magnetic_twist": {
+        "scenario": "magnetic_twist",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 1.2,
+        "T_START": 0.3,
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+    "island_coalescence" : {
+        "scenario": "island_coalescence",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 0.8,
+        "T_START": 0.4,       # Shock develops around t~0.2-0.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,    # Reconnection is fast — frequent VQA calls
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,  # X-point detection requires advanced anomalies
+    },
+
+    "mhd_rotor" : {
+        "scenario": "mhd_rotor",
+        "N": N_TRAINING,
+        "max_depth_override": MAX_DEPTH_TRAINING,
+        "T_MAX": 0.7,
+        "T_START": 0.3,       # Rotor winds up B-field around t~0.2-0.5
+        "DT": 1e-3,
+        "HYBRID_DT": 0.10,
+        "K_opt": 30,
+        "Re": 800,
+        "Rm": 800,
+        "shots": 256,
+        "AdvAnomaliesEnable": True,
+    },
+
+}
+
 
 def main():
     sys.stdout.reconfigure(line_buffering=True) # Pour un affichage immédiat des print() à enlever pour une meilleure perf
@@ -27,170 +166,112 @@ def main():
     parser.add_argument("--out-dir", default="../data", help="Output directory for mapping")
     parser.add_argument("--in-file", default="../input/mapping_input.json", help="Input directory for mapping")
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--AdvAnomaliesEnable", action="store_true")
+    # Ces options valent `None` par defaut et sont resolues depuis
+    # `PHASE[scenario]` (voir `_resolve`) : un defaut CLI concret
+    # ecraserait silencieusement la configuration du scenario.
+    parser.add_argument("--AdvAnomaliesEnable", action="store_true", default=None)
     parser.add_argument("--grid-size", type=int, default=2, help="Coarse grid dimension N (NxN)")
-    parser.add_argument("--dns-resolution", type=int, default=256, help="High-Res Grid for Ground Truth")
-    parser.add_argument("--t-max", type=float, default=1.0, help="Simulation end time")
-    parser.add_argument("--dt", type=float, default=1e-4, help="Time step size")
-    parser.add_argument("--hybrid-dt", type=float, default=0.1, help="Hybrid simulation time step size")
+    parser.add_argument("--dns-resolution", type=int, default=None, help="High-Res Grid for Ground Truth (defaut : celle du scenario)")
+    parser.add_argument("--t-max", type=float, default=None, help="Simulation end time (defaut : celle du scenario)")
+    parser.add_argument("--dt", type=float, default=None, help="Time step size (defaut : celui du scenario)")
+    parser.add_argument("--hybrid-dt", type=float, default=None, help="Hybrid simulation time step size (defaut : celui du scenario)")
     parser.add_argument("--reps", type=int, default=-1, required=False, help="Number of repetitions for the QAOA ansatz.")
-    parser.add_argument("--mode", default="simulator", choices=["simulator", "hardware"])
-    parser.add_argument("--backend", default="state_vector", choices=["aer", "estimator","state_vector"])
-    parser.add_argument("--shots", type=int, default=1024)
-    parser.add_argument("--method", default="L-BFGS-B", choices=["COBYLA", "L-BFGS-B", "Powell"])
+    # `hardware` retire des choix : aucun backend IBM reel n'est cable, donc
+    # un run le demandant tournerait sur simulateur sans le signaler.
+    parser.add_argument("--mode", default="simulator", choices=["simulator"])
+    parser.add_argument(
+        "--backend", default="state_vector",
+        choices=["aer", "matrix_product_state", "state_vector"],
+    )
+    parser.add_argument("--shots", type=int, default=None, help="(defaut : celui du scenario)")
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Seed shared by transpilation, Estimator and Sampler "
+             "(D-191 : par defaut aucune, le bras QAOA reste stochastique)",
+    )
+    parser.add_argument("--method", default="COBYLA", choices=["COBYLA", "L-BFGS-B", "Powell"])
     parser.add_argument("--opt-level", type=int, default=1, choices=[0,1,2,3], help="Optimization level for transpilation.")
-    parser.add_argument("--K-opt", type=int, default=80, help="Maximum number of iterations for the optimizer.")
+    parser.add_argument("--K-opt", type=int, default=None, help="Maximum number of iterations for the optimizer (defaut : celui du scenario)")
+    parser.add_argument(
+        "--hyperparams-file",
+        help="Completed campaign candidate or deploy export. Defaults to "
+             "QHAS_HYPERPARAMS_PATH, then the reference artifact.")
     parser.add_argument("--eps", type=float, default=1e-2, help="Convergence tolerance for the optimizer.")
-    parser.add_argument("--scenario", default="lamb_oseen_vortex",
-                        choices=["orszag_tang", "kelvin_helmholtz",
-                                 "magnetic_twist", "noisy_uniform",
-                                 "harris_tearing", "double_tearing",
-                                 "lamb_oseen_vortex", "island_coalescence",
-                                 "mhd_rotor", "ghost_twisting"],
+    # Les choix sont DERIVES de `PHASE`, pas recopies a cote : une liste
+    # ecrite a la main peut diverger de `PHASE` et accepter un scenario
+    # absent de la table, provoquant un `KeyError` plus loin.
+    parser.add_argument("--scenario", default="orszag_tang",
+                        choices=sorted(PHASE),
                         help="Initial condition scenario")
 
     args = parser.parse_args()
 
     verbose = args.verbose
-
-    N = args.dns_resolution                   # Résolution moyenne (DNS)
     VQA_N = args.grid_size                    # Résolution Grossière
-    T_MAX = args.t_max                        # Temps final
-    DT = args.dt                              # Pas de temps
-    HYBRID = int(args.hybrid_dt / DT)         # Fréquence de mise à jour hybride
 
-    Re = 1000
-    Rm = 1000
+    cfg = PHASE[args.scenario]
+
+    # `_resolve` : la configuration du scenario fait foi, sauf si la CLI
+    # l'a passee EXPLICITEMENT (defaut `None`). Le DNS et la boucle hybride
+    # doivent tourner sous la MEME physique — sinon le hot start peut placer
+    # T_START apres T_MAX, la boucle hybride ne s'execute alors jamais, et
+    # le run rend un score plausible pour une trajectoire jamais calculee.
+    def _resolve(cli_value, cle, defaut=None):
+        if cli_value is not None:
+            return cli_value
+        return cfg.get(cle, defaut)
+
+    N     = _resolve(args.dns_resolution, "N")
+    T_MAX = _resolve(args.t_max,          "T_MAX")
+    DT    = _resolve(args.dt,             "DT")
+    hybrid_dt = _resolve(args.hybrid_dt,  "HYBRID_DT")
+    HYBRID = int(hybrid_dt / DT)          # Fréquence de mise à jour hybride
 
     argus = SimpleNamespace(
         reps=args.reps if args.reps > 0 else (VQA_N-1) * 2, # 2 for 2D, 3 for 3D
         mode=args.mode,
         backend=args.backend,
-        shots=args.shots,
+        shots=_resolve(args.shots, "shots"),
         method=args.method,
         opt_level=args.opt_level,
-        AdvAnomaliesEnable=args.AdvAnomaliesEnable,
-        K_opt=args.K_opt,
+        AdvAnomaliesEnable=_resolve(args.AdvAnomaliesEnable, "AdvAnomaliesEnable", False),
+        K_opt=_resolve(args.K_opt, "K_opt"),
         eps=args.eps,
+        seed=args.seed,
         eta=0.001,       # Faible résistivité pour laisser l'instabilité grandir
         Bz_guide=0.1,    # Faible champ guide pour la stabilité
         c_s=1.0,         # Référence de vitesse acoustique
-        Re= Re,          # Reynolds number
-        Rm= Rm           # Magnetic Reynolds number
+        Re=_resolve(None, "Re"),
+        Rm=_resolve(None, "Rm"),
     )
 
-    N_TRAINING         = N
-    MAX_DEPTH_TRAINING = 4
+    # Le hot start demarre a T_START : un T_MAX anterieur rend la boucle
+    # vide, ce qui produisait un score plausible sans aucun calcul.
+    t_start = cfg.get("T_START", 0.0)
+    if T_MAX <= t_start:
+        raise ValueError(
+            f"T_MAX={T_MAX} <= T_START={t_start} pour le scenario "
+            f"'{args.scenario}' : le hot start place t_current a T_START, "
+            f"donc `while t_current < T_MAX` serait faux des l'entree et la "
+            f"boucle ne tournerait pas. Le run rendrait une erreur nulle et "
+            f"un score plausible sans rien calculer. Voir D-66.")
 
-    PHASE={
-        "orszag_tang": {
-            "scenario": "orszag_tang",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 2.8,
-            "T_START": 2.3,
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-        },
+    dns_trace, hot_start_state = precompute_dns(cfg)
 
-        "kelvin_helmholtz": {
-            "scenario": "kelvin_helmholtz",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.7,
-            "T_START": 1.3,      # KH instability develops around t~1.0-1.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "lamb_oseen_vortex": {
-            "scenario": "lamb_oseen_vortex",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.0,
-            "T_START": 0.6,       # Vortex is present from t=0, start early
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "harris_tearing" : {
-            "scenario": "harris_tearing",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 1.1,
-            "T_START": 0.7,       # Tearing mode develops around t~0.5-1.0
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "island_coalescence" : {
-            "scenario": "island_coalescence",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.8,
-            "T_START": 0.4,       # Shock develops around t~0.2-0.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,    # Reconnection is fast — frequent VQA calls
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,  # X-point detection requires advanced anomalies
-        },
-
-        "mhd_rotor" : {
-            "scenario": "mhd_rotor",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.7,
-            "T_START": 0.3,       # Rotor winds up B-field around t~0.2-0.5
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-
-        "ghost_twisting" : {
-            "scenario": "ghost_twisting",
-            "N": N_TRAINING,
-            "max_depth_override": MAX_DEPTH_TRAINING,
-            "T_MAX": 0.8,
-            "T_START": 0.0,
-            "DT": 1e-3,
-            "HYBRID_DT": 0.10,
-            "K_opt": 30,
-            "Re": 800,
-            "Rm": 800,
-            "shots": 256,
-            "AdvAnomaliesEnable": True,
-        },
-    }
-    dns_trace, hot_start_state = precompute_dns(PHASE[args.scenario])
+    if verbose:
+        print(f"Configuration resolue pour '{args.scenario}' : "
+              f"N={N}, T_START={t_start}, T_MAX={T_MAX}, DT={DT}, "
+              f"HYBRID_DT={hybrid_dt}, Re={argus.Re}, Rm={argus.Rm}, "
+              f"shots={argus.shots}, K_opt={argus.K_opt}, "
+              f"AdvAnomalies={argus.AdvAnomaliesEnable}")
 
     print(f"Starting pipeline... saved in{args.out_dir}")
-    pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, lambda_cost=0.5, trial= None, classic_AMR_comp=True, dns_trace=dns_trace, hot_start_state=hot_start_state, max_depth_override= 4, scenario=args.scenario, save_dir=args.out_dir)
+    pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus,
+             lambda_cost=0.5, trial=None, classic_AMR_comp=True,
+             dns_trace=dns_trace, hot_start_state=hot_start_state,
+             max_depth_override=cfg.get("max_depth_override", 4),
+             scenario=args.scenario, save_dir=args.out_dir,
+             hyperparams_path=args.hyperparams_file)
 
 
 
@@ -206,12 +287,62 @@ def _init_scenario(sim, scenario):
         'lamb_oseen_vortex': sim.init_lamb_oseen_vortex,
         'island_coalescence': sim.init_island_coalescence,
         'mhd_rotor':         sim.init_mhd_rotor,
-        'ghost_twisting':      sim.init_ghost_twisting,
     }
     init_map[scenario]()
 
 
-def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lambda_cost=0.5, trial=None, classic_AMR_comp = False, dns_trace=None, hot_start_state=None, min_patch_size=6, max_depth_override=None, scenario='orszag_tang', save_dir=None, return_details=False, classical_only=False):
+def validate_precomputed_run(dns_trace, hot_start_state, N, T_MAX):
+    """Validate that a DNS trace covers exactly the requested continuation."""
+    if not isinstance(dns_trace, dict) or not dns_trace:
+        raise ValueError("dns_trace must be a non-empty dictionary")
+    keys = sorted(dns_trace)
+    if keys != list(range(keys[0], keys[-1] + 1)):
+        raise ValueError("dns_trace step indices must be contiguous")
+
+    if hot_start_state is None:
+        start_step, start_time = keys[0], 0.0
+    else:
+        required = {"vx", "vy", "Bx", "By", "t_current", "step"}
+        missing = required - set(hot_start_state)
+        if missing:
+            raise KeyError(f"hot_start_state is missing {sorted(missing)}")
+        start_step = int(hot_start_state["step"])
+        start_time = float(hot_start_state["t_current"])
+        for field in ("vx", "vy", "Bx", "By"):
+            values = np.asarray(hot_start_state[field])
+            if values.shape != (N, N) or not np.all(np.isfinite(values)):
+                raise ValueError(
+                    f"hot-start field {field} must be finite with shape {(N, N)}")
+
+    if start_step not in dns_trace:
+        raise ValueError(f"hot-start step {start_step} is absent from dns_trace")
+    if not np.isfinite(start_time) or start_time >= T_MAX:
+        raise ValueError(
+            f"hot-start time {start_time} must be finite and smaller than "
+            f"T_MAX={T_MAX}")
+
+    duration = 0.0
+    for step in range(start_step, keys[-1] + 1):
+        dt = float(dns_trace[step].get("dt", np.nan))
+        if not np.isfinite(dt) or dt <= 0.0:
+            raise ValueError(f"dns_trace[{step}]['dt'] must be finite and > 0")
+        duration += dt
+    tolerance = max(1e-10, 1e-9 * max(1.0, abs(T_MAX)))
+    if not np.isclose(start_time + duration, T_MAX, rtol=0.0,
+                      atol=tolerance):
+        raise ValueError(
+            f"dns_trace covers t={start_time + duration:.16g}, expected "
+            f"T_MAX={T_MAX:.16g}")
+    if "fluxes" not in dns_trace[keys[-1]]:
+        raise ValueError("the final DNS trace entry has no reference fluxes")
+
+
+def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus,
+             hyperparams=None, lambda_cost=0.5, trial=None,
+             classic_AMR_comp=False, dns_trace=None, hot_start_state=None,
+             min_patch_size=6, max_depth_override=None,
+             scenario='orszag_tang', save_dir=None, return_details=False,
+             classical_only=False, hyperparams_path=None):
 
     #Paramètres physiques
     eta = argus.eta       # Faible résistivité pour laisser l'instabilité grandir
@@ -241,6 +372,8 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         step = 0
 
     dns_presence = dns_trace is not None
+    if dns_presence:
+        validate_precomputed_run(dns_trace, hot_start_state, N, T_MAX)
     # sim_temoin is the DNS witness — only needed when there is no precomputed
     # dns_trace (live comparison mode).  When dns_trace is provided, the
     # reference comes from the precomputed trace, so we skip allocating and
@@ -267,34 +400,28 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     mapper = AngleMapper(v0=1.0, B0=1.0, w_compress=2.0, w_shear=1.0)
 
     # Load defaults from best_hyperparams.json, then override with caller's hp
-    _defaults = load_hyperparams()
+    _defaults = load_hyperparams(path=hyperparams_path)
     hp = {**_defaults, **(hyperparams or {})}
 
-    """
-    # ── Encoding hyperparameters (Tier 1) ──
-    beta            = hp.get('beta', 0.8683654005538312)
-    threshold_amr   = hp.get('threshold_amr', 0.5891029179142372)
-
-    # ── Hamiltonian hyperparameters (Tier 2) ──
-    # Split Michelson sensitivity: fall back to shared beta_michelson
-    beta_grad  = hp.get('beta_grad',  0.44356154664122427)
-    beta_curl  = hp.get('beta_curl',  0.44356154664122427)
-    beta_xpoint = hp.get('beta_xpoint', 0.44356154664122427)
-
-    # ── v7 trainable parameters (Tier 2) ──
-    gamma_hydro = hp.get('gamma_hydro', 1.6529193289578792)
-    gamma_mag   = hp.get('gamma_mag', 3.3558897780227754)
-    kappa       = hp.get('kappa', 5.41718485540701)
-    w_z_frac    = hp.get('w_z_frac',0.49259437288557695)
-    """
-
-    
     # ── Encoding hyperparameters (Tier 1) ──
     beta            = hp.get('beta', _defaults['beta'])
     threshold_amr   = hp.get('threshold_amr', _defaults['threshold_amr'])
 
     # ── Hamiltonian hyperparameters (Tier 2) ──
-    # sigma: uncertainty width for ZZ coupling (replaces beta_grad)
+    # sigma : largeur d'incertitude pour le couplage ZZ (remplace beta_grad).
+    #
+    # Absent de `best_hyperparams.json`, le repli 0.05 n'est pas une valeur
+    # choisie par l'entrainement. On ne leve pas (cela arreterait une
+    # campagne en cours) mais on avertit une fois et on consigne la
+    # provenance dans les details du run, pour qu'aucun artefact ne laisse
+    # croire que sigma vient de l'entrainement.
+    _sigma_defaulted = 'sigma' not in hp
+    if _sigma_defaulted:
+        warnings.warn(
+            "sigma absent des hyperparametres charges : repli sur 0.05, une "
+            "valeur qu'aucun essai n'a choisie. La campagne gelee "
+            "l'echantillonne pourtant (meilleur essai : 0.0230). Voir D-22.",
+            RuntimeWarning, stacklevel=2)
     sigma      = hp.get('sigma',       _defaults.get('sigma', 0.05))
     beta_curl  = hp.get('beta_curl',   _defaults['beta_curl'])
     beta_xpoint = hp.get('beta_xpoint',  _defaults['beta_xpoint'])
@@ -304,6 +431,12 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     gamma_mag   = hp.get('gamma_mag', _defaults['gamma_mag'])
     kappa       = hp.get('kappa', _defaults['kappa'])
     w_z_frac    = hp.get('w_z_frac', _defaults['w_z_frac'])
+
+    # Percentile du critere relatif : quand aucune cellule n'atteint le
+    # seuil absolu de Reynolds-maille, le seuil effectif devient ce
+    # percentile du signal. `None` => PhysicalMapper.RELATIVE_PERCENTILE.
+    relative_percentile = hp.get('relative_percentile',
+                                 _defaults.get('relative_percentile', None))
     
 
     # ── Physical constants derived from simulation ──
@@ -317,6 +450,34 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         print(f"  Hamiltonian: sigma={sigma}, beta_curl={beta_curl}, beta_xpoint={beta_xpoint}")
         print(f"               gamma_hydro={gamma_hydro}, gamma_mag={gamma_mag}, kappa={kappa}")
         print(f"  Physics:     Re={argus.Re}, Rm={argus.Rm}, nu={nu:.6f}, eta_mhd={eta_mhd:.6f}, cs={c_s}")
+
+    def _details(payload, scoring_error=None, completed=True, abort=None):
+        """Sortie detaillee — TOUS les chemins `return_details` passent par
+        ici, pour garantir un schema unique et eviter que des chemins censes
+        rendre le meme dictionnaire divergent silencieusement."""
+        out = dict(payload)
+        out['scoring_error'] = scoring_error
+        out['sigma'] = float(sigma)
+        out['sigma_source'] = 'default' if _sigma_defaulted else 'loaded'
+        out['completed'] = bool(completed)
+        out['abort'] = abort
+        out['physics_seed'] = int(
+            hot_start_state.get('phys_seed', 0)
+            if hot_start_state is not None else 0)
+        out['physics_noise_amplitude'] = float(
+            hot_start_state.get('physics_noise_amplitude', 0.0)
+            if hot_start_state is not None else 0.0)
+        return out
+
+    def _divergence_details(scoring_error=None):
+        return _details({
+            'combined': DIVERGENCE_PENALTY,
+            'phys_score': DIVERGENCE_PENALTY,
+            'patch_ratio': 1.0,
+            'field_errors': {v: DIVERGENCE_PENALTY
+                             for v in ['vx', 'vy', 'Bx', 'By', 'Jz']},
+        }, scoring_error=scoring_error, completed=False,
+           abort={"kind": "invalid_final_score"})
 
     # Skip Hamiltonian + VQA setup in classical-only mode (no quantum circuit needed)
     HamiltMapper = None
@@ -334,6 +495,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 beta_curl=beta_curl,
                 beta_xpoint=beta_xpoint,
                 w_z_frac=w_z_frac,
+                relative_percentile=relative_percentile,
             )
 
         # Create VQA runtime ONCE — reused across all hybrid steps and VQA calls.
@@ -343,6 +505,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             mode=argus.mode,
             shots=argus.shots,
             opt_level=argus.opt_level,
+            seed=getattr(argus, "seed", None),
         )
 
     active_patches = []
@@ -368,10 +531,9 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
 
     Phi_ema = None          # Exponential moving average of stress flux
     EMA_ALPHA = 0.3         # EMA smoothing factor: higher = more weight on recent
-    if hot_start_state is not None :
-        first_step_with_flux = min([s for s, v in dns_trace.items() if 'fluxes' in v])
-        Phi_ema = mapper.compute_stress_flux(dns_trace[first_step_with_flux]['fluxes'])
     physics_state = sim_quantum.get_fluxes()
+    if hot_start_state is not None:
+        Phi_ema = mapper.compute_stress_flux(physics_state)
 
     # 3. Boucle Temporelle
     HYBRID_DT = HYBRID * DT   # Physical time between VQA updates
@@ -460,7 +622,9 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 if classic_AMR_comp:
                     sim_classical.dt = dt
             else:
-                break
+                raise RuntimeError(
+                    f"dns_trace ended before pipeline step {step}; refusing "
+                    "to score a truncated trajectory")
         else:
             dt = DT
             dt_q = sim_quantum.adapt_dt(cfl_target=0.4)
@@ -495,8 +659,12 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
         step_simulated += 1
 
         # --- Divergence guard ---
+        quantum_diverged = sim_quantum.is_diverged()
         temoin_diverged = sim_temoin.is_diverged() if sim_temoin is not None else False
-        if sim_quantum.is_diverged() or temoin_diverged or (classic_AMR_comp and sim_classical.is_diverged()) or sim_quantum.check_cfl() > 1.0:
+        classical_diverged = (classic_AMR_comp and sim_classical.is_diverged())
+        cfl_exceeded = sim_quantum.check_cfl() > 1.0
+        if (quantum_diverged or temoin_diverged or classical_diverged
+                or cfl_exceeded):
             if verbose:
                 print(f"[ABORT] Divergence detected at step {step-1} (t={t_current:.4f})")
             # Try to compute a partial score from the fields that haven't
@@ -504,7 +672,7 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             # contains NaN/inf we assign DIVERGENCE_PENALTY for that field
             # only; otherwise we keep the real (partial) error.  This lets
             # Optuna learn from the *valid* part of the simulation.
-            DIVERGENCE_PENALTY = 10.0
+            scoring_error = None
             try:
                 q_fluxes = sim_quantum.get_fluxes()
                 # Pick the best available reference
@@ -520,20 +688,26 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                         raise RuntimeError("No reference available")
                 else:
                     ref_fluxes = sim_temoin.get_fluxes()
-                # Score each field individually — keep valid ones
+                # Use the same weighted metric as the completed-run score.
                 variables = ['vx', 'vy', 'Bx', 'By', 'Jz']
                 field_errors = {}
                 n_diverged = 0
+                _ref_finite = all(np.all(np.isfinite(ref_fluxes[v]))
+                                  for v in variables)
+                if _ref_finite:
+                    _w = instability_weight_map(ref_fluxes).flatten()
+                    _w_sum = np.sum(_w)
                 for var in variables:
                     arr_q = q_fluxes[var]
                     arr_r = ref_fluxes[var]
-                    if np.any(~np.isfinite(arr_q)) or np.any(~np.isfinite(arr_r)):
+                    if (not _ref_finite
+                            or np.any(~np.isfinite(arr_q))
+                            or np.any(~np.isfinite(arr_r))):
                         field_errors[var] = DIVERGENCE_PENALTY
                         n_diverged += 1
                     else:
-                        ref_rms = np.sqrt(np.mean(arr_r**2))
-                        rel_err = np.sqrt(np.mean((arr_q - arr_r)**2)) / (ref_rms + 1e-10)
-                        field_errors[var] = float(rel_err)
+                        field_errors[var] = weighted_relative_error(
+                            arr_q, arr_r, _w, _w_sum)
                 phys_score = np.mean(list(field_errors.values()))
                 patch_ratio = total_pixel_used / (step_simulated * N**2) if step_simulated > 0 else 1.0
                 combined = (phys_score + lambda_cost * patch_ratio) / (1 + lambda_cost)
@@ -546,14 +720,35 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
                 if verbose:
                     print(f"[DIVERGE] Partial score: combined={combined:.4f}, "
                           f"diverged_fields={n_diverged}/{len(variables)}")
-            except Exception:
+            except Exception as exc:
+                # Filet volontairement large : un essai Optuna ne doit pas
+                # faire tomber la campagne. La cause est journalisee et
+                # rendue avec le resultat pour rester distinguable d'une
+                # vraie divergence physique.
+                import traceback
+                print(f"[SCORING-ERROR] {type(exc).__name__}: {exc}",
+                      file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
                 combined = DIVERGENCE_PENALTY
                 phys_score = DIVERGENCE_PENALTY
                 patch_ratio = 1.0
                 field_errors = {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}
+                scoring_error = f"{type(exc).__name__}: {exc}"
             if return_details:
-                return {'combined': combined, 'phys_score': phys_score,
-                        'patch_ratio': patch_ratio, 'field_errors': field_errors}
+                abort = {
+                    'kind': 'numerical_divergence',
+                    'step': int(step - 1),
+                    'time': float(t_current),
+                    'quantum_diverged': bool(quantum_diverged),
+                    'reference_diverged': bool(temoin_diverged),
+                    'classical_diverged': bool(classical_diverged),
+                    'cfl_exceeded': bool(cfl_exceeded),
+                }
+                return _details({'combined': combined, 'phys_score': phys_score,
+                                 'patch_ratio': patch_ratio,
+                                 'field_errors': field_errors},
+                                scoring_error=scoring_error,
+                                completed=False, abort=abort)
             return combined
 
         # --- Intermediate scoring for Optuna pruning ---
@@ -585,14 +780,13 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
     score_result = {}
     score_classical = {}
     if dns_presence:
-        last_step = step if step in dns_trace else step - 1
+        last_step = step - 1
         while last_step >= 0 and 'fluxes' not in dns_trace.get(last_step, {}):
             last_step -= 1
         if last_step < 0:
-            DIVERGENCE_PENALTY = 10.0
             if return_details:
-                return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
-                        'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
+                return _divergence_details(
+                    scoring_error='no dns flux snapshot before the last step')
             return DIVERGENCE_PENALTY
         ground_truth_fluxes = dns_trace[last_step]['fluxes']
         score_result = score(sim_quantum.get_fluxes(), ground_truth_fluxes, lambda_cost, total_pixel_used, step_simulated, N**2)
@@ -608,10 +802,9 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
 
     final_score = score_result['combined']
     if np.isnan(final_score) or np.isinf(final_score):
-        DIVERGENCE_PENALTY = 10.0
         if return_details:
-            return {'combined': DIVERGENCE_PENALTY, 'phys_score': DIVERGENCE_PENALTY,
-                    'patch_ratio': 1.0, 'field_errors': {v: DIVERGENCE_PENALTY for v in ['vx','vy','Bx','By','Jz']}}
+            return _divergence_details(
+                scoring_error='final score is NaN or inf')
         return DIVERGENCE_PENALTY
 
     # Store decomposed metrics for hyperparameter analysis
@@ -657,8 +850,45 @@ def pipeline(N, VQA_N, T_MAX, DT, HYBRID, verbose, argus, hyperparams=None, lamb
             print("=" * 40)
 
     if return_details:
-        return score_result
+        return _details(score_result)
     return final_score
+
+
+def instability_weight_map(ref_fluxes):
+    """Carte de poids asymétrique, construite sur la référence.
+
+    w = 1 + 0.25 × (|Jz|/⟨|Jz|⟩ + |ωz|/⟨|ωz|⟩)
+
+    Les régions à fort courant OU forte vorticité pèsent davantage : rater
+    une instabilité coûte plus cher que raffiner une région calme.
+
+    Le chemin de divergence et le score final utilisent cette même carte.
+    """
+    Jz_abs = np.abs(ref_fluxes['Jz'])
+    Jz_mean = np.mean(Jz_abs) + 1e-10
+
+    vx_ref, vy_ref = ref_fluxes['vx'], ref_fluxes['vy']
+    omega_z = np.abs(
+        (np.roll(vy_ref, -1, axis=AXIS_X) - vy_ref)
+        - (np.roll(vx_ref, -1, axis=AXIS_Y) - vx_ref)
+    )
+    omega_mean = np.mean(omega_z) + 1e-10
+
+    instability_weight = 0.5
+    return 1.0 + instability_weight * (
+        Jz_abs / Jz_mean + omega_z / omega_mean
+    ) * 0.5
+
+
+def weighted_relative_error(arr_q, arr_r, weight_flat, weight_sum):
+    """Erreur L2 relative pondérée d'un champ contre sa référence.
+
+    Vaut 0 sur une reconstruction exacte et 1 quand le bras rend zéro.
+    """
+    diff_sq = (arr_q.flatten() - arr_r.flatten()) ** 2
+    weighted_rmse = np.sqrt(np.sum(weight_flat * diff_sq) / weight_sum)
+    ref_rms = np.sqrt(np.sum(weight_flat * arr_r.flatten() ** 2) / weight_sum)
+    return float(weighted_rmse / (ref_rms + 1e-10))
 
 
 def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, total_steps, N_square, verbose=False):
@@ -679,27 +909,9 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
     variables = ['vx', 'vy', 'Bx', 'By', 'Jz']
 
     # ── Asymmetric weight map ──
-    # Combine |Jz| (current sheets) AND |ωz| (vorticity) for weighting.
-    # This catches instabilities where either B or v is active.
-    Jz_ref = sim_temoin_fluxes['Jz']
-    vx_ref = sim_temoin_fluxes['vx']
-    vy_ref = sim_temoin_fluxes['vy']
-
-    Jz_abs = np.abs(Jz_ref)
-    Jz_mean = np.mean(Jz_abs) + 1e-10
-
-    # Discrete vorticity |ωz| ≈ |∂vy/∂x − ∂vx/∂y|
-    omega_z = np.abs(
-        (np.roll(vy_ref, -1, axis=1) - vy_ref)
-        - (np.roll(vx_ref, -1, axis=0) - vx_ref)
-    )
-    omega_mean = np.mean(omega_z) + 1e-10
-
-    # w = 1 + 0.5*(|Jz|/mean + |ωz|/mean) — weights instability regions
-    instability_weight = 0.5
-    weight_map = 1.0 + instability_weight * (
-        Jz_abs / Jz_mean + omega_z / omega_mean
-    ) * 0.5
+    # Extraite dans `instability_weight_map` pour que le chemin de
+    # divergence de `pipeline()` emploie EXACTEMENT la meme ponderation.
+    weight_map = instability_weight_map(sim_temoin_fluxes)
     weight_flat = weight_map.flatten()
     weight_sum = np.sum(weight_flat)
 
@@ -707,28 +919,24 @@ def score(sim_quantum_fluxes, sim_temoin_fluxes, lambda_cost, total_pixel_used, 
     detailed_errors = {}
 
     for var in variables:
-        arr_q = sim_quantum_fluxes[var].flatten()
-        arr_t = sim_temoin_fluxes[var].flatten()
-
-        # Weighted L2: sum(w * (q-t)^2) / sum(w), then sqrt for norm-like behavior
-        diff_sq = (arr_q - arr_t) ** 2
-        weighted_mse = np.sum(weight_flat * diff_sq) / weight_sum
-        weighted_rmse = np.sqrt(weighted_mse)
-
-        ref_rms = np.sqrt(np.sum(weight_flat * arr_t ** 2) / weight_sum)
-        epsilon_security = 1e-10
-        rel_err = weighted_rmse / (ref_rms + epsilon_security)
-
+        rel_err = weighted_relative_error(
+            sim_quantum_fluxes[var], sim_temoin_fluxes[var],
+            weight_flat, weight_sum)
         detailed_errors[var] = rel_err
         total_error += rel_err
 
     phys_score = total_error / len(variables)
 
-    if total_steps > 0:
-        avg_pixel_used = total_pixel_used / total_steps
-    else:
-        avg_pixel_used = N_square
+    # `total_steps == 0` signifie qu'aucun pas n'a ete integre. Un repli
+    # numerique convertirait cela en un score plausible pour un run qui n'a
+    # rien calcule : un run vide doit crier, pas se noter.
+    if total_steps <= 0:
+        raise ValueError(
+            f"score() appele avec total_steps={total_steps} : aucun pas de "
+            f"temps n'a ete integre, il n'y a rien a noter. Verifier que "
+            f"T_MAX est posterieur a T_START (voir D-66 et D-67).")
 
+    avg_pixel_used = total_pixel_used / total_steps
     patch_ratio = avg_pixel_used / N_square
 
     if verbose:

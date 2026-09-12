@@ -1,0 +1,49 @@
+====================================================================================
+  V4 T22 - fold ot (orszag_tang)  mode=unseen-ic
+  unseen condition: init_orszag_tang takes NO parameters; the only available unseen condition is a different Reynolds number
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  classical reference: budget-matched threshold 0.1906 (forced)
+  QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
+  classical threshold = 0.19062500000000002   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (canonical/ot) ---
+
+
+--- Pre-computing DNS traces for unseen/ot ---
+Hot-Start captured at t=2.0002
+DNS pre-computed: 1123 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (unseen/ot) ---
+
+
+  DNS signature canonical=1.458888e+05  unseen=1.454737e+05
+  trajectory actually changed: True
+/home/user/BA_Proj/src/visual.py:19: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=(10, 9))
+    [qhas] canonical run 1/5: phys=0.17203 patch=0.7270
+    [qhas] canonical run 2/5: phys=0.10941 patch=0.7204
+    [qhas] canonical run 3/5: phys=0.12095 patch=0.7272
+    [qhas] canonical run 4/5: phys=0.11741 patch=0.7117
+    [qhas] canonical run 5/5: phys=0.09345 patch=0.7404
+    [qhas] unseen run 1/5: phys=0.11659 patch=0.7197
+    [qhas] unseen run 2/5: phys=0.09765 patch=0.7796
+    [qhas] unseen run 3/5: phys=0.16912 patch=0.7136
+    [qhas] unseen run 4/5: phys=0.07287 patch=0.7894
+    [qhas] unseen run 5/5: phys=0.12957 patch=0.7616
+  [qhas] canonical phys=0.12265+-0.02956  unseen phys=0.11716+-0.03604  degradation x0.96
+    [classical] canonical run 1/2: phys=0.08270 patch=0.6412
+    [classical] canonical run 2/2: phys=0.08270 patch=0.6412
+    [classical] unseen run 1/2: phys=0.07823 patch=0.6699
+    [classical] unseen run 2/2: phys=0.07823 patch=0.6699
+  [classical] canonical phys=0.08270+-0.00000  unseen phys=0.07823+-0.00000  degradation x0.95
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.96  classical x0.95
+  => Q-HAS degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_ot.json (12717s)
+
+V4 Task 22 complete.

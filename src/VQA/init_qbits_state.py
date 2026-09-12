@@ -1,4 +1,4 @@
-# scripts/init_qbits_state.py
+# src/VQA/init_qbits_state.py
 
 import matplotlib.pyplot as plt
 import numpy as np

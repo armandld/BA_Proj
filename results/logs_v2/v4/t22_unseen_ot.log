@@ -1,0 +1,38 @@
+====================================================================================
+  V4 T22 - fold ot (orszag_tang)  mode=unseen-ic
+  unseen condition: init_orszag_tang takes NO parameters; the only available unseen condition is a different Reynolds number
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+  QAOA arm threshold = 0.14959824837662078   <- LEAKED (fitted on all 4 classes)
+  classical threshold = 0.46161012794549355   (tuned on training classes only)
+
+--- Pre-computing DNS traces for canonical/ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (canonical/ot) ---
+
+
+--- Pre-computing DNS traces for unseen/ot ---
+Hot-Start captured at t=2.0002
+DNS pre-computed: 1123 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (unseen/ot) ---
+
+
+  DNS signature canonical=1.458888e+05  unseen=1.454737e+05
+  trajectory actually changed: True
+
+  [qhas] canonical phys=0.1071 patch=0.7506
+  [qhas] unseen    phys=0.1009 patch=0.7274   degradation x0.94
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+
+  [classical] canonical phys=0.4845 patch=0.3238
+  [classical] unseen    phys=0.5998 patch=0.3755   degradation x1.24
+
+  ------------------------------------------------------------------------------
+  degradation on the unseen condition: Q-HAS x0.94  classical x1.24
+  => the classical rule degrades more when the initial condition is new
+
+  saved: t22_unseen_unseen-ic_ot.json (2099s)
+
+V4 Task 22 complete.

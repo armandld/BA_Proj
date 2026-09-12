@@ -1,0 +1,41 @@
+====================================================================================
+  V4 T20 - Q-HAS run-to-run variance, fold tearing
+  5 Q-HAS runs + 2 classical (determinism control), identical inputs
+  V1 fixes no RNG seed: Estimator/Sampler run at 256 shots.
+====================================================================================
+Environnement Local detecte. Ecriture directe sur le disque.
+
+--- Pre-computing DNS traces for variance/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (variance/tearing) ---
+
+  Q-HAS run 1/5: combined=0.2532 phys=0.0103 patch=0.8604
+  Q-HAS run 2/5: combined=0.2622 phys=0.0087 patch=0.8961
+  Q-HAS run 3/5: combined=0.2578 phys=0.0090 patch=0.8799
+  Q-HAS run 4/5: combined=0.2805 phys=0.0063 patch=0.9661
+  Q-HAS run 5/5: combined=0.2751 phys=0.0057 patch=0.9484
+  classical run 1/2: combined=0.1817 phys=0.0044
+  classical run 2/2: combined=0.1817 phys=0.0044
+
+  --------------------------------------------------------------------------------
+  metric          Q-HAS mean       std     range      CV   | classical range
+  combined            0.2658    0.0116    0.0273   0.044   | 0.00e+00
+  phys_score          0.0080    0.0019    0.0046   0.241   | 0.00e+00
+  patch_ratio         0.9102    0.0452    0.1057   0.050   | 0.00e+00
+
+  classical arm deterministic: True  (control — if False, the measurement chain itself is suspect)
+
+  classical reference: budget-matched classical
+
+  Q-HAS run-to-run std on phys : 0.00193  (CV 0.241)
+  stored fold value 0.01854 sits at the 100th percentile of the draws
+  gap / std, from the STORED draw : 7.33
+  gap / std, from the MEAN draw   : 1.86   <- the one to quote
+  => against sampling noise the between-arm gap is NOT large;
+     a single run per arm cannot support a directional claim on
+     the magnitude. Report the dominance count instead.
+
+  saved: t20_qhas_run_variance_tearing.json (3647s)
+
+V4 Task 20 complete.

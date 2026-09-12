@@ -1,0 +1,57 @@
+{
+ "fold": "kh",
+ "scenario": "kelvin_helmholtz",
+ "train_on": [
+  "ot",
+  "tearing",
+  "rotor"
+ ],
+ "n_trials": 4,
+ "best_train_loss": 0.2590038128464127,
+ "classical_params": {
+  "threshold_amr": 0.46161012794549355
+ },
+ "classical_train_loss": 0.3840786773183768,
+ "hyperparams": {
+  "gamma_hydro": 2.0,
+  "gamma_mag": 0.5,
+  "kappa": 10.0,
+  "beta": 5.713728287309586,
+  "w_z_frac": 72.57005721594277,
+  "sigma": 0.18877374530006025,
+  "beta_curl": 2.724415914984484,
+  "beta_xpoint": 2.1182739966945237,
+  "threshold_amr": 0.14959824837662078
+ },
+ "qhas": {
+  "combined": 0.24432829297933184,
+  "phys_score": 0.007002138906696718,
+  "patch_ratio": 0.8376436781609196,
+  "wall_s": 578.6740922927856
+ },
+ "classical": {
+  "combined": 0.1800140864155247,
+  "phys_score": 0.002019720981734553,
+  "patch_ratio": 0.625,
+  "wall_s": 213.1109824180603
+ },
+ "t_dns": 182.21987891197205,
+ "t_tune": 4267.038781642914,
+ "t_tune_classical": 614.7435274124146,
+ "git_hash": "1858c5a5f31ebad5ab12931fefd0e7abd8cafec5",
+ "cli_args": {
+  "folds": [
+   "kh"
+  ],
+  "n_trials": 4,
+  "n_trials_classical": 2,
+  "lambda_cost": null,
+  "seed": 0,
+  "verbose": false,
+  "list": false,
+  "out_prefix": "t15_level3",
+  "smoke": false,
+  "smoke_N": 64,
+  "smoke_tmax": 0.4
+ }
+}

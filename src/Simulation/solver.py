@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import zoom, map_coordinates
+from Simulation.grid import AXIS_X, AXIS_Y, project_divergence_free_any
 from Simulation.utils import compute_local_factor
 
 class MHDSolver:
@@ -32,6 +33,34 @@ class MHDSolver:
     # ================================================================
     #                    INITIALISATIONS PHYSIQUES
     # ================================================================
+
+    def apply_physics_perturbation(self, seed, amplitude=0.1, k_cut=8):
+        """Apply a reproducible large-scale velocity perturbation.
+
+        Seed 0 is the unperturbed reference trajectory. Positive seeds add
+        independent band-limited fields and restore discrete incompressibility.
+        """
+        seed = int(seed)
+        if seed < 0:
+            raise ValueError("physics seed must be non-negative")
+        if seed == 0:
+            return
+        if not np.isfinite(amplitude) or amplitude <= 0.0:
+            raise ValueError("physics perturbation amplitude must be finite and > 0")
+        rng = np.random.default_rng(seed)
+        wave = np.fft.fftfreq(self.grid.N) * self.grid.N
+        kx, ky = np.meshgrid(wave, wave, indexing="ij")
+        keep = np.sqrt(kx ** 2 + ky ** 2) <= int(k_cut)
+
+        def noise():
+            spectrum = np.fft.fft2(rng.standard_normal(self.vx.shape))
+            spectrum[~keep] = 0.0
+            field = np.real(np.fft.ifft2(spectrum))
+            return field / max(float(field.std()), 1e-30)
+
+        self.vx = self.vx + float(amplitude) * noise()
+        self.vy = self.vy + float(amplitude) * noise()
+        self.enforce_incompressibility()
 
     def init_kelvin_helmholtz(self, shear_width= 0.5, noise_amplitude=0.1, drift_velocity=0.5):
         X, Y = self.grid.X, self.grid.Y
@@ -77,8 +106,24 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        self.Bx = B0 * np.cos(alpha)
-        self.By = B0 * np.sin(alpha)
+        # B = (B0 cos alpha(y), B_guide) — solénoïdal PAR CONSTRUCTION :
+        # Bx ne dépend pas de x et By est constant, donc div B = 0 exactement.
+        #
+        # Poser B = (B0 cos alpha, B0 sin alpha) à la place n'est PAS à
+        # divergence nulle en 2-D : `enforce_incompressibility` y annulerait
+        # alors la torsion elle-même, silencieusement.
+        #
+        # En 2-D, un champ solénoïdal dont la direction tourne exige que la
+        # composante parallèle à la variation reste constante : c'est ce que
+        # fait le champ guide B_guide ci-dessous.
+        # La composante VARIABLE doit changer de signe pour que la direction
+        # balaie réellement `twist_angle` : avec Bx = B0 sin(alpha) et alpha
+        # parcourant [-twist/2, +twist/2], l'angle va de
+        # atan2(guide, -B0 sin(twist/2)) à atan2(guide, +B0 sin(twist/2)),
+        # soit exactement `twist_angle` pour guide = B0 cos(twist/2).
+        b_guide = B0 * np.cos(twist_angle / 2.0)
+        self.Bx = B0 * np.sin(alpha)
+        self.By = np.full_like(X, b_guide)
         # Pas de vitesse initiale — la tension magnétique drive la dynamique
         self.vx = np.zeros_like(X)
         self.vy = perturbation * np.sin(X) * (
@@ -97,8 +142,19 @@ class MHDSolver:
     def init_noisy_uniform(self, B0=1.0, noise_sigma=0.05, seed=42):
         X = self.grid.X
         rng = np.random.default_rng(seed)
-        self.Bx = B0 + noise_sigma * rng.standard_normal(X.shape)
-        self.By = noise_sigma * rng.standard_normal(X.shape)
+        # Bruit tiré d'une fonction de flux, donc solénoïdal par
+        # construction : tirer Bx et By indépendamment ne serait
+        # solénoïdal qu'à moitié après projection, et `noise_sigma` ne
+        # serait plus l'écart-type réellement obtenu. On tire psi, on
+        # prend son rotationnel, puis on renormalise pour que l'écart-type
+        # demandé soit celui produit.
+        psi = rng.standard_normal(X.shape)
+        bx, by = self._curl_z_fd4(psi, self.dx)
+        scale = noise_sigma / max(float(np.std(np.concatenate([bx.ravel(),
+                                                               by.ravel()]))),
+                                  1e-30)
+        self.Bx = B0 + scale * bx
+        self.By = scale * by
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
@@ -121,35 +177,23 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Perturbation magnétique pour déclencher la tearing mode
-        self.By = perturbation * np.cos(k_mode * X) * (
-            1.0 / np.cosh((Y - np.pi / 2) / shear_width) ** 2
-            + 1.0 / np.cosh((Y - 3 * np.pi / 2) / shear_width) ** 2
-        )
+        # Perturbation magnétique pour déclencher la tearing mode, posée
+        # par fonction de flux : à divergence nulle par construction. Ne
+        # poser que `dBy` seul se ferait en grande partie retirer par la
+        # projection.
+        u1 = (Y - np.pi / 2) / shear_width
+        u2 = (Y - 3 * np.pi / 2) / shear_width
+        env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
+        # d/dy sech^2(u) = -(2/w) sech^2(u) tanh(u)
+        psi = -(perturbation / k_mode) * np.sin(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         # Pas de vitesse initiale — la reconnexion drive la dynamique
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
 
-    def init_ghost_twisting(self, twist_width=0.8):
-        """
-        Scénario 'Fantôme' : Amplitude de B constante, seule la phase tourne.
-        Le critère classique |grad(B)| est trompé si on regarde la magnitude.
-        """
-        X, Y = self.grid.X, self.grid.Y
-        
-        # L'angle alpha tourne de 0 à pi
-        alpha = (np.pi / 2.0) * (np.tanh((Y - np.pi/2) / twist_width) 
-                                - np.tanh((Y - 3*np.pi/2) / twist_width) - 1.0)
-        
-        # Bx et By changent, mais Bx^2 + By^2 est TOUJOURS égal à 1.0
-        self.Bx = np.cos(alpha)
-        self.By = np.sin(alpha)
-        
-        self.vx = np.zeros_like(X)
-        self.vy = np.zeros_like(X)
-        
-        self.enforce_incompressibility()
     # ----------------------------------------------------------------
     #  Double Tearing Mode — deux nappes de courant proches
     #  Chaque nappe est individuellement sous le seuil de l'AMR classique,
@@ -219,11 +263,17 @@ class MHDSolver:
             - np.tanh((Y - (3 * np.pi / 2 + d)) / shear_width)
             - 2.0
         )
-        # Perturbation pour la tearing
-        self.By = perturbation * np.sin(k_mode * X) * (
-            np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
-            + np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
-        )
+        # Perturbation pour la tearing, posée par fonction de flux (à
+        # divergence nulle par construction).
+        g1 = np.exp(-((Y - np.pi / 2) ** 2) / (2 * d) ** 2)
+        g2 = np.exp(-((Y - 3 * np.pi / 2) ** 2) / (2 * d) ** 2)
+        env = g1 + g2
+        # cos(kx) ici (plutôt que sin) donne le même profil physique,
+        # après décalage de phase.
+        psi = (perturbation / k_mode) * np.cos(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         self.vx = np.zeros_like(X)
         self.vy = np.zeros_like(X)
         self.enforce_incompressibility()
@@ -313,12 +363,15 @@ class MHDSolver:
             - np.tanh((Y - 3 * np.pi / 2) / shear_width)
             - 1.0
         )
-        # Stronger perturbation to drive island coalescence
-        # Uses cos(k*x) to create multiple X-points along the sheet
-        self.By = perturbation * np.cos(k_mode * X) * (
-            1.0 / np.cosh((Y - np.pi / 2) / shear_width) ** 2
-            + 1.0 / np.cosh((Y - 3 * np.pi / 2) / shear_width) ** 2
-        )
+        # Stronger perturbation to drive island coalescence, posée par
+        # fonction de flux (voir harris_tearing).
+        u1 = (Y - np.pi / 2) / shear_width
+        u2 = (Y - 3 * np.pi / 2) / shear_width
+        env = 1.0 / np.cosh(u1) ** 2 + 1.0 / np.cosh(u2) ** 2
+        psi = -(perturbation / k_mode) * np.sin(k_mode * X) * env
+        dBx, dBy = self._curl_z_fd4(psi, self.dx)
+        self.Bx = self.Bx + dBx
+        self.By = dBy
         # Small velocity perturbation to drive coalescence
         self.vx = np.zeros_like(X)
         self.vy = perturbation * np.sin(k_mode * X) * (
@@ -326,6 +379,93 @@ class MHDSolver:
             + np.exp(-((Y - 3 * np.pi / 2) ** 2) / shear_width ** 2)
         )
         self.enforce_incompressibility()
+
+    # ----------------------------------------------------------------
+    #  IC jouet : une vraie instabilité, paramètres physiques randomisés
+    #
+    #  Un hamiltonien réglé pour détecter vortex/points X ne doit pas
+    #  s'entraîner uniquement sur les 8 scénarios fixes (USER). Du bruit
+    #  filtré seul ne suffit pas : mesuré, il ne développe jamais de
+    #  structure (une instabilité réelle en CONCENTRE en évoluant, le
+    #  bruit ne fait que diffuser — voir DEFAUTS.md/RESULTS.md). Cette IC
+    #  tire donc une vraie recette d'instabilité et en randomise les
+    #  paramètres physiques : générique par les paramètres, pas par
+    #  l'absence de structure.
+    # ----------------------------------------------------------------
+
+    #: Recettes d'instabilité déjà testées (test_scenarios_analytic.py).
+    #: Exclut `orszag_tang` (aucun paramètre) et `noisy_uniform` (bruit
+    #: statique, ne développe rien). Bornes centrées sur le défaut de
+    #: chaque fonction.
+    _TOY_INSTABILITY_RECIPES = {
+        "kelvin_helmholtz": {
+            "shear_width": (0.3, 0.8), "noise_amplitude": (0.05, 0.2),
+            "drift_velocity": (0.3, 0.8)},
+        "magnetic_twist": {
+            "twist_angle": (np.pi / 4, np.pi), "shear_width": (0.15, 0.5),
+            "perturbation": (0.005, 0.03)},
+        "harris_tearing": {
+            "B0": (0.6, 1.4), "shear_width": (0.15, 0.5),
+            "perturbation": (0.005, 0.03), "k_mode": (0.5, 2.0)},
+        "lamb_oseen_vortex": {
+            "circulation": (3.0, 10.0), "core_radius": (0.2, 0.7),
+            "B0": (0.05, 0.2)},
+        "double_tearing": {
+            "B0": (0.4, 0.9), "separation": (0.3, 0.8),
+            "shear_width": (0.1, 0.35), "perturbation": (0.005, 0.03),
+            "k_mode": (1.0, 3.0)},
+        "mhd_rotor": {
+            "omega": (5.0, 16.0), "r0": (0.5, 1.0),
+            "taper_width": (0.08, 0.25), "B0": (0.6, 1.4)},
+        "island_coalescence": {
+            "B0": (0.6, 1.4), "shear_width": (0.15, 0.5),
+            "perturbation": (0.02, 0.1), "k_mode": (0.5, 2.0)},
+    }
+
+    def init_toy_instability(self, seed=0, recipe=None):
+        """Une recette au hasard, ses paramètres au hasard, et un
+        décalage périodique au hasard (position de la structure) --
+        générique par les tirages, pas par l'absence de dynamique. Le
+        choix et ses paramètres sont gardés sur `self.toy_recipe`/
+        `self.toy_recipe_params` pour la provenance.
+        """
+        seed = int(seed)
+        rng = np.random.default_rng(seed)
+        if recipe is None:
+            recipe = str(rng.choice(list(self._TOY_INSTABILITY_RECIPES)))
+        ranges = self._TOY_INSTABILITY_RECIPES[recipe]
+        params = {name: float(rng.uniform(*bounds))
+                  for name, bounds in ranges.items()}
+        if recipe == "lamb_oseen_vortex":
+            params["circulation"] *= float(rng.choice([-1.0, 1.0]))
+
+        getattr(self, f"init_{recipe}")(**params)
+
+        shift = tuple(int(rng.integers(0, self.grid.N)) for _ in range(2))
+        self.vx = np.roll(self.vx, shift, axis=(0, 1))
+        self.vy = np.roll(self.vy, shift, axis=(0, 1))
+        self.Bx = np.roll(self.Bx, shift, axis=(0, 1))
+        self.By = np.roll(self.By, shift, axis=(0, 1))
+
+        self.toy_recipe = recipe
+        self.toy_recipe_params = dict(params)
+
+    # ----------------------------------------------------------------
+    #  Perturbations magnétiques : par fonction de flux
+    # ----------------------------------------------------------------
+    @staticmethod
+    def _curl_z_fd4(psi, dx):
+        """`rot(psi z)` avec le MEME stencil FD4 que le second membre.
+
+        `div(rot psi) = d_x d_y psi - d_y d_x psi` : exactement nul, parce
+        que les deux dérivées FD4 sont des combinaisons de `np.roll` et
+        commutent. Dériver `psi` analytiquement ne donnerait la contrainte
+        qu'à la précision de discrétisation, pas exactement — une
+        contrainte discrète ne se satisfait que dans l'opérateur qui la
+        mesure.
+        """
+        g_x, g_y = MHDSolver._fd_grad(psi, dx)
+        return g_y, -g_x
 
     def get_fluxes(self):
         dx = self.dx
@@ -350,12 +490,57 @@ class MHDSolver:
         self.energy_history['magnetic'].append(Em)
         self.energy_history['total'].append(Ek + Em)
 
-    def enforce_incompressibility(self):
-        self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
-        self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
+    #: Projeter aussi le champ magnetique. Par defaut False : l'induction le
+    #: garde deja a divergence nulle, et la projection l'en ECARTE.
+    #: Voir `enforce_incompressibility` pour la mesure.
+    PROJECT_B = False
 
-    def is_diverged(self, max_value=1e100):
-        """Check if any field has NaN, Inf, or has blown up beyond physical limits."""
+    def enforce_incompressibility(self):
+        """Impose la contrainte de divergence nulle sur la vitesse.
+
+        LE CHAMP MAGNETIQUE N'EST PLUS PROJETE — et c'est une correction,
+        pas un oubli.
+
+        L'induction est ecrite en forme rotationnelle :
+        `rhs_B = (dEz/dy, -dEz/dx)`. Sa divergence AUX DIFFERENCES FINIES
+        vaut `d2Ez/dxdy - d2Ez/dydx`, exactement nulle puisque les decalages
+        de `np.roll` commutent. B est donc solenoidal par construction, dans
+        l'operateur meme qui construit le second membre.
+
+        La projection, elle, est SPECTRALE : un operateur DIFFERENT de
+        celui qui a construit B. Appliquee a un champ deja a divergence FD
+        nulle, elle ne le nettoie pas — elle y injecte le desaccord entre
+        les deux operateurs. Mesure sur Orszag-Tang N=64 : 50 pas SANS
+        projeter B laissent sa divergence FD a 1.00e-14 (bruit) ; 50 pas
+        EN la projetant la fait monter a 4.63e-07, huit ordres de
+        grandeur perdus. Sur un run complet (T=0.05, 256 pas), l'erreur
+        en temps est IDENTIQUE que B soit projete ou non (1.185e-05) —
+        projeter B ne gagne donc rien, et laisse sa divergence FD a
+        4.877e-06 contre 2.818e-14 sans.
+
+        La vitesse, elle, en a reellement besoin : sa divergence FD
+        n'est PAS nulle analytiquement.
+
+        `PROJECT_B = True` reproduit le chemin historique bit a bit.
+        """
+        self.vx, self.vy = self.grid.project_divergence_free(self.vx, self.vy)
+        if self.PROJECT_B:
+            self.Bx, self.By = self.grid.project_divergence_free(self.Bx, self.By)
+
+    def is_diverged(self, max_value=1e8):
+        """Check if any field has NaN, Inf, or has blown up beyond physical limits.
+
+        Le seuil doit rester petit devant l'echelle de l'overflow `float64`
+        (~1e154) mais tres grand devant l'echelle physique legitime des
+        scenarios de ce depot (champs d'ordre 1-4) : un seuil demesurement
+        haut ne detecterait plus qu'un run deja depourvu de sens (NaN/Inf).
+        Une divergence MHD croit exponentiellement, donc couper tot ne
+        perd aucun run viable et laisse le score partiel se calculer sur
+        des champs moins corrompus.
+
+        `max_value` reste un parametre : un appelant qui travaille a une
+        autre echelle peut l'elargir explicitement.
+        """
         for field in [self.vx, self.vy, self.Bx, self.By]:
             if np.any(np.isnan(field)) or np.any(np.isinf(field)):
                 return True
@@ -448,32 +633,82 @@ class MHDSolver:
                 Bx + (dt / 2.0) * (k1[2] + k2[2]),
                 By + (dt / 2.0) * (k1[3] + k2[3]))
     
+    #: Projeter le SECOND MEMBRE a chaque etage RK4 plutot que l'ETAT une
+    #: fois le pas fini (voir `_rk4_step` pour le gain d'ordre).
+    #:
+    #: PAR DEFAUT False, malgre ce gain, parce que la correction n'est
+    #: VALIDE QUE SUR `step_full`. `_rk4_step` a trois appelants :
+    #:
+    #:   step_full       champ global periodique        -> projection valide
+    #:   step_layered/1  champ global sous-echantillonne -> periodique, mais
+    #:                   d'une autre TAILLE que self.grid : la projection leve
+    #:   step_layered/2  patch LOCAL avec halo           -> pas periodique,
+    #:                   une projection spectrale periodique n'y est pas definie
+    #:
+    #: Projeter les deux premiers et pas le troisieme romprait la garantie
+    #: « a max_depth, step_layered est identique a step_full » : etendre ce
+    #: flag est une decision de modelisation, pas une correction de defaut.
+    PROJECT_RHS = False
+
+    def _projected_rhs(self, vx, vy, Bx, By, dx, nu, eta):
+        """Second membre rendu a divergence nulle avant integration.
+
+        Le systeme est differentiel-algebrique : la vitesse et le champ
+        magnetique doivent rester a divergence nulle. Imposer la contrainte
+        APRES un pas RK4 non contraint est un splitting de Lie, d'ordre 1 —
+        c'est ce qui ramenait le solveur d'ordre 4 a ordre 1.2.
+
+        En projetant le second membre, le champ integre est a divergence
+        nulle PAR CONSTRUCTION et RK4 garde son ordre. La projection reste
+        idempotente et lineaire, donc elle commute avec la combinaison des
+        etages.
+        """
+        kvx, kvy, kBx, kBy = self._compute_rhs_fd(vx, vy, Bx, By, dx, nu, eta)
+        # Projection independante de la taille : `step_layered` calcule sa
+        # phase 1 sur le champ global SOUS-ECHANTILLONNE, qui reste
+        # periodique mais n'a plus la taille de la grille.
+        kvx, kvy = project_divergence_free_any(kvx, kvy)
+        kBx, kBy = project_divergence_free_any(kBx, kBy)
+        return kvx, kvy, kBx, kBy
+
     def _rk4_step(self, vx, vy, Bx, By, dx, dt, nu=None, eta=None):
-        """Intégration temporelle Runge-Kutta d'Ordre 4 (RK4). 
-        Essentiel pour stabiliser les différences spatiales centrées."""
+        """Integration temporelle Runge-Kutta d'ordre 4 (RK4).
+
+        Projeter l'ETAT apres un pas RK4 complet degrade l'ordre du schema
+        a 1 (splitting de Lie) ; projeter le SECOND MEMBRE a chaque etage
+        preserve l'ordre 4 de RK4 tout en controlant la divergence aussi
+        bien que la projection de l'etat. Ne pas projeter du tout garde
+        aussi l'ordre 4 mais laisse la divergence exploser.
+
+        A ne pas confondre avec un splitting de Strang : la projection est
+        un projecteur idempotent (P.P = P), pas un flot decoupable en
+        demi-pas.
+        """
+        _rhs = self._projected_rhs if self.PROJECT_RHS else self._compute_rhs_fd
+
         # Étape 1
-        k1_vx, k1_vy, k1_Bx, k1_By = self._compute_rhs_fd(vx, vy, Bx, By, dx, nu, eta)
-        
+        k1_vx, k1_vy, k1_Bx, k1_By = _rhs(vx, vy, Bx, By, dx, nu, eta)
+
         # Étape 2
         vxp2 = vx + 0.5 * dt * k1_vx
         vyp2 = vy + 0.5 * dt * k1_vy
         Bxp2 = Bx + 0.5 * dt * k1_Bx
         Byp2 = By + 0.5 * dt * k1_By
-        k2_vx, k2_vy, k2_Bx, k2_By = self._compute_rhs_fd(vxp2, vyp2, Bxp2, Byp2, dx, nu, eta)
-        
+        k2_vx, k2_vy, k2_Bx, k2_By = _rhs(vxp2, vyp2, Bxp2, Byp2, dx, nu, eta)
+
         # Étape 3
         vxp3 = vx + 0.5 * dt * k2_vx
         vyp3 = vy + 0.5 * dt * k2_vy
         Bxp3 = Bx + 0.5 * dt * k2_Bx
         Byp3 = By + 0.5 * dt * k2_By
-        k3_vx, k3_vy, k3_Bx, k3_By = self._compute_rhs_fd(vxp3, vyp3, Bxp3, Byp3, dx, nu, eta)
-        
+        k3_vx, k3_vy, k3_Bx, k3_By = _rhs(vxp3, vyp3, Bxp3, Byp3, dx, nu, eta)
+
         # Étape 4
         vxp4 = vx + dt * k3_vx
         vyp4 = vy + dt * k3_vy
         Bxp4 = Bx + dt * k3_Bx
         Byp4 = By + dt * k3_By
-        k4_vx, k4_vy, k4_Bx, k4_By = self._compute_rhs_fd(vxp4, vyp4, Bxp4, Byp4, dx, nu, eta)
+        k4_vx, k4_vy, k4_Bx, k4_By = _rhs(vxp4, vyp4, Bxp4, Byp4, dx, nu, eta)
         
         # Somme pondérée finale
         vx_new = vx + (dt / 6.0) * (k1_vx + 2*k2_vx + 2*k3_vx + k4_vx)
@@ -517,15 +752,25 @@ class MHDSolver:
     @staticmethod
     def _upsample_global(field, factor):
         """Prolongation bicubique périodique (ordre 3) pour la grille complète.
-        Utilise scipy.ndimage.map_coordinates avec mode='wrap' pour
-        respecter la topologie torique du domaine."""
+
+        Deux conventions doivent coïncider avec celles de `PeriodicGrid` :
+
+        1. ÉCHANTILLONNAGE AUX NŒUDS. `PeriodicGrid` pose ses points sur
+           `linspace(0, L, N, endpoint=False)`, donc le point fin j tombe à
+           l'indice grossier j / factor — PAS la convention centre-de-cellule
+           `(j + 0.5) / factor - 0.5`.
+
+        2. mode='grid-wrap'. Depuis scipy 1.6, `mode='wrap'` n'est PAS
+           l'enroulement périodique : il traite le tableau comme si le
+           premier et le dernier échantillon coïncidaient. C'est
+           `'grid-wrap'` qui réalise la topologie torique.
+        """
         if factor == 1: return field
         Nc = field.shape[0]
         N = Nc * factor
-        fine_idx = np.arange(N)
-        pos = (fine_idx + 0.5) / factor - 0.5
-        Y, X = np.meshgrid(pos, pos, indexing='ij')
-        return map_coordinates(field, [Y, X], order=3, mode='wrap')
+        pos = np.arange(N) / factor
+        I0, I1 = np.meshgrid(pos, pos, indexing='ij')
+        return map_coordinates(field, [I0, I1], order=3, mode='grid-wrap')
 
     # ================================================================
     #                STEP FULL — RÉFÉRENCE (Témoin)

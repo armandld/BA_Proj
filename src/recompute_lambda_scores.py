@@ -95,7 +95,11 @@ def load_completed_trials(db_path, study_name):
 
 
 def _detect_scenario_keys(completed):
-    """Auto-detect which scenario keys are actually present in user_attrs."""
+    """Auto-detect which scenario keys are actually present in user_attrs.
+
+    Checks the `phys_{key}` marker, not `loss_{key}` like the sibling copy
+    in `analyze_hyperparams._detect_scenario_keys` -- see that docstring
+    for why the two stay in agreement."""
     found = set()
     for t in completed[:10]:
         for key in ALL_SCENARIO_KEYS:
@@ -310,13 +314,24 @@ def _pareto_front(points):
 
 
 def _add_trend(ax, x_vals, y_vals, color="red", n_bins=15):
+    """Médiane par classe. Copie de celle d'`analyze_hyperparams`.
+
+    La dernière classe est FERMEE : le dernier bord vaut `x.max()`, donc un
+    `<` strict excluait de toute classe l'essai portant la plus grande
+    valeur du paramètre. Les deux copies doivent rendre la même chose —
+    `tests/pipeline/test_trend_last_bin_closed.py` le vérifie en les
+    comparant sur la même entrée.
+    """
     x, y = np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
     if len(x) < 5:
         return
     bins = np.linspace(x.min(), x.max(), n_bins + 1)
     centers, medians = [], []
     for k in range(n_bins):
-        mask = (x >= bins[k]) & (x < bins[k + 1])
+        if k == n_bins - 1:
+            mask = (x >= bins[k]) & (x <= bins[k + 1])
+        else:
+            mask = (x >= bins[k]) & (x < bins[k + 1])
         if mask.sum() >= 2:
             centers.append((bins[k] + bins[k + 1]) / 2)
             medians.append(np.median(y[mask]))
@@ -388,7 +403,14 @@ def plot_pareto_with_isocost(completed, lambda_cost, output_dir):
 
     ax.set_xlabel("Patch Ratio (computational cost)", fontsize=12)
     ax.set_ylabel("Physics Score (L2 error)", fontsize=12)
-    ax.set_ylim(-0.05, 0.4)
+    # Fenêtre dynamique plutôt que fixe à (-0,05 ; 0,40) : une fenêtre figée
+    # peut couper hors cadre une partie du front de Pareto — silencieusement,
+    # la figure montre alors un front qui s'arrête sans rien dire de ce qui
+    # continue. On garde (-0,05 ; 0,40) comme bornes par défaut quand tout y
+    # entre, et on élargit aux données sinon. Aucun seuil inventé : les
+    # bornes viennent des points tracés.
+    ax.set_ylim(min(-0.05, float(phys.min()) - 0.05),
+                max(0.4, float(phys.max()) * 1.05))
     ax.set_title(f"Pareto Front with Iso-Score Lines (lambda={lambda_cost:.4f})", fontsize=14)
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -674,43 +696,56 @@ def main():
 
     if args.lambda_cost is None and args.lambda_sweep is None:
         parser.error("Provide either --lambda-cost or --lambda-sweep (or both)")
+
+    # Ce `try` ne couvre que le CHARGEMENT de l'étude ; l'échec sort en
+    # code 1. Une exception levée plus loin — rescore, écriture CSV, une
+    # figure, le balayage — ne doit pas être confondue avec un chargement
+    # manqué : un script de campagne qui teste `$?` doit voir un code non
+    # nul et un message qui accuse la bonne étape.
     try:
         study, completed = load_completed_trials(args.db_path, args.study_name)
-        if not completed:
-            print("[ERROR] No completed trials with finite score.")
-            sys.exit(1)
-
-        base_dir = args.output_dir or os.path.dirname(os.path.abspath(args.db_path))
-
-        # Collect all lambda values to process
-        lambdas_to_run = []
-        if args.lambda_cost is not None:
-            lambdas_to_run.append(args.lambda_cost)
-        if args.lambda_sweep is not None:
-            lambdas_to_run.extend(args.lambda_sweep)
-        # Deduplicate while preserving order
-        seen = set()
-        unique_lambdas = []
-        for l in lambdas_to_run:
-            if l not in seen:
-                seen.add(l)
-                unique_lambdas.append(l)
-
-        # Run per-lambda analysis
-        for lam in unique_lambdas:
-            out = os.path.join(base_dir, f"rescore_{args.study_name}_lambda{lam:.4f}")
-            run_single_lambda(completed, lam, out)
-
-        # Lambda sweep comparison (if multiple values)
-        sweep_lambdas = args.lambda_sweep or unique_lambdas
-        if len(sweep_lambdas) >= 2:
-            sweep_dir = os.path.join(base_dir, f"rescore_{args.study_name}_sweep")
-            os.makedirs(sweep_dir, exist_ok=True)
-            plot_lambda_sweep(completed, sorted(sweep_lambdas), sweep_dir)
-
-        print(f"\nDone. All outputs in: {base_dir}/rescore_*")
     except Exception as e:
-        print(f"Erreur lors du chargement : {e}")
+        print(f"[ERREUR] chargement de '{args.study_name}' depuis "
+              f"{args.db_path} : {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not completed:
+        print(f"[ERREUR] '{args.study_name}' ne contient aucun essai COMPLETE "
+              f"a valeur finie — rien a rescorer.", file=sys.stderr)
+        sys.exit(1)
+
+    base_dir = args.output_dir or os.path.dirname(os.path.abspath(args.db_path))
+
+    # Collect all lambda values to process
+    lambdas_to_run = []
+    if args.lambda_cost is not None:
+        lambdas_to_run.append(args.lambda_cost)
+    if args.lambda_sweep is not None:
+        lambdas_to_run.extend(args.lambda_sweep)
+    # Deduplicate while preserving order
+    seen = set()
+    unique_lambdas = []
+    for l in lambdas_to_run:
+        if l not in seen:
+            seen.add(l)
+            unique_lambdas.append(l)
+
+    # Run per-lambda analysis. Rien n'est rattrape ici : une ecriture qui
+    # echoue, une figure qui casse, un repertoire non ecrivable doivent
+    # remonter avec leur trace et un code de retour non nul. Un rescore a
+    # moitie ecrit qui s'annonce « Done » est pire qu'un rescore absent.
+    for lam in unique_lambdas:
+        out = os.path.join(base_dir, f"rescore_{args.study_name}_lambda{lam:.4f}")
+        run_single_lambda(completed, lam, out)
+
+    # Lambda sweep comparison (if multiple values)
+    sweep_lambdas = args.lambda_sweep or unique_lambdas
+    if len(sweep_lambdas) >= 2:
+        sweep_dir = os.path.join(base_dir, f"rescore_{args.study_name}_sweep")
+        os.makedirs(sweep_dir, exist_ok=True)
+        plot_lambda_sweep(completed, sorted(sweep_lambdas), sweep_dir)
+
+    print(f"\nDone. All outputs in: {base_dir}/rescore_*")
 
 
 if __name__ == "__main__":

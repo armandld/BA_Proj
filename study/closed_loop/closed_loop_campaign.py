@@ -1,0 +1,581 @@
+#!/usr/bin/env python3
+"""Closed-loop leave-one-scenario-out evaluation.
+
+For each held-out scenario, the Q-HAS parameters (including its AMR
+threshold) and the classical threshold are tuned only on the remaining
+scenarios. Both arms then use the same DNS trace, hot start and solver
+configuration. Each tuning study and fold artifact is bound to an immutable
+protocol contract, so incompatible checkpoints cannot be resumed silently.
+
+Scientific runs use 170 Q-HAS trials per fold. ``--smoke`` exercises the
+workflow with a separate output prefix and reduced numerical settings.
+"""
+import argparse, hashlib, json, os, sys, tempfile, time
+import numpy as np
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# --- chemins du dépôt (bloc unique, généré) -------------------------------
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+# -------------------------------------------------------------------------
+
+from h2b_feature_selection import git_commit_hash
+from stats_confirmatory import holm_correction, tost_equivalence
+import provenance
+
+def _load_v1_training_module():
+    """Importe le module d'entrainement V1 (scenarios, objectifs, DNS)."""
+    import train_hyperparams as T
+    return T
+
+
+def fold_scenarios(T, only=None):
+    """Return validated LOSO folds, optionally filtered by key or scenario."""
+    scen = list(T.SCENARIOS_ALL)
+    keys = [key for key, _ in scen]
+    names = [config["scenario"] for _, config in scen]
+    if len(keys) != len(set(keys)):
+        raise ValueError("SCENARIOS_ALL contains duplicate fold keys")
+    if len(names) != len(set(names)):
+        raise ValueError("SCENARIOS_ALL contains duplicate scenarios")
+    if only:
+        keep = {o.lower() for o in only}
+        scen = [(k, c) for k, c in scen
+                if k.lower() in keep or c["scenario"].lower() in keep]
+    return scen
+
+
+def _contract_hash(contract):
+    encoded = json.dumps(contract, sort_keys=True, separators=(",", ":"))
+    return encoded, hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _bind_contract(study, contract):
+    """Bind an Optuna study to one immutable scientific protocol."""
+    encoded, digest = _contract_hash(contract)
+    previous = study.user_attrs.get("campaign_contract_sha256")
+    if previous is None:
+        if study.trials:
+            raise RuntimeError(
+                f"study {study.study_name!r} contains trials without a "
+                "campaign contract; refusing an unverifiable resume")
+        study.set_user_attr("campaign_contract", encoded)
+        study.set_user_attr("campaign_contract_sha256", digest)
+    elif previous != digest:
+        raise RuntimeError(
+            f"campaign contract mismatch for {study.study_name!r}: "
+            f"stored={previous}, requested={digest}")
+    return digest
+
+
+def _atomic_json(path, payload):
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=1, default=float)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def fold_contract(T, held_key, train_list, n_trials, n_trials_classical,
+                  seed, lambda_cost):
+    """Protocol identity shared by tuning checkpoints and fold results."""
+    lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
+    q_space = {
+        name: {"low": lo, "high": hi, "log": log}
+        for name, (lo, hi, log) in T.SEARCH_SPACE.items()
+    }
+    lo, hi = T.CLASSICAL_THRESHOLD_RANGE
+    q_space["threshold_amr"] = {"low": lo, "high": hi, "log": False}
+    return {
+        "schema": 1,
+        "git_commit": git_commit_hash(),
+        "kind": "closed_loop_loso",
+        "held_out": held_key,
+        "training_scenarios": [
+            {"key": key, "config": dict(config)} for key, config in train_list
+        ],
+        "qaoa_trials": int(n_trials),
+        "classical_trials": int(n_trials_classical),
+        "sampler_seed": int(seed),
+        "lambda_cost": float(lam),
+        "qaoa_search_space": q_space,
+        "qaoa_fixed_params": {
+            key: value for key, value in T.FIXED_PARAMS.items()
+            if key != "threshold_amr"
+        },
+        "classical_search_space": {
+            "threshold_amr": {"low": lo, "high": hi, "log": False}
+        },
+    }
+
+
+def _persistent_study(storage_path, study_name, seed, contract):
+    """Create or resume a contract-bound SQLite Optuna study."""
+    import optuna
+    study = optuna.create_study(
+        study_name=study_name,
+        storage=f"sqlite:///{storage_path}",
+        load_if_exists=True,
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=seed))
+    _bind_contract(study, contract)
+    return study
+
+
+def _n_completed(study):
+    import optuna
+    return sum(t.state == optuna.trial.TrialState.COMPLETE
+               for t in study.trials)
+
+
+def train_params_excluding(T, dns_traces, train_list, n_trials, seed=0,
+                           lambda_cost=None, verbose=False,
+                           storage_path=None, study_name="qaoa"):
+    """Regle les hyperparametres QAOA sur `train_list` SEULEMENT.
+
+    Reutilise `make_composite_objective` de V1 : la fonction de perte, le
+    pipeline et les bornes de recherche sont exactement ceux de
+    l'entrainement V1, seule la LISTE DES SCENARIOS change. Le reglage est
+    repris essai par essai lorsqu'un `storage_path` est fourni.
+    """
+    import optuna
+    optuna.logging.set_verbosity(
+        optuna.logging.INFO if verbose else optuna.logging.WARNING)
+    lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
+    obj = T.make_composite_objective(
+        dns_traces, train_list, lambda_cost=lam, tune_threshold=True)
+    contract = {
+        "schema": 1,
+        "kind": "closed_loop_qaoa_tuning",
+        "study_name": study_name,
+        "target_trials": int(n_trials),
+        "sampler_seed": int(seed),
+        "objective": getattr(obj, "_qhas_contract", None),
+    }
+    if storage_path:
+        study = _persistent_study(storage_path, study_name, seed, contract)
+        done = _n_completed(study)
+        if done:
+            print(f"  [resume] {study_name}: {done}/{n_trials} trials "
+                  f"already stored", flush=True)
+        todo = max(0, n_trials - done)
+    else:
+        study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=seed))
+        _bind_contract(study, contract)
+        todo = n_trials
+    if todo:
+        study.optimize(obj, n_trials=todo)
+    best = study.best_trial.user_attrs.get("hyperparams_resolved")
+    if best is None:
+        best = dict(study.best_params)
+    return dict(best), float(study.best_value), _n_completed(study)
+
+
+def train_classical_threshold_excluding(T, dns_traces, train_list, n_trials,
+                                        seed=0, lambda_cost=None,
+                                        storage_path=None,
+                                        study_name="classical"):
+    """Regle le seuil AMR du bras classique sur les memes classes.
+
+    Sans cela, le bras classique beneficierait d'un seuil choisi en voyant
+    la classe tenue : la comparaison ne serait plus appariee. Meme reprise
+    par essai que le bras QAOA.
+    """
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
+    obj = T.make_classical_composite_objective(
+        dns_traces, train_list, lambda_cost=lam)
+    contract = {
+        "schema": 1,
+        "kind": "closed_loop_classical_tuning",
+        "study_name": study_name,
+        "target_trials": int(n_trials),
+        "sampler_seed": int(seed),
+        "objective": getattr(obj, "_qhas_contract", None),
+    }
+    if storage_path:
+        study = _persistent_study(storage_path, study_name, seed, contract)
+        todo = max(0, n_trials - _n_completed(study))
+    else:
+        study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=seed))
+        _bind_contract(study, contract)
+        todo = n_trials
+    if todo:
+        study.optimize(obj, n_trials=todo)
+    return dict(study.best_params), float(study.best_value)
+
+
+def run_arm(T, key, config, dns_traces, hyperparams, classical_only,
+            lambda_cost=None, verbose=False, seed=None):
+    """Execute UN bras du pipeline complet sur la classe tenue.
+
+    Les deux bras recoivent la meme trace DNS, le meme hot start, le meme
+    budget hybride et la meme profondeur : seule la regle de decision change.
+    """
+    from pipeline import pipeline
+    lam = T.LAMBDA_COST_SOFT if lambda_cost is None else lambda_cost
+    dns_trace, hot_start = dns_traces[key]
+    DT = config["DT"]
+    t0 = time.time()
+    argus = T.create_argus(config)
+    if seed is not None:
+        argus.seed = int(seed)
+    res = pipeline(
+        N=config["N"], VQA_N=2, T_MAX=config["T_MAX"], DT=DT,
+        HYBRID=int(config["HYBRID_DT"] / DT),
+        verbose=verbose, argus=argus,
+        hyperparams=hyperparams, lambda_cost=lam, trial=None,
+        dns_trace=dns_trace, hot_start_state=hot_start,
+        min_patch_size=config.get("min_patch_size", 6),
+        max_depth_override=config.get("max_depth_override", None),
+        scenario=config["scenario"], return_details=True,
+        classical_only=classical_only,
+    )
+    if not isinstance(res, dict):
+        res = {"combined": float(res)}
+    res = dict(res)
+    res["wall_s"] = time.time() - t0
+    res.pop("field_errors", None)
+    return res
+
+
+def _tune_ckpt_path(results_dir, prefix, held_key):
+    return os.path.join(results_dir, f"{prefix}_tuning_{held_key}.json")
+
+
+def load_or_tune(T, results_dir, prefix, held_key, dns_train, train_list,
+                 n_trials, n_cls, seed, lambda_cost, verbose):
+    """Tune both arms or load a checkpoint with the same protocol hash."""
+    path = _tune_ckpt_path(results_dir, prefix, held_key)
+    contract = fold_contract(
+        T, held_key, train_list, n_trials, n_cls, seed, lambda_cost)
+    contract_json, contract_sha256 = _contract_hash(contract)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as stream:
+            ck = json.load(stream)
+        if ck.get("campaign_contract_sha256") != contract_sha256:
+            raise RuntimeError(
+                f"tuning checkpoint contract mismatch for fold {held_key}: "
+                f"stored={ck.get('campaign_contract_sha256')}, "
+                f"requested={contract_sha256}")
+        print(f"  [resume] tuning checkpoint found -> "
+              f"{os.path.basename(path)}", flush=True)
+        if ck.get("classical_params") is not None:
+            return (ck["hyperparams"], ck["best_train_loss"], ck["n_trials"],
+                    ck["classical_params"], ck["classical_train_loss"],
+                    ck.get("t_tune", 0.0), ck.get("t_tune_classical", 0.0))
+        # checkpoint partiel : le tuning QAOA est acquis, le classique reste
+        print("  [resume] classical arm not tuned yet; completing it",
+              flush=True)
+        t0 = time.time()
+        cls_params, cls_loss = train_classical_threshold_excluding(
+            T, dns_train, train_list, n_cls, seed=seed,
+            lambda_cost=lambda_cost,
+            storage_path=_tune_ckpt_path(results_dir, prefix, held_key)
+            .replace("_tuning_", "_optuna_").replace(".json", ".db"),
+            study_name=f"classical_{held_key}")
+        t_tune_c = time.time() - t0
+        ck.update(classical_params=cls_params, classical_train_loss=cls_loss,
+                  t_tune_classical=t_tune_c)
+        _atomic_json(path, ck)
+        print(f"  classical tuning: best loss {cls_loss:.4f}, params "
+              f"{cls_params}, {t_tune_c:.0f}s", flush=True)
+        return (ck["hyperparams"], ck["best_train_loss"], ck["n_trials"],
+                cls_params, cls_loss, ck.get("t_tune", 0.0), t_tune_c)
+
+    db = os.path.join(results_dir, f"{prefix}_optuna_{held_key}.db")
+    t0 = time.time()
+    hp, best_loss, n_done = train_params_excluding(
+        T, dns_train, train_list, n_trials, seed=seed,
+        lambda_cost=lambda_cost, verbose=verbose,
+        storage_path=db, study_name=f"qaoa_{held_key}")
+    t_tune = time.time() - t0
+    print(f"  QAOA tuning: {n_done} trials, best composite loss "
+          f"{best_loss:.4f}, {t_tune:.0f}s", flush=True)
+
+    t0 = time.time()
+    cls_params, cls_loss = train_classical_threshold_excluding(
+        T, dns_train, train_list, n_cls, seed=seed, lambda_cost=lambda_cost,
+        storage_path=db, study_name=f"classical_{held_key}")
+    t_tune_c = time.time() - t0
+    print(f"  classical tuning: best loss {cls_loss:.4f}, params "
+          f"{cls_params}, {t_tune_c:.0f}s", flush=True)
+
+    _atomic_json(path, dict(
+        hyperparams=hp, best_train_loss=best_loss,
+        n_trials=n_done, classical_params=cls_params,
+        classical_train_loss=cls_loss, t_tune=t_tune,
+        t_tune_classical=t_tune_c,
+        campaign_contract=contract_json,
+        campaign_contract_sha256=contract_sha256,
+    ))
+    print(f"  tuning checkpoint saved -> {os.path.basename(path)}",
+          flush=True)
+    return (hp, best_loss, n_done, cls_params, cls_loss, t_tune, t_tune_c)
+
+
+def run_fold(T, held_key, held_cfg, all_scen, n_trials, n_trials_classical,
+             seed=0, lambda_cost=None, verbose=False,
+             results_dir=None, prefix="t15_level3"):
+    """Un fold LOSO complet : reglage hors classe, puis les deux bras."""
+    train_list = [(k, c) for k, c in all_scen if k != held_key]
+    contract = fold_contract(
+        T, held_key, train_list, n_trials, n_trials_classical,
+        seed, lambda_cost)
+    contract_json, contract_sha256 = _contract_hash(contract)
+    print(f"\n{'='*84}\n  FOLD held-out = {held_key} "
+          f"({held_cfg['scenario']})  |  tuned on "
+          f"{[k for k, _ in train_list]}\n{'='*84}", flush=True)
+
+    t0 = time.time()
+    dns_train = T._precompute_dns_for(train_list, label=f"train/{held_key}")
+    dns_held = T._precompute_dns_for([(held_key, held_cfg)],
+                                     label=f"held/{held_key}")
+    t_dns = time.time() - t0
+    print(f"  DNS traces ready in {t_dns:.0f}s", flush=True)
+
+    (hp, best_loss, n_done, cls_params, cls_loss,
+     t_tune, t_tune_c) = load_or_tune(
+        T, results_dir, prefix, held_key, dns_train, train_list,
+        n_trials, n_trials_classical, seed, lambda_cost, verbose)
+    print(f"  params: "
+          f"{ {k: round(v, 4) for k, v in hp.items() if isinstance(v, float)} }",
+          flush=True)
+
+    hp_classical = dict(hp)
+    hp_classical.update(cls_params)
+
+    q = run_arm(T, held_key, held_cfg, dns_held, hp, False,
+                lambda_cost=lambda_cost, verbose=verbose, seed=seed)
+    print(f"  [Q-HAS]     combined={q.get('combined'):.4f} "
+          f"phys={q.get('phys_score', float('nan')):.4f} "
+          f"patch={q.get('patch_ratio', float('nan')):.4f} "
+          f"({q['wall_s']:.0f}s)", flush=True)
+    c = run_arm(T, held_key, held_cfg, dns_held, hp_classical, True,
+                lambda_cost=lambda_cost, verbose=verbose, seed=seed)
+    print(f"  [classical] combined={c.get('combined'):.4f} "
+          f"phys={c.get('phys_score', float('nan')):.4f} "
+          f"patch={c.get('patch_ratio', float('nan')):.4f} "
+          f"({c['wall_s']:.0f}s)", flush=True)
+
+    return dict(
+        fold=held_key, scenario=held_cfg["scenario"],
+        train_on=[k for k, _ in train_list],
+        n_trials=n_done, best_train_loss=best_loss,
+        classical_params=cls_params, classical_train_loss=cls_loss,
+        hyperparams={k: (float(v) if isinstance(v, (int, float)) else v)
+                     for k, v in hp.items()},
+        qhas=q, classical=c,
+        t_dns=t_dns, t_tune=t_tune, t_tune_classical=t_tune_c,
+        campaign_contract=contract_json,
+        campaign_contract_sha256=contract_sha256,
+    )
+
+
+def summarise(records):
+    """Comparaison appariee par fold + Holm + equivalence TOST."""
+    keys = ("combined", "phys_score", "patch_ratio")
+    out = {}
+    for k in keys:
+        q = np.array([r["qhas"].get(k, np.nan) for r in records], float)
+        c = np.array([r["classical"].get(k, np.nan) for r in records], float)
+        m = np.isfinite(q) & np.isfinite(c)
+        d = q[m] - c[m]
+        out[k] = dict(
+            q=q, c=c, delta=d,
+            mean_delta=float(np.mean(d)) if len(d) else np.nan,
+            n_qhas_better=int(np.sum(d < 0)), n=int(len(d)))
+    return out
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description="V4 Task 15: Level-3 closed-loop LOSO")
+    from config import FOLD_KEYS, RESULTS_DIR
+
+    p.add_argument("--folds", nargs="+", default=None,
+                   help="cles de scenario a traiter (defaut : toutes)")
+    p.add_argument("--n-trials", type=int, default=170,
+                   help="essais Optuna Q-HAS par fold")
+    p.add_argument("--n-trials-classical", type=int, default=None,
+                   help="defaut : moitie de --n-trials")
+    p.add_argument("--lambda-cost", type=float, default=None)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--verbose", action="store_true")
+    p.add_argument("--list", action="store_true",
+                   help="liste les folds disponibles et sort")
+    p.add_argument("--out-prefix")
+    p.add_argument(
+        "--allow-protocol-deviation", action="store_true",
+        help="autorise un budget autre que 170 hors smoke; l'ecart reste "
+             "inscrit dans l'artefact")
+    p.add_argument("--smoke", action="store_true",
+                   help="valide le CHEMIN DE CODE de bout en bout a cout "
+                        "reduit (N et T_MAX rabaisses). Resultats non "
+                        "scientifiques : sert uniquement a de-risquer un "
+                        "run long.")
+    p.add_argument("--smoke-N", type=int, default=64)
+    p.add_argument("--smoke-tmax", type=float, default=0.4)
+    args = p.parse_args()
+    run_provenance = provenance.start()
+    if args.n_trials < 1:
+        p.error("--n-trials doit etre >= 1")
+    if args.n_trials_classical is not None and args.n_trials_classical < 1:
+        p.error("--n-trials-classical doit etre >= 1")
+    if (not args.smoke and args.n_trials != 170
+            and not args.allow_protocol_deviation):
+        p.error("un run scientifique utilise 170 essais; passer --smoke ou "
+                "--allow-protocol-deviation pour un autre budget")
+    if args.out_prefix is None:
+        args.out_prefix = ("t15_level3_smoke" if args.smoke
+                           else "t15_level3")
+
+    T = _load_v1_training_module()
+    all_scen = fold_scenarios(T)
+    if tuple(key for key, _ in all_scen) != tuple(FOLD_KEYS):
+        raise RuntimeError(
+            "closed-loop scenario set differs from the frozen eight-fold "
+            "protocol")
+    if args.list:
+        print("Available LOSO folds (key -> scenario, N, T_MAX, Re):")
+        for k, c in all_scen:
+            print(f"  {k:<14} -> {c['scenario']:<20} N={c['N']} "
+                  f"T_MAX={c['T_MAX']} Re={c['Re']}")
+        return
+    if run_provenance["dirty_at_start"] and not args.smoke:
+        raise RuntimeError(
+            "refusing a scientific closed-loop campaign from a dirty tree")
+
+    if args.smoke:
+        print(f"  [SMOKE] scaling every scenario to N={args.smoke_N}, "
+              f"T_MAX={args.smoke_tmax}; results are NOT scientific.")
+        for _, c in all_scen:
+            c["N"] = args.smoke_N
+            c["T_MAX"] = args.smoke_tmax
+            c["T_START"] = min(c.get("T_START", 0.0), args.smoke_tmax / 2)
+            c["K_opt"] = min(c.get("K_opt", 30), 8)
+            c["max_depth_override"] = 2
+    todo = fold_scenarios(T, args.folds)
+    if args.folds:
+        unknown = [name for name in args.folds if not any(
+            name.lower() in (key.lower(), cfg["scenario"].lower())
+            for key, cfg in all_scen)]
+        if unknown:
+            p.error(f"fold(s) inconnu(s): {', '.join(unknown)}")
+    n_cls = args.n_trials_classical
+    if n_cls is None:
+        n_cls = max(4, args.n_trials // 2)
+
+    print("=" * 88)
+    print("  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer")
+    print(f"  folds={[k for k, _ in todo]}  optuna trials/fold={args.n_trials}"
+          f" (classical {n_cls})")
+    print("  Held-out class excluded from ALL tuning, both arms.")
+    if args.n_trials != 170:
+        print(f"  PROTOCOL DEVIATION: 170 Q-HAS trials expected; running "
+              f"{args.n_trials}. Logged in the output.")
+    print("=" * 88, flush=True)
+
+    records = []
+    for key, cfg in todo:
+        train_list = [(k, c) for k, c in all_scen if k != key]
+        expected_contract = fold_contract(
+            T, key, train_list, args.n_trials, n_cls,
+            args.seed, args.lambda_cost)
+        _, expected_sha256 = _contract_hash(expected_contract)
+        path = os.path.join(RESULTS_DIR, f"{args.out_prefix}_fold_{key}.json")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as stream:
+                previous = json.load(stream)
+            if previous.get("campaign_contract_sha256") != expected_sha256:
+                raise RuntimeError(
+                    f"existing fold artifact has a different or missing "
+                    f"campaign contract: {path}")
+            print(f"\n  [resume] fold {key} already done -> {path}",
+                  flush=True)
+            records.append(previous)
+            continue
+        rec = run_fold(T, key, cfg, all_scen, args.n_trials, n_cls,
+                       seed=args.seed, lambda_cost=args.lambda_cost,
+                       verbose=args.verbose, results_dir=RESULTS_DIR,
+                       prefix=args.out_prefix)
+        rec.update(provenance.finish(run_provenance))
+        rec["cli_args"] = vars(args)
+        _atomic_json(path, rec)
+        print(f"  saved fold -> {os.path.basename(path)}", flush=True)
+        records.append(rec)
+
+    if not records:
+        raise RuntimeError(
+            "balayage vide : aucun fold n'est allé au bout.")
+
+    s = summarise(records)
+    print("\n" + "=" * 88)
+    print("  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)")
+    print(f"  {'fold':<14} {'phys Q':>9} {'phys C':>9} {'d phys':>9} "
+          f"{'patch Q':>9} {'patch C':>9} {'d comb':>9}")
+    for i, r in enumerate(records):
+        print(f"  {r['fold']:<14} "
+              f"{r['qhas'].get('phys_score', np.nan):>9.4f} "
+              f"{r['classical'].get('phys_score', np.nan):>9.4f} "
+              f"{s['phys_score']['q'][i] - s['phys_score']['c'][i]:>+9.4f} "
+              f"{r['qhas'].get('patch_ratio', np.nan):>9.4f} "
+              f"{r['classical'].get('patch_ratio', np.nan):>9.4f} "
+              f"{s['combined']['q'][i] - s['combined']['c'][i]:>+9.4f}")
+    print("  " + "-" * 84)
+    for k in ("combined", "phys_score", "patch_ratio"):
+        v = s[k]
+        print(f"  {k:<14} mean delta = {v['mean_delta']:+.4f}   "
+              f"Q-HAS better on {v['n_qhas_better']}/{v['n']} folds")
+
+    if s["combined"]["n"] >= 2:
+        d = s["combined"]["delta"]
+        from scipy import stats as _st
+        t, pv = _st.ttest_1samp(d, 0.0)
+        holm = holm_correction([pv])
+        margin = 0.05 * float(np.mean(np.abs(s["combined"]["c"])) + 1e-12)
+        eq = tost_equivalence(s["combined"]["q"], s["combined"]["c"],
+                              margin=margin)
+        print(f"\n  paired t-test on combined delta: p={pv:.4f} "
+              f"(Holm-adjusted {holm['p_adjusted'][0]:.4f})")
+        print(f"  TOST equivalence at margin {margin:.4f}: "
+              f"{'EQUIVALENT' if eq['equivalent'] else 'not established'} "
+              f"(p={eq['p_tost']:.4f})")
+
+    out = os.path.join(RESULTS_DIR, f"{args.out_prefix}_summary.npz")
+    np.savez_compressed(
+        out,
+        fold=np.array([r["fold"] for r in records]),
+        combined_q=s["combined"]["q"], combined_c=s["combined"]["c"],
+        phys_q=s["phys_score"]["q"], phys_c=s["phys_score"]["c"],
+        patch_q=s["patch_ratio"]["q"], patch_c=s["patch_ratio"]["c"],
+        n_trials=args.n_trials,
+        git_hash=run_provenance["git_hash_at_start"],
+        provenance=json.dumps(provenance.finish(run_provenance)),
+        cli_args=json.dumps(vars(args)),
+    )
+    print(f"\n  saved: {os.path.basename(out)}")
+    print("\nV4 Task 15 complete.")
+
+
+if __name__ == "__main__":
+    main()

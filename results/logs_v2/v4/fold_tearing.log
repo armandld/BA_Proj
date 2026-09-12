@@ -1,0 +1,126 @@
+=== [tearing] start 01:16:24 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['tearing']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = tearing (harris_tearing)  |  tuned on ['kh', 'ot', 'rotor']
+====================================================================================
+
+--- Pre-computing DNS traces for train/tearing ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (train/tearing) ---
+
+
+--- Pre-computing DNS traces for held/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (held/tearing) ---
+
+  DNS traces ready in 187s
+[WARNING] Violation CFL détéctée : 1.15 > 1.0.
+[WARNING] Violation CFL détéctée : 1.15 > 1.0.
+=== [tearing] start 19:46:22 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['tearing']  optuna trials/fold=4 (classical 2)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 4. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = tearing (harris_tearing)  |  tuned on ['kh', 'ot', 'rotor']
+====================================================================================
+
+--- Pre-computing DNS traces for train/tearing ---
+Hot-Start captured at t=0.9046
+DNS pre-computed: 408 steps, 18 flux snapshots stored.
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+Hot-Start captured at t=0.2009
+DNS pre-computed: 975 steps, 15 flux snapshots stored.
+--- DNS pre-computation complete (train/tearing) ---
+
+
+--- Pre-computing DNS traces for held/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (held/tearing) ---
+
+  DNS traces ready in 203s
+  [resume] qaoa_tearing: 3/4 trials already stored
+[WARNING] Violation CFL détéctée : 1.29 > 1.0.
+[WARNING] Violation CFL détéctée : 1.29 > 1.0.
+  QAOA tuning: 4 trials, best composite loss 0.2551, 1549s
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.01 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.03 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+[WARNING] Violation CFL détéctée : 1.21 > 1.0.
+  classical tuning: best loss 0.3835, params {'threshold_amr': 0.46161012794549355}, 871s
+  tuning checkpoint saved -> t15_level3_tuning_tearing.json
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 6.636, 'w_z_frac': 5.6279, 'sigma': 0.2697, 'beta_curl': 4.8183, 'beta_xpoint': 1.9172, 'threshold_amr': 0.1496}
+  [Q-HAS]     combined=0.2330 phys=0.0185 patch=0.7692 (240s)
+  [classical] combined=0.1817 phys=0.0044 patch=0.6250 (73s)
+  saved fold -> t15_level3_fold_tearing.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  tearing           0.0185    0.0044   +0.0141    0.7692    0.6250   +0.0513
+  ------------------------------------------------------------------------------------
+  combined       mean delta = +0.0513   Q-HAS better on 0/1 folds
+  phys_score     mean delta = +0.0141   Q-HAS better on 0/1 folds
+  patch_ratio    mean delta = +0.1442   Q-HAS better on 0/1 folds
+
+  saved: t15_level3_summary.npz
+
+V4 Task 15 complete.
+=== [tearing] t15 done 20:35:27 ===
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold tearing
+  Q-HAS realised patch_ratio = 0.7692  (phys 0.0185)
+  tuned classical            = 0.6250  (phys 0.0044, thr 0.4616)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/tearing ---
+Hot-Start captured at t=0.3041
+DNS pre-computed: 123 steps, 11 flux snapshots stored.
+--- DNS pre-computation complete (held/tearing) ---
+
+    thr=0.0500 -> patch=0.9597 phys=0.0040 (target patch 0.7692)
+    thr=0.8000 -> patch=0.0727 phys=4.1258 (target patch 0.7692)
+    thr=0.4250 -> patch=0.6250 phys=0.0044 (target patch 0.7692)
+    thr=0.2375 -> patch=0.6250 phys=0.0044 (target patch 0.7692)
+    thr=0.1438 -> patch=0.6250 phys=0.0044 (target patch 0.7692)
+    thr=0.0969 -> patch=0.6250 phys=0.0044 (target patch 0.7692)
+
+  ====================================================================================
+  budget-matched classical: thr=0.4250  patch=0.6250  phys=0.0044
+  Q-HAS                   : patch=0.7692  phys=0.0185
+  delta phys at matched budget = +0.0141 (negative favours Q-HAS)
+  budget mismatch remaining    = -0.1442
+
+  READING: at equal compute the classical arm recovers the fidelity; the Level-3 gap was a move along the error-cost frontier, not a better decision rule.
+
+  saved: t15b_budget_matched_tearing.json
+
+V4 Task 15b complete.
+=== [tearing] COMPLETE 20:42:17 ===

@@ -1,0 +1,146 @@
+{
+ "folds": [
+  {
+   "fold": "ot",
+   "status": "completed",
+   "qaoa_threshold": 0.46161012794549355,
+   "classical_threshold": 0.19062500000000002,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 2,
+     "n_aborted": 3,
+     "qhas_patch": 0.2686273893360161,
+     "qhas_phys": 0.5991091382575102,
+     "frontier_phys_at_qhas_budget": 0.3663766649915644,
+     "ratio_vs_frontier": 1.6352273370666341,
+     "out_of_swept_range": false,
+     "classical_patch": 0.6411673163983903,
+     "classical_phys": 0.08269889925338406
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 3,
+     "n_aborted": 2,
+     "qhas_patch": 0.2657128706543967,
+     "qhas_phys": 0.5040453898647973,
+     "frontier_phys_at_qhas_budget": 0.368945472929576,
+     "ratio_vs_frontier": 1.3661785462834748,
+     "out_of_swept_range": false,
+     "classical_patch": 0.6698859279141104,
+     "classical_phys": 0.07822988099241154
+    }
+   }
+  },
+  {
+   "fold": "kh",
+   "status": "completed",
+   "qaoa_threshold": 0.46161012794549355,
+   "classical_threshold": 0.19062500000000002,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.5513290229885057,
+     "qhas_phys": 0.027448654807308247,
+     "frontier_phys_at_qhas_budget": 0.014723193574421728,
+     "ratio_vs_frontier": 1.864313925410461,
+     "out_of_swept_range": false,
+     "classical_patch": 0.7942708333333334,
+     "classical_phys": 0.0016812335405671738
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.4646391369047619,
+     "qhas_phys": 0.13272458223581043,
+     "frontier_phys_at_qhas_budget": 0.02967158487587268,
+     "ratio_vs_frontier": 4.473120758161282,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.0022936069350650555
+    }
+   }
+  },
+  {
+   "fold": "rotor",
+   "status": "total_abort",
+   "qaoa_threshold": 0.5863920247793146,
+   "classical_threshold": 0.09687500000000002,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 0,
+     "n_aborted": 5
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 3,
+     "n_aborted": 2,
+     "qhas_patch": 0.08822374326750448,
+     "qhas_phys": 0.8534915229451268,
+     "frontier_phys_at_qhas_budget": null,
+     "ratio_vs_frontier": null,
+     "out_of_swept_range": true,
+     "classical_patch": 0.383457697486535,
+     "classical_phys": 0.0281994814530657
+    }
+   },
+   "threshold_source": "reconstructed from t15 fold record"
+  },
+  {
+   "fold": "tearing",
+   "status": "completed",
+   "qaoa_threshold": 0.46161012794549355,
+   "classical_threshold": 0.42500000000000004,
+   "thresholds_match": false,
+   "conditions": {
+    "canonical": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.38461277173913044,
+     "qhas_phys": 3.735120129118871,
+     "frontier_phys_at_qhas_budget": 1.7982274832149718,
+     "ratio_vs_frontier": 2.0771121362470857,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.004428861099280601
+    },
+    "unseen": {
+     "n_runs": 5,
+     "n_completed": 5,
+     "n_aborted": 0,
+     "qhas_patch": 0.42323690878378384,
+     "qhas_phys": 2.560020813613663,
+     "frontier_phys_at_qhas_budget": 1.510009492965009,
+     "ratio_vs_frontier": 1.6953673639407945,
+     "out_of_swept_range": false,
+     "classical_patch": 0.625,
+     "classical_phys": 0.0017243827113390183
+    }
+   },
+   "threshold_source": "reconstructed from t15 fold record"
+  }
+ ],
+ "missing": [],
+ "cli_args": {
+  "folds": [
+   "ot",
+   "kh",
+   "rotor",
+   "tearing"
+  ],
+  "seed": 0
+ },
+ "git_hash_at_start": "d6b9ed7e70b5691dec1754fc10da1778a63b27ac",
+ "dirty_at_start": true,
+ "git_hash_at_save": "d6b9ed7e70b5691dec1754fc10da1778a63b27ac",
+ "head_moved_during_run": false,
+ "git_hash": "d6b9ed7e70b5691dec1754fc10da1778a63b27ac"
+}

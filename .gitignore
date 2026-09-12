@@ -1,4 +1,48 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-study/results/
+.DS_Store
+.venv/
+.venv_vigil/
+env/
+.python-version
+
+# Etat de reprise des campagnes : transitoire, pas un resultat.
+# Le .npz final est le livrable ; ces fichiers ne servent qu a
+# redemarrer une campagne interrompue.
+results/.checkpoints/
+
+# Sorties de bisection : artefacts de travail, jamais du depot.
+.bisect_*.txt
+# Mesures de bisection en cours : la trace utile vit dans DEFAUTS.md D-132,
+# pas a la racine du depot.
+.culprit_*.txt
+
+# Sortie de `src/compare_rotor_budget.py` : artefact recalculable par une
+# commande, pas un resultat a versionner (son chemin par defaut est
+# `../data/` relatif a src/).
+data/
+
+# Campagne de reoptimisation : sorties de TRAVAIL, pas des resultats.
+#
+# La base Optuna est binaire et reecrite en continu pendant la campagne :
+# la committer figerait un instantane incoherent (essais RUNNING inclus).
+# Ce qui doit etre versionne est le PRODUIT de la campagne — le JSON
+# deploye et son analyse — pas son fichier de travail.
+#
+# La base de la vraie campagne vit sur le disque persistant des coeurs
+# loues ; celle d'ici est une demonstration, effacee au recyclage du
+# conteneur.
+results/hyperparams/reoptimisation/
+results/hyperparams/reoptimisation_launch.log
+
+# Meme raison, pour le pilote (echelle reduite) de l'entrainement jouet :
+# base Optuna de travail, pas un resultat.
+results/hyperparams/toy_pilot/
+/results/campaigns/
+.coverage
+
+# Artefacts locaux de calcul. Les fichiers deja suivis restent versionnes;
+# les nouvelles sorties sont exportees explicitement apres validation.
+/logs/
+/study/results/

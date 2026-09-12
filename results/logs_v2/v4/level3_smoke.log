@@ -1,0 +1,50 @@
+Environnement Local detecte. Ecriture directe sur le disque.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+  [SMOKE] scaling every scenario to N=64, T_MAX=0.4; results are NOT scientific.
+  [WARNING] TrainHyperParam_v2.SCENARIOS_ALL lists ['ot', 'rotor'] twice; de-duplicated for LOSO (see docstring).
+========================================================================================
+  V4 Task 15: LEVEL 3 - closed-loop LOSO transfer
+  folds=['tearing']  optuna trials/fold=2 (classical 1)
+  Held-out class excluded from ALL tuning, both arms.
+  DEVIATION: protocol freezes 170 trials; running 2. Logged in the output.
+========================================================================================
+
+====================================================================================
+  FOLD held-out = tearing (harris_tearing)  |  tuned on ['kh', 'ot', 'rotor']
+====================================================================================
+
+--- Pre-computing DNS traces for train/tearing ---
+Hot-Start captured at t=0.2217
+DNS pre-computed: 17 steps, 4 flux snapshots stored.
+Hot-Start captured at t=0.2007
+DNS pre-computed: 24 steps, 4 flux snapshots stored.
+Hot-Start captured at t=0.2047
+DNS pre-computed: 74 steps, 4 flux snapshots stored.
+--- DNS pre-computation complete (train/tearing) ---
+
+
+--- Pre-computing DNS traces for held/tearing ---
+Hot-Start captured at t=0.2355
+DNS pre-computed: 11 steps, 4 flux snapshots stored.
+--- DNS pre-computation complete (held/tearing) ---
+
+  DNS traces ready in 1s
+  QAOA tuning: 2 trials, best composite loss 0.3132, 20s
+  params: {'gamma_hydro': 2.0, 'gamma_mag': 0.5, 'kappa': 10.0, 'beta': 5.7137, 'w_z_frac': 72.5701, 'sigma': 0.1888, 'beta_curl': 2.7244, 'beta_xpoint': 2.1183, 'threshold_amr': 0.1496}
+  classical tuning: best loss 0.3071, params {'threshold_amr': 0.46161012794549355}, 4s
+  [Q-HAS]     combined=0.3081 phys=0.0314 patch=1.0000 (2s)
+  [classical] combined=0.3081 phys=0.0314 patch=1.0000 (0s)
+  saved fold -> t15_smoke_fold_tearing.json
+
+========================================================================================
+  LEVEL-3 RESULTS (paired per fold; negative delta favours Q-HAS)
+  fold              phys Q    phys C    d phys   patch Q   patch C    d comb
+  tearing           0.0314    0.0314   +0.0000    1.0000    1.0000   +0.0000
+  ------------------------------------------------------------------------------------
+  combined       mean delta = +0.0000   Q-HAS better on 0/1 folds
+  phys_score     mean delta = +0.0000   Q-HAS better on 0/1 folds
+  patch_ratio    mean delta = +0.0000   Q-HAS better on 0/1 folds
+
+  saved: t15_smoke_summary.npz
+
+V4 Task 15 complete.

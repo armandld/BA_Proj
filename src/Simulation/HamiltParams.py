@@ -1,5 +1,6 @@
 import numpy as np
 from Simulation.PhysToAngle import _lohner_estimator
+from Simulation.grid import curl_z, divergence, forward_curl_z
 
 class PhysicalMapper:
     """
@@ -52,6 +53,11 @@ class PhysicalMapper:
     # can no longer resolve the physics and refinement is needed.
     # (v8 used RE_CRIT=10 which required extreme under-resolution to trigger,
     # making the Hamiltonian empty for most simulation-resolution grids.)
+    #: Percentile du critere RELATIF (voir `_effective_crit`).
+    #: Reglage NOUVEAU : il entre dans le perimetre de reoptimisation,
+    #: qui passe donc de 8 a 9 parametres.
+    RELATIVE_PERCENTILE = 90.0
+
     RE_CRIT = 1.0      # Cell Reynolds: advection > diffusion at cell scale
     RM_CRIT = 1.0      # Magnetic Reynolds: same criterion for B-field
     MACH_CRIT = 1.0    # Sonic transition
@@ -61,12 +67,16 @@ class PhysicalMapper:
     def __init__(self, cs=1.0, nu=1e-3, eta_mhd=1e-3, dx=1.0,
                  gamma_hydro=0.5, gamma_mag=0.5, kappa=5.0,
                  sigma=0.05, beta_curl=None, beta_xpoint=None,
-                 w_z_frac=0.15,
-                 beta_grad=None):
+                 w_z_frac=0.15, relative_percentile=None,
+                 beta_grad=None, fixed_curl=True):
         self.cs = cs
         self.nu = nu
         self.eta_mhd = eta_mhd
         self.dx = dx
+        # Rotationnel/divergence discrets : voir Simulation.grid. False
+        # reproduit bit-a-bit le chemin historique (convention indexing='xy'),
+        # True applique la convention AXIS_X/AXIS_Y declaree par le depot.
+        self.fixed_curl = bool(fixed_curl)
         # ── Uncertainty width for ZZ coupling ──
         # sigma controls how far from the decision boundary (threshold_amr)
         # the ZZ coupling remains active. Gaussian: exp(-((score-thr)/σ)²)
@@ -96,6 +106,13 @@ class PhysicalMapper:
         self.gamma_mag = gamma_mag
         self.kappa = kappa
         self.w_z_frac = w_z_frac  # Adaptive Z weight: fraction of max(|C|,|K|)
+        # Percentile du critere relatif. Reglable par instance parce qu'il
+        # est ENTRAINE (`SEARCH_SPACE`) : c'etait la derniere constante en
+        # dur du chemin de decision. `None` retient la constante de classe,
+        # donc le comportement d'avant, a l'identique.
+        self.relative_percentile = (float(relative_percentile)
+                                    if relative_percentile is not None
+                                    else self.RELATIVE_PERCENTILE)
 
     # ══════════════════════════════════════════════════════════════════
     #  f-gate: Normal-Critical scaling (absolute physical non-dimensionalization)
@@ -110,9 +127,12 @@ class PhysicalMapper:
         Critical regime (x > x_crit): f = 1 + γ × ln(x/x_crit)  (logarithmic growth)
 
         Continuous at x = x_crit (both sides = 1.0).
-        Logarithmic form bounds growth: Re=3000, x_crit=10, γ=2 → f ≈ 12 (not ∞).
-        Clamped to f_max to prevent extreme Hamiltonian coefficients from
-        destabilising the solver during training.
+        Logarithmic form bounds growth: Re=3000, x_crit=10, γ=2 → f ≈ 12.4
+        au lieu de diverger. Cette valeur illustre la FORMULE ; elle ne sort
+        pas de la fonction telle qu'elle est appelee, car f_max=10.0 par
+        defaut la ramene a 10.0. Le clamp existe pour empecher des
+        coefficients extremes de destabiliser le solveur pendant
+        l'entrainement.
         """
         r = x / (x_crit + 1e-10)
         f = np.where(r <= 1.0, r, 1.0 + gamma * np.log(np.maximum(r, 1.0)))
@@ -164,6 +184,38 @@ class PhysicalMapper:
         """
         x = np.clip(-kappa * (np.abs(Jz_curl) / (J_crit + 1e-10) - 1.0), -500, 500)
         return 1.0 / (1.0 + np.exp(x))
+
+    def _effective_crit(self, signal, crit_absolu):
+        """Seuil effectif : `min(absolu, percentile)`.
+
+        Le seuil de maille est ABSOLU (`RE_CRIT nu/(dx^2 v0)`), croit en
+        1/dx^2, et est le MEME pour tous les scenarios : a la resolution
+        d'entrainement il peut s'effacer completement (aucune cellule ne
+        le franchit) meme quand le signal brut porte une vraie structure,
+        et un seuil unique ne peut pas servir deux instabilites
+        d'amplitudes tres differentes.
+
+        D'ou `min(absolu, percentile)` :
+
+          - des qu'une cellule franchit le critere physique, l'absolu
+            l'emporte et le comportement d'origine est conserve A
+            L'IDENTIQUE ;
+          - sinon le relatif prend le relais et distingue les cellules les
+            plus instables DU CHAMP COURANT.
+
+        Un champ rigoureusement uniforme n'a pas de cellule « plus
+        instable » : son percentile vaut son maximum, le contraste seuille
+        rend zero partout. Le critere ne fabrique donc pas de signal a
+        partir de rien -- c'est l'invariant que teste
+        `test_le_critere_relatif_ne_fabrique_pas_de_signal`.
+        """
+        fini = np.asarray(signal, dtype=float)
+        fini = fini[np.isfinite(fini)]
+        if fini.size == 0:
+            return crit_absolu
+        if float(fini.max()) >= crit_absolu:
+            return crit_absolu          # le critere physique tire deja
+        return float(np.percentile(fini, self.relative_percentile))
 
     @staticmethod
     def _compute_det_jacobian_B(Bx, By, dx):
@@ -225,14 +277,23 @@ class PhysicalMapper:
         return np.minimum(raw, tc_max)
 
     # ══════════════════════════════════════════════════════════════════
-    #  Physical score: replaces classical_score for θ initialization
+    #  Physical score — NOT wired to θ initialization in the deployed
+    #  pipeline. See the docstring below before reading this header as a
+    #  claim about production behaviour.
     # ══════════════════════════════════════════════════════════════════
 
     LOHNER_CRIT = 0.3   # Löhner > 0.3 → genuine discontinuity
 
     def physical_score(self, physics_state):
         """
-        Physics-grounded instability score for qubit initialization.
+        Physics-grounded instability score — an alternative to
+        `AngleMapper.classical_score`, exercised only by the test suite.
+
+        N'est appelee nulle part dans `src/` ni `study/` : le theta-init
+        deploye vient partout de `AngleMapper.classical_score`
+        (`refinement.py`, `qaoa_inputs.py`). Utilisee uniquement par les
+        tests comme formule alternative a comparer — ne pas lire cette
+        fonction comme une description du comportement de production.
 
         Each indicator is normalized by its **physical critical value**
         (not by the domain maximum). This ensures:
@@ -267,12 +328,8 @@ class PhysicalMapper:
         jz_crit = self.RM_CRIT * self.eta_mhd / (self.dx ** 2)
 
         # ── Raw indicators (same discrete operators as classical_score) ──
-        vorticity = np.abs(
-            (np.roll(vy, -1, axis=1) - vy) - (np.roll(vx, -1, axis=0) - vx)
-        )
-        div_v = np.abs(
-            (np.roll(vx, -1, axis=1) - vx) + (np.roll(vy, -1, axis=0) - vy)
-        )
+        vorticity = np.abs(curl_z(vx, vy, self.fixed_curl))
+        div_v = np.abs(divergence(vx, vy, self.fixed_curl))
         abs_Jz = np.abs(Jz)
         B_mag = np.sqrt(Bx**2 + By**2)
         lohner_B = _lohner_estimator(B_mag)
@@ -340,10 +397,8 @@ class PhysicalMapper:
         B0 = max(np.mean(np.abs(Bx)), np.mean(np.abs(By)), 1e-10)
 
         # Discrete vorticity and current density (for plaquette)
-        omega_z = (vx - np.roll(vx, -1, axis=0)
-                   + np.roll(vy, -1, axis=1) - vy)
-        Jz_curl = (Bx - np.roll(Bx, -1, axis=0)
-                   + np.roll(By, -1, axis=1) - By)
+        omega_z = curl_z(vx, vy, self.fixed_curl)
+        Jz_curl = curl_z(Bx, By, self.fixed_curl)
 
         # ── 0. ACTIVITY BIAS (1-body Z) ── ADAPTIVE WEIGHT ─────────
         # Z bias breaks the degenerate ground state of ferromagnetic ZZ/ZZZZ.
@@ -480,7 +535,17 @@ class PhysicalMapper:
 
         # g-gates: decoupled topological switches
         g_rot = self._g_rot(Q_OW, self.Q_CRIT, self.kappa)
-        g_mag = self._g_mag(Jz_curl, self.J_CRIT, self.kappa)
+        # `Jz_curl` sort de `curl_z`, qui ne divise PAS par dx : c'est une
+        # difference finie en unites de GRILLE. `Q_OW`, lui, vient de
+        # `_compute_q_criterion(..., dx=dx)` et est en unites PHYSIQUES.
+        #
+        # Comparer les deux a des seuils nominalement du meme ordre
+        # (Q_CRIT = 2.0, J_CRIT = 1.0) rendrait la porte magnetique plus
+        # dure a franchir d'un facteur 1/dx — se degradant quand la grille
+        # se raffine. `g_mag` recoit donc un Jz PHYSIQUE, comme `g_rot`
+        # recoit un Q_OW physique.
+        Jz_phys = Jz_curl / max(dx, 1e-10)
+        g_mag = self._g_mag(Jz_phys, self.J_CRIT, self.kappa)
 
         # f-gates for plaquette: Re for fluid component, Rm for magnetic
         Re_cell = (np.sqrt(vx**2 + vy**2) * dx) / max(self.nu, 1e-10)
@@ -497,8 +562,11 @@ class PhysicalMapper:
         jz_mag = np.abs(Jz_curl / B0)
         omega_crit = self.RE_CRIT * self.nu / (max(dx, 1e-10)**2 * max(v0, 1e-10))
         jz_crit = self.RM_CRIT * self.eta_mhd / (max(dx, 1e-10)**2 * max(B0, 1e-10))
-        mic_omega = self._threshold_contrast(omega_mag, omega_crit, self.beta_curl)
-        mic_jz = self._threshold_contrast(jz_mag, jz_crit, self.beta_curl)
+        # Critere RELATIF : voir `_effective_crit`.
+        omega_crit_eff = self._effective_crit(omega_mag, omega_crit)
+        jz_crit_eff = self._effective_crit(jz_mag, jz_crit)
+        mic_omega = self._threshold_contrast(omega_mag, omega_crit_eff, self.beta_curl)
+        mic_jz = self._threshold_contrast(jz_mag, jz_crit_eff, self.beta_curl)
 
         # Decoupled components with Michelson normalization
         fluid_comp = g_rot * f_Re_cell * mic_omega
@@ -507,16 +575,31 @@ class PhysicalMapper:
         # Even-parity: output negative so cost_hamiltonian uses as-is
         K_plaquettes = -1.0 * np.sqrt(fluid_comp**2 + mag_comp**2)
 
+        # ── Etages observables ─────────────────────────────────────
+        # Exposees telles que la fonction les a calculees plutot que
+        # RECALCULEES a cote pour diagnostic : une reproduction incomplete
+        # accuserait a tort du code juste. `_stages` n'est lu que par les
+        # tests et les diagnostics ; aucun chemin de production ne le
+        # consulte.
+        self._stages = {
+            "g_rot": g_rot, "g_mag": g_mag,
+            "f_Re_cell": f_Re_cell, "f_Rm_cell": f_Rm_cell,
+            "mic_omega": mic_omega, "mic_jz": mic_jz,
+            "omega_mag": omega_mag, "jz_mag": jz_mag,
+            "omega_crit": omega_crit_eff, "jz_crit": jz_crit_eff,
+            "fluid_comp": fluid_comp, "mag_comp": mag_comp,
+            "v0": v0, "B0": B0,
+        }
+
         # ── Build result ───────────────────────────────────────────
         # ── 0b. FILL Z BIAS with adaptive weight (global median) ────
         # The Z bias breaks the degenerate ground state of ferromagnetic
         # ZZ/ZZZZ. We scale it relative to a GLOBAL summary of the
         # multi-body coupling strength.
         #
-        # Using the global MAX caused a single outlier (e.g. C=-1193 at
-        # the Orszag-Tang current sheet) to over-inflate alpha for all
-        # cells. The MEDIAN of non-zero |C| and |K| values is robust to
-        # outliers while still reflecting the typical coupling scale.
+        # The global MAX lets a single outlier cell over-inflate alpha for
+        # every cell. The MEDIAN of non-zero |C| and |K| values is robust
+        # to outliers while still reflecting the typical coupling scale.
         # w_z_frac ∈ [0.05, 0.5], default 0.15.
         all_coeffs = np.concatenate([
             np.abs(C_horiz).ravel(),
@@ -555,23 +638,41 @@ class PhysicalMapper:
             # X-point signal: only negative determinant (hyperbolic nulls)
             xpoint_signal = np.maximum(0.0, -det_J_B)
 
-            # Normalize by (B0/dx)² — natural scale of gradient product
-            B0_sq_over_dx_sq = max(B0, 1e-10)**2 / max(dx, 1e-10)**2
-            xpoint_norm = xpoint_signal / max(B0_sq_over_dx_sq, 1e-10)
+            # `sqrt(det)` a les MEMES UNITES que |Jz| : tous deux sont des
+            # gradients de B. On emploie donc la normalisation et le seuil du
+            # canal courant, deja definis plus haut (`jz_crit`).
+            #
+            # Comparer un signal AU CARRE normalise par une seule puissance
+            # de dx^2 a un seuil lui-meme au carre ferait varier le rapport
+            # en dx^4 : le critere deviendrait exponentiellement moins
+            # susceptible de se declencher a mesure que la grille se
+            # raffine. La forme actuelle suit la meme loi (dx^2) que le
+            # canal courant, ce que la coherence dimensionnelle impose.
+            xpoint_grad = np.sqrt(xpoint_signal) / max(B0, 1e-10)
 
-            # Critical value: when each gradient reaches Rm_crit scale
-            # grad_crit = RM_CRIT * eta / dx, so det_crit = (grad_crit/dx)²
-            # normalized by (B0/dx)²: (RM_CRIT * eta / (dx * B0))²
-            xpoint_crit = (self.RM_CRIT * self.eta_mhd
-                           / (max(dx, 1e-10) * max(B0, 1e-10)))**2
-
+            # Meme critere relatif, mais sur la distribution DE CE CANAL :
+            # `sqrt(det)` et |Jz| n'ont pas les memes percentiles, et c'est
+            # precisement ce qui rend le canal point X discriminant la ou
+            # le canal courant ne l'est pas (contraste 1104 contre 49.5 sur
+            # harris_tearing).
+            xpoint_crit_eff = self._effective_crit(xpoint_grad, jz_crit)
             mic_xpoint = self._threshold_contrast(
-                xpoint_norm, xpoint_crit, self.beta_xpoint
+                xpoint_grad, xpoint_crit_eff, self.beta_xpoint
             )
 
-            # Scale by f_Rm_cell (already computed above for K_plaquettes)
+            # PAS de `f_Rm_cell` ici : cette porte vaut
+            # `_f_gate(|B| dx / eta)`, et un point X est PAR DEFINITION un
+            # zero de B — elle annulerait le coefficient exactement la ou
+            # il doit signaler, ne laissant que l'anneau autour. Verifie
+            # par `tests/mapping/test_xpoint_at_training_resolution.py`.
+            #
+            # ATTENTION — ce retrait ne suffit pas a faire tirer le terme
+            # sur des champs REELS : a N=256 le seuil lui-meme n'est pas
+            # atteint. La normalisation est le second verrou, et il reste
+            # ouvert. Voir RESULTS.md.
+            #
             # Even-parity ZZZZ: output negative so cost_hamiltonian uses as-is
-            K_xpoint = -1.0 * f_Rm_cell * mic_xpoint
+            K_xpoint = -1.0 * mic_xpoint
             result["K_xpoint"] = K_xpoint
 
         return result

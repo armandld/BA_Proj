@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""
+Phase 6 - Verification: Does the v2 Hamiltonian identify hard patches?
+
+Key question: when we rank patches by their Hamiltonian "energy"
+  E_i = |H_i| + sum_j |C_ij| + sum_p |K_p|
+do the top-ranked patches coincide with the L2-hard patches?
+
+This is the direct analog of "the ground state of the quantum optimisation
+problem is the hard-patch mask". If the Hamiltonian is well-posed, then
+the highest-E patches (which cost the most to keep in the low-refinement
+|0> state) are exactly the ones that most need refinement.
+
+For each (scenario, Re, dim) we report:
+  - F1 score of Hamiltonian energy ranking vs L2 ground truth
+  - F1 score of classical indicator vs L2 ground truth
+  - Top-K overlap between them
+  - ROC-AUC for Hamiltonian energy as hard-patch detector
+  - Same for classical score (for comparison)
+
+Usage:
+  python study/pipeline/pipeline_verification.py
+  python study/pipeline/pipeline_verification.py --dim 4 --v2
+"""
+import argparse, os, sys
+import numpy as np
+from sklearn.metrics import f1_score, roc_auc_score, precision_recall_curve
+
+# --- chemins du dépôt (bloc unique, généré) -------------------------------
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _p in [os.path.join(_REPO_ROOT, "src")] + [
+        os.path.join(_REPO_ROOT, "study", _d) for _d in (
+            "pipeline", "h0_selection", "h1_solver", "h2b_prediction",
+            "h3_representation", "h4_transfer", "closed_loop", "common")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+# -------------------------------------------------------------------------
+from config import RESULTS_DIR, SCENARIOS, RE_VALUES, DNS_N, TRAINED_SIGMA
+
+
+def analyze(scenario, Re, dim, N, use_v2=True, sigma=TRAINED_SIGMA):
+    suffix = "_v2" if use_v2 else ""
+    coef_path = os.path.join(
+        RESULTS_DIR,
+        f"coefficients_{scenario}_Re{Re}_N{N}_dim{dim}{suffix}.npz")
+    patch_path = os.path.join(
+        RESULTS_DIR, f"patches_{scenario}_Re{Re}_N{N}_dim{dim}.npz")
+
+    if not (os.path.exists(coef_path) and os.path.exists(patch_path)):
+        return None
+
+    patches = np.load(patch_path)
+    coefs = np.load(coef_path)
+
+    l2_full = patches["l2_errors"]          # (n_snaps_full, dim, dim)
+    is_hard_full = patches["is_hard"]
+    l2_thr = float(patches["l2_threshold"])
+
+    # coefficients were computed only on every k-th snapshot; figure out
+    # which snapshots are there by reading the C array shape
+    #
+    # The key must be built explicitly, never taken as "the first _E key
+    # found": phase 3 writes SIX sigma values into the same artifact, and
+    # the F1 verdict differs across them (PASS at 0.023/0.050, WARN at
+    # 0.100/0.200/0.300, TIE at 0.150). A silent fallback to whichever
+    # key happens to be written first would let the write order of
+    # `sigma_values` decide the published verdict instead of an explicit
+    # sigma choice, so a missing key raises rather than falling back.
+    E_key = "s0.000_E" if use_v2 else f"s{sigma:.3f}_E"
+    if E_key not in coefs.files:
+        available = sorted(k[:-2] for k in coefs.files if k.endswith("_E"))
+        raise KeyError(
+            f"{os.path.basename(coef_path)} ne porte pas {E_key!r} — "
+            f"sigmas disponibles : {available}. Aucun repli : le sigma "
+            f"decide le verdict (D-180).")
+    E = coefs[E_key]
+
+    n_snaps_sub = E.shape[0]
+    n_snaps_full = l2_full.shape[0]
+    # reconstruct snap indices (must match analyze_one logic)
+    step = max(1, n_snaps_full // 10)
+    snap_indices = list(range(0, n_snaps_full, step))
+    if len(snap_indices) < 3:
+        snap_indices = list(range(n_snaps_full))
+    snap_indices = snap_indices[:n_snaps_sub]
+
+    l2 = l2_full[snap_indices]          # (n_sub, dim, dim)
+    is_hard = is_hard_full[snap_indices]
+
+    # flatten for classification metrics
+    E_flat = E.flatten()
+    l2_flat = l2.flatten()
+    hard_flat = is_hard.flatten()
+
+    # classical scores are stored in the patches file
+    if "classical_scores" in patches.files:
+        classical_full = patches["classical_scores"]
+        classical = classical_full[snap_indices].flatten()
+    else:
+        classical = None
+
+    # AUC for Hamiltonian energy ranking
+    try:
+        auc_E = roc_auc_score(hard_flat, E_flat)
+    except ValueError:
+        auc_E = np.nan
+
+    # F1 at optimal threshold (scan)
+    def best_f1(score, labels):
+        if len(set(labels.astype(int))) < 2:
+            return 0.0, 0.0
+        thrs = np.quantile(score, np.linspace(0.05, 0.95, 40))
+        best = 0.0
+        best_thr = 0.0
+        for t in thrs:
+            pred = score > t
+            tp = np.sum(pred & labels)
+            fp = np.sum(pred & ~labels)
+            fn = np.sum(~pred & labels)
+            p = tp / max(tp + fp, 1)
+            r = tp / max(tp + fn, 1)
+            f1 = 2*p*r / max(p + r, 1e-10)
+            if f1 > best:
+                best = f1
+                best_thr = t
+        return best, best_thr
+
+    f1_E, thr_E = best_f1(E_flat, hard_flat)
+
+    # top-25% overlap (Hamiltonian-hard vs L2-hard)
+    # the hard rate is 25% by construction of the L2 threshold
+    n_hard = int(np.sum(hard_flat))
+    topK_E = np.argsort(E_flat)[::-1][:n_hard]
+    topK_hard = np.where(hard_flat)[0]
+    overlap_E = len(set(topK_E) & set(topK_hard))
+    recall_E = overlap_E / max(n_hard, 1)
+
+    # A constant E (no patch ever crosses the v1 Hamiltonian's critical
+    # thresholds) makes every ranking metric tied at its chance value
+    # (AUC=0.5, F1=0.0) -- indistinguishable at a glance from a genuine
+    # "no discrimination" result, but it means no signal was computed at
+    # all. Flag it so it isn't averaged in as if it were a real
+    # chance-level measurement.
+    degenerate_E = bool(np.ptp(E_flat) < 1e-12)
+
+    result = {
+        "scenario": scenario, "Re": Re, "dim": dim,
+        "n_snaps": n_snaps_sub,
+        "n_patches": len(E_flat),
+        "n_hard": int(n_hard),
+        "auc_E": auc_E, "f1_E": f1_E,
+        "recall_E_topK": recall_E,
+        "degenerate_E": degenerate_E,
+    }
+
+    # classical for comparison (from the saved scores)
+    if classical is not None:
+        try:
+            auc_c = roc_auc_score(hard_flat, classical)
+        except ValueError:
+            auc_c = np.nan
+        f1_c, _ = best_f1(classical, hard_flat)
+        topK_c = np.argsort(classical)[::-1][:n_hard]
+        overlap_c = len(set(topK_c) & set(topK_hard))
+        recall_c = overlap_c / max(n_hard, 1)
+        result.update({
+            "auc_c": auc_c, "f1_c": f1_c,
+            "recall_c_topK": recall_c,
+        })
+
+    return result
+
+
+def split_degenerate(rows):
+    """
+    Separate rows whose Hamiltonian energy never crossed a critical
+    threshold (E constant, AUC/F1 tied at their chance value by
+    construction) from rows with a genuine ranking.
+
+    Returns (clean_rows, degenerate_rows).
+    """
+    clean = [r for r in rows if not r["degenerate_E"]]
+    degenerate = [r for r in rows if r["degenerate_E"]]
+    return clean, degenerate
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Phase 6: verify v2 Hamiltonian finds hard patches")
+    parser.add_argument("--scenario", nargs="+", default=SCENARIOS)
+    parser.add_argument("--re", nargs="+", type=int, default=RE_VALUES)
+    parser.add_argument("--dim", nargs="+", type=int, default=[4])
+    parser.add_argument("--N", type=int, default=DNS_N)
+    parser.add_argument("--v1", action="store_true",
+                        help="Use v1 coefficients file instead of v2")
+    parser.add_argument("--sigma", type=float, default=TRAINED_SIGMA,
+                        help="D-180 : sigma lu dans l'artefact v1. La phase 3 "
+                             "en ecrit six et le verdict F1 flippe entre eux ; "
+                             "il n'y a pas de defaut sain, seulement un defaut "
+                             "DIT. Sans effet sous v2.")
+    args = parser.parse_args()
+
+    use_v2 = not args.v1
+    version = ("v2 (a-priori constants)" if use_v2
+               else f"v1 (trained, sigma={args.sigma:.3f})")
+
+    print("=" * 78)
+    print(f"  Phase 6: Hard-patch detection via {version} Hamiltonian energy")
+    print("=" * 78)
+    print()
+    print("  Hypothesis: the patch-level Hamiltonian energy")
+    print("    E_patch = <|H_i|> + <|C_ij|> + <|K_p|>")
+    print("  ranks patches such that high-E patches = hard-to-simulate patches.")
+    print()
+    print(f"  {'Scenario':<18} {'Re':>5} {'dim':>4} {'N_hard':>7} "
+          f"{'AUC(E)':>7} {'F1(E)':>7} {'Recall@K(E)':>12} "
+          f"{'AUC(cl)':>8} {'F1(cl)':>7} {'Recall@K(cl)':>13}")
+    print("  " + "-" * 76)
+
+    rows = []
+    for sc in args.scenario:
+        for re in args.re:
+            for dim in args.dim:
+                r = analyze(sc, re, dim, args.N, use_v2=use_v2,
+                            sigma=args.sigma)
+                if r is None:
+                    continue
+                rows.append(r)
+                flag = "  <- DEGENERATE (E constant, no signal)" if r["degenerate_E"] else ""
+                print(f"  {sc:<18} {re:>5} {dim:>4} {r['n_hard']:>7} "
+                      f"{r['auc_E']:>7.3f} {r['f1_E']:>7.3f} "
+                      f"{r['recall_E_topK']:>12.3f} "
+                      f"{r.get('auc_c', np.nan):>8.3f} "
+                      f"{r.get('f1_c', np.nan):>7.3f} "
+                      f"{r.get('recall_c_topK', np.nan):>13.3f}{flag}")
+
+    if not rows:
+        # Raise rather than print-and-return: silently exiting 0 here
+        # without writing an artifact would leave the previous campaign's
+        # file in place, indistinguishable from a fresh, successful run.
+        raise RuntimeError(
+            "balayage vide : aucun fichier de coefficients trouve, lancer "
+            "la phase 3 d'abord. Le script sortait ici avec le code 0 et "
+            "sans artefact, donc sans se distinguer d'une campagne reussie.")
+
+    print()
+    print("=" * 78)
+    print("  INTERPRETATION")
+    print("=" * 78)
+
+    # Rows where the Hamiltonian energy never crossed the v1 critical
+    # thresholds are tied at AUC=0.5/F1=0.0 by construction -- not a
+    # measurement of chance-level discrimination. Averaging them in
+    # silently changes the PASS/FAIL verdict below, so report them
+    # separately instead of dropping them without a trace.
+    clean_rows, degenerate_rows = split_degenerate(rows)
+    if degenerate_rows:
+        names = ", ".join(f"{r['scenario']}(Re={r['Re']})" for r in degenerate_rows)
+        print(f"\n  NOTE: {len(degenerate_rows)}/{len(rows)} row(s) excluded from "
+              f"the Hamiltonian-energy averages below -- E was constant\n"
+              f"        (no coefficient ever crossed a critical threshold): {names}")
+    if not clean_rows:
+        # Same failure mode as the `not rows` guard above (silent success
+        # on an empty result): raise instead of print-and-return, so an
+        # all-degenerate sweep cannot masquerade as a completed campaign.
+        raise RuntimeError(
+            f"balayage vide : les {len(rows)} ligne(s) sont toutes degenerees "
+            "(E constant, aucun coefficient n'a franchi de seuil critique — voir "
+            "D-41), donc aucun verdict energie-hamiltonien n'est calculable. Ce "
+            "script n'ecrit pas d'artefact : son code de sortie EST son verdict, "
+            "et il valait 0 ici (D-75).")
+
+    mean_auc_E = np.nanmean([r['auc_E'] for r in clean_rows])
+    mean_f1_E = np.nanmean([r['f1_E'] for r in clean_rows])
+    mean_recall_E = np.nanmean([r['recall_E_topK'] for r in clean_rows])
+
+    # same row set as the Hamiltonian averages above, so PASS/FAIL/TIE
+    # compares both sides on identical scenarios.
+    auc_c = [r.get('auc_c', np.nan) for r in clean_rows]
+    f1_c = [r.get('f1_c', np.nan) for r in clean_rows]
+    recall_c = [r.get('recall_c_topK', np.nan) for r in clean_rows]
+    mean_auc_c = np.nanmean(auc_c)
+    mean_f1_c = np.nanmean(f1_c)
+    mean_recall_c = np.nanmean(recall_c)
+
+    # sigma must tag every printed number: the F1 verdict is
+    # sigma-dependent (see E_key above), so a bare number would be
+    # ambiguous.
+    tag = "" if use_v2 else f" [sigma={args.sigma:.3f}]"
+    print(f"\n  Hamiltonian energy{tag}:  AUC = {mean_auc_E:.3f}  "
+          f"F1 = {mean_f1_E:.3f}  Recall@K = {mean_recall_E:.3f}")
+    print(f"  Classical score:     AUC = {mean_auc_c:.3f}  "
+          f"F1 = {mean_f1_c:.3f}  Recall@K = {mean_recall_c:.3f}")
+
+    print()
+    if mean_auc_E > 0.5 + 0.05:
+        print(f"  PASS{tag}: Hamiltonian energy ranks hard patches above "
+              f"chance (AUC={mean_auc_E:.3f} > 0.5).")
+        print(f"        Minimizing H (i.e. picking low-E states) does identify "
+              f"non-hard patches.")
+        print(f"        Maximizing E identifies the hard patches.")
+    else:
+        print(f"  FAIL{tag}: Hamiltonian energy does not rank hard patches "
+              f"(AUC={mean_auc_E:.3f}).")
+
+    if mean_f1_E > mean_f1_c + 0.02:
+        print(f"\n  PASS{tag}: Hamiltonian F1 ({mean_f1_E:.3f}) > "
+              f"Classical F1 ({mean_f1_c:.3f}).")
+        print(f"        The quantum Hamiltonian adds discrimination power beyond "
+              f"the classical score.")
+    elif mean_f1_E > mean_f1_c - 0.02:
+        print(f"\n  TIE{tag}:  Hamiltonian F1 ({mean_f1_E:.3f}) ~= "
+              f"Classical F1 ({mean_f1_c:.3f}).")
+        print(f"        The Hamiltonian matches the classical baseline.")
+    else:
+        print(f"\n  WARN{tag}: Hamiltonian F1 ({mean_f1_E:.3f}) < "
+              f"Classical F1 ({mean_f1_c:.3f}).")
+
+
+if __name__ == "__main__":
+    main()

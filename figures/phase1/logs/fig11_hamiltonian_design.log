@@ -1,6 +1,0 @@
-Fig 11 — Hamiltonian Design Visualization
-threshold_amr = 0.14959824837662078
-sigma = 0.02298137250311738
-w_z_frac = 10.395947170474118
-N = 256
-Scenarios: ['Kelvin-Helmholtz', 'Harris Tearing', 'MHD Rotor', 'Orszag-Tang']

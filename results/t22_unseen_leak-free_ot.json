@@ -1,0 +1,217 @@
+{
+ "fold": "ot",
+ "scenario": "orszag_tang",
+ "mode": "leak-free",
+ "classical_reference_source": "budget-matched threshold 0.1906 (forced)",
+ "classical_tuned_arm_completed": null,
+ "unseen_condition": {
+  "ic": {},
+  "re": 600,
+  "note": "init_orszag_tang takes NO parameters; the only available unseen condition is a different Reynolds number"
+ },
+ "qaoa_threshold_leaked": false,
+ "qaoa_threshold_amr": 0.46161012794549355,
+ "classical_threshold_amr": 0.19062500000000002,
+ "arms": {
+  "qhas": {
+   "n_runs": 5,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 3,
+   "n_aborted": 5,
+   "canonical_runs": [
+    {
+     "combined": 0.38702241820010713,
+     "phys_score": 0.4311107624517588,
+     "patch_ratio": 0.2768015575709779,
+     "completed": false,
+     "abort": {
+      "abort_step": 955,
+      "abort_time": 2.7903,
+      "partial_combined": 0.387,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.3832762652772044,
+     "phys_score": 0.4238981938018792,
+     "patch_ratio": 0.28172144396551724,
+     "completed": false,
+     "abort": {
+      "abort_step": 928,
+      "abort_time": 2.7258,
+      "partial_combined": 0.3833,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.39863468200427365,
+     "phys_score": 0.452898822663126,
+     "patch_ratio": 0.26297433035714285,
+     "completed": false,
+     "abort": {
+      "abort_step": 918,
+      "abort_time": 2.7016,
+      "partial_combined": 0.3986,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.5527294088919664,
+     "phys_score": 0.6587117660101212,
+     "patch_ratio": 0.2877735160965795,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.4566421539536289,
+     "phys_score": 0.5395065105048993,
+     "patch_ratio": 0.24948126257545272,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.3954866025871484,
+     "phys_score": 0.4598960953602491,
+     "patch_ratio": 0.23446287065439672,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.5738870872411744,
+     "phys_score": 0.67744110514418,
+     "patch_ratio": 0.31500204248366015,
+     "completed": false,
+     "abort": {
+      "abort_step": 1092,
+      "abort_time": 3.1341,
+      "partial_combined": 0.5739,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.4122306825501092,
+     "phys_score": 0.45173951998733075,
+     "patch_ratio": 0.3134585889570552,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.5747857322375073,
+     "phys_score": 0.700727967897089,
+     "patch_ratio": 0.2599301430885529,
+     "completed": false,
+     "abort": {
+      "abort_step": 1096,
+      "abort_time": 3.1432,
+      "partial_combined": 0.5748,
+      "diverged_fields": 0,
+      "n_fields": 5
+     }
+    },
+    {
+     "combined": 0.5001338679910767,
+     "phys_score": 0.600500554246812,
+     "patch_ratio": 0.24921715235173825,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.5046857814227976,
+    "phys_score": 0.5991091382575102,
+    "patch_ratio": 0.2686273893360161
+   },
+   "unseen": {
+    "combined": 0.43595038437611144,
+    "phys_score": 0.5040453898647973,
+    "patch_ratio": 0.2657128706543967
+   },
+   "canonical_phys_sd": 0.08429084452081742,
+   "unseen_phys_sd": 0.08363211992066588,
+   "status": "completed",
+   "degradation_ratio": 0.841324823271428
+  },
+  "classical": {
+   "n_runs": 2,
+   "n_completed_canonical": 2,
+   "n_completed_unseen": 2,
+   "n_aborted": 0,
+   "canonical_runs": [
+    {
+     "combined": 0.24226130415195732,
+     "phys_score": 0.08269889925338406,
+     "patch_ratio": 0.6411673163983903,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.24226130415195732,
+     "phys_score": 0.08269889925338406,
+     "patch_ratio": 0.6411673163983903,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "unseen_runs": [
+    {
+     "combined": 0.24727446582718265,
+     "phys_score": 0.07822988099241154,
+     "patch_ratio": 0.6698859279141104,
+     "completed": true,
+     "abort": null
+    },
+    {
+     "combined": 0.24727446582718265,
+     "phys_score": 0.07822988099241154,
+     "patch_ratio": 0.6698859279141104,
+     "completed": true,
+     "abort": null
+    }
+   ],
+   "canonical": {
+    "combined": 0.24226130415195732,
+    "phys_score": 0.08269889925338406,
+    "patch_ratio": 0.6411673163983903
+   },
+   "unseen": {
+    "combined": 0.24727446582718265,
+    "phys_score": 0.07822988099241154,
+    "patch_ratio": 0.6698859279141104
+   },
+   "canonical_phys_sd": 0.0,
+   "unseen_phys_sd": 0.0,
+   "status": "completed",
+   "degradation_ratio": 0.9459603658413913
+  }
+ },
+ "thresholds_match": false,
+ "dns_signature_canonical": 145888.8460796226,
+ "dns_signature_unseen": 145473.71212274957,
+ "dns_relative_shift": 0.002845549663518914,
+ "unseen_condition_is_weak": true,
+ "resumed_from_checkpoint": false,
+ "n_runs_resumed": 0,
+ "status": "completed",
+ "qhas_degrades_more": false,
+ "git_hash_at_start": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
+ "dirty_at_start": true,
+ "git_hash_at_save": "d6b9ed7e70b5691dec1754fc10da1778a63b27ac",
+ "head_moved_during_run": true,
+ "git_hash": "43a9a78d38b81b2288cd39d7d851baef4c2227b0",
+ "cli_args": {
+  "fold": "ot",
+  "mode": "leak-free",
+  "no_resume": false,
+  "prefix": "t15_level3",
+  "seed": 0,
+  "repeats": 5,
+  "matched_reference": true
+ },
+ "wall_s": 6656.006125688553
+}

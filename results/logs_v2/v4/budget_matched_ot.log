@@ -1,0 +1,33 @@
+Environnement Local detecte. Ecriture directe sur le disque.
+========================================================================================
+  V4 Task 15b: budget-matched comparison, fold ot
+  Q-HAS realised patch_ratio = 0.6797  (phys 0.1940)
+  tuned classical            = 0.3238  (phys 0.4845, thr 0.4616)
+  searching the classical threshold that matches the Q-HAS budget
+========================================================================================
+
+--- Pre-computing DNS traces for held/ot ---
+Hot-Start captured at t=2.0016
+DNS pre-computed: 1136 steps, 14 flux snapshots stored.
+--- DNS pre-computation complete (held/ot) ---
+
+    thr=0.0500 -> patch=0.9480 phys=0.0111 (target patch 0.6797)
+    thr=0.8000 -> patch=0.0156 phys=0.5894 (target patch 0.6797)
+[WARNING] Violation CFL détéctée : 1.09 > 1.0.
+[WARNING] Violation CFL détéctée : 1.09 > 1.0.
+    thr=0.4250 -> patch=0.3554 phys=0.2899 (target patch 0.6797)
+    thr=0.2375 -> patch=0.5866 phys=0.1027 (target patch 0.6797)
+    thr=0.1438 -> patch=0.7369 phys=0.0649 (target patch 0.6797)
+    thr=0.1906 -> patch=0.6412 phys=0.0827 (target patch 0.6797)
+
+  ====================================================================================
+  budget-matched classical: thr=0.1906  patch=0.6412  phys=0.0827
+  Q-HAS                   : patch=0.6797  phys=0.1940
+  delta phys at matched budget = +0.1113 (negative favours Q-HAS)
+  budget mismatch remaining    = -0.0385
+
+  READING: at equal compute the classical arm recovers the fidelity; the Level-3 gap was a move along the error-cost frontier, not a better decision rule.
+
+  saved: t15b_budget_matched_ot.json
+
+V4 Task 15b complete.

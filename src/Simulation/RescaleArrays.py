@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.ndimage import uniform_filter, zoom
+from scipy.ndimage import zoom
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -18,12 +18,24 @@ def _maxabs_pool_2d(arr, target_h, target_w):
     bw = w // target_w
     if bh < 1 or bw < 1:
         return zoom(arr, (target_h / h, target_w / w), order=1)
-    arr_c = arr[:target_h * bh, :target_w * bw]
-    # (target_h, bh, target_w, bw) → (target_h, target_w, bh*bw)
-    blocks = arr_c.reshape(target_h, bh, target_w, bw)
-    blocks = blocks.transpose(0, 2, 1, 3).reshape(target_h, target_w, -1)
-    idx = np.argmax(np.abs(blocks), axis=-1)
-    return np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+
+    # Les blocs sont delimites par des bornes reparties sur TOUTE l'etendue :
+    # tronquer puis jeter le reste de la division ferait disparaitre les
+    # dernieres lignes/colonnes sans trace — exactement l'anomalie que ce
+    # pooling existe pour preserver.
+    #
+    # Quand h % target_h == 0 (le cas du chemin deploye, 256 vers 2/4/8),
+    # les bornes retombent sur les memes blocs qu'avant : la sortie est
+    # alors bit-a-bit identique.
+    ii = np.linspace(0, h, target_h + 1).astype(int)
+    jj = np.linspace(0, w, target_w + 1).astype(int)
+    out = np.empty((target_h, target_w), dtype=float)
+    for a in range(target_h):
+        for b in range(target_w):
+            block = arr[ii[a]:ii[a + 1], jj[b]:jj[b + 1]]
+            flat = block.reshape(-1)
+            out[a, b] = flat[np.argmax(np.abs(flat))]
+    return out
 
 
 def _maxabs_pool_1d(arr, target_len):
@@ -32,10 +44,15 @@ def _maxabs_pool_1d(arr, target_len):
     bs = n // target_len
     if bs < 1:
         return zoom(arr, (target_len / n,), order=1)
-    arr_c = arr[:target_len * bs]
-    blocks = arr_c.reshape(target_len, bs)
-    idx = np.argmax(np.abs(blocks), axis=-1)
-    return np.take_along_axis(blocks, idx[..., np.newaxis], axis=-1).squeeze(-1)
+    # Meme correction qu'en 2D : les bornes couvrent toute l'etendue au lieu
+    # de tronquer le reste de la division, qui faisait disparaitre les
+    # dernieres cellules. Sortie inchangee quand n % target_len == 0.
+    kk = np.linspace(0, n, target_len + 1).astype(int)
+    out = np.empty(target_len, dtype=float)
+    for a in range(target_len):
+        seg = np.asarray(arr[kk[a]:kk[a + 1]]).reshape(-1)
+        out[a] = seg[np.argmax(np.abs(seg))]
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -125,9 +142,15 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     """
     Adapte les flux et les paramètres à la dimension cible du VQA.
 
-    - Flux arrays      → bilinear interpolation (smooth physical fields).
-    - Hamiltonian coefs → max-abs pooling (anomaly detection: a single
-      strong signal in a large block must survive downsampling).
+    Les TROIS chemins qui descendent vers le VQA — score, coefficients
+    d'Hamiltonien, flux de contrainte — appliquent la meme reduction :
+    max-abs pooling. Un signal fort et isole (choc, nappe de courant) dans
+    un gros bloc doit survivre a la reduction ; c'est la raison d'etre de
+    ces trois quantites.
+
+    Le flux n'est PAS un champ lisse — Phi est bati sur des DIFFERENCES de
+    champ et pique la ou le score pique — d'ou le max-abs pooling plutot
+    qu'un lissage puis interpolation bilineaire. Voir `_process_flux`.
 
     type_filter=True  (depth 0) : global periodic scan.
     type_filter=False (depth>0) : local sub-domain with halo.
@@ -141,18 +164,26 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     proc_h = local_h.astype(float)
     proc_v = local_v.astype(float)
 
-    # ── Flux dispatch (bilinear — smooth fields) ──────────────────────
+    # ── Flux dispatch (max-abs pool — anomaly preservation) ───────────
+    #
+    # Phi n'est PAS un champ lisse : c'est un indicateur d'anomalie,
+    # construit sur des DIFFERENCES de champ, qui pique aux chocs et aux
+    # nappes de courant — comme le score et les coefficients, que ce
+    # fichier max-poole deja. Un lissage puis zoom bilineaire les traiterait
+    # comme un champ lisse : le zoom ECHANTILLONNE (il ne moyenne pas), donc
+    # un pic isole ne survit qu'a une fraction des positions possibles dans
+    # le bloc, et un lissage prealable le dilue encore avant cet
+    # echantillonnage.
+    #
+    # Les trois chemins qui descendent vers le VQA — score, coefficients,
+    # flux — appliquent donc la meme reduction (max-abs pooling).
     def _process_flux(arr, is_periodic_scan):
         if arr is None:
             return None
         if is_periodic_scan:
-            h, w = arr.shape
-            processed = arr
-            if min(h, w) > target_dim:
-                processed = uniform_filter(arr, size=3, mode='wrap')
-            return zoom(processed, (target_dim / h, target_dim / w), order=1)
+            return _maxabs_pool_2d(arr, target_dim, target_dim)
         else:
-            return _resize_padded_bilinear(arr, target_dim)
+            return _resize_padded_maxpool(arr, target_dim)
 
     # ── Hamiltonian dispatch (max-abs pool — anomaly preservation) ────
     def _process_hamilt(arr, is_periodic_scan):
@@ -174,8 +205,12 @@ def get_adaptive_flux(local_h, local_v, local_prev_h, local_prev_v, score, hamil
     if hamilt_params is not None:
         for key, value in hamilt_params.items():
             if key == 'E_max':
+                # E_max est un scalaire d'echelle, pas un champ : il ne doit
+                # PAS etre reduit. Le `elif` est necessaire — avec un `if`
+                # independant, un E_max devenu tableau se ferait remplacer
+                # en silence par sa version poolee.
                 mini_hamilt_params[key] = value
-            if isinstance(value, (tuple, list)):
+            elif isinstance(value, (tuple, list)):
                 mini_hamilt_params[key] = tuple(
                     _process_hamilt(v, type_filter) for v in value
                 )
