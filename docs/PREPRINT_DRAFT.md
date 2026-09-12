@@ -43,6 +43,47 @@ excludes zero, p = 0.000). A full Optuna hyperparameter campaign was not run;
 we report why, and show that the untrained starting point is not the source
 of the failure.
 
+## Presentation
+
+Q-HAS (Quantum-Hierarchical Adaptive Steering) originates from an
+undergraduate project at Imperial College London (SPC-Appelbe-1, supervised
+by Dr. Brian Appelbe), which constructed the mapping from coarse-grained
+MHD observables to qubit states, defined the structured Ising Hamiltonian
+used throughout this report, and implemented the full hybrid software
+pipeline. That project's own evaluation, at 2×2 VQA resolution (8 qubits,
+N = 256), reported a 0.66% composite-loss advantage for Q-HAS over
+classical AMR (0.2134 vs 0.2148, 170+ Optuna trials), positive and
+statistically significant on two of four canonical scenarios
+(Kelvin-Helmholtz, Δ = +0.004, p = 0.026; Harris Tearing,
+Δ = +0.003, p = 0.001), negative and statistically significant on the
+other two (MHD Rotor, Δ = -0.010; Orszag-Tang, Δ = -0.096). On
+aggregate per-cell decision accuracy, classical AMR was already ahead
+(46.6% of 2136 cells vs 43.3%). The strongest positive signal was localised
+to topologically rich sub-regions: +3.8 and +5.3 percentage points on
+Tearing and Orszag-Tang respectively. That report's own abstract closed
+with the question this one answers: "Whether the localised advantage
+scales to larger VQA grids or higher Reynolds numbers remains an open
+question."
+
+The present report carries that test out, with one methodological
+correction made necessary by the scaling itself: at 2×2 resolution the
+exact ground state of the Hamiltonian is, on every tested instance, the
+trivial "refine everything" state, independent of the Hamiltonian's own
+coefficients (Section 2.4) — a degeneracy not identified in the earlier
+project, and one that makes the 2×2 point uninformative about whether the
+framework's optimisation or representation choices are sound, prior to any
+question of scale. `dim = 3` (18 qubits) is the smallest resolution above
+this degenerate point at which the exact ground state remains exhaustively
+enumerable, and is used throughout as the certified
+reference size. Scaling further, to `dim = 4` and `dim = 8`, does show the
+coupling terms' relative influence growing with resolution, exactly as the
+earlier report's further-work section anticipated — but in the opposite
+direction: the gap between the full Hamiltonian and a bias-only version
+widens from -0.033 F1 at `dim = 4` to -0.057 at `dim = 8` (Table 1),
+rather than closing. The remainder of this report gives the full
+measurement, on the certified size and, in Section 4.5, replicated at a
+larger sample size directly on real DNS.
+
 ## 1. Introduction
 
 ### 1.1 Motivation
@@ -500,6 +541,74 @@ pytest tests/study/test_h0_certified_dim3_contradicts_criterion.py \
 
 ## References
 
-[Not filled in — this section intentionally left for the authors to
-populate with prior work on QAOA, Ising encodings for classification tasks,
-and classical/ML-based adaptive mesh refinement.]
+Carried over from the Q-HAS project's originating report (Presentation);
+not independently re-verified here, and not yet checked for completeness
+against this manuscript's own citations in the text above.
+
+1. J. P. Freidberg, *Ideal MHD* (Cambridge University Press, 2014).
+2. J. P. H. Goedbloed and S. Poedts, *Principles of Magnetohydrodynamics*
+   (Cambridge University Press, 2004).
+3. J. Wesson, *Tokamaks*, 4th ed. (Oxford University Press, 2011).
+4. S. Chandrasekhar, *Hydrodynamic and Hydromagnetic Stability* (Clarendon
+   Press, Oxford, 1961).
+5. H. P. Furth, J. Killeen, and M. N. Rosenbluth, "Finite-resistivity
+   instabilities of a sheet pinch," Phys. Fluids 6, 459-484 (1963).
+6. G. Bateman, *MHD Instabilities* (MIT Press, 1978).
+7. S. B. Pope, *Turbulent Flows* (Cambridge University Press, 2000).
+8. M. J. Berger and J. Oliger, "Adaptive mesh refinement for hyperbolic
+   partial differential equations," J. Comput. Phys. 53, 484-512 (1984).
+9. M. J. Berger and P. Colella, "Local adaptive mesh refinement for shock
+   hydrodynamics," J. Comput. Phys. 82, 64-84 (1989).
+10. M. A. Nielsen and I. L. Chuang, *Quantum Computation and Quantum
+    Information*, 10th anniversary ed. (Cambridge University Press, 2010).
+11. A. W. Harrow, A. Hassidim, and S. Lloyd, "Quantum algorithm for linear
+    systems of equations," Phys. Rev. Lett. 103, 150502 (2009).
+12. R. P. Feynman, "Simulating physics with computers," Int. J. Theor.
+    Phys. 21, 467-488 (1982).
+13. E. Farhi, J. Goldstone, and S. Gutmann, "A quantum approximate
+    optimization algorithm," arXiv:1411.4028 (2014).
+14. J. Preskill, "Quantum computing in the NISQ era and beyond," Quantum 2,
+    79 (2018).
+15. A. Lucas, "Ising formulations of many NP problems," Front. Phys. 2, 5
+    (2014).
+16. J. R. McClean, S. Boixo, V. N. Smelyanskiy, R. Babbush, and H. Neven,
+    "Barren plateaus in quantum neural network training landscapes," Nat.
+    Commun. 9, 4812 (2018).
+17. I. Goodfellow, Y. Bengio, and A. Courville, *Deep Learning* (MIT Press,
+    2016).
+18. M. J. D. Powell, "A direct search optimization method that models the
+    objective and constraint functions by linear interpolation," in
+    *Advances in Optimization and Numerical Analysis*, ed. S. Gomez and
+    J.-P. Hennart (Springer, 1994), pp. 51-67.
+19. T. Akiba, S. Sano, T. Yanase, T. Ohta, and M. Koyama, "Optuna: A
+    next-generation hyperparameter optimization framework," in Proc. 25th
+    ACM SIGKDD (2019), pp. 2623-2631.
+20. Qiskit contributors, "Qiskit: An open-source framework for quantum
+    computing," https://github.com/Qiskit/qiskit (2024).
+21. C. R. Harris et al., "Array programming with NumPy," Nature 585,
+    357-362 (2020).
+22. P. Virtanen et al., "SciPy 1.0: fundamental algorithms for scientific
+    computing in Python," Nat. Methods 17, 261-272 (2020).
+23. A. J. Chorin, "Numerical solution of the Navier-Stokes equations,"
+    Math. Comput. 22, 745-762 (1968).
+24. S. A. Orszag and C. M. Tang, "Small-scale structure of
+    two-dimensional magnetohydrodynamic turbulence," J. Fluid Mech. 90,
+    129-143 (1979).
+25. B. Fryxell et al., "FLASH: An adaptive mesh hydrodynamics code for
+    modeling astrophysical thermonuclear flashes," Astrophys. J. Suppl.
+    Ser. 131, 273-334 (2000).
+26. J. M. Stone, T. A. Gardiner, P. Teuben, J. F. Hawley, and J. B. Simon,
+    "Athena: a new code for astrophysical MHD," Astrophys. J. Suppl. Ser.
+    178, 137-177 (2008).
+27. A. P. Solon et al., "Pressure is not a state function for generic
+    active fluids," Phys. Rev. E 92, 062111 (2015).
+28. R. Löhner, "An adaptive finite element scheme for transient problems
+    in CFD," Comput. Methods Appl. Mech. Eng. 61, 323-338 (1987).
+29. A. Okubo, "Horizontal dispersion of floatable particles in the
+    vicinity of velocity singularities such as convergences," Deep-Sea
+    Res. 17, 445-454 (1970).
+30. J. Weiss, "The dynamics of enstrophy transfer in two-dimensional
+    hydrodynamics," Physica D 48, 273-294 (1991).
+31. A. Mignone, P. Rossi, G. Bodo, A. Ferrari, and S. Massaglia, "PLUTO: A
+    numerical code for computational astrophysics," Astrophys. J. Suppl.
+    Ser. 170, 228-242 (2007).
