@@ -223,13 +223,15 @@ def test_the_unwired_scripts_really_run_with_psi_zero():
 def test_the_debt_is_not_silently_growing():
     """Un garde-fou grossier sur la taille de la dette.
 
-    Plancher a 7, pas 6 : `h3_toy_model_check.py` a fait passer le compte
+    Plancher a 8, pas 6 : `h3_toy_model_check.py` a fait passer le compte
     de 6 a 7, mais ce n'est pas de la dette qui s'accumule -- c'est un
     generateur statique par conception (voir le commentaire sur
-    `PSI_STILL_ZERO` ci-dessus), qui ne rejoindra jamais PSI_WIRED. Si ce
-    compte depasse 7, c'est un VRAI script sur trajectoire qui attend son
-    cablage, a verifier."""
-    assert len(PSI_STILL_ZERO) <= 7, (
+    `PSI_STILL_ZERO` ci-dessus), qui ne rejoindra jamais PSI_WIRED. Meme
+    raison pour `h0_recentring_summary.py` (7 -> 8, octobre) : il ne fait
+    tourner aucun QAOA et recalcule l'OPTIMUM EXACT, que psi ne touche pas.
+    Si ce compte depasse 8, c'est un VRAI script sur trajectoire qui attend
+    son cablage, a verifier."""
+    assert len(PSI_STILL_ZERO) <= 8, (
         f"{len(PSI_STILL_ZERO)} scripts tournent encore sans psi ; la dette "
         "augmente au lieu de diminuer")
     assert PSI_WIRED, "aucun script ne rebranche psi : le cablage a disparu"
