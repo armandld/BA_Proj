@@ -28,9 +28,10 @@ sélection par perte moyenne) ; l'entraînement lui-même diversifie ses
 régimes physiques par essai (`TRAINING_REGIME_GRID`, 4 régimes, coût par
 essai inchangé). Rien ne manque au code.
 
-**Périmètre.** 8 hyperparamètres à réoptimiser : `beta`, `w_z_frac`,
-`sigma`, `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`.
-`threshold_amr` reste gelé au meilleur essai classique.
+**Périmètre.** 9 hyperparamètres à réoptimiser : `beta`, `w_z_frac`,
+`sigma`, `beta_curl`, `beta_xpoint`, `gamma_hydro`, `gamma_mag`, `kappa`,
+`relative_percentile` (vérifié par `python src/train_hyperparams.py
+--print-space`). `threshold_amr` reste gelé au meilleur essai classique.
 
 **Vérification minimale (`CLAUDE.md`) passée sur `c52c1de`** : `pytest
 -m "not slow"` (3108 passed, 2 échecs connus — voir ci-dessous),

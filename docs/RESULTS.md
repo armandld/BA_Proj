@@ -9498,7 +9498,7 @@ obtenir la mesure même si redondante, plutôt qu'un refus sans mesure).
 | harris_tearing | 0,9656 · 0,9692 · 1,0000 · 1,0000 · 1,0000 | quasi inchangé |
 | kelvin_helmholtz | 0,9955 · 0,9965 · 0,9968 · 0,9969 · 0,9976 | quasi inchangé |
 | mhd_rotor | **0,8167** · 0,9909 · 0,9918 · 0,9935 · 0,9951 | 1 instantané sous le seuil de redondance |
-| orszag_tang | **0,6577** · **0,9185** · 0,9325 · 0,9453 · 0,9675 | 3 des 5 sous le seuil |
+| orszag_tang | **0,6577** · **0,9185** · **0,9325** · **0,9453** · 0,9675 | 4 des 5 sous le seuil |
 
 (seuil de redondance du module : `REDUNDANCY_RHO_LIMIT = 0,95`)
 
