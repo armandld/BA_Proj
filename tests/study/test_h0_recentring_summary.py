@@ -141,3 +141,134 @@ def test_a_dirty_artifact_is_refused(summary, tmp_path):
           dirty=True)
     with pytest.raises(ValueError):
         summary.collect(str(tmp_path))
+
+
+# ── les nombres du plan, sur les vrais artefacts ──────────────────────
+#
+# Plan lance depuis 420404a (arbre propre), synthese
+# results/h0_recentring_summary.json. Voir RESULTS.md, « Recentrage du
+# biais ».
+
+_STEM = ("h0_optimiser_equivalence_N96_dim3_harris_tearing-kelvin_helmholtz-"
+         "mhd_rotor-orszag_tang")
+
+
+def _results_dir():
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        from config import RESULTS_DIR
+    return RESULTS_DIR
+
+
+@pytest.fixture(scope="module")
+def plan(summary):
+    return summary.collect(_results_dir())
+
+
+def test_the_v1_baseline_reproduces_the_published_panel_bit_for_bit():
+    """La reference V1 du plan rejoue le panel publie du 28 aout sur le code
+    courant : memes 108 lignes, memes F1, memes energies, au bit pres."""
+    def rows(name):
+        d = np.load(os.path.join(_results_dir(), name), allow_pickle=True)
+        return {(str(s), int(n), str(v)): (float(e), float(f))
+                for s, n, v, e, f in zip(d["scenario"], d["snap"],
+                                         d["solver"], d["E"], d["f1"])}
+    published = rows(_STEM + "_v1.npz")
+    replay = rows(_STEM + "_v1_recentrage.npz")
+    assert len(published) == 108
+    assert replay == published
+
+
+def test_rho_never_turns_negative(plan):
+    """Le critere pre-enregistre (rho negatif : le reglage suffit) n'est
+    atteint dans aucune des huit cellules, seuil recentre compris."""
+    expected = {
+        "v1|deployed|majority": +0.891, "v1|deployed|deployed": +0.632,
+        "v1|loso-f1|majority": +0.863, "v1|loso-f1|deployed": +0.863,
+        "v2|deployed|majority": -0.148, "v2|deployed|deployed": -0.130,
+        "v2|loso-f1|majority": +0.979, "v2|loso-f1|deployed": +0.828,
+    }
+    for key, rho in expected.items():
+        assert plan[key]["rho"] == pytest.approx(rho, abs=5e-4), key
+    assert not any(c["rho"] < 0 and c["p"] < 0.05 for c in plan.values())
+    for key in ("v1|loso-f1|majority", "v1|loso-f1|deployed",
+                "v2|loso-f1|majority", "v2|loso-f1|deployed"):
+        assert plan[key]["rho"] > 0.8 and plan[key]["p"] < 0.01, key
+    # V2 courant au seuil deploye : plus de rho positif (artefact du 16 aout,
+    # normalisation historique : +0,870)
+    for key in ("v2|deployed|majority", "v2|deployed|deployed"):
+        assert plan[key]["p"] > 0.5, key
+
+
+def test_the_exact_optimum_never_decides_better_on_average(plan):
+    f1 = {k: (c["per_solver"]["exhaustive"]["f1"],
+              c["per_solver"]["classical_init"]["f1"])
+          for k, c in plan.items() if k.endswith("|majority")}
+    expected = {"v1|deployed|majority": (0.437, 0.468),
+                "v1|loso-f1|majority": (0.405, 0.479),
+                "v2|deployed|majority": (0.386, 0.468),
+                "v2|loso-f1|majority": (0.108, 0.479)}
+    for key, (exh, cls) in expected.items():
+        assert f1[key][0] == pytest.approx(exh, abs=5e-4), key
+        assert f1[key][1] == pytest.approx(cls, abs=5e-4), key
+        assert f1[key][0] < f1[key][1], key
+    # par trajectoire (l'unite d'inference) : 16 comparaisons, une seule
+    # gagnee par l'optimum (V1 recentre, Orszag-Tang)
+    better = {k: c["trajectories_exact_vs_classical"]["better"]
+              for k, c in plan.items() if k.endswith("|majority")}
+    assert sum(better.values()) == 1
+    assert better["v1|loso-f1|majority"] == 1
+    assert plan["v1|loso-f1|majority"]["by_trajectory"]["orszag_tang"][
+        "exhaustive"] > plan["v1|loso-f1|majority"]["by_trajectory"][
+        "orszag_tang"]["classical_init"]
+
+
+def test_the_v2_ground_state_is_always_a_uniform_mask(plan):
+    """Le seuil ne fait que choisir QUEL masque uniforme : tout raffiner a
+    0,15, rien raffiner sur 8 instances sur 12 une fois recentre."""
+    for bias, (n_all, n_none) in {"deployed": (12, 0),
+                                  "loso-f1": (4, 8)}.items():
+        g = plan[f"v2|{bias}|majority"]["ground_state"]
+        assert (g["n_refine_all"], g["n_refine_none"]) == (n_all, n_none)
+        assert g["n_unique_optimum"] == g["n_instances"] == 12
+    assert plan["v2|loso-f1|majority"]["ground_state"][
+        "n_equals_classical"] == 0
+
+
+def test_the_v1_ground_state(plan):
+    g0 = plan["v1|deployed|majority"]["ground_state"]
+    g1 = plan["v1|loso-f1|majority"]["ground_state"]
+    assert (g0["n_refine_all"], g0["n_refine_none"],
+            g0["n_equals_classical"]) == (9, 0, 6)
+    assert (g1["n_refine_all"], g1["n_refine_none"],
+            g1["n_equals_classical"]) == (1, 2, 4)
+
+
+def test_the_readout_decides_how_often_qaoa_reaches_the_optimum(plan):
+    """Lu par vote majoritaire, le QAOA n'atteint presque jamais l'optimum
+    (H0a) ; lu comme le solveur deploye au seuil 0,15, il part de la
+    decision classique et l'atteint aussi souvent qu'elle sur V1."""
+    hits = {k: max(c["per_solver"][s]["hit"]
+                   for s in ("qaoa_p1", "qaoa_p2", "qaoa_p3"))
+            for k, c in plan.items()}
+    assert hits["v1|deployed|majority"] == 0.0
+    assert hits["v1|loso-f1|majority"] == 0.0
+    assert hits["v2|deployed|majority"] == pytest.approx(2 / 12)
+    v1d = plan["v1|deployed|deployed"]["per_solver"]
+    assert v1d["qaoa_p1"]["hit"] == v1d["classical_init"]["hit"] == 0.5
+    assert v1d["qaoa_p1"]["f1"] == v1d["classical_init"]["f1"]
+
+
+def test_the_committed_summary_matches_the_recomputation(plan):
+    import json
+    path = os.path.join(_results_dir(), "h0_recentring_summary.json")
+    with open(path, encoding="utf-8") as fh:
+        saved = json.load(fh)
+    assert saved["dirty_at_start"] is False
+    for key, c in plan.items():
+        s = saved["cells"][key]
+        assert s["rho"] == pytest.approx(c["rho"], abs=1e-12), key
+        assert s["ground_state"] == c["ground_state"], key
+        assert s["trajectories_exact_vs_classical"] == \
+            c["trajectories_exact_vs_classical"], key

@@ -31,6 +31,17 @@ constant optimal sur 40/40 instantanés) :
 | H0a | **NON** | QAOA atteint l'optimum sur 0,062–0,156 (V2) / 0/12 (V1) des instantanés, contre 1,000 exigé |
 | H0b | **NON** | ρ(E_gap, F1) = +0,870 (V2) / +0,891, p=0,0013 (V1) sur 9 solveurs : mieux résoudre l'hamiltonien **dégrade** la décision AMR |
 
+**Précision du 5 octobre (`RESULTS.md`, « Recentrage du biais »).** Le
++0,891 de V1 est rejoué au bit près sur le code courant (A). Le +0,870 de V2
+porte sur la normalisation historique : sur le V2 courant, au seuil déployé,
+ρ = −0,148 (p = 0,70) — ce panel V2 est donc B. Ce qui tient sur les deux
+mappeurs, et sur le seuil déployé comme sur le seuil F1-optimal recentré :
+l'optimum exact ne décide jamais mieux que la règle classique au même seuil
+(8 cellules sur 8 du plan de recentrage), et recentrer le biais ne rend
+jamais ρ négatif (+0,83 à +0,98, p ≤ 0,006). Le taux d'optimum atteint par
+le QAOA (H0a) se lit avec la lecture majoritaire ; lu comme le solveur
+déployé, le QAOA part de la décision classique.
+
 V2 est le mappeur sans paramètre (poids figés, hors de portée de
 `train_hyperparams.py`) ; V1 est celui que la campagne règle et que le
 pipeline déploie, mesuré aux hyperparamètres de référence (la campagne n'a
@@ -160,7 +171,7 @@ compléter.
 
 | hypothèse | où elle vit | pourquoi |
 |---|---|---|
-| H0a, H0b | **en A** | remesurées à `dim = 3`, verrouillées par un test |
+| H0a, H0b | **en A** (V1, rejoué au bit près le 5 octobre ; plan de recentrage) — panels V2 du 9 et du 16 août en B (normalisation historique) | remesurées à `dim = 3`, verrouillées par un test |
 | H2b | réfuté, hors de ce tableau | modèle libre testé, ne bat pas la baseline |
 | H3 | **en A** | balayage causal `dim = 2` à `dim = 8`, T26 |
 | H1 | reste en B | partiel — les défauts numériques comptent, rien ne dit qu'ils suffisent seuls |

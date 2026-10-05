@@ -6,9 +6,11 @@ repository at commit `294319d0e179b0a2d3e2afa06a42da3b974090bc` (branch
 `claude/project-evaluation-mit-preprint-t6f3hp`), with the pinned environment
 of `requirements.txt`: either recomputed from its artifact, or pinned by an
 automated test that was run on that commit (605 passed, one expected
-failure; Section 12). Each result names its script, its test where one
-exists, the date of the artifact it comes from, and its evidence level
-(Section 2.8).
+failure; Section 12). The measurements added by this review (the readout
+diagnostic and the recentring plan of Section 5.2) were produced from clean
+working trees at commits `d2a43c2` and `420404a` and are pinned by their own
+tests. Each result names its script, its test where one exists, the date of
+the artifact it comes from, and its evidence level (Section 2.8).
 
 ---
 
@@ -38,17 +40,24 @@ the classical indicator (Spearman ρ = 0.80 against 0.81).
 What does not. Turning those sensors into a refinement decision through the
 Ising ground state does not help. At the only lattice size where the exact
 optimum is both enumerable and non-degenerate (18 qubits), QAOA reaches the
-optimum of its own Hamiltonian on 0 to 16% of instances (H0a); solving the
-Hamiltonian better makes the decision worse, ρ(energy gap, F1) = +0.71 to
-+0.89 on three independent panels and two mapper implementations (H0b).
-This review traced H0b to the bias: it is centred on the AMR threshold
-inherited from the deployed pipeline (0.15), far below the threshold that
-maximises F1 for this label (0.51-0.60), so the ground state refines nearly
-everything; and the QAOA decision, as the study code reads it, gives the
-same F1 as a fixed threshold of 0.5 on the classical score on 11 of 12
-instances of the trained mapper. The coupling terms never improve the
-exact decision and lower F1 by 0.033 to 0.065 once they are not inert
-(H3). On real simulations, four instability
+optimum of its own Hamiltonian on at most a quarter of instances, and never
+on the trained mapper (H0a); solving the
+Hamiltonian better makes the decision worse (H0b): the exact optimum
+never decides better than the classical rule at the same threshold, on
+both mapper implementations, and ρ(energy gap, F1) is positive on the
+trained mapper (+0.891, replayed bit for bit on the current code). This
+review tested the obvious repair. The bias is centred on a threshold
+inherited from the deployed pipeline (0.15), far below the one that
+maximises F1 for this label (0.51-0.60); recentring it does not turn ρ
+negative (+0.83 to +0.98) and does not make the optimum a better decision,
+because the couplings drive the ground state toward a uniform mask (on the
+parameter-free mapper, uniform on 24 of 24 instance-threshold pairs; the
+threshold only picks refine-everything or refine-nothing). The QAOA
+decision, as the study code reads it, gives the same F1 as a fixed
+threshold of 0.5 on the classical score on 11 of 12 instances of the
+trained mapper. The coupling terms never improve the exact decision and
+lower F1 by 0.033 to 0.065 once they are not inert (H3). On real
+simulations, four instability
 scenarios × four Reynolds numbers, 40 held-out snapshots per fold, a
 classical threshold beats or ties both QAOA and a trained gradient-boosted
 tree on every fold, and beats QAOA with a 95% bootstrap interval excluding
@@ -102,7 +111,7 @@ reference size. Scaling further, to `dim = 4` and `dim = 8`, does show the
 coupling terms' relative influence growing with resolution, exactly as the
 earlier report's further-work section anticipated — but in the opposite
 direction: the gap between the full Hamiltonian and a bias-only version
-widens from -0.033 F1 at `dim = 4` to -0.057 at `dim = 8` (Table 3),
+widens from -0.033 F1 at `dim = 4` to -0.057 at `dim = 8` (Table 4),
 rather than closing. The remainder of this report gives the full
 measurement, on the certified size and, in Section 5.4, replicated at a
 larger sample size directly on real DNS.
@@ -188,12 +197,15 @@ The results, in the order they are presented:
 5. At `dim = 2`, the size of the deployed pipeline and of the originating
    report, the exact ground state is "refine everything" whatever the
    Hamiltonian; every comparison at that size is vacuous (Section 4.5).
-6. H0a: QAOA reaches the optimum of its own Hamiltonian on 0 to 16% of
-   instances at `dim = 3` (Section 5.1).
-7. H0b: solving the Hamiltonian better makes the refinement decision worse,
-   because the bias is centred on a threshold far below the F1-optimal one;
-   the QAOA decision measured by the study code is essentially a fixed
-   threshold at 0.5 on the classical score (Section 5.2).
+6. H0a: QAOA reaches the optimum of its own Hamiltonian on 0 to 17% of
+   instances at `dim = 3` (at most 25% once the bias is recentred; never on
+   the trained mapper) (Sections 5.1-5.2).
+7. H0b: solving the Hamiltonian better makes the refinement decision worse.
+   The exact optimum never decides better than the classical rule at the
+   same threshold, recentring the bias on the F1-optimal threshold does not
+   change this, and the couplings drive the ground state toward a uniform
+   mask; the QAOA decision measured by the study code is essentially a
+   fixed threshold at 0.5 on the classical score (Section 5.2).
 8. H3: the coupling terms never help the exact decision and cost F1 once
    they are active; neighbour features help a learned model only in a
    setting whose average cannot be cited (Section 5.3).
@@ -318,7 +330,8 @@ result uses which version:
 |---|---|---|---|---|
 | H0a/H0b panel, 32 instances | V2 | legacy normalisation, before the curl-convention fix | 9 Aug | 5.1-5.2 |
 | H0a/H0b panel, corrected, 12 instances | V2 | legacy normalisation, after the curl fix and study/circuit alignment | 16 Aug | 5.1-5.2 |
-| H0a/H0b panel, 12 instances | V1 | current | 28 Aug | 5.1-5.2 |
+| H0a/H0b panel, 12 instances | V1 | current (replayed bit for bit on 5 Oct) | 28 Aug | 5.1-5.2 |
+| recentring plan, 8 panels of 12 instances | V1 and V2 | current | 5 Oct | 5.2 |
 | coupling ablation at `dim = 3` | V1 and V2 | current | 29 Aug | 5.3 |
 | size scan `dim = 2, 4, 8` | V1 | early (before the curl, threshold and gate fixes) | 7 Aug | 5.3 |
 | confirmatory LOSO, 4 Re | V2 | current | 11 Sep | 5.4 |
@@ -435,8 +448,8 @@ and they are flagged where cited.
 
 | label | question | verdict | section |
 |---|---|---|---|
-| H0a | Does QAOA reach the exact ground state of its own Hamiltonian? | **No** — 0 to 16% of instances at `dim = 3` | 5.1 |
-| H0b | If a solver reaches it, is the refinement decision better? | **No** — it is worse; ρ(E_gap, F1) = +0.71 to +0.89; the bias is centred far below the F1-optimal threshold | 5.2 |
+| H0a | Does QAOA reach the exact ground state of its own Hamiltonian? | **No** — 0 to 17% of instances at `dim = 3` (at most 25% with the bias recentred), read by majority | 5.1-5.2 |
+| H0b | If a solver reaches it, is the refinement decision better? | **No** — the exact optimum never decides better than the classical rule at the same threshold; ρ(E_gap, F1) > 0 on the trained mapper and wherever the bias is recentred | 5.2 |
 | H1 | Are solver and numerical defects, on their own, sufficient to explain a failure? | **Partial** — they matter; nothing isolates them as sufficient | 6.4 |
 | H2b | Does a more flexible model beat the classical threshold? | **No** — no model tested beats it under leave-one-scenario-out | 5.4-5.5 |
 | H3 | Do the ZZ/ZZZZ couplings improve the decision over the bias alone? | **No** — never for the exact decision; they lower F1 once active | 5.3 |
@@ -803,16 +816,23 @@ ground state of the same Hamiltonian, three independent panels.**
 | QAOA, more shots (p = 6 / 3 / 3) | 0.062 | 0.083 | 0.000 |
 
 QAOA reaches the optimum of its own Hamiltonian less often than the
-classical decision alone (0.500), at every depth, on both mappers.
+classical decision alone (0.500), at every depth, on both mappers. These
+rates use the study's majority readout, the one that asks whether the
+circuit's state concentrates on the ground state; read with the deployed
+rule, which starts from the classical decision, QAOA reaches the optimum as
+often as that decision does on V1 (Table 3).
 A correct claim of optimality would require 1.000. The drop from 0.156 to
 0.083 between the first two panels is within QAOA's run-to-run dispersion;
 the ranking of solvers is the same. The corrected panel differs from the
 first by four alignments between the study code and the circuit: the
 X-point term included, the anomaly flag enabled, the magnetic gate in
 physical units, and the pruning threshold raised from 10⁻¹² to 10⁻⁶ (which
-had kept 25% more terms than the circuit on the Harris sheet). [A for the
-three panels; the V1 panel is reproduced by its script but has no dedicated
-test.] (script: `study/h0_selection/h0_optimiser_equivalence.py`; test:
+had kept 25% more terms than the circuit on the Harris sheet). [V1 panel:
+A, replayed bit for bit on the current code during this review and pinned
+by `tests/study/test_h0_recentring_summary.py`. V2 panels: B, measured
+under the legacy V2 normalisation; on the current V2, QAOA reaches the
+optimum on 0 to 17% of the same twelve instances (Table 3).] (script:
+`study/h0_selection/h0_optimiser_equivalence.py`; test:
 `tests/study/test_h0_certified_dim3_contradicts_criterion.py`.)
 
 **It is not a budget problem in the usual sense.** On the Harris sheet
@@ -857,15 +877,18 @@ trend; it sits at the losing end. In the V1 panel the best solver, QAOA at
 depth 1, never once reaches the optimum (0 of 12) and scores 0.519, against
 0.437 for every solver that does. This is the most direct finding of the
 work, because it does not depend on QAOA: the panel contains the exact
-solution, so a perfect optimizer would not improve on it, and it holds for
-both mappers. [A for +0.870 and +0.891, which are pinned; +0.706 is
-computed by the same script on the original artifact during this review.]
-(script: `study/common/rho_gap_f1.py`; test:
+solution, so a perfect optimizer would not improve on it. [+0.891 (V1) is
+A: this review replayed the V1 panel on the current code and obtained it
+bit for bit (Table 3). +0.870 and +0.706 (V2) are B: they were measured
+under the legacy V2 normalisation, and the current V2 does not reproduce
+them (ρ = −0.148 at the deployed threshold, Table 3). All three are
+recomputed from their artifacts by the same script.] (script:
+`study/common/rho_gap_f1.py`; test:
 `tests/study/test_rho_gap_f1_reference.py`.)
 
-**Why the optimum loses, and what QAOA's F1 measures** (found during this
-review). Three facts, each checked on the instances of the panels, explain
-the sign of ρ.
+**What QAOA's F1 measures, and why the optimum refines everything at this
+threshold** (found during this review). Three facts, each checked on the
+instances of the panels.
 
 1. The Hamiltonian's bias is centred on the AMR threshold inherited from
    the deployed pipeline, 0.15 for V2 and 0.1496 for V1. On these block
@@ -890,13 +913,13 @@ the sign of ρ.
    of 12.
 
 So the QAOA F1 of Table 2 is, on the trained mapper, essentially the F1 of
-a threshold at 0.5 on the classical score, and it beats the exact optimum
+a threshold at 0.5 on the classical score. It beats the exact optimum
 because 0.5 is closer to the F1-optimal threshold for this label than the
-0.15 on which the Hamiltonian's bias is centred. H0a and H0b stand as
-measured; what changes is their reading. The positive ρ indicts the
-Hamiltonian as built, including its fixed threshold, and `threshold_amr` is
-outside the campaign's search space (Section 8), so no campaign could have
-moved it. [A: recomputed from the panels' DNS and from the per-instance F1
+0.15 on which the bias is centred, which makes the optimum refine (nearly)
+everything. That raises a direct question — is H0b only the consequence of
+a threshold set for another task? — which no campaign could have answered,
+because `threshold_amr` is outside its search space (Section 8). [A:
+recomputed from the panels' DNS and from the per-instance F1
 stored in the H0 artifacts by
 `study/h0_selection/h0_readout_threshold_diagnostic.py` (artifact 5 Oct,
 clean tree), and pinned by
@@ -904,20 +927,97 @@ clean tree), and pinned by
 that the study's implementation of the deployed rule returns, for given
 marginals, exactly the cells the deployed solver refines. The artifacts
 store F1 values, not masks, so the equalities above are equalities of F1.]
-Whether a Hamiltonian whose bias is centred on an F1-calibrated threshold
-decides better is the experiment that follows.
 
-A caveat on what "the optimum" is at this size. At `dim = 3` the ground
-state is unique (non-degenerate) on every instance measured, but it is
-often the uniform "refine everything" mask: in the coupling-ablation
-artifact of 29 August it is uniform on 8 of 8 instances for V2 and on 4 of
-8 for V1. For V2, H0b therefore largely says that the Hamiltonian's
-ground state is the trivial mask, which is a worse decision than a
-partially refined one. The pre-registered reading of this criterion
-(`rho_gap_f1.py`): a hyperparameter campaign that turned ρ negative at
-`dim = 3` would show that tuning suffices; ρ positive at the reference
-point and on the tuned mapper (V1) puts the form of the Hamiltonian, not
-its tuning, in question. At `dim = 2`, ρ = −1.000 is meaningless (Section
+**Recentring the bias does not change the verdict** (experiment of this
+review). The V1 panel of Table 2 was run again for both mappers under a
+2 × 2 plan fixed before execution: the bias centred on the deployed
+threshold or on the F1-optimal threshold of the classical score, fitted on
+the three other scenarios as the classical arm of Section 5.4 does
+("LOSO-F1": 0.52, 0.60, 0.59 and 0.51 when the Harris sheet,
+Kelvin-Helmholtz, the rotor and Orszag-Tang are held out; the classical
+decision of the panel uses the same threshold); and QAOA read by majority
+or with the deployed rule. All eight runs started together from one
+commit and a clean tree.
+
+**Table 3. The recentring plan: same twelve instances as Tables 1-2,
+current code. "Optimum" columns count instances whose exact ground state
+refines every cell, refines none, or equals the classical decision.**
+
+| mapper | bias threshold | QAOA readout | ρ(E_gap, F1) | p | F1 exact | F1 classical | F1 QAOA, p = 1-3 | QAOA reaches the optimum | optimum: all / none / = classical (of 12) |
+|---|---|---|---|---|---|---|---|---|---|
+| V1 | deployed | majority | +0.891 | 0.001 | 0.437 | 0.468 | 0.503-0.519 | 0 | 9 / 0 / 6 |
+| V1 | deployed | deployed | +0.632 | 0.068 | 0.437 | 0.468 | 0.468-0.488 | 0.50 | 9 / 0 / 6 |
+| V1 | LOSO-F1 | majority | +0.863 | 0.003 | 0.405 | 0.479 | 0.515-0.519 | 0 | 1 / 2 / 4 |
+| V1 | LOSO-F1 | deployed | +0.863 | 0.003 | 0.405 | 0.479 | 0.479-0.507 | 0 | 1 / 2 / 4 |
+| V2 | deployed | majority | −0.148 | 0.70 | 0.386 | 0.468 | 0.334-0.411 | 0-0.17 | 12 / 0 / 6 |
+| V2 | deployed | deployed | −0.130 | 0.74 | 0.386 | 0.468 | 0.356-0.362 | 0.58-0.67 | 12 / 0 / 6 |
+| V2 | LOSO-F1 | majority | +0.979 | < 0.001 | 0.108 | 0.479 | 0.341-0.357 | 0.17-0.25 | 4 / 8 / 0 |
+| V2 | LOSO-F1 | deployed | +0.828 | 0.006 | 0.108 | 0.479 | 0.265-0.294 | 0.25-0.42 | 4 / 8 / 0 |
+
+The first row replays the V1 column of Table 2 bit for bit: 108 rows,
+identical F1 values and energies, five weeks later, in a different
+environment, with one OpenMP thread per process. The plan answers the
+question in four points.
+
+- **Recentring never turns ρ negative.** Recentred, ρ is positive and
+  significant on both mappers and both readouts (+0.83 to +0.98,
+  p ≤ 0.006). The pre-registered condition for "tuning suffices" is met in
+  none of the eight cells.
+- **The exact optimum never decides better than the classical rule at the
+  same threshold**, on average: 0.437 against 0.468 and 0.405 against
+  0.479 for V1, 0.386 against 0.468 and 0.108 against 0.479 for V2. Counted
+  by trajectory, the inference unit, the optimum wins 1 comparison of 16
+  (V1 recentred, Orszag-Tang, 0.450 against 0.250), loses 11 and ties 4.
+- **The mechanism is the coupling structure, not the threshold.** The V2
+  ground state is a uniform mask on all 24 instance-threshold pairs:
+  refine everything at 0.15; refine nothing on 8 instances and everything
+  on 4 once recentred; never the classical decision. Its ferromagnetic
+  couplings dominate a bias capped at 0.1 times the largest coupling, so
+  the threshold only decides, through the sum of the biases, which uniform
+  mask wins. On the recentred Harris sheet, 6 of 9 cells score above the
+  threshold and the optimum refines none of them, because the 3 calm cells
+  lie far below it. The V1 optimum, whose bias weighs more, is less often
+  uniform once recentred (3 of 12) but not better: it equals the classical
+  decision on 4 of 12 instances and loses on 3 of 4 trajectories.
+- **The readout changes QAOA's F1, not the conclusion.** Read by majority,
+  QAOA almost never reaches the optimum (0 on V1, at most 0.25 on V2); that
+  is H0a. Read with the deployed rule at 0.15, it starts from the classical
+  decision and reaches the optimum exactly as often as that decision on V1
+  (0.50; at p = 1 its F1 equals the classical rule's). H0a is therefore the
+  majority-readout statement, the only one that asks whether the circuit's
+  state concentrates on the ground state.
+
+On the current V2 code at the deployed threshold, ρ is no longer positive
+(−0.148, p = 0.70): the +0.870 of Table 2 was measured under the legacy
+normalisation. QAOA decides worse there than it did under that
+normalisation (0.334-0.411 against 0.470-0.481), for a reason not isolated
+here; the exact optimum still decides worse than the classical rule. The
+robust form of H0b is therefore not "ρ > 0 everywhere" but "the exact
+optimum never decides better than the classical rule at the same
+threshold", true in all eight cells, with ρ positive wherever the bias is
+recentred. [A: artifacts of 5 Oct from one commit and a clean tree; the
+summary recomputes every exact ground state without QAOA and checks that it
+reproduces the stored F1 instance by instance. Twelve instances on four
+trajectories at Re = 400: the direction is clear, its generality is not
+established, and the replication of Section 5.4 was not rerun with the
+recentred threshold.] (scripts:
+`study/h0_selection/h0_optimiser_equivalence.py` with `--bias-threshold`,
+`--readout` and `--tag recentrage`, `study/common/bias_threshold.py`,
+`study/h0_selection/h0_recentring_summary.py`; test:
+`tests/study/test_h0_recentring_summary.py`.)
+
+What "the optimum" is at this size. At `dim = 3` the ground state is
+unique (non-degenerate) on every instance measured, but it is often a
+uniform mask: in the coupling-ablation artifact of 29 August it is uniform
+on 8 of 8 instances for V2 and on 4 of 8 for V1, and Table 3 finds it
+uniform on 24 of 24 V2 instance-threshold pairs. For V2, H0b therefore says
+that the Hamiltonian's ground state ignores the cell-by-cell evidence. The
+pre-registered reading of this criterion (`rho_gap_f1.py`): a
+hyperparameter campaign that turned ρ negative at `dim = 3` would show that
+tuning suffices; ρ positive at the reference point and on the tuned mapper
+(V1) puts the form of the Hamiltonian, not its tuning, in question — and
+it stays positive when the one fixed parameter, the threshold, is
+recentred (Table 3). At `dim = 2`, ρ = −1.000 is meaningless (Section
 4.5).
 
 At larger scale (Section 5.4), F1(QAOA) − F1(exact) has a 95% interval
@@ -930,7 +1030,7 @@ We separate two questions: do the couplings change the exact decision at
 all, and, when they do, is the changed decision better against the DNS
 label?
 
-**Table 3. Exact-optimum decisions and F1 against the DNS label, full
+**Table 4. Exact-optimum decisions and F1 against the DNS label, full
 Hamiltonian versus bias only (couplings zeroed), by lattice size.**
 
 | `dim` | qubits | search | mapper, artifact | decisions changed: no ZZ / no ZZZZ / bias only | F1 full | F1 bias only | F1 classical rule | coupling effect on F1 |
@@ -1014,7 +1114,7 @@ probability threshold fitted on the three other scenarios is never reached
 non-monotone, measured at two sizes with one seed, and its `dim = 16` point
 has a patch side of 6 cells (below the `dim ≤ N/8` rule). It shows that
 neighbour features can help a learned model; it does not show that the
-Ising couplings help, and Table 3 shows that they do not. (script:
+Ising couplings help, and Table 4 shows that they do not. (script:
 `study/h2b_prediction/h2b_neighbour_cone_curve.py`; tests:
 `tests/study/test_t1b_cone_curve.py`,
 `tests/study/test_seuil_non_transfere_vs_absence_de_signal.py`.)
@@ -1039,7 +1139,7 @@ majority (Section 2.4), and the Hamiltonian's bias is centred on 0.15. [A,
 artifact 11 Sep, clean tree; two commits landed during the 78.5-minute run,
 neither touching the code it executed.]
 
-**Table 4. F1 by held-out scenario, n = 40 snapshots per fold.**
+**Table 5. F1 by held-out scenario, n = 40 snapshots per fold.**
 
 | held-out scenario | classical | GBT | QAOA (full) | exact (full) | QAOA (bias only) | exact (bias only) |
 |---|---|---|---|---|---|---|
@@ -1438,10 +1538,11 @@ campaign a comparable order.
 
 We judged this cost unjustified for three reasons. The reference starting
 point that a campaign would tune from already sits in the pathological
-regime it would be run to test (H0b on V1, Section 5.2); and the quantity
-this review found to drive that regime, the threshold on which the bias is
-centred, is fixed outside the search space (`threshold_amr`), so the
-campaign as designed could not have moved it. The three central
+regime it would be run to test (H0b on V1, Section 5.2). The one
+parameter that sits outside the search space, the threshold on which the
+bias is centred (`threshold_amr`), was moved by hand to its F1-optimal
+value during this review, and ρ stayed positive (Table 3): its absence from
+the search space does not weaken this reason. The three central
 hypotheses (H0a, H0b, H3) could be re-measured without any training,
 directly on real DNS, at a larger sample size than a campaign's own folds
 would have given (Section 5.4). And the deployed hyperparameters have no
@@ -1481,14 +1582,18 @@ tested on an instrument that sees.
 The decision half did not work, and it fails along two independent angles
 that agree. Optimization: QAOA does not reach the ground state of its
 Hamiltonian (H0a), and reaching it would not help, because the ground state
-is a worse decision than a partially optimized state (H0b, on three panels
-and two mappers). The reason is now identified (Section 5.2): the bias is
-centred on a threshold of about 0.15, far below the 0.51-0.60 that maximises
-F1 for this label, so the ground state refines nearly everything. QAOA's F1
+is a worse decision than the classical rule at the same threshold (H0b).
+The obvious suspect, a bias centred on a threshold of about 0.15 far below
+the 0.51-0.60 that maximises F1 for this label, was tested and cleared
+(Section 5.2): recentred, the ground state is no better and ρ stays
+positive. What the measurements show instead is structural: the couplings
+pull the ground state toward a uniform mask (always, on the
+parameter-free mapper), and the threshold only decides which one. QAOA's F1
 is better than the exact optimum's not because it optimizes better — it
-rarely reaches the optimum — but because the study reads it by majority, and
-on the trained mapper the optimised circuit read that way gives the same F1
-as a threshold at 0.5 on the classical score on 11 of 12 instances.
+rarely reaches the optimum — but because the study reads it by majority,
+and on the trained mapper the optimised circuit read that way gives the
+same F1 as a threshold at 0.5 on the classical score on 11 of 12
+instances.
 Representation: the coupling terms that were meant to add neighbour
 information never improve the exact decision and lower it once they are
 active (H3); the best case of the formulation is to reproduce the classical
@@ -1503,10 +1608,13 @@ it at the one size where the question is well posed, in a setting whose
 average cannot be cited (Section 5.3). And the coefficients can be pushed
 slightly above the classical indicator in ranking quality somewhere in
 their hyperparameter space (Section 4.3). Neither says anything about the
-ground state of the Hamiltonian. The cheapest untested change is the one
-Section 5.2 points to: centre the bias on a threshold calibrated for the
-decision being scored, read QAOA with the same rule as the deployed
-solver, and measure ρ again. The diagnostic any new proposal should pass
+ground state of the Hamiltonian. The cheapest change, centring the bias on
+a threshold calibrated for the decision being scored and reading QAOA with
+the deployed rule, has been tried and does not help (Table 3). What is
+left to change is the balance between the local term and the couplings —
+and Section 5.3 shows that the limit of that change, the bias alone,
+reproduces the classical rule rather than beating it. The diagnostic any
+new proposal should pass
 first is the one that settled H0b: does solving the proposed Hamiltonian
 better make the refinement decision better (ρ(E_gap, F1) < 0) on a size
 where the optimum is not trivial?
@@ -1530,7 +1638,7 @@ hyperparameters, at one point of a nine-dimensional space.
 
 **Small panels at the certified size.** The H0 panels have 12 to 32
 instances at `dim = 3`; the confirmatory run has 40 held-out snapshots per
-fold on four scenarios. The `dim = 2, 4, 8` rows of Table 3 are on an
+fold on four scenarios. The `dim = 2, 4, 8` rows of Table 4 are on an
 earlier version of V1 (level B).
 
 **At `dim = 3` the exact optimum is often the trivial mask** (Section 5.2),
@@ -1541,10 +1649,13 @@ decision of a deployed-style solver, not the exact optimum.
 **The study reads QAOA differently from the deployed solver** (Section
 2.4). The QAOA F1 of Sections 5.1-5.4 is that of a majority vote on each
 qubit, which on the trained mapper gives the F1 of a threshold at 0.5 on
-the classical score on 11 of 12 instances; the deployed rule would read
-the same circuit against the AMR threshold. H0a does not depend on this
-choice. The size of QAOA's F1 advantage over the exact optimum does, and
-ρ(E_gap, F1) has not been re-measured under the deployed rule.
+the classical score on 11 of 12 instances; the deployed rule reads the same
+circuit against the AMR threshold and starts from the classical decision.
+QAOA's F1 and its rate of reaching the optimum depend on this choice; H0a
+is stated for the majority readout, the only one that asks whether the
+state concentrates on the ground state. The H0b conclusion does not depend
+on it: Table 3 measures both readouts and finds ρ positive on the trained
+mapper under each.
 
 **QAOA variance.** The QAOA arm is non-deterministic between calls (per-call
 range of block scores 0.18-0.36). Conclusions based on rank are supported;
@@ -1566,7 +1677,7 @@ classical baseline.
 **The closed loop is historical** (Section 6.1), and transfer (H4) has no
 current dedicated experiment.
 
-**Artifacts from a modified working tree.** The size scan of Table 3
+**Artifacts from a modified working tree.** The size scan of Table 4
 (`dim = 2, 4, 8`), the static synthetic-model artifacts, and some
 closed-loop artifacts record that they were produced from a working tree
 with uncommitted changes. Their commands reproduce them from a clean
@@ -1582,11 +1693,11 @@ the adaptive-mesh-refinement decision, does not outperform a classical
 threshold on the same physical score at any scale at which we tested it.
 The failure closes along two independent angles that agree — optimization
 (H0a, H0b) and representation (H3) — and relaxing the model to a flexible
-learned form does not recover the gap (H2b). Why the exact optimum is the
-worse decision is now identified: the Hamiltonian's bias is centred on a
-threshold far below the one that maximises F1 for the scored label, and
-that threshold sits outside the hyperparameter search space; recentring it
-is the first change a future attempt should test. A replication on
+learned form does not recover the gap (H2b). The one fixed parameter that
+could have explained H0b, a bias centred on a threshold far below the one
+that maximises F1 for the scored label, was recentred and does not change
+the verdict: the couplings drive the ground state toward a uniform mask
+that ignores the local evidence. A replication on
 real DNS across four Reynolds numbers with bootstrap intervals, without any
 hyperparameter training, reproduces the verdict and adds one: at that
 scale the classical threshold beats or ties both the quantum and the
@@ -1638,7 +1749,16 @@ python study/h0_selection/h0_optimiser_equivalence.py \
     --re 400 --N 96 --dim 3 --mapper v1 --qaoa-reps 1 2 3 --n-snaps 3 --k-opt 60 --seed 0
 python study/common/rho_gap_f1.py results/h0_optimiser_equivalence_N96_dim3*.npz
 
-# Table 3 (H3): dim = 3 rows (once per mapper), then the dim = 2, 4, 8 rows
+# Section 5.2: readout diagnostic, then the recentring plan of Table 3 (one
+# run per mapper x bias threshold x readout, all from the same clean commit)
+python study/h0_selection/h0_readout_threshold_diagnostic.py
+python study/h0_selection/h0_optimiser_equivalence.py \
+    --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang \
+    --re 400 --N 96 --dim 3 --qaoa-reps 1 2 3 --n-snaps 3 --k-opt 60 --seed 0 \
+    --mapper v1 --bias-threshold loso-f1 --readout deployed --tag recentrage
+python study/h0_selection/h0_recentring_summary.py
+
+# Table 4 (H3): dim = 3 rows (once per mapper), then the dim = 2, 4, 8 rows
 python study/h3_representation/h3_term_ablation.py \
     --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang \
     --re 400 --N 96 --dim 3 --n-snaps 2 --mapper v1     # and --mapper v2
@@ -1646,7 +1766,7 @@ python study/h3_representation/h3_size_scan.py \
     --scenario orszag_tang harris_tearing kelvin_helmholtz mhd_rotor \
     --re 400 --N 256 --dims 2 4 8 --n-snaps 3 --mapper v1
 
-# Table 4 (confirmatory replication, real DNS, 4 Re values)
+# Table 5 (confirmatory replication, real DNS, 4 Re values)
 python study/h2b_prediction/h2b_v2_hamiltonian_vs_gbt_loso.py \
     --re 400 800 1200 1600 --n-snaps 10
 
@@ -1657,6 +1777,9 @@ python study/pipeline/dynamic_patch_labels.py --scenario orszag_tang \
 # regression tests pinning the main numbers
 pytest tests/study/test_h0_certified_dim3_contradicts_criterion.py \
        tests/study/test_rho_gap_f1_reference.py \
+       tests/study/test_h0_readout_and_bias_threshold.py \
+       tests/study/test_h0_recentring_summary.py \
+       tests/study/test_toy_harness_mapper_mismatch.py \
        tests/study/test_t13_dim3_couplings_not_inert.py \
        tests/study/test_t26_proxy_validation_surfaced.py \
        tests/study/test_h2b_v2_hamiltonian_vs_gbt_loso_multire.py \
@@ -2086,12 +2209,11 @@ and where it is discussed above. "Engineering" marks a defect whose fix
 did not change a published scientific number; such entries are counted in
 Section 7 and not detailed.
 
-Two findings of this review are not yet entries of `docs/RESULTS.md` and
-have no test: the synthetic harnesses compare QAOA on V1 with the exact
-optimum on V2 (Section 5.5); and the study reads QAOA's decision by
-majority while the deployed solver reads it against the AMR threshold,
-which, with a bias centred far below the F1-optimal threshold, explains the
-sign of H0b (Section 5.2).
+The findings of this review are the last three rows: the readout and
+bias-threshold diagnostic and the recentring plan (entries of
+`docs/RESULTS.md`, each with its test), and the synthetic-harness mapper
+mismatch, an open defect (D-202 in `docs/DEFAUTS.md`) pinned by a strict
+expected-failure test.
 
 | `docs/RESULTS.md` entry | what it established | level | here |
 |---|---|---|---|
@@ -2136,9 +2258,9 @@ sign of H0b (Section 5.2).
 | Do the coefficients point where refinement is needed? | Spearman with true block error | A (Harris, current) / B (four scenarios) | 4.3 |
 | Balance between families; fluid/magnetic imbalance fixed | magnetic gate in grid units; 27 500 → 0.44 | A | 4.2e |
 | `study/` sees the X-point term; thresholds aligned | study and circuit identical to 5.3 × 10⁻¹⁵ | A | 2.4, 5.1 |
-| `dim = 3` relaunch on the corrected Hamiltonian; "the main defect is the Hamiltonian"; ρ criterion; D-172 | H0a and H0b on V2 | A | 5.1, 5.2 |
+| `dim = 3` relaunch on the corrected Hamiltonian; "the main defect is the Hamiltonian"; ρ criterion; D-172 | H0a and H0b on V2 | B (legacy V2 normalisation; current V2 differs, Table 3) | 5.1, 5.2 |
 | Coefficient preflight | five checks | A | 4.2h, 4.3 |
-| D-53 — the certified size contradicts the refutation of H0 | H0a/H0b separate | A | 5.1, 5.2 |
+| D-53 — the certified size contradicts the refutation of H0 | H0a/H0b separate | A (separation); V2 values B | 5.1, 5.2 |
 | D-51, D-59 | X-point term reaches `study/`; duplicated ZZ link at `dim = 2` (no published number moves) | A | 5.1 |
 | D-47 — degeneracy at `dim = 2` | exact optimum "refine everything" on 40 of 40 | A | 4.5 |
 | Campaign database naming, ghost trials | 298 abandoned trials counted | engineering | — |
@@ -2163,3 +2285,6 @@ sign of H0b (Section 5.2).
 | V2 against GBT, Re = 400, n = 5 | superseded at larger scale | superseded | 5.4 |
 | V2 against GBT, multi-Re with bootstrap | confirmatory replication | A | 5.4 |
 | D-92 bis | synthesis script reused retracted single-draw ratios; fixed | A | 7 |
+| Lecture du QAOA et seuil du biais (review, 5 Oct) | study reads QAOA by majority, deployed solver against the AMR threshold; bias centred at 0.15, F1-optimal 0.51-0.60; QAOA F1 = threshold at 0.5 on 11 of 12 V1 instances | A | 2.4, 5.2 |
+| Recentrage du biais (review, 5 Oct) | V1 panel replayed bit for bit; recentring never turns ρ negative; exact optimum never better than the classical rule; V2 optimum uniform on 24 of 24 | A | 5.2 |
+| D-202 (open) — synthetic harnesses on two mappers | QAOA on V1, exact optimum on V2; synthetic H0a/H0b numbers are not replications | open, pinned | 5.5 |

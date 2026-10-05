@@ -11060,11 +11060,9 @@ lecture change. Le biais centré à 0,15 marque presque tout : l'état
 fondamental raffine presque tout. Le QAOA, lu par vote majoritaire, rend à
 une instance près la lecture de son état de départ, c'est-à-dire un seuil
 fixe à 0,5 sur le score classique — plus proche du seuil F1-optimal que 0,15.
-Le ρ positif met en cause le hamiltonien TEL QU'IL EST CONSTRUIT, seuil
-compris, et le critère pré-enregistré de `rho_gap_f1.py` (« ρ reste positif
-→ la forme est en cause, aucune campagne ne le trouvera ») est vrai en
-partie par construction : le paramètre qui pilote ρ est hors de l'espace
-de recherche. L'expérience de recentrage ci-dessous le mesure.
+Le seuil du biais est hors de l'espace de recherche : un ρ positif ne
+pouvait pas, à lui seul, séparer la forme du hamiltonien de ce seuil figé.
+L'expérience de recentrage ci-dessous tranche — ce n'est pas le seuil.
 
 **N'établit PAS** : qu'un hamiltonien recentré décide mieux que la règle
 classique (c'est la question de l'entrée suivante).
@@ -11078,3 +11076,124 @@ pytest tests/study/test_h0_readout_and_bias_threshold.py -q   # 21 passed
 `test_deployed_readout_is_the_deployed_solver_decision` remplace le VQA de
 `_run_level` par des marginales imposées et compare les sous-patches
 raffinés.
+
+---
+
+# Recentrage du biais — le seuil n'explique pas H0b : il choisit QUEL masque uniforme
+
+**Demande USER, 5 octobre** : après le constat précédent, centrer le biais
+sur un seuil calibré en F1, lire le QAOA comme le solveur déployé, et
+remesurer ρ(E_gap, F1).
+
+**Plan 2 × 2 × 2, fixé avant exécution.** Configuration du panel V1 du
+28 août (quatre scénarios canoniques, Re = 400, N = 96, dim = 3, trois
+instantanés, p = 1, 2, 3, K_opt = 60, graine 0) ; pour chaque mappeur, seuil
+du biais {déployé, `loso-f1`} × lecture du QAOA {majoritaire, déployée}.
+`loso-f1` centre le biais, scénario par scénario, sur le seuil F1-optimal du
+score classique ajusté sur les trois AUTRES scénarios (0,5208 harris,
+0,6000 KH, 0,5923 rotor, 0,5100 OT — ceux du bras classique de la
+réplication confirmatoire, recalculés au bit près) ; la décision classique
+du panel suit le même seuil, c'est donc le bras classique calibré. Huit
+artefacts `h0_optimiser_equivalence_..._recentrage.npz`, lancés ensemble
+depuis `420404a`, arbre propre (`dirty_at_start = False`) ; un commit
+purement documentaire est tombé pendant le calcul (`head_moved_during_run`,
+aucun fichier exécuté touché entre `420404a` et `820fc67`). Synthèse :
+`results/h0_recentring_summary.json`, qui recalcule aussi l'optimum exact de
+chaque instance sans QAOA et vérifie qu'il reproduit le F1 de l'artefact.
+
+**Contrôle de reproductibilité.** La référence V1 (seuil déployé, lecture
+majoritaire) rejoue le panel publié du 28 août **au bit près** : 108 lignes,
+F1 et énergies identiques, ρ = +0,891 — cinq semaines plus tard, dans un
+autre environnement, un fil OpenMP par processus. La référence V2 sur le code
+courant ne rejoue pas le panel du 16 août (normalisation historique) :
+72 lignes sur 108 identiques.
+
+| mappeur | seuil du biais | lecture QAOA | ρ(E_gap, F1) | p | F1 exact | F1 classique | F1 QAOA p = 1..3 | QAOA atteint l'optimum | optimum : tout / rien / = classique (sur 12) |
+|---|---|---|---|---|---|---|---|---|---|
+| V1 | 0,1496 | majoritaire | +0,891 | 0,001 | 0,437 | 0,468 | 0,503–0,519 | 0 | 9 / 0 / 6 |
+| V1 | 0,1496 | déployée | +0,632 | 0,068 | 0,437 | 0,468 | 0,468–0,488 | 0,50 | 9 / 0 / 6 |
+| V1 | LOSO-F1 | majoritaire | +0,863 | 0,003 | 0,405 | 0,479 | 0,515–0,519 | 0 | 1 / 2 / 4 |
+| V1 | LOSO-F1 | déployée | +0,863 | 0,003 | 0,405 | 0,479 | 0,479–0,507 | 0 | 1 / 2 / 4 |
+| V2 | 0,15 | majoritaire | −0,148 | 0,70 | 0,386 | 0,468 | 0,334–0,411 | 0–0,17 | 12 / 0 / 6 |
+| V2 | 0,15 | déployée | −0,130 | 0,74 | 0,386 | 0,468 | 0,356–0,362 | 0,58–0,67 | 12 / 0 / 6 |
+| V2 | LOSO-F1 | majoritaire | +0,979 | < 0,001 | 0,108 | 0,479 | 0,341–0,357 | 0,17–0,25 | 4 / 8 / 0 |
+| V2 | LOSO-F1 | déployée | +0,828 | 0,006 | 0,108 | 0,479 | 0,265–0,294 | 0,25–0,42 | 4 / 8 / 0 |
+
+(L'optimum exact est unique sur les 48 instances-configurations ; il ne
+dépend pas de la lecture.)
+
+## Ce que ça dit
+
+1. **Recentrer le biais ne rend jamais ρ négatif.** Recentré, ρ est positif
+   et significatif sur les deux mappeurs et les deux lectures (+0,83 à
+   +0,98, p ≤ 0,006). Le critère pré-enregistré de `rho_gap_f1.py`
+   (« ρ passe négatif → le réglage suffisait ») n'est atteint dans aucune
+   des huit cellules.
+2. **L'optimum exact ne décide jamais mieux que la règle classique au même
+   seuil**, en moyenne : 0,437 contre 0,468 et 0,405 contre 0,479 (V1),
+   0,386 contre 0,468 et 0,108 contre 0,479 (V2). Par trajectoire (l'unité
+   d'inférence), l'optimum gagne une comparaison sur seize (V1 recentré,
+   Orszag-Tang, 0,450 contre 0,250), en perd onze, quatre sont nulles.
+3. **Le mécanisme est la structure, pas le seuil.** L'optimum de V2 est un
+   masque UNIFORME sur 24 instances-seuils sur 24 : tout raffiner sur 12/12
+   au seuil 0,15 ; une fois recentré, rien raffiner sur 8 et tout raffiner
+   sur 4, jamais la décision classique. Les couplages ferromagnétiques
+   dominent un biais plafonné à 0,1 × le plus grand couplage ; le seuil ne
+   fait que décider, par la SOMME des biais, quel masque uniforme
+   l'emporte. Sur la nappe de Harris recentrée, 6 cellules sur 9 sont
+   au-dessus du seuil et l'optimum n'en raffine aucune : les 3 cellules
+   calmes sont loin en dessous. V1, dont le biais pèse davantage, garde un
+   optimum moins uniforme (3 sur 12 une fois recentré) mais pas meilleur :
+   il ne coïncide avec la décision classique que sur 4 instances sur 12 et
+   perd sur 3 trajectoires sur 4.
+4. **La lecture du QAOA change le F1 du QAOA, pas la conclusion.** Lu par
+   vote majoritaire, le QAOA n'atteint presque jamais l'optimum (0 sur V1,
+   au plus 0,25 sur V2) : c'est H0a. Lu comme le solveur déployé au seuil
+   0,15, il part de la décision classique et l'atteint aussi souvent
+   qu'elle sur V1 (0,50 ; à p = 1, F1 identique à la règle classique) : le
+   taux d'optimum atteint dépend de la lecture. H0a se lit avec la règle
+   majoritaire, la seule qui demande si l'état se concentre sur le
+   fondamental.
+5. **Sur le code courant de V2, au seuil déployé, ρ n'est plus positif**
+   (−0,148, p = 0,70) : le +0,870 du 16 août portait sur la normalisation
+   historique. Le QAOA y décide moins bien qu'alors (0,334–0,411 contre
+   0,470–0,481) ; la cause n'est pas isolée ici. L'optimum, lui, reste pire
+   que la règle classique (0,386 contre 0,468). La forme robuste de H0b
+   n'est donc pas « ρ > 0 partout » mais « l'optimum exact ne décide jamais
+   mieux que la règle classique au même seuil » — vrai dans les huit
+   cellules.
+
+## Ce que ça change
+
+- **H0b ne dépend pas du seuil, et son mécanisme est mesuré** : la
+  structure de couplage pousse le fondamental vers un masque uniforme qui
+  ignore l'information locale — le constat de H3 (les couplages baissent le
+  F1 dès qu'ils agissent), vu cette fois du côté de l'optimum.
+- **L'entrée précédente reste vraie mais n'explique pas H0b** : elle
+  explique pourquoi le QAOA « bat » l'optimum (sur V1 il rend un seuil à
+  0,5) et pourquoi l'optimum est « tout raffiner » à 0,15. Recentré,
+  l'optimum devient « rien raffiner » sur V2.
+- **`threshold_amr` hors de l'espace de recherche ne fragilise pas la
+  décision d'écarter la campagne** : déplacé à la main sur le seuil
+  F1-optimal, il ne rend pas ρ négatif.
+- **Statut des panels V2 du 9 et du 16 août** : obtenus sur la
+  normalisation historique, non reproduits par le code courant — niveau B
+  au sens d'`EVALUATION.md`. Le panel V1 (+0,891) est A : rejoué au bit
+  près.
+
+**N'établit PAS** : la généralité au-delà de ce panel (12 instances sur
+4 trajectoires, Re = 400 ; la réplication confirmatoire à 4 Re n'a pas été
+relancée avec le seuil recentré) ; ni qu'aucun AUTRE réglage — le poids
+relatif du biais et des couplages, notamment — ne rendrait l'optimum
+meilleur : seul le seuil a été déplacé.
+
+```bash
+# le plan : huit lancements (mappeur x seuil x lecture), voir le commit 080489a
+python study/h0_selection/h0_optimiser_equivalence.py \
+    --scenario harris_tearing kelvin_helmholtz mhd_rotor orszag_tang \
+    --re 400 --N 96 --dim 3 --qaoa-reps 1 2 3 --n-snaps 3 --k-opt 60 \
+    --seed 0 --mapper v1 --bias-threshold loso-f1 --readout deployed \
+    --tag recentrage
+python study/h0_selection/h0_recentring_summary.py
+pytest tests/study/test_h0_recentring_summary.py -q   # 12 passed
+```
