@@ -178,7 +178,7 @@ def _psi_from_pipeline(vx, vy, Bx, By, prev_fields, N, n_patches, Re, dx,
 def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
                         use_v2=False, prev_fields=None,
                         with_psi=False, beta=1.0, fixed_curl=True,
-                        prev_phi=None):
+                        prev_phi=None, threshold_amr=None):
     """
     Prepare all inputs needed for QAOA on one snapshot.
 
@@ -193,7 +193,20 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
 
     ``fixed_curl=True`` applique la convention ``indexing='ij'`` de la
     grille. Une ablation explicite peut passer ``False``.
+
+    ``threshold_amr`` remplace le seuil sur lequel le biais (et, pour V1,
+    la fenetre d'incertitude des couplages) est centre. Par defaut : le
+    seuil deploye, ``V2_THRESHOLD`` ou ``TRAINED_THRESHOLD`` selon le
+    mappeur. Les angles theta ne dependent pas du seuil.
     """
+    if threshold_amr is None:
+        threshold_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
+    threshold_amr = float(threshold_amr)
+    if not 0.0 < threshold_amr < 1.0:
+        raise ValueError(
+            f"threshold_amr={threshold_amr} hors de ]0, 1[ : le score "
+            "classique vit dans [0, 1], un seuil hors de cet intervalle "
+            "donne un biais de signe constant sur toute la grille.")
     dx = 2 * np.pi / N
     nu = 1.0 / Re
     eta = 1.0 / Re
@@ -242,7 +255,6 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
     sim_vqa.By = By_vqa
 
     fields_vqa = sim_vqa.get_fluxes()
-    threshold_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
     hamilt_params = mapper.compute_coefficients(
         sim_vqa, score_vqa, fields_vqa, threshold_amr,
         advanced_anomalies_enabled=True,
@@ -282,14 +294,67 @@ def prepare_qaoa_inputs(vx, vy, Bx, By, N, n_patches, Re,
 # Run QAOA and extract decisions
 # -------------------------------------------------------------------
 
+#  Deux regles transforment les marginales P(q=1) d'un circuit en decision.
+#  Elles ne coincident que si le seuil AMR vaut 0,5. Comme chaque qubit part
+#  de P(1) = s (theta = 2 arcsin sqrt(s)), la regle « deployed » appliquee au
+#  circuit NON optimise rend la decision classique s >= seuil, alors que la
+#  regle « majority » rend s > 0,5 : sur le panel H0 a dim=3, ces deux
+#  masques different sur 34 cellules sur 108
+#  (`study/h0_selection/h0_readout_threshold_diagnostic.py`).
+READOUTS = ("majority", "deployed")
+
+
+def _split_marginals(marginals, dim):
+    marg = np.asarray(marginals, dtype=float).ravel()
+    n_cells = dim * dim
+    if marg.size != 2 * n_cells:
+        raise ValueError(
+            f"{marg.size} marginales pour dim={dim} : {2 * n_cells} "
+            "attendues (une par arete horizontale puis verticale)")
+    return (marg[:n_cells].reshape(dim, dim),
+            marg[n_cells:].reshape(dim, dim))
+
+
+def majority_readout(marginals, dim):
+    """Lecture historique de `study/` : chaque qubit d'arete vote
+    « raffiner » si P(1) > 0,5. Retourne (dec_h, dec_v), (dim, dim) bool ;
+    une cellule est raffinee si l'une de ses deux aretes l'est."""
+    marg_h, marg_v = _split_marginals(marginals, dim)
+    return marg_h > 0.5, marg_v > 0.5
+
+
+def deployed_readout(marginals, dim, threshold_amr):
+    """Lecture du solveur deploye (`Simulation.refinement._run_level`) :
+    `prob_map = 0.5 * (probs_h + probs_v)`, raffiner si
+    `prob_map >= threshold_amr`.
+
+    La decision y est prise par CELLULE ; elle est rendue sur les deux
+    familles d'aretes, comme `classical_init_spins`, pour que
+    `dec_h | dec_v` soit le masque deploye et que l'energie d'une decision
+    se calcule comme celle de la decision classique. Le sondage de bord et
+    la duree de vie (TTL) du solveur deploye agissent entre deux niveaux de
+    raffinement ; ils n'entrent pas dans une decision a un seul niveau.
+    """
+    if threshold_amr is None:
+        raise ValueError("la lecture deployee exige threshold_amr")
+    marg_h, marg_v = _split_marginals(marginals, dim)
+    refine = 0.5 * (marg_h + marg_v) >= float(threshold_amr)
+    return refine.copy(), refine.copy()
+
+
 def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
                          K_opt=100, shots=8192,
                          backend_name="state_vector",
                          warm_start_params=None,
                          prune_eps=0.0,
-                         seed=0):
+                         seed=0, readout="majority", threshold_amr=None):
     """
     Build and run QAOA circuit, return decisions.
+
+    ``readout`` choisit la regle marginales -> decision (``READOUTS``) :
+    ``"majority"`` (defaut historique, P(1) > 0,5 par qubit) ou
+    ``"deployed"`` (moyenne des deux marginales d'une cellule >=
+    ``threshold_amr``, la regle du solveur deploye).
 
     Returns:
       marginals: list of P(qi=1) for each qubit
@@ -298,6 +363,11 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
       optimal_params: optimized QAOA parameters
       wall_time: seconds
     """
+    if readout not in READOUTS:
+        raise ValueError(f"readout={readout!r} inconnu ; attendu l'un de "
+                         f"{READOUTS}")
+    if readout == "deployed" and threshold_amr is None:
+        raise ValueError("readout='deployed' exige threshold_amr")
     t0 = time.time()
 
     # optional coefficient pruning: drop coefficients below prune_eps * max
@@ -337,13 +407,11 @@ def run_qaoa_on_snapshot(data_in, hamilt_params, dim, reps=2,
     marginals = postprocess(distribution, n_qubits, verbose=False)
 
     # convert marginals to decisions
-    marg_array = np.array(marginals)
-    n_cells = dim * dim
-    marg_h = marg_array[:n_cells].reshape(dim, dim)
-    marg_v = marg_array[n_cells:].reshape(dim, dim)
-
-    decisions_h = marg_h > 0.5
-    decisions_v = marg_v > 0.5
+    if readout == "deployed":
+        decisions_h, decisions_v = deployed_readout(marginals, dim,
+                                                    threshold_amr)
+    else:
+        decisions_h, decisions_v = majority_readout(marginals, dim)
 
     wall_time = time.time() - t0
 

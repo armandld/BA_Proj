@@ -48,6 +48,18 @@ REGLE DE DECISION (pre-specifiee, avant execution) :
 # artefacts.
 Sortie : results/h0_optimiser_equivalence_N{N}_dim{D}.npz (+ hash git, args CLI)
 
+RECENTRAGE DU BIAIS (`--bias-threshold loso-f1`, `--readout deployed`).
+Le biais est centre par defaut sur le seuil AMR deploye (0,15 pour V2,
+0,1496 pour V1), tres en dessous du seuil qui maximise F1 contre le label
+statique (0,51 a 0,60) ; et l'etude lit QAOA par vote majoritaire (P > 0,5)
+alors que le solveur deploye compare la moyenne des deux marginales d'une
+cellule au seuil (`study/h0_selection/h0_readout_threshold_diagnostic.py`).
+`--bias-threshold loso-f1` centre le biais, scenario par scenario, sur le
+seuil F1-optimal ajuste sur les trois AUTRES scenarios canoniques
+(`study/common/bias_threshold.py`) ; `--readout deployed` lit QAOA avec la
+regle du solveur deploye. Le nom de l'artefact porte `_thrlosof1` et
+`_readdeployed` des que ces options quittent leur defaut.
+
 Usage :
   python study/h0_selection/h0_optimiser_equivalence.py --N 256 --dim 2 --n-snaps 3
 """
@@ -66,7 +78,7 @@ for _p in [os.path.join(_REPO_ROOT, "src")] + [
         sys.path.insert(0, _p)
 # -------------------------------------------------------------------------
 
-from h2b_feature_selection import git_commit_hash          # v3, reutilise
+import provenance                                           # hash au DEMARRAGE
 from ising_terms_and_annealing import (                          # V2, reutilise
     build_ising_terms, total_energy, delta_energy,
     _build_incidence, sa_multi_restart, spins_to_decisions,
@@ -134,6 +146,20 @@ def greedy_local_search(h_bias, edges, plaqs, n_q, init_spins,
     return spins.astype(np.int8), float(E), n_flips
 
 
+def _default_threshold(mapper):
+    """Seuil AMR deploye du mappeur : celui sur lequel le biais est centre
+    hors recentrage."""
+    from config import TRAINED_THRESHOLD, V2_THRESHOLD
+    return float(V2_THRESHOLD if mapper == "v2" else TRAINED_THRESHOLD)
+
+
+def h0_snapshot_indices(n_dns, n_snaps):
+    """Instantanes du panel : `n_snaps` points regulierement espaces sur la
+    trajectoire, le premier exclu (il n'a pas de predecesseur pour psi)."""
+    return sorted(set(int(round(i)) for i in
+                      np.linspace(0, n_dns - 1, n_snaps + 1)[1:]))
+
+
 def decision_agreement(spins_a, spins_b, dim):
     """Comparaison de deux solutions au niveau spin ET au niveau decision.
 
@@ -188,7 +214,14 @@ def _output_path(args):
         + ("_noexact" if args.no_exact else "")
         + ("" if args.backend == "state_vector" else f"_{args.backend}")
         + ("_scalekopt" if args.scale_kopt else "")
+        # `getattr` : un espace d'arguments anterieur a ces options (tests,
+        # reprises) designe leurs valeurs par defaut, donc le nom historique.
+        + ("" if getattr(args, "bias_threshold", "deployed") == "deployed"
+           else "_thrlosof1")
+        + ("" if getattr(args, "readout", "majority") == "majority"
+           else "_readdeployed")
         + ("" if args.mapper == "v2" else f"_{args.mapper}")
+        + (f"_{args.tag}" if getattr(args, "tag", None) else "")
         + ".npz")
 
 
@@ -278,8 +311,13 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                  qaoa_reps=(1, 2, 3), qaoa_shots=4096, k_opt=60,
                  zero_psi=False, scale_kopt=False, no_exact=False,
                  backend='state_vector', prev_fields=None, with_psi=True,
-                 run_qaoa=True, seed=0, fixed_curl=True, prev_phi=None):
-    """Execute tous les solveurs sur le meme Hamiltonien / snapshot."""
+                 run_qaoa=True, seed=0, fixed_curl=True, prev_phi=None,
+                 threshold_amr=None, readout="majority"):
+    """Execute tous les solveurs sur le meme Hamiltonien / snapshot.
+
+    `threshold_amr` centre le biais (et la decision classique) sur un autre
+    seuil que le seuil deploye ; `readout` choisit la regle marginales ->
+    decision du QAOA (`qaoa_inputs.READOUTS`)."""
     from qaoa_inputs import (                      # V2, reutilise
         prepare_qaoa_inputs, run_qaoa_on_snapshot,
         constant_initial_params,
@@ -287,7 +325,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     from VQA.cost_hamiltonian import create_period_hamiltonian
     from config import V2_THRESHOLD, TRAINED_THRESHOLD
 
-    thr_amr = V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD
+    thr_amr = (float(threshold_amr) if threshold_amr is not None
+               else (V2_THRESHOLD if use_v2 else TRAINED_THRESHOLD))
     # psi encode la derivee temporelle du flux. Sans prev_fields il reste
     # nul, ce qui est le comportement historique de l'etude ; avec, on
     # retrouve l'encodage du pipeline deploye, celui contre lequel les
@@ -295,7 +334,7 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
     data_in, hp, score_vqa = prepare_qaoa_inputs(
         vx, vy, Bx, By, N, dim, re, use_v2=use_v2,
         prev_fields=prev_fields, with_psi=with_psi, fixed_curl=fixed_curl,
-        prev_phi=prev_phi)
+        prev_phi=prev_phi, threshold_amr=thr_amr)
 
     # Ablation psi : psi porte une derivee temporelle du flux qui n'existe
     # NULLE PART dans l'hamiltonien. Le QAOA part donc d'un etat encodant une
@@ -385,7 +424,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
                 data_in, hp, dim, reps=reps,
                 K_opt=(k_opt * reps if scale_kopt else k_opt),
                 shots=qaoa_shots, backend_name=backend,
-                warm_start_params=ws, seed=seed)
+                warm_start_params=ws, seed=seed,
+                readout=readout, threshold_amr=thr_amr)
             s = np.ones(n_q, dtype=np.int8)
             s[:dim * dim] = np.where(dh.ravel(), -1, 1)
             s[dim * dim:] = np.where(dv.ravel(), -1, 1)
@@ -399,7 +439,8 @@ def solver_panel(vx, vy, Bx, By, N, dim, re, l2_errors, l2_threshold,
             data_in, hp, dim, reps=reps,
             K_opt=(k_opt * reps if scale_kopt else k_opt),
             shots=qaoa_shots, backend_name="aer",
-            warm_start_params=ws, seed=seed)
+            warm_start_params=ws, seed=seed,
+            readout=readout, threshold_amr=thr_amr)
         s = np.ones(n_q, dtype=np.int8)
         s[:dim * dim] = np.where(dh.ravel(), -1, 1)
         s[dim * dim:] = np.where(dv.ravel(), -1, 1)
@@ -619,7 +660,52 @@ def main():
     p.add_argument("--no-qaoa", action="store_true")
     p.add_argument("--mapper", choices=["v1", "v2"], default="v2")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--bias-threshold", choices=["deployed", "loso-f1"],
+                   default="deployed",
+                   help="seuil sur lequel le biais est centre : le seuil "
+                        "AMR deploye (defaut), ou le seuil F1-optimal du "
+                        "score classique ajuste sur les trois AUTRES "
+                        "scenarios canoniques (study/common/"
+                        "bias_threshold.py). La decision classique du panel "
+                        "suit le meme seuil.")
+    p.add_argument("--readout", choices=["majority", "deployed"],
+                   default="majority",
+                   help="regle marginales -> decision du QAOA : vote "
+                        "majoritaire P(1) > 0,5 par qubit (defaut "
+                        "historique de l'etude) ou regle du solveur "
+                        "deploye, moyenne des deux marginales d'une "
+                        "cellule >= seuil.")
+    p.add_argument("--tag", default=None,
+                   help="suffixe ajoute au nom de l'artefact. Une campagne "
+                        "qui rejoue la configuration d'un artefact publie "
+                        "(par exemple la reference d'un plan d'experience) "
+                        "l'ecraserait sans ce suffixe.")
     args = p.parse_args()
+    if args.tag is not None and (not args.tag.replace("-", "").isalnum()):
+        raise SystemExit(f"--tag {args.tag!r} : lettres, chiffres et tirets "
+                         "seulement (il entre dans un nom de fichier).")
+
+    started = provenance.start()
+    if started.get("dirty_at_start"):
+        print("  [PROVENANCE] arbre de travail MODIFIE au demarrage : aucun "
+              "hash ne decrit exactement le code execute (dirty_at_start "
+              "est consigne dans l'artefact).")
+
+    bias_thresholds = {}
+    if args.bias_threshold == "loso-f1":
+        from bias_threshold import CANONICAL_SCENARIOS, loso_f1_thresholds
+        hors = sorted(set(args.scenario) - set(CANONICAL_SCENARIOS))
+        if hors:
+            raise SystemExit(
+                f"--bias-threshold loso-f1 n'est defini que sur les quatre "
+                f"scenarios canoniques {CANONICAL_SCENARIOS} ; hors "
+                f"perimetre : {hors}.")
+        calib = loso_f1_thresholds(RESULTS_DIR, N=args.N, dim=args.dim)
+        bias_thresholds = {sc: calib[sc][0] for sc in args.scenario}
+        print("  seuils du biais calibres en F1, scenario tenu a l'ecart :")
+        for sc in args.scenario:
+            print(f"    {sc:<18} seuil={calib[sc][0]:.4f}  "
+                  f"(F1 d'entrainement {calib[sc][1]:.3f})")
 
     print("=" * 88)
     print("  V4 Task 11: quantum-contribution attribution "
@@ -656,8 +742,7 @@ def main():
             Bx = dns["Bx"].astype(np.float64); By = dns["By"].astype(np.float64)
             l2 = pat["l2_errors"]; thr = float(pat["l2_threshold"])
             n_dns = len(vx)
-            sel = sorted(set(int(round(i)) for i in
-                             np.linspace(0, n_dns - 1, args.n_snaps + 1)[1:]))
+            sel = h0_snapshot_indices(n_dns, args.n_snaps)
             from qaoa_inputs import _ema_update, _stress_flux_for_snapshot
             selected = set(sel)
             ema_before = {}
@@ -688,7 +773,9 @@ def main():
                     no_exact=args.no_exact, backend=args.backend,
                     prev_phi=ema_before[si], with_psi=True,
                     k_opt=args.k_opt, run_qaoa=not args.no_qaoa,
-                    seed=args.seed, fixed_curl=not args.legacy_curl)
+                    seed=args.seed, fixed_curl=not args.legacy_curl,
+                    threshold_amr=bias_thresholds.get(sc),
+                    readout=args.readout)
                 diag_flags.append(out["diagonal"])
                 snap_records = [
                     dict(scenario=sc, re=re, snap=si, solver=name,
@@ -758,8 +845,15 @@ def main():
         f1=np.array([r["f1"] for r in records]),
         wall=np.array([r["wall"] for r in records]),
         diagonal_all=bool(all(diag_flags)),
-        seed=args.seed, git_hash=git_commit_hash(),
+        seed=args.seed,
         cli_args=json.dumps(vars(args)),
+        bias_threshold_mode=args.bias_threshold,
+        readout=args.readout,
+        bias_threshold_scenarios=np.array(list(args.scenario)),
+        bias_threshold_values=np.array(
+            [bias_thresholds.get(sc, _default_threshold(args.mapper))
+             for sc in args.scenario], dtype=float),
+        **provenance.finish(started),
     )
     print(f"\n  saved: {os.path.basename(out)}")
     print("\nV4 Task 11 complete.")

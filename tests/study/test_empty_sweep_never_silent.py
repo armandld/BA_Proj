@@ -124,6 +124,13 @@ _EXEMPTIONS = {
         "Meme raison que `preflight_coefficients.py` : `--json` est sa seule "
         "option, aucune demande ne peut etre rendue vide. Non couvert, et "
         "dit plutot que devine."),
+    "study/h0_selection/h0_recentring_summary.py": (
+        "Agrege les HUIT artefacts fixes du plan de recentrage "
+        "(`_recentrage.npz`) : sa CLI n'a que `--out`, aucune demande ne "
+        "peut ne correspondre a rien. Son garde de plan incomplet est "
+        "mesure ailleurs : un artefact manquant leve FileNotFoundError et "
+        "un plan a deux commits leve ValueError "
+        "(`tests/study/test_h0_recentring_summary.py`)."),
     "study/pipeline/dns_validation.py": (
         "GELE — ses artefacts sont publies, et une correction y a deja ete "
         "annulee. Mesure D-148 : il sort bien avec le code 0 sur "
