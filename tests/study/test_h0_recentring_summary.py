@@ -103,7 +103,9 @@ def test_the_names_are_the_ones_the_panel_writes(summary):
 
 def test_a_complete_plan_is_summarised(summary, tmp_path):
     _full_plan(summary, str(tmp_path))
-    cells = summary.collect(str(tmp_path))
+    # les faux artefacts n'ont pas de DNS derriere eux : la structure de
+    # l'optimum (recalculee sur DNS) est testee sur les vrais artefacts
+    cells = summary.collect(str(tmp_path), structure=False)
     assert len(cells) == 8
     c = cells["v1|loso-f1|deployed"]
     assert c["rho"] == pytest.approx(1.0)

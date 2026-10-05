@@ -52,8 +52,13 @@ _STUDY = os.path.join(_REPO_ROOT, "study")
 #  dette a rembourser. Compte quand meme ici, cote "absent", parce que
 #  c'est ce que ce fichier verifie -- l'etat REEL du cablage, pas
 #  pourquoi il est dans cet etat.
+#
+#  `h0_recentring_summary.py` ne fait tourner aucun QAOA : il recalcule
+#  l'OPTIMUM EXACT du hamiltonien, que psi ne touche pas (psi ne modifie que
+#  les angles initiaux du circuit). psi = 0 y est sans objet, pas une dette.
 PSI_STILL_ZERO = {
     "h0_qaoa_displacement.py",
+    "h0_recentring_summary.py",
     "h1_curl_convention_gap.py",
     "h3_equivariance.py",
     "h3_size_scan.py",
