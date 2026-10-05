@@ -77,6 +77,16 @@ def summarise(path):
     r = rho_gap_f1(path)
     exh = per_solver["exhaustive"]["f1"]
     cls = per_solver["classical_init"]["f1"]
+    # L'unite d'inference est la trajectoire (CLAUDE.md) : la comparaison
+    # exact / classique se compte par scenario, sur la moyenne de ses
+    # instantanes, jamais instantane par instantane.
+    by_traj = {}
+    for sc in sorted(set(d["scenario"].tolist())):
+        ms = d["scenario"] == sc
+        by_traj[sc] = {s: float(np.nanmean(d["f1"][ms & (sol == s)].astype(float)))
+                       for s in ("exhaustive", "classical_init", "qaoa_p1",
+                                 "qaoa_p2", "qaoa_p3")}
+    diffs = [v["exhaustive"] - v["classical_init"] for v in by_traj.values()]
     return {
         "artifact": os.path.basename(path),
         "git_hash": str(d["git_hash"]) if "git_hash" in d else None,
@@ -93,6 +103,12 @@ def summarise(path):
         "rho_error": r.get("erreur"),
         "n_solvers": r.get("n_solveurs"),
         "f1_exact_minus_classical": exh - cls,
+        "trajectories_exact_vs_classical": {
+            "better": int(sum(x > 1e-12 for x in diffs)),
+            "equal": int(sum(abs(x) <= 1e-12 for x in diffs)),
+            "worse": int(sum(x < -1e-12 for x in diffs)),
+        },
+        "by_trajectory": by_traj,
         "per_solver": per_solver,
     }
 

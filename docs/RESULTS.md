@@ -11007,3 +11007,74 @@ la table maître affiche `MISSING`, donc non poursuivi ici.
 pytest tests/study/test_t15c_synthesis.py -v   # 18 passed
 python study/closed_loop/closed_loop_fold_synthesis.py --folds kh ot rotor tearing
 ```
+
+---
+
+# Lecture du QAOA et seuil du biais — ce que mesure le F1 du QAOA de H0 (revue d'octobre)
+
+**Trouvé en relisant le panel H0 pour le préprint, 5 octobre.** H0b
+(ρ(E_gap, F1) > 0) dit que mieux résoudre le hamiltonien dégrade la
+décision ; deux faits de code, jamais rapprochés, en donnent le mécanisme.
+
+**Fait 1 — le biais est centré sur un seuil choisi pour une autre tâche.**
+h_i est proportionnel à (s_i − seuil), avec le seuil AMR déployé : 0,15
+(`V2_THRESHOLD`) ou 0,1496 (`TRAINED_THRESHOLD`, issu de l'entraînement
+classique gelé, qui optimisait la perte composite en boucle fermée). Le seuil
+qui maximise F1 contre le label statique, ajusté sur les trois AUTRES
+scénarios par le bras classique de la réplication confirmatoire, vaut 0,5208
+(`harris_tearing` tenu), 0,6000 (`kelvin_helmholtz`), 0,5923 (`mhd_rotor`),
+0,5100 (`orszag_tang`). Et `threshold_amr` est HORS de l'espace de recherche
+de la campagne (`FIXED_PARAMS`) : aucune campagne ne pouvait le déplacer.
+
+**Fait 2 — l'étude ne lit pas le QAOA comme le solveur déployé.**
+`run_qaoa_on_snapshot` (étude) : un qubit d'arête vote « raffiner » si
+P(1) > 0,5, une cellule est raffinée si l'une de ses deux arêtes l'est.
+`refinement._run_level` (déployé) : `prob_map = 0.5 * (probs_h + probs_v)`,
+raffiner si `>= threshold_amr`. Les deux règles ne coïncident qu'à seuil
+0,5. Comme chaque qubit part de P(1) = s, la règle déployée appliquée au
+circuit NON optimisé rend la décision classique ; la règle de l'étude rend
+s > 0,5.
+
+**Mesuré** sur les douze instantanés du panel H0 (quatre scénarios
+canoniques, Re = 400, N = 96, dim = 3), artefact
+`results/h0_readout_threshold_diagnostic.json` (commit `d2a43c2`, arbre
+propre) :
+
+| quantité | valeur |
+|---|---|
+| cellules raffinées par la décision classique (s > 0,15) | 88 / 108 |
+| cellules raffinées par la lecture majoritaire du circuit non optimisé (s > 0,5) | 54 / 108 |
+| cellules où les deux diffèrent | **34 / 108 (31 %)** — harris 0, KH 9, rotor 11, OT 14 |
+| F1 moyen : décision classique / lecture majoritaire non optimisée / tout raffiner | 0,468 / **0,507** / 0,386 |
+| panel V1 du 28 août : F1 du QAOA = F1 du masque s > 0,5 | **11 / 12** instances à chaque profondeur (6 / 7 des instances où les trois masques ont trois F1 différents) |
+| panel V2 du 16 août (code plus ancien) : même comparaison | 9, 8, 8 / 12 (p = 1, 2, 3) |
+| F1 de l'optimum exact = F1 de « tout raffiner » | 12 / 12 (V2, 16 août), 9 / 12 (V1, 28 août) |
+| décision classique recalculée = celle de l'artefact V1 | 12 / 12 |
+| seuils LOSO recalculés = seuils de l'artefact confirmatoire | identiques au bit près |
+
+Les artefacts H0 ne stockent pas les masques : l'égalité est une égalité de
+F1, rapportée comme telle.
+
+**Ce que ça change.** H0a et H0b restent vrais tels que mesurés ; leur
+lecture change. Le biais centré à 0,15 marque presque tout : l'état
+fondamental raffine presque tout. Le QAOA, lu par vote majoritaire, rend à
+une instance près la lecture de son état de départ, c'est-à-dire un seuil
+fixe à 0,5 sur le score classique — plus proche du seuil F1-optimal que 0,15.
+Le ρ positif met en cause le hamiltonien TEL QU'IL EST CONSTRUIT, seuil
+compris, et le critère pré-enregistré de `rho_gap_f1.py` (« ρ reste positif
+→ la forme est en cause, aucune campagne ne le trouvera ») est vrai en
+partie par construction : le paramètre qui pilote ρ est hors de l'espace
+de recherche. L'expérience de recentrage ci-dessous le mesure.
+
+**N'établit PAS** : qu'un hamiltonien recentré décide mieux que la règle
+classique (c'est la question de l'entrée suivante).
+
+```bash
+python study/h0_selection/h0_readout_threshold_diagnostic.py
+pytest tests/study/test_h0_readout_and_bias_threshold.py -q   # 21 passed
+```
+
+`deployed_readout` est prouvé identique à la décision du solveur déployé :
+`test_deployed_readout_is_the_deployed_solver_decision` remplace le VQA de
+`_run_level` par des marginales imposées et compare les sous-patches
+raffinés.

@@ -164,3 +164,30 @@ chaîne.
 ```bash
 pytest tests/pipeline/test_amr_figure_axes.py::test_la_deviation_reste_consignee_dans_le_fichier -q
 ```
+
+---
+
+## D-202 — les bancs synthétiques comparent QAOA sur V1 à l'optimum exact sur V2
+
+**Trouvé à la revue d'octobre** (relecture du préprint). `h3_toy_model_check.py`
+et `h3_toy_instability_check.py` calculent l'optimum exact par
+`build_patch_hamiltonian(..., use_v2=True)` (seuil `--threshold-amr`,
+défaut 0,15), mais font tourner le QAOA sur `prepare_qaoa_inputs(...)`
+appelé sans `use_v2` : V1, au seuil par défaut de V1 (0,1496). Les nombres
+de `RESULTS.md` présentés comme une réplication de H0a/H0b sur les bancs
+synthétiques — accord QAOA/exact 0,622 ± 0,147 (statique) et 0,719 ± 0,232
+(dynamique), « QAOA bat l'exact » — comparent donc deux hamiltoniens. Ils ne
+répliquent ni H0a ni H0b. Ce qu'ils montrent reste vrai : trois règles de
+décision notées contre le même label (sur le banc statique, l'optimum exact
+de V2 raffine tout sur 20 instances sur 20). Les plafonds classique/GBT de
+ces bancs ne sont pas touchés.
+
+**Pas corrigé** : la correction (passer `use_v2=True` et le même seuil au
+QAOA) demande de relancer les deux bancs, dont le dynamique fait évoluer le
+solveur à N = 256. Épinglé par un xfail STRICT, qui passera en XPASS — donc
+en échec — le jour du correctif et forcera la mise à jour de `RESULTS.md`
+et du préprint.
+
+```bash
+pytest tests/study/test_toy_harness_mapper_mismatch.py -rxX   # 3 passed, 2 xfailed
+```

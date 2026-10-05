@@ -109,6 +109,9 @@ def test_a_complete_plan_is_summarised(summary, tmp_path):
     assert c["rho"] == pytest.approx(1.0)
     assert c["n_solvers"] == 9
     assert c["f1_exact_minus_classical"] == pytest.approx(-0.06)
+    assert c["trajectories_exact_vs_classical"] == {
+        "better": 0, "equal": 0, "worse": 1}
+    assert set(c["by_trajectory"]) == {"harris_tearing"}
 
 
 def test_an_incomplete_plan_is_refused(summary, tmp_path):

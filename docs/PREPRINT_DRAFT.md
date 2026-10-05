@@ -896,12 +896,16 @@ because 0.5 is closer to the F1-optimal threshold for this label than the
 measured; what changes is their reading. The positive ρ indicts the
 Hamiltonian as built, including its fixed threshold, and `threshold_amr` is
 outside the campaign's search space (Section 8), so no campaign could have
-moved it. Whether a Hamiltonian whose bias is centred on an F1-calibrated
-threshold has a ground state that beats the classical rule has not been
-tested. [Computed during this review from the panels' DNS with the study's
-own `prepare_qaoa_inputs` and from the per-instance F1 stored in the H0
-artifacts; the fitted thresholds are stored in the confirmatory artifact.
-Not yet pinned by a test.]
+moved it. [A: recomputed from the panels' DNS and from the per-instance F1
+stored in the H0 artifacts by
+`study/h0_selection/h0_readout_threshold_diagnostic.py` (artifact 5 Oct,
+clean tree), and pinned by
+`tests/study/test_h0_readout_and_bias_threshold.py`. The same test proves
+that the study's implementation of the deployed rule returns, for given
+marginals, exactly the cells the deployed solver refines. The artifacts
+store F1 values, not masks, so the equalities above are equalities of F1.]
+Whether a Hamiltonian whose bias is centred on an F1-calibrated threshold
+decides better is the experiment that follows.
 
 A caveat on what "the optimum" is at this size. At `dim = 3` the ground
 state is unique (non-degenerate) on every instance measured, but it is
@@ -1148,7 +1152,10 @@ replications of H0a or H0b. What these numbers do show is three decision
 rules scored against the same label: the exact optimum of V2 refines
 everything on 20 of 20 static instances (F1 0.500), QAOA on V1 reaches
 0.673 ± 0.101 and the classical threshold 0.699 ± 0.154. The defect is
-recorded for correction; the real-DNS panels of Sections 5.1-5.4 are not
+open (D-202 in `docs/DEFAUTS.md`) and pinned by a strict expected-failure
+test that will fail the day it is fixed
+(`tests/study/test_toy_harness_mapper_mismatch.py`); the real-DNS panels
+of Sections 5.1-5.4 are not
 affected (the confirmatory script uses V2 for both QAOA and the exact
 optimum, and the panels of Tables 1-2 use one mapper per run).
 
